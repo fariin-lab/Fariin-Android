@@ -4,6 +4,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -62,10 +69,11 @@ internal fun ChatBackupPage(pop: () -> Unit) {
     var pwPage by remember { mutableStateOf(false) }
     var confirmPwOff by remember { mutableStateOf(false) }
     var confirmReplace by remember { mutableStateOf(false) }
+    var job by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     fun run(token: String? = null) {
         busy = true; note = null
-        scope.launch {
+        job = scope.launch {
             when (val r = ChatBackup.backUp(ctx, uid, automatic = false, token = token)) {
                 ChatBackup.Result.Done -> {
                     last = ChatBackup.lastBackup(ctx, uid); size = ChatBackup.lastSize(ctx, uid)
@@ -93,24 +101,41 @@ internal fun ChatBackupPage(pop: () -> Unit) {
         if (set) { hasPw = true; run() }   // a fresh backup carries the new lock (both apps)
     }); return }
 
+    // Owner 2026-11-12, the minimal page (iOS 093874382): a centred status, one capsule, then settings.
     ScrollPage("Chat Backup", pop) {
-        SettingsSection(footer = "Your chats are saved to your own Google Drive, locked so only you can open them. Photos and videos are not included yet.") {
-            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(if (last > 0) "Last backup: " + android.text.format.DateUtils.getRelativeDateTimeString(ctx, last,
-                        android.text.format.DateUtils.MINUTE_IN_MILLIS, android.text.format.DateUtils.WEEK_IN_MILLIS, 0) + " · " + sizeWords(size)
-                    else "No backup yet", fontSize = 15.sp, color = c.secondary)
-                if (busy) Text("Backing up…", fontSize = 15.sp, color = c.label)
-                note?.let { Text(it, fontSize = 14.sp, color = c.red) }
+        Column(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            androidx.compose.foundation.layout.Box(Modifier.size(76.dp).clip(androidx.compose.foundation.shape.CircleShape).background(c.fieldFill),
+                contentAlignment = androidx.compose.ui.Alignment.Center) {
+                androidx.compose.material3.Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_cloud_up_fill),
+                    null, tint = c.secondary, modifier = Modifier.size(38.dp))
             }
-            SettingsRow("Back Up Now", trailing = Trailing.NONE, titleColor = c.accent, last = true,
-                accessory = if (busy) ({ com.fariin.app.ui.components.FariinSpinner(size = 20.dp) }) else null) {
-                if (busy) return@SettingsRow
-                if (ChatBackup.restoreWaiting(ctx, uid)) confirmReplace = true else run()
+            Spacer(Modifier.height(4.dp))
+            Text(if (last > 0) "Last backup" else "No backup yet", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label)
+            Text(if (last > 0) android.text.format.DateUtils.getRelativeDateTimeString(ctx, last,
+                    android.text.format.DateUtils.MINUTE_IN_MILLIS, android.text.format.DateUtils.WEEK_IN_MILLIS, 0).toString() + " · " + sizeWords(size)
+                else "Keep your chats safe if you lose this phone.", fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center)
+            if (busy) Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                com.fariin.app.ui.components.FariinSpinner(size = 16.dp)
+                Text("Backing up…", fontSize = 15.sp, color = c.secondary)
             }
+            note?.let { Text(it, fontSize = 14.sp, color = c.red, textAlign = TextAlign.Center) }
+            Spacer(Modifier.height(10.dp))
+            androidx.compose.foundation.layout.Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(50.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape).background(if (busy) c.fieldFill else c.accent)
+                .clickable {
+                    if (busy) { job?.cancel(); busy = false; return@clickable }
+                    if (ChatBackup.restoreWaiting(ctx, uid)) confirmReplace = true else run()
+                }, contentAlignment = androidx.compose.ui.Alignment.Center) {
+                Text(if (busy) "Cancel" else "Back Up Now", fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+                    color = if (busy) c.label else c.onAccent)
+            }
+            Text("Locked so only you can open it. Fariin can't read your backup. Photos and videos are not included yet.",
+                fontSize = 13.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 28.dp, vertical = 6.dp))
         }
-        SettingsSection {
+        SettingsSection(footer = "Backups run on Wi-Fi unless you allow mobile data.") {
             androidx.compose.foundation.layout.Box {
-                SettingsRow("How Often", value = when (freq) { "daily" -> "Daily"; "weekly" -> "Weekly"; else -> "Off" }) { freqOpen = true }
+                SettingsRow("Automatic Backup", value = when (freq) { "daily" -> "Daily"; "weekly" -> "Weekly"; else -> "Off" }) { freqOpen = true }
                 com.fariin.app.ui.components.GlassDropdown(freqOpen, onDismissRequest = { freqOpen = false }, containerColor = c.card) {
                     listOf("daily" to "Daily", "weekly" to "Weekly", "off" to "Off").forEach { (k, label) ->
                         DropdownMenuItem(text = { Text(label, color = c.label, fontWeight = if (k == freq) FontWeight.SemiBold else FontWeight.Normal) },
@@ -120,8 +145,10 @@ internal fun ChatBackupPage(pop: () -> Unit) {
             }
             SwitchRow("Use Mobile Data", cell, last = true) { cell = it; ChatBackup.setMobileData(ctx, uid, it) }
         }
-        SettingsSection(footer = "Without a password, a reinstall can only restore if your phone's Google backup is on. With one, you can restore anywhere, even on an iPhone.") {
-            SettingsRow("Backup Password", value = if (hasPw) "On" else "Off", last = true) { if (hasPw) confirmPwOff = true else pwPage = true }
+        SettingsSection(footer = if (hasPw) "You need this password to restore on a new phone."
+            else "Without a password, a new phone can restore only from this phone's Google backup.") {
+            SwitchRow("Backup Password", hasPw, last = !hasPw) { on -> if (on) pwPage = true else confirmPwOff = true }
+            if (hasPw) SettingsRow("Change Password", last = true) { pwPage = true }
         }
     }
     if (confirmPwOff) GlassAlert(onDismissRequest = { confirmPwOff = false },
