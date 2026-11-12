@@ -312,6 +312,13 @@ object LocalDb {
         runCatching { d.rawQuery("SELECT 1 FROM messages LIMIT 1", null).use { it.moveToFirst() } }.getOrDefault(false)
     } ?: false
 
+    /** A full history to back up: some chat has a no-gap mark, or a backup was restored here
+     *  (same test as iOS hasSyncedMarks: a fresh phone's first few rows are not a history). */
+    fun hasSyncedMarks(uid: String): Boolean {
+        if (!meta(uid, "restored").isNullOrEmpty()) return true
+        return db(uid)?.let { d -> runCatching { d.rawQuery("SELECT 1 FROM chats WHERE synced_up_to IS NOT NULL LIMIT 1", null).use { it.moveToFirst() } }.getOrDefault(false) } ?: false
+    }
+
     /** Account deletion: the whole file goes. */
     fun deleteFor(uid: String) {
         helpers.remove(uid)?.close()

@@ -53,7 +53,7 @@ object ChatBackup {
      */
     suspend fun backUp(ctx: Context, uid: String, password: String?, automatic: Boolean, token: String? = null): Result = lock.withLock {
         if (!ENABLED) return Result.Failed("Chat backup is not on yet.")
-        if (automatic && (!LocalDb.hasAnyMessage(uid) || restoreWaiting(ctx, uid))) return Result.NothingToBackUp
+        if (automatic && (!LocalDb.hasSyncedMarks(uid) || restoreWaiting(ctx, uid))) return Result.NothingToBackUp
         val tok = token ?: when (val a = Drive.authorize(ctx)) {
             is Drive.Auth.Token -> a.value
             is Drive.Auth.Ask -> return Result.NeedsGoogle(a)
