@@ -51,6 +51,8 @@ enum class GetStartedCard(val title: String, val iconRes: Int) {
     CHAT_COLOR("Bubble color", com.fariin.app.R.drawable.ic_gs_palette_fill),
     /** Only after Skip on the restore screen: the second chance (owner 2026-11-12). Never stored. */
     RESTORE("Restore", com.fariin.app.R.drawable.ic_sf_lock_fill),
+    /** Seven days after Not Now on the chat backup card: one more ask (both apps). Never stored. */
+    BACK_UP("Back Up", com.fariin.app.R.drawable.ic_gs_cloud_up_fill),
 }
 
 /**
@@ -76,7 +78,7 @@ object GetStartedStore {
         if (hasPhoto) addTo(c, "$uid.done", GetStartedCard.ADD_PHOTO)
         val removed = p(c).getStringSet("$uid.removed", emptySet()).orEmpty()
         val seen = p(c).getStringSet("$uid.seen", emptySet()).orEmpty()
-        return GetStartedCard.entries.filter { it != GetStartedCard.RESTORE && it.name !in removed && it.name !in seen }
+        return GetStartedCard.entries.filter { it != GetStartedCard.RESTORE && it != GetStartedCard.BACK_UP && it.name !in removed && it.name !in seen }
     }
 
     // DONE STEPS (owner 2026-11-04: "when a task finishes it needs to show the user"): a done step

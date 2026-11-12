@@ -12,6 +12,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -213,6 +214,10 @@ fun ChatBackupGate(me: String) {
     var pw by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
+
+    // The Restore circle: look again, even though this backup was checked before.
+    val reopen by ChatBackup.reopen.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(reopen) { if (reopen > 0) step = "look" }
 
     suspend fun search(t: String) {
         token = t

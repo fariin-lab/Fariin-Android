@@ -70,6 +70,18 @@ object ChatBackup {
         else -> "The backup didn't finish. It will try again."
     }
 
+    /** Asks the sign-in gate to look again (the Restore circle). */
+    val reopen = kotlinx.coroutines.flow.MutableStateFlow(0)
+
+    /** The Back Up circle: Not Now on the backup card was 7+ days ago, backup is still off, not hidden. */
+    fun backUpCircle(ctx: Context, uid: String): Boolean {
+        if (!ENABLED || frequency(ctx, uid) != "off") return false
+        val asked = LocalDb.meta(uid, "backup.asked") ?: return false
+        val at = asked.removePrefix("later:").toLongOrNull() ?: return false
+        return asked.startsWith("later:") && System.currentTimeMillis() - at >= 7L * 24 * 60 * 60 * 1000
+    }
+    fun hideBackUpCircle(uid: String) = LocalDb.setMeta(uid, "backup.asked", "dismissed")
+
     /** True when a restore was offered and skipped and that backup still waits (no automatic backup then). */
     fun restoreWaiting(ctx: Context, uid: String): Boolean = !LocalDb.meta(uid, "restore.waiting").isNullOrEmpty()
 

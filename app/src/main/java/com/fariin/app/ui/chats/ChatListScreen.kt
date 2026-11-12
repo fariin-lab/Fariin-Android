@@ -881,10 +881,15 @@ fun ChatListScreen(
         // After Skip on the restore screen, Restore leads the card (owner 2026-11-12), for any
         // account: the card then shows even when it was closed or the account is not new.
         val restoreLater by com.fariin.app.crypto.KeyBackup.later.collectAsState()
-        val restoreSpot = restoreLater != null && !state.loading && !searching && !selecting && !showArchive && filter == FILTER_ALL
-        val gsCards = remember(gsVersion, gsShown, myPhoto, restoreSpot) {
+        val listQuiet = !state.loading && !searching && !selecting && !showArchive && filter == FILTER_ALL
+        // Chat backup's second chances (both apps): Restore after a skipped restore, Back Up a week after Not Now.
+        val backupRestore = listQuiet && com.fariin.app.backup.ChatBackup.ENABLED && com.fariin.app.backup.ChatBackup.restoreWaiting(appCtx, me)
+        val backupAsk = listQuiet && com.fariin.app.backup.ChatBackup.backUpCircle(appCtx, me)
+        val restoreSpot = (restoreLater != null || backupRestore) && listQuiet
+        val gsCards = remember(gsVersion, gsShown, myPhoto, restoreSpot, backupAsk) {
             val base = if (gsShown) GetStartedStore.cards(appCtx, me, hasPhoto = !myPhoto.isNullOrEmpty()) else emptyList()
-            if (restoreSpot) (listOf(GetStartedCard.RESTORE) + base).take(4) else base
+            val lead = listOfNotNull(GetStartedCard.RESTORE.takeIf { restoreSpot }, GetStartedCard.BACK_UP.takeIf { backupAsk })
+            (lead + base).take(4)
         }
         Box(Modifier.align(Alignment.BottomCenter).padding(bottom = com.fariin.app.ui.shell.bottomBarInset())
             .then(androidx.compose.ui.Modifier.onSizeChanged { gsHeightPx = if (gsCards.isNotEmpty()) it.height else 0 })) {
@@ -895,10 +900,17 @@ fun ChatListScreen(
                         GetStartedCard.INVITE -> com.fariin.app.ui.settings.shareInvite(screenCtx, myHandle)
                         GetStartedCard.ADD_PHOTO -> people.editProfile()
                         GetStartedCard.CHAT_COLOR -> { com.fariin.app.ui.settings.SettingsLink.request(com.fariin.app.ui.settings.PAGE_CHAT_COLOR); onSettings() }
-                        GetStartedCard.RESTORE -> com.fariin.app.crypto.KeyBackup.later.value?.let { com.fariin.app.crypto.KeyBackup.ask.value = it }
+                        GetStartedCard.RESTORE -> if (backupRestore) com.fariin.app.backup.ChatBackup.reopen.value++
+                            else com.fariin.app.crypto.KeyBackup.later.value?.let { com.fariin.app.crypto.KeyBackup.ask.value = it }
+                        GetStartedCard.BACK_UP -> { com.fariin.app.ui.settings.SettingsLink.request(com.fariin.app.ui.settings.PAGE_CHAT_BACKUP); onSettings() }
                     }
                 },
-                onRemove = { if (it == GetStartedCard.RESTORE) com.fariin.app.crypto.KeyBackup.dismissLater(appCtx, me) else GetStartedStore.remove(appCtx, me, it) },
+                onRemove = { when {
+                    it == GetStartedCard.RESTORE && backupRestore -> { com.fariin.app.local.LocalDb.setMeta(me, "restore.waiting", ""); GetStartedStore.version.intValue++ }
+                    it == GetStartedCard.RESTORE -> com.fariin.app.crypto.KeyBackup.dismissLater(appCtx, me)
+                    it == GetStartedCard.BACK_UP -> { com.fariin.app.backup.ChatBackup.hideBackUpCircle(me); GetStartedStore.version.intValue++ }
+                    else -> GetStartedStore.remove(appCtx, me, it)
+                } },
                 onHideAll = {
                     if (restoreLater != null) com.fariin.app.crypto.KeyBackup.dismissLater(appCtx, me)
                     GetStartedStore.finish(appCtx, me); gsUndo = true
