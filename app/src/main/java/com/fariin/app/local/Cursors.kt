@@ -19,7 +19,7 @@ object Cursors {
 
     fun advance(cid: String, upToMs: Long) {
         val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
-        if (upToMs <= (sent[cid] ?: 0L)) return
+        if (upToMs - 1 <= (sent[cid] ?: 0L)) return
         val now = System.currentTimeMillis()
         val since = now - (lastAt[cid] ?: 0L)
         if (since < EVERY_MS) {
@@ -34,10 +34,12 @@ object Cursors {
     }
 
     private fun write(me: String, cid: String, upToMs: Long) {
-        if (upToMs <= (sent[cid] ?: 0L)) return
+        if (upToMs - 1 <= (sent[cid] ?: 0L)) return
         val now = System.currentTimeMillis()
         // Never ahead of the server's clock check (the rules allow a minute of drift).
-        val value = minOf(upToMs, now)
+        // One ms under the newest filed row: a row 0.7 ms after a whole ms can never fall under it
+        // (the server also deletes strictly below the line). Same as iOS.
+        val value = minOf(upToMs - 1, now)
         sent[cid] = value; lastAt[cid] = now
         FirebaseFirestore.getInstance().collection("conversations").document(cid).collection("cursors").document(me)
             .set(mapOf("deliveredUpTo" to value, "at" to FieldValue.serverTimestamp()))

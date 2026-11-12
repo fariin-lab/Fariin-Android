@@ -141,6 +141,11 @@ class ThreadRepository(
     @Volatile private var seeded = false
     /** Messages are only cached once the listener has really answered. */
     @Volatile private var live = false
+    /** The live window's last answer came from the server (not the phone's cache): only then may
+     *  this chat vouch for what it filed (safety review 2026-11-12, both apps). */
+    @Volatile private var windowFromServer = false
+    /** An older page was answered from the cache once: older pages no longer count as one unbroken run. */
+    @Volatile private var olderFromCache = false
     @Volatile private var msgFailed = false
 
     /** This chat is a channel, as the chat list or my followed channels know it. */
@@ -229,6 +234,7 @@ class ThreadRepository(
                 if (snap.metadata.isFromCache && snap.isEmpty && (liveDocs.isNotEmpty() || seeded)) return@addSnapshotListener
                 seeded = false
                 live = true
+                windowFromServer = !snap.metadata.isFromCache
                 keepSlidOut(snap.documents, full = snap.size() >= PAGE_SIZE)
                 liveDocs.clear()
                 for (d in snap.documents) liveDocs[d.id] = d
@@ -425,7 +431,7 @@ class ThreadRepository(
                 // read would have asked the server first).
                 if (first && snap.metadata.isFromCache && snap.isEmpty) return@addSnapshotListener
                 // Offline (the answer came from the cache): the phone's history fills in behind it.
-                if (first && snap.metadata.isFromCache) fromDb()
+                if (first && snap.metadata.isFromCache) { olderFromCache = true; fromDb() }
                 if (first) {
                     first = false
                     // Rows the database drew (while offline) for this span that the server no longer has: gone.
@@ -576,10 +582,16 @@ class ThreadRepository(
             // The no-gap rule's inputs: the oldest server row read in one unbroken run (the live
             // window plus the older pages, all contiguous from the newest), and whether the server
             // said there is nothing older.
-            val oldestRead = if (chSync == null) (liveDocs.values + olderDocs.values)
-                .mapNotNull { it.getTimestamp("createdAt")?.toDate()?.time }.minOrNull() else null
-            com.fariin.app.local.LocalDb.save(me, cid, sorted, cursor = !isChannelChat() && chSync == null,
-                oldestFiledMs = oldestRead, reachedStart = !_state.value.canLoadOlder)
+            // Safety review 2026-11-12: vouch only for server rows (never cache, seed or local-db
+            // rows), never past a message this phone could not open yet ("…", or a group lock whose
+            // key may still be released), and the newest point is the newest SERVER row.
+            val serverDocs = if (olderFromCache) liveDocs.values.toList() else (liveDocs.values + olderDocs.values)
+            val times = serverDocs.filter { !it.metadata.hasPendingWrites() }.mapNotNull { it.getTimestamp("createdAt")?.toDate()?.time }
+            val unopened = sorted.any { !it.deleted && (it.text == "\u2026" || it.text == Wire.LOCKED) }
+            val vouch = windowFromServer && !unopened && chSync == null && !isChannelChat() && times.isNotEmpty()
+            com.fariin.app.local.LocalDb.save(me, cid, sorted, cursor = vouch,
+                oldestFiledMs = times.minOrNull(), newestFiledMs = times.maxOrNull(),
+                reachedStart = !_state.value.canLoadOlder && !olderFromCache)
         }
         scheduleBurn(Disappearing.nextExpiry(stamped, now))
         if (due.isNotEmpty()) burn(due)

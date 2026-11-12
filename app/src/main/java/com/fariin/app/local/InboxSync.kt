@@ -51,7 +51,7 @@ object InboxSync {
             val page = snap.documents.map { d ->
                 Message.fromFirestore(d.id, d.data ?: emptyMap(), cid) { raw, author -> crypto.decrypt(raw, cid, author) }
             }
-            if (page.any { it.text == "…" && !it.deleted }) return   // keys not in yet: the next kick tries again
+            if (page.any { (it.text == "…" || it.text == com.fariin.app.crypto.Wire.LOCKED) && !it.deleted }) return   // keys not in yet: the next kick tries again
             if (!LocalDb.saveNow(me, cid, page)) return
             val newest = snap.documents.mapNotNull { it.getTimestamp("createdAt")?.toDate()?.time }.maxOrNull() ?: return
             mark = maxOf(mark, newest)

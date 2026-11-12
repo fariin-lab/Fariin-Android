@@ -76,7 +76,7 @@ object LocalDb {
      * the newest) is at or before the existing mark. No mark and not at the start = vouch for nothing.
      */
     fun save(uid: String, cid: String, messages: List<Message>, cursor: Boolean = false,
-             oldestFiledMs: Long? = null, reachedStart: Boolean = false) {
+             oldestFiledMs: Long? = null, newestFiledMs: Long? = null, reachedStart: Boolean = false) {
         val rows = messages.filter(::keepable)
         if (rows.isEmpty()) return
         val changed = rows.filter { written["$uid/$cid/${it.id}"] != it.hashCode() }
@@ -101,8 +101,8 @@ object LocalDb {
                 } finally { db.endTransaction() }
                 runCatching { refreshSummary(db, cid) }
                 // Stored for good: the mark (and the cursor the server deletes by) may move, no hole allowed.
-                if (cursor) {
-                    val newest = rows.maxOf { it.createdAtMillis.toLong() }
+                if (cursor && newestFiledMs != null) {
+                    val newest = newestFiledMs
                     val mark = mark(db, cid)
                     if (reachedStart || (mark != null && oldestFiledMs != null && oldestFiledMs <= mark)) {
                         val next = maxOf(mark ?: 0L, newest)

@@ -67,7 +67,7 @@ object HistoryPull {
             val page = snap.documents.map { d ->
                 Message.fromFirestore(d.id, d.data ?: emptyMap(), cid) { raw, author -> crypto.decrypt(raw, cid, author) }
             }
-            if (page.any { it.text == "\u2026" && !it.deleted }) return   // keys not in yet: try again later
+            if (page.any { (it.text == "\u2026" || it.text == com.fariin.app.crypto.Wire.LOCKED) && !it.deleted }) return   // keys not in yet: try again later
             if (!LocalDb.saveNow(me, cid, page)) return
             val pageOldest = snap.documents.mapNotNull { it.getTimestamp("createdAt")?.toDate()?.time }.minOrNull()
             if (pageOldest != null) { oldest = pageOldest; LocalDb.setMeta(me, "pull.$cid", "$oldest|$t0") }
