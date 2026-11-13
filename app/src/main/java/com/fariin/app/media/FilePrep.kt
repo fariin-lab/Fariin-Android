@@ -17,7 +17,7 @@ import java.io.File
 class FilePrep(val name: String, val bytes: ByteArray, val previewJpeg: ByteArray?) {
     companion object {
         /** Limits.fileUploadBytes: 25 MB, deliberately below the Storage rule. */
-        const val MAX_BYTES = 25 * 1024 * 1024
+        val MAX_BYTES: Int get() = MediaRules.FILE_UPLOAD_BYTES.toInt()
 
         sealed class Result {
             data class Ok(val prep: FilePrep) : Result()

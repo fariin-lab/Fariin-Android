@@ -462,6 +462,20 @@ private fun ThreadContent(
             }
     }
     val peopleNav = com.fariin.app.ui.people.LocalPeopleNav.current
+    // A group member's small photo opens their card (iOS, owner 2026-11-13): Message, Voice, Video,
+    // and the admin rows; a row that needs a page opens the group's pages over the chat.
+    val memberTap by MemberTap.request.collectAsState()
+    var memberPage by remember { mutableStateOf<com.fariin.app.ui.people.GroupPage?>(null) }
+    DisposableEffect(ui.cid) { onDispose { MemberTap.request.value = null } }   // never carried into another chat
+    memberTap?.let { uid ->
+        if (ui.isGroup && ui.channel == null && ui.groupDoc.isNotEmpty())
+            com.fariin.app.ui.people.MemberCard(ui.cid, ui.me, uid, ui.groupDoc, onClose = { MemberTap.request.value = null },
+                onProfile = { MemberTap.request.value = null; actions.onOpenPerson(it) },
+                open = { MemberTap.request.value = null; memberPage = it },
+                onMessage = { MemberTap.request.value = null; actions.onMessagePerson(it) })
+        else MemberTap.request.value = null
+    }
+    memberPage?.let { p -> com.fariin.app.ui.people.GroupPagesHost(ui.cid, ui.me, p, onExit = { memberPage = null }) }
     // Forward picker (media worker: ForwardSheet.kt).
     var forwardFor by remember { mutableStateOf<Message?>(null) }
     // The quick forward arrow beside a group's photos, videos and links (QuickForward).
@@ -1919,7 +1933,10 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
         verticalAlignment = Alignment.Bottom,
     ) {
         if (showSender) {
-            if (g.last) Avatar(ui.photos[m.authorId], 34.dp) else Spacer(Modifier.width(34.dp))
+            if (g.last) Box(Modifier.clip(CircleShape).clickable(enabled = ui.channel == null && m.authorId != ui.me,
+                    onClickLabel = "Member") { MemberTap.request.value = m.authorId }) {
+                Avatar(ui.photos[m.authorId], 34.dp)
+            } else Spacer(Modifier.width(34.dp))
             Spacer(Modifier.width(6.dp))
         }
         if (failed) {
@@ -3293,13 +3310,22 @@ private class ListPadding(private val density: androidx.compose.ui.unit.Density,
 }
 
 
+/** The group member whose small photo was tapped in the chat (their card opens over it). */
+internal object MemberTap {
+    val request = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+}
+
 /** One tap to Forward from beside a bubble (owner 2026-11-13, Android only for now). */
 internal object QuickForward {
     val request = kotlinx.coroutines.flow.MutableStateFlow<Message?>(null)
 
+    /** Off (owner 2026-11-13, with a photo: "in group it has every thing share, remove it"). The
+     *  arrow sat beside every photo in a group; Forward stays in the message menu. */
+    const val SHOWN = false
+
     /** In a group, someone else's photo, video, album, GIF, file or link; never a view-once or a restricted chat. */
     fun wanted(ui: ThreadUi, m: Message, isMe: Boolean): Boolean =
-        ui.isGroup && ui.channel == null && !isMe && !m.deleted && !m.viewOnce && m.sendState == null && !m.isSystem &&
+        SHOWN && ui.isGroup && ui.channel == null && !isMe && !m.deleted && !m.viewOnce && m.sendState == null && !m.isSystem &&
             (m.mediaKind != null || m.linkPreview != null || m.type == "gif") &&
             !com.fariin.app.data.ChatRestrictions.isOn(ui.cid)
 }

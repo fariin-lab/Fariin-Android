@@ -16,7 +16,9 @@ object MessageRules {
      * Limits.deleteForEveryoneSeconds (48 h). iOS defines it but never applies it (no rule and no
      * menu check uses it), so Delete for Everyone has no time limit on iOS. Kept the same here.
      */
-    const val DELETE_FOR_EVERYONE_MS = 48 * 3600 * 1000.0
+    /** 0 from the server means no limit (owner 2026-11-13). */
+    val DELETE_FOR_EVERYONE_MS: Double get() = com.fariin.app.data.AppConfig.int(com.fariin.app.data.AppConfig.K.deleteForEveryoneHours)
+        .let { if (it > 0) it * 3600 * 1000.0 else Double.POSITIVE_INFINITY }
 
     /** QuickReaction.bar, in this order always (owner order on iOS). */
     val QUICK_REACTIONS = listOf("👍", "❤️", "😂", "😮", "😢", "🙏")

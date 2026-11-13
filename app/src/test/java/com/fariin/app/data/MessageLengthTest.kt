@@ -31,10 +31,11 @@ class MessageLengthTest {
         assertEquals("😀" + "y".repeat(10), parts[1])
     }
 
-    @Test fun maxLengthTextIsThreeBubbles() {
+    @Test fun maxLengthTextIsTwoBubbles() {
+        // 4,096 (owner 2026-11-13, as iOS) over 2,500 a bubble.
         val words = buildString { while (length < MessageLength.MAX_CHARS - 6) append("words ") }.trim()
         val parts = MessageLength.splitForBubbles(words)
-        assertEquals(3, parts.size)
+        assertEquals(2, parts.size)
         assertTrue(parts.all { it.length <= MessageLength.BUBBLE_CHARS })
     }
 

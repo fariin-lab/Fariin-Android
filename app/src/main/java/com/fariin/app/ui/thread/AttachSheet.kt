@@ -377,7 +377,7 @@ internal fun AttachSheet(
                     ) {
                         Box(Modifier.weight(1f).padding(vertical = 4.dp), contentAlignment = Alignment.CenterStart) {
                             if (caption.isEmpty()) Text(if (viewOnce) "View once" else "Add a caption", fontSize = 17.sp, color = c.secondary)
-                            BasicTextField(caption, { caption = it }, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
+                            BasicTextField(caption, { caption = it.take(com.fariin.app.media.MediaRules.CAPTION_CHARS) }, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
                                 cursorBrush = SolidColor(c.accent), maxLines = 5,
                                 // Typing opens the sheet fully: at half height the caption sat under the
                                 // keyboard (Pixel 2026-11-05).

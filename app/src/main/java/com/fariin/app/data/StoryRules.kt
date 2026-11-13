@@ -46,14 +46,14 @@ enum class StoryAudienceChoice(val title: String, val tagLabel: String, val foot
 object StoryRules {
     /** iOS story lifetime menu: "Choose how long the story will be visible." */
     val HOURS = listOf(6, 12, 24, 48)
-    const val DEFAULT_HOURS = 24
+    val DEFAULT_HOURS: Int get() = com.fariin.app.data.AppConfig.int(com.fariin.app.data.AppConfig.K.storyExpiryHours)
 
     /** iOS StoryPhoto: widths tried in turn until the JPEG is at most 1.5 MB, quality 0.85. */
     val PHOTO_WIDTHS = listOf(1080, 900, 720, 540)
     const val PHOTO_BUDGET = 1_500_000
     const val PHOTO_QUALITY = 85
     /** Storage rule: a story file is under 50 MB. */
-    const val VIDEO_MAX_BYTES = 50L * 1024 * 1024
+    val VIDEO_MAX_BYTES: Long get() = com.fariin.app.data.AppConfig.bytes(com.fariin.app.data.AppConfig.K.storyUploadMB)
     const val VIEWER_LIST_CAP = 500L
 
     /** iOS StoriesService.newStoryId: 10 characters of [0-9A-Za-z]. */

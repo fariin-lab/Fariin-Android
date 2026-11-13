@@ -82,6 +82,10 @@ object GroupManage {
 
     /** promoteGroupAdmin: no chat line (iOS 2026-10-23); restrictions cleared only by who may lift them. */
     suspend fun promote(cid: String, uid: String, rights: List<String>, team: GroupAdmins.Team) {
+        // The admin panel's ceiling (getAppConfig groupAdminsMax, 20 shipped); the owner is not counted.
+        val max = AppConfig.int(AppConfig.K.groupAdminsMax)
+        if (max > 0 && uid !in team.admins && team.admins.count { it != team.owner } >= max)   // 0 = no limit
+            throw LimitReached("A group can have up to $max admins.")
         val data = hashMapOf<String, Any>(
             "admins" to FieldValue.arrayUnion(uid),
             "adminRights.$uid" to rights,

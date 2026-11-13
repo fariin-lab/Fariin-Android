@@ -45,7 +45,7 @@ data class ProfileLink(val title: String, val url: String) {
 
 /** The bio's rules and my profile's own small writes (iOS ProfileStore, Limits). */
 object ProfileWrites {
-    const val BIO_CHARS = 140
+    val BIO_CHARS: Int get() = com.fariin.app.data.AppConfig.int(com.fariin.app.data.AppConfig.K.bioChars)
 
     /** iOS Limits.oneParagraph: every whitespace a space, no doubles, then the ceiling. */
     fun oneParagraph(raw: String, max: Int = BIO_CHARS): String {

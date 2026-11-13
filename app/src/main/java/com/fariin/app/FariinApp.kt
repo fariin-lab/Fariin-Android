@@ -73,7 +73,7 @@ class FariinApp : Application() {
         Thread({ for (f in listOf(com.fariin.app.ui.settings.CHAT_PREFS, "fariin_privacy", "fariin_history_start")) runCatching {
             getSharedPreferences(f, MODE_PRIVATE).all }
             // Messages I deleted for me: read once here, not by the first chat that opens.
-            runCatching { com.fariin.app.data.HiddenMessages.load(this) } }, "prefs-prefetch").apply { isDaemon = true }.start() }, PREFS_PREFETCH_DELAY_MS)
+            runCatching { com.fariin.app.data.HiddenMessages.load(this) }; runCatching { com.fariin.app.data.HiddenLast.load(this) } }, "prefs-prefetch").apply { isDaemon = true }.start() }, PREFS_PREFETCH_DELAY_MS)
         StartClock.mark("prefs+reactionart")
         com.fariin.app.ui.thread.DecodedPictures.init(this)
         com.fariin.app.ui.thread.StickerLottie.init(this)
@@ -82,6 +82,7 @@ class FariinApp : Application() {
         com.fariin.app.data.ContactNames.init(this)
         com.fariin.app.data.MsgPolicy.init(this)     // Message Requests on/off, as of the last open
         com.fariin.app.data.AppFeatures.init(this)   // the admin panel's switches, as of the last open
+        com.fariin.app.data.AppConfig.init(this)     // getAppConfig's launch snapshot for this account
         com.fariin.app.data.AppearancePrefs.applySplash(this)   // the next launch screen follows Night Mode
         StartClock.mark("features")
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0

@@ -175,6 +175,7 @@ fun rememberChannelThread(cid: String, me: String, doc: Map<String, Any?>, messa
     var joining by remember(cid) { mutableStateOf(false) }
     var problem by remember(cid) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val followCtx = androidx.compose.ui.platform.LocalContext.current
     val docInfo = if (doc["channel"] == true) ChannelInfo.from(cid, doc) else null
     // A visitor cannot read the document: the header comes from publicGroupPreview, once the
     // first page of posts says this chat can be read from outside. Not only an empty doc: a
@@ -231,6 +232,7 @@ fun rememberChannelThread(cid: String, me: String, doc: Map<String, Any?>, messa
         held = { mid -> rx[cid]?.get(mid) },
         counts = { m -> served["$cid/${m.id}"] ?: m.reactionCounts },
         onFollow = {
+            com.fariin.app.ui.components.SuccessHaptic.soft(followCtx)   // a soft tap on Follow (owner 2026-11-13)
             problem = null; joining = true
             scope.launch {
                 try {

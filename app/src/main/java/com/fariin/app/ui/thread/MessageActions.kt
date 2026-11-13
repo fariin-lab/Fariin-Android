@@ -85,6 +85,9 @@ data class ThreadActions(
     /** The list reached (true) or left (false) the newest message. */
     val onAtBottom: (Boolean) -> Unit = {},
     val onTitleClick: () -> Unit = {},
+    /** A person's profile page, and a 1:1 chat with them (the group member card's Open Profile / Message). */
+    val onOpenPerson: (String) -> Unit = {},
+    val onMessagePerson: (String) -> Unit = {},
     /** The header menu's Mute / Unmute. */
     val onToggleMute: () -> Unit = {},
     val onUnblock: () -> Unit = {},

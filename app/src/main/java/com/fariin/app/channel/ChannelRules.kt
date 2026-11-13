@@ -249,8 +249,9 @@ object ChannelRules {
 
     // ---- New channel ---------------------------------------------------------------------------
 
-    const val NAME_MAX = 100
-    const val ABOUT_MAX = 255
+    /** Group and channel names, and a channel's about text (the admin panel may change both). */
+    val NAME_MAX: Int get() = com.fariin.app.data.AppConfig.int(com.fariin.app.data.AppConfig.K.groupNameChars)
+    val ABOUT_MAX: Int get() = com.fariin.app.data.AppConfig.int(com.fariin.app.data.AppConfig.K.channelDescChars)
     const val LINK_MIN = 5
 
     /**

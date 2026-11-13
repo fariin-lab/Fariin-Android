@@ -254,7 +254,9 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
         // Our own "Share with" sheet (iOS), not the system share page; that sits in its corner.
         shareLink = "https://fariin.com/${info.username}" to text
     }
+    val followCtx = androidx.compose.ui.platform.LocalContext.current
     fun follow() {
+        com.fariin.app.ui.components.SuccessHaptic.soft(followCtx)   // a soft tap: it did something (owner 2026-11-13)
         error = null; following = true
         scope.launch {
             try {

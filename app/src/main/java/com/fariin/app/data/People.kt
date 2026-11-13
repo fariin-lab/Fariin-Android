@@ -234,6 +234,14 @@ class FirestorePeople(
     override suspend fun setBlocked(uid: String, on: Boolean): Boolean = ok {
         if (uid.isEmpty() || uid == me || uid.contains('/')) error("bad uid")
         val ref = blockedRef(uid)
+        // The admin panel's ceiling (getAppConfig blockedUsersMax, 1,000 shipped).
+        if (on && !BlockList.contains(uid) && BlockList.snapshot.entries.size >= AppConfig.int(AppConfig.K.blockedUsersMax)) {
+            val max = AppConfig.int(AppConfig.K.blockedUsersMax)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                com.fariin.app.ui.components.Snack.show("You can block up to $max people. Unblock someone first.")
+            }
+            error("block limit")
+        }
         if (on) {
             ref.set(mapOf("at" to FieldValue.serverTimestamp())).await()
             // Blocking the person I am on a 1:1 call with ends that call (owner 2026-11-08: it ran on
@@ -331,6 +339,9 @@ class FirestorePeople(
         // The poster goes with the circle, as on iOS: 1280 at 0.78. Without it an account whose
         // poster was set on an iPhone kept the OLD face as the big profile header there.
         val posterJpeg = squareJpeg(jpegOrAny, 1280, 78) ?: jpeg
+        // storage.rules refuses a bigger file anyway; this says why (getAppConfig profilePhotoMB).
+        if (maxOf(jpeg.size, posterJpeg.size) > AppConfig.bytes(AppConfig.K.profilePhotoMB))
+            throw LimitReached("That photo is too large. Choose a smaller one.")
         val path = "profiles/$me.jpg"
         val posterPath = "profiles/$me-poster.jpg"
         val meta = StorageMetadata.Builder().setContentType("image/jpeg").setCustomMetadata("audience", "checked").build()
@@ -386,7 +397,7 @@ class FirestorePeople(
         for (p in allowed + listOfNotNull(mine)) { names[p.uid] = p.name.ifEmpty { p.handle }; p.photoUrl?.let { photos[p.uid] = it } }
         val ref = db.collection("conversations").document()
         val data = hashMapOf<String, Any>(
-            "type" to "group", "title" to title.trim().take(100), "users" to users, "admins" to listOf(me),
+            "type" to "group", "title" to title.trim().take(com.fariin.app.channel.ChannelRules.NAME_MAX), "users" to users, "admins" to listOf(me),
             "createdBy" to me, "createdAt" to FieldValue.serverTimestamp(), "names" to names, "photos" to photos,
             "unreadCount" to users.associateWith { 0 }, "typing" to users.associateWith { false },
             "updatedAt" to FieldValue.serverTimestamp(), "e2ee" to false,
@@ -725,7 +736,7 @@ object GroupRules {
     fun description(data: Map<String, Any?>): String = (data["desc"] as? String)?.trim() ?: ""
 
     /** ChatService.renameGroup: trimmed, at most 100 characters. */
-    fun cleanTitle(s: String): String = s.trim().take(100)
+    fun cleanTitle(s: String): String = s.trim().take(com.fariin.app.channel.ChannelRules.NAME_MAX)
 
     /** The system lines iOS writes (ChatService.renameGroup / removeGroupAvatar; "Someone" when nameless). */
     fun renamedLine(myName: String, title: String) = "${myName.ifEmpty { "Someone" }} renamed the group to “$title”"

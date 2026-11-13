@@ -326,15 +326,29 @@ object GroupShareLink {
     /**
      * iOS GroupInfoView.mayShareLink / inviteLink: admins and the owner share the link, members only
      * while "Share the group link" is on; the server's code first, else the group doc's old `inviteCode`.
-     * null = no Share Group or QR Code in the menu.
+     * A public group (iOS, owner 2026-11-13): any member who may not share the invite link shares
+     * the public one, https://fariin.com/<name>, the way large messengers let every member pass a
+     * public group on. null = no Share Group or QR Code in the menu.
      */
     fun of(me: String, conv: Map<String, Any?>, serverCode: String?): String? {
         val admins = (conv["admins"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
         val may = me in admins || conv["createdBy"] == me || conv["membersCanShareLink"] == true
-        if (!may) return null
         val code = serverCode ?: (conv["inviteCode"] as? String)
-        if (code.isNullOrEmpty() || !QrRules.safeSegment(code)) return null
-        return "https://fariin.com/g/$code"
+        if (may && !code.isNullOrEmpty() && QrRules.safeSegment(code)) return "https://fariin.com/g/$code"
+        return publicLink(conv)
+    }
+
+    /** The public group's own link, or null for a private group. */
+    fun publicLink(conv: Map<String, Any?>): String? {
+        val name = conv["username"] as? String
+        if (conv["isPublic"] != true || name.isNullOrEmpty() || !QrRules.safeSegment(name)) return null
+        return "https://fariin.com/$name"
+    }
+
+    /** What Share Group sends: the public link with an invitation line (iOS words), else the link alone. */
+    fun text(conv: Map<String, Any?>, link: String): String {
+        val title = (conv["title"] as? String)?.trim().orEmpty()
+        return if (link == publicLink(conv) && title.isNotEmpty()) "Join $title on Fariin: $link" else link
     }
 }
 

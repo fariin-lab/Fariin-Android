@@ -1940,6 +1940,12 @@ class ThreadRepository(
         // deleteForMe on a failed message: queue entry, upload and bubble all go).
         m.clientId?.let { pending.remove(it); retryPhoto.remove(it); retryVoice.remove(it)
             if (m.sendState != null && !SendQueue.isInFlight(it)) { SendQueue.remove(me, it); retryMedia.remove(it) } }
+        // The chat's newest message: the chat list shows the one before it from now on (HiddenLast).
+        val shown = _state.value.messages.filter { !it.isSystem && !HiddenMessages.isHidden(it.id) }
+        if (shown.maxByOrNull { it.createdAtMillis }?.id == m.id) {
+            val before = shown.filter { it.id != m.id }.maxByOrNull { it.createdAtMillis }
+            HiddenLast.set(context, cid, m.createdAtMillis, before?.let { MessageInfoRules.snippet(it) } ?: "")
+        }
         HiddenMessages.hide(context, m.id)
         rebuild()
     }

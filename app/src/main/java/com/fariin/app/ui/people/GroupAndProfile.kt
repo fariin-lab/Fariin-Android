@@ -647,7 +647,7 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
                             tint = c.accent, modifier = Modifier.size(28.dp))   // iOS: the owner's camera drawing (2026-10-18)
                     }
                     Spacer(Modifier.width(4.dp))
-                    Box(Modifier.weight(1f)) { Field(title, "Group Name") { title = it.take(100) } }
+                    Box(Modifier.weight(1f)) { Field(title, "Group Name") { title = it.take(com.fariin.app.channel.ChannelRules.NAME_MAX) } }
                 }
             }
             NewGroupTimerSection(timer) { timer = it }
@@ -922,7 +922,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     }
     val inviteLink = if (iAmMember) com.fariin.app.data.GroupShareLink.of(me, conv, serverCode) else null
     var sharingLink by remember { mutableStateOf(false) }
-    if (sharingLink && inviteLink != null) com.fariin.app.ui.thread.LinkShareSheet(me, inviteLink, onDismiss = { sharingLink = false })
+    if (sharingLink && inviteLink != null) com.fariin.app.ui.thread.LinkShareSheet(me, inviteLink,
+        com.fariin.app.data.GroupShareLink.text(conv, inviteLink), onDismiss = { sharingLink = false })
     var showQr by remember { mutableStateOf(false) }
     var publicQr by remember { mutableStateOf<String?>(null) }
     var publicShare by remember { mutableStateOf<String?>(null) }
@@ -1383,7 +1384,7 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
             Spacer(Modifier.height(8.dp))
             // Name and description in ONE card, a line between them (iOS EditGroupView).
             SettingsSection(footer = w("Optional. Shown on the group's info page.")) {
-                Field(name, w("Group Name")) { name = it.take(100) }
+                Field(name, w("Group Name")) { name = it.take(com.fariin.app.channel.ChannelRules.NAME_MAX) }
                 Box(Modifier.fillMaxWidth().padding(start = 16.dp).height(0.5.dp).background(c.separator))
                 DescriptionField(desc, descFocus) { desc = GroupRules.oneParagraph(it) }
             }

@@ -13,11 +13,29 @@ import android.os.VibratorManager
  * vibrator itself, the same with the sound on or off; the phone's "Vibration" switch still wins.
  */
 object SuccessHaptic {
-    fun play(context: Context) {
+    private fun vibrator(context: Context): Vibrator? {
         val v: Vibrator? = if (Build.VERSION.SDK_INT >= 31)
             (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager)?.defaultVibrator
         else @Suppress("DEPRECATION") (context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)
-        if (v == null || !v.hasVibrator()) return
+        return v?.takeIf { it.hasVibrator() }
+    }
+
+    /** One soft tap: "that did something" (owner 2026-11-13, following a channel). */
+    fun soft(context: Context) {
+        val v = vibrator(context) ?: return
+        runCatching {
+            when {
+                Build.VERSION.SDK_INT >= 30 && v.areAllPrimitivesSupported(VibrationEffect.Composition.PRIMITIVE_CLICK) ->
+                    v.vibrate(VibrationEffect.startComposition()
+                        .addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 0.5f).compose())
+                Build.VERSION.SDK_INT >= 29 -> v.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
+                else -> v.vibrate(VibrationEffect.createOneShot(20, 120))
+            }
+        }
+    }
+
+    fun play(context: Context) {
+        val v = vibrator(context) ?: return
         runCatching {
             when {
                 Build.VERSION.SDK_INT >= 30 && v.areAllPrimitivesSupported(VibrationEffect.Composition.PRIMITIVE_CLICK) ->

@@ -348,7 +348,7 @@ private fun EditorBar(
                         Text("View Once Media", color = grey, fontSize = 17.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     } else {
                         if (caption.isEmpty()) Text("Add a caption…", color = grey, fontSize = 17.sp)
-                        BasicTextField(caption, { onCaption(it.take(1000)) }, textStyle = TextStyle(color = Color.White, fontSize = 17.sp),
+                        BasicTextField(caption, { onCaption(it.take(com.fariin.app.media.MediaRules.CAPTION_CHARS)) }, textStyle = TextStyle(color = Color.White, fontSize = 17.sp),
                             cursorBrush = SolidColor(Color.White), maxLines = 7, modifier = Modifier.fillMaxWidth())
                     }
                 }

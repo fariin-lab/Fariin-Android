@@ -7,18 +7,19 @@ import kotlinx.coroutines.tasks.await
  * The story ceilings iOS keeps (Limits.swift, AppLimits, StoriesService), kept pure where they can be:
  * 50 stories a day (100 verified) and 40 an hour, both enforced by the rules' counters in
  * `users/{me}/limits/{storiesDaily,stories}`; 90 seconds a story video, a longer pick split into
- * several stories up to 10 minutes; 700 characters of caption.
+ * several stories up to 10 minutes; 200 characters of caption (owner 2026-11-13, as iOS). All three
+ * come from getAppConfig ([AppConfig]) when the admin panel sets them.
  */
 object StoryLimits {
     /** iOS Limits.storyVideoSeconds: one story's video. */
-    const val VIDEO_SECONDS = 90
+    val VIDEO_SECONDS: Int get() = AppConfig.int(AppConfig.K.storyVideoSeconds)
     /** iOS Limits.storyVideoPickSeconds: a longer pick is refused (seven stories at 90 s). */
-    const val PICK_SECONDS = 600
+    val PICK_SECONDS: Int get() = AppConfig.int(AppConfig.K.storyVideoPickSeconds)
     /** iOS Limits.storyCaptionChars. */
-    const val CAPTION_CHARS = 700
+    val CAPTION_CHARS: Int get() = AppConfig.int(AppConfig.K.storyCaptionChars)
 
     const val TOO_LONG_TITLE = "That video is too long"
-    val TOO_LONG_TEXT = "Stories can be up to ${PICK_SECONDS / 60} minutes. Longer videos are posted as several stories, but this one is past the limit."
+    val TOO_LONG_TEXT get() = "Stories can be up to ${PICK_SECONDS / 60} minutes. Longer videos are posted as several stories, but this one is past the limit."
     const val DAY_TITLE = "That's today's limit"
 
     /** A pick past [PICK_SECONDS] (iOS allows one second of slack). */

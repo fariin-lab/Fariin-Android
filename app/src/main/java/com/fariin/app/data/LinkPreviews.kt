@@ -51,8 +51,8 @@ object LinkPreviews {
     fun init(context: Context) { app = context.applicationContext }
 
     /** Settings > Chats > Link Previews. Default on, as iOS. */
-    fun enabled(): Boolean =
-        app?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.getBoolean(PREF_KEY, true) ?: true
+    fun enabled(): Boolean = AppConfig.bool(AppConfig.K.linkPreviews) &&   // the admin panel's switch first
+        (app?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.getBoolean(PREF_KEY, true) ?: true)
 
     /** A composer draft: everything the card needs, still plaintext, still on this phone. */
     class Draft(
@@ -455,7 +455,7 @@ object LinkPreviews {
     private const val TIMEOUT_MS = 8_000
     private const val PAGE_CAP = 300_000
     private const val IMAGE_CAP = 3 * 1024 * 1024
-    private const val IMAGE_SIDE = 800
+    private val IMAGE_SIDE: Int get() = AppConfig.int(AppConfig.K.linkPreviewImageSide)
 
     private fun open(url: String, accept: String, referer: String? = null): HttpURLConnection? {
         if (!url.startsWith("https://") || isPrivateHost(url)) return null

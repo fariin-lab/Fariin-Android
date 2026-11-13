@@ -64,7 +64,7 @@ object GroupCallWire {
     fun isActive(doc: Map<String, Any?>?) = doc?.get("active") == true
 
     /** iOS: a group rings for 60 s; a call nobody joined by then ends. */
-    const val RING_WINDOW_MS = 60_000L
+    val RING_WINDOW_MS: Long get() = com.fariin.app.data.AppConfig.int(com.fariin.app.data.AppConfig.K.groupRingSeconds) * 1000L
 
     /**
      * Who may start a call in this chat, as the rules (groupCalls create: isGroupMember and

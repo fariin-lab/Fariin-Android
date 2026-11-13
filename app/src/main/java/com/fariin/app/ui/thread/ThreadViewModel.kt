@@ -232,6 +232,8 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         onTyping = { on -> vm.repo.setTyping(on) },
         onRecordingVoice = { on -> vm.repo.setRecording(on) },
         onAtBottom = { atBottom.value = it },
+        onOpenPerson = { uid -> nav.contact(uid) },
+        onMessagePerson = { other -> nav.chat(com.fariin.app.crypto.Wire.directCid(me, other)) },
         onTitleClick = {
             InChatSearchLink.openedFrom = cid   // the info page's Search circle shows only when opened from here
             if (channel != null) channelNav.page(cid) else if (conv?.isGroup == true) nav.group(cid) else conv?.otherUid(me)?.takeIf { it.isNotEmpty() }?.let(nav.contact)

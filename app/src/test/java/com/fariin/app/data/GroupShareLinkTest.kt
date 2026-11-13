@@ -25,4 +25,15 @@ class GroupShareLinkTest {
         assertNull(GroupShareLink.of("a", conv - "inviteCode", null))
         assertNull(GroupShareLink.of("a", conv, "a/b"))
     }
+
+    @Test fun publicGroupMemberSharesThePublicLink() {
+        val pub = conv + mapOf("isPublic" to true, "username" to "beach", "title" to "Beach Trip")
+        assertEquals("https://fariin.com/beach", GroupShareLink.of("m", pub, "new"))
+        assertEquals("https://fariin.com/g/new", GroupShareLink.of("a", pub, "new"))
+        assertEquals("Join Beach Trip on Fariin: https://fariin.com/beach", GroupShareLink.text(pub, "https://fariin.com/beach"))
+        assertEquals("https://fariin.com/g/new", GroupShareLink.text(pub, "https://fariin.com/g/new"))
+        // Not public, or no name: a member still gets nothing.
+        assertNull(GroupShareLink.of("m", conv + ("username" to "beach"), "new"))
+        assertNull(GroupShareLink.of("m", conv + ("isPublic" to true), "new"))
+    }
 }

@@ -220,6 +220,8 @@ object ChatList {
         if (c.isChannel && me !in c.users) return RowPreview(channelPostLine(c))
         // A blocked person's newest line never leaks into the list.
         if (c.leaksBlocked(me)) return RowPreview("Blocked", icon = PreviewIcon.BLOCKED)
+        // I deleted the newest message for me only: the one before it (owner 2026-11-13).
+        HiddenLast.line(c)?.let { return RowPreview(it) }
         reactionPreview(c, me, decryptor, senderName)?.let { line ->
             val heart = c.lastReactionBy != me && c.lastReactionToAuthor == me
             return reactionParts(c, line, heart)

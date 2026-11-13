@@ -51,6 +51,7 @@ object AppLifecycle : DefaultLifecycleObserver {
         runCatching { com.fariin.app.push.NotificationPoster.pruneExpired(app) }
         runCatching { com.fariin.app.push.NotificationPoster.pruneDeleted(app) }   // deleted-for-everyone lines
         scope.launch { Presence.set(online = true, context = app) }
+        com.fariin.app.data.AppConfig.foreground()   // the server's settings, when the last ask is old
         try { FirebaseFirestore.getInstance().enableNetwork() } catch (_: Exception) {}
         reconnect()
         // Back in front: chats that moved while away are warmed before they are opened.

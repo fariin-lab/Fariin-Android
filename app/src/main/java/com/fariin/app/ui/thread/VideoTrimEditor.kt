@@ -425,7 +425,7 @@ private fun VideoEditorBody(uri: Uri, caption: String, onCaption: (String) -> Un
                     contentAlignment = Alignment.CenterStart,
                 ) {
                     if (caption.isEmpty()) Text("Add a caption…", color = Color(0xFF8E8E93), fontSize = 17.sp)
-                    BasicTextField(caption, { onCaption(it.take(1000)) }, textStyle = TextStyle(color = Color.White, fontSize = 17.sp),
+                    BasicTextField(caption, { onCaption(it.take(com.fariin.app.media.MediaRules.CAPTION_CHARS)) }, textStyle = TextStyle(color = Color.White, fontSize = 17.sp),
                         cursorBrush = SolidColor(Color.White), maxLines = if (imeUp) 7 else 1, modifier = Modifier.fillMaxWidth())
                 }
                 Spacer(Modifier.width(10.dp))

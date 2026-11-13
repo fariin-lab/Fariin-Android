@@ -37,7 +37,7 @@ class VideoPrep(
 ) {
     companion object {
         /** Limits.videoMessageBytes: the send cap, 100 MB (owner 2026-11-13). */
-        const val MAX_BYTES = MediaRules.VIDEO_MESSAGE_BYTES
+        val MAX_BYTES: Long get() = MediaRules.VIDEO_MESSAGE_BYTES
 
         /** [onProgress] gets the compression's 0..1 (a long clip takes minutes; the ring shows it). */
         suspend fun fromUri(context: Context, uri: Uri, outDir: File, id: String, onProgress: ((Float) -> Unit)? = null): VideoPrep? {

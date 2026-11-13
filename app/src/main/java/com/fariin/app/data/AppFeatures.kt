@@ -50,9 +50,12 @@ object AppFeatures {
      *  file first, as before. */
     val videoStream: Boolean get() = offOnly("videoStream", true)
 
-    fun value(key: String, default: Boolean): Boolean = snapshot[key] ?: default
+    /** getAppConfig's value for this account first ([AppConfig], next-launch keys from its launch
+     *  snapshot), then config/features as of this launch, then the shipped default. */
+    private fun server(key: String): Boolean? = AppConfig.switchValue(key) ?: snapshot[key]
+    fun value(key: String, default: Boolean): Boolean = server(key) ?: default
     /** A switch the server may only turn off (iOS RemoteFeatures.offOnly). */
-    fun offOnly(key: String, default: Boolean): Boolean = default && snapshot[key] != false
+    fun offOnly(key: String, default: Boolean): Boolean = default && server(key) != false
     const val CREATE_OFF = "Creating new groups and channels isn't available right now."
 
     /** Once per launch, before anything reads a switch. */

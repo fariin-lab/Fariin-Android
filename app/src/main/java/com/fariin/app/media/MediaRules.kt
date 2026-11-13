@@ -17,23 +17,26 @@ object MediaRules {
     // ---- Limits.swift and storage.rules `chat/{cid}/{file}`: size < 102 MB, create only
     // (owner 2026-11-13: chat videos up to 100 MB, plus 2 MB for the encryption bytes).
     const val STORAGE_CHAT_LIMIT = 102L * 1024 * 1024
-    const val FILE_UPLOAD_BYTES = 25L * 1024 * 1024
-    const val VIDEO_MESSAGE_BYTES = 100L * 1024 * 1024
+    // The admin panel may lower these (getAppConfig, owner 2026-11-13); storage.rules keeps 102 MB.
+    val FILE_UPLOAD_BYTES: Long get() = com.fariin.app.data.AppConfig.bytes(com.fariin.app.data.AppConfig.K.fileUploadMB)
+    val VIDEO_MESSAGE_BYTES: Long get() = com.fariin.app.data.AppConfig.bytes(com.fariin.app.data.AppConfig.K.videoMessageMB)
     /** What the video export aims at, unchanged (iOS Limits.videoExportTargetBytes): only the cap moved. */
-    const val VIDEO_EXPORT_TARGET_BYTES = 62L * 1024 * 1024
-    const val VOICE_NOTE_SECONDS = 30 * 60
+    val VIDEO_EXPORT_TARGET_BYTES: Long get() = com.fariin.app.data.AppConfig.bytes(com.fariin.app.data.AppConfig.K.videoExportTargetMB)
+    val VOICE_NOTE_SECONDS: Int get() = com.fariin.app.data.AppConfig.int(com.fariin.app.data.AppConfig.K.voiceNoteMinutes) * 60
     /** AudioRecorder.finish: a note under a second is not sent (it would read "0:00"). */
     const val VOICE_MIN_SECONDS = 1.0
     /** Largest download this app accepts for one chat item (the storage rule's ceiling). */
     const val MAX_DOWNLOAD = STORAGE_CHAT_LIMIT
 
     // ---- PhotoQuality.swift
-    enum class PhotoQuality(val maxSide: Int, val maxBytes: Int) {
-        STANDARD(1280, 1_572_864),   // 1.5 MB
-        HIGH(2560, 3_145_728);       // 3 MB
-        val jpegQuality: Int get() = 60   // UIKit 0.6
+    enum class PhotoQuality(val maxBytes: Int) {
+        STANDARD(1_572_864),   // 1.5 MB
+        HIGH(3_145_728);       // 3 MB
+        /** 1280 / 2560 shipped; the admin panel may change them (getAppConfig). */
+        val maxSide: Int get() = com.fariin.app.data.AppConfig.int(if (this == STANDARD) com.fariin.app.data.AppConfig.K.photoMaxSideStandard else com.fariin.app.data.AppConfig.K.photoMaxSideHigh)
+        val jpegQuality: Int get() = com.fariin.app.data.AppConfig.int(com.fariin.app.data.AppConfig.K.photoJpegQualityPct)   // UIKit 0.6
     }
-    const val MIN_SIDE = 640
+    val MIN_SIDE: Int get() = com.fariin.app.data.AppConfig.int(com.fariin.app.data.AppConfig.K.photoMinSide)
 
     /** PhotoQuality.nextSide: three quarters, rounded, while it stays at 640 or more. */
     fun nextSide(side: Int): Int? {
@@ -87,11 +90,14 @@ object MediaRules {
 
     // ---- Albums and forwarding (Limits.swift)
     /** Limits.albumMaxItems: one album message holds 10; a bigger pick is sent as several albums. */
-    const val ALBUM_MAX_ITEMS = 10
+    /** Limits.captionMaxChars: a photo, video or album caption (1,024 shipped; was 1,000 here). */
+    val CAPTION_CHARS: Int get() = com.fariin.app.data.AppConfig.int(com.fariin.app.data.AppConfig.K.captionMaxChars)
+    val ALBUM_MAX_ITEMS: Int get() = com.fariin.app.data.AppConfig.int(com.fariin.app.data.AppConfig.K.albumMaxItems)
     /** Limits.mediaPerMessage: the picker's ceiling. */
-    const val MEDIA_PER_PICK = 32
+    val MEDIA_PER_PICK: Int get() = com.fariin.app.data.AppConfig.int(com.fariin.app.data.AppConfig.K.mediaPerMessage)
     /** Limits.forwardChatsAtOnce. */
-    const val FORWARD_CHATS_AT_ONCE = 5
+    /** 0 from the server means no limit (owner 2026-11-13). */
+    val FORWARD_CHATS_AT_ONCE: Int get() = com.fariin.app.data.AppConfig.int(com.fariin.app.data.AppConfig.K.forwardChatsAtOnce).let { if (it > 0) it else Int.MAX_VALUE }
 
     /** ThreadView: a pick of more than ten goes as albums of ten, in order; a lone one stays itself. */
     fun <T> albumChunks(items: List<T>): List<List<T>> = items.chunked(ALBUM_MAX_ITEMS)

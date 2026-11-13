@@ -82,7 +82,7 @@ object AutoDownload {
     }
     const val PREFS = "fariin_media"
     /** Files over 200 MB never download by themselves (iOS maxAutoBytes). */
-    const val MAX_AUTO_BYTES = 200L * 1024 * 1024
+    val MAX_AUTO_BYTES: Long get() = com.fariin.app.data.AppConfig.bytes(com.fariin.app.data.AppConfig.K.autoDownloadMaxMB)
 
     fun policy(c: Context, k: Kind): String =
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("autodl.${k.key}", k.default) ?: k.default

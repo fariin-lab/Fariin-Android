@@ -170,7 +170,8 @@ sealed interface GroupPage {
 }
 
 private fun failText(e: Exception, fallback: String = "Couldn't save. Try again."): String =
-    if (e is com.google.firebase.firestore.FirebaseFirestoreException &&
+    if (e is com.fariin.app.data.LimitReached) e.message ?: fallback
+    else if (e is com.google.firebase.firestore.FirebaseFirestoreException &&
         e.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) "You don't have the right to do that." else fallback
 
 /**

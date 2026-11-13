@@ -2,7 +2,7 @@ package com.fariin.app.data
 
 /**
  * How long one typed message may be (iOS Limits.messageMaxChars / messageBubbleChars, owner
- * 2026-10-29): the field takes up to 6,400 characters, and a send longer than one bubble's 2,500 goes
+ * 2026-10-29): the field takes up to 4,096 characters (owner 2026-11-13, as iOS; getAppConfig may change it), and a send longer than one bubble's 2,500 goes
  * out as several bubbles, in order. config/limits has no keys for these, so they are iOS's numbers.
  *
  * The reason is the chat screen, not the database: every line of a bubble is measured and drawn on
@@ -13,8 +13,9 @@ package com.fariin.app.data
  * emoji or other composed character.
  */
 object MessageLength {
-    const val MAX_CHARS = 6_400
-    const val BUBBLE_CHARS = 2_500
+    /** The server may change both (getAppConfig messageMaxChars / messageBubbleChars). */
+    val MAX_CHARS: Int get() = AppConfig.int(AppConfig.K.messageMaxChars)
+    val BUBBLE_CHARS: Int get() = AppConfig.int(AppConfig.K.messageBubbleChars)
 
     /**
      * iOS shouldChangeTextIn: the field's next text when [next] (with the cursor at [cursor]) would

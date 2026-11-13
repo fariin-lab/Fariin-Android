@@ -12,7 +12,7 @@ import com.fariin.app.crypto.Wire
 object PinRules {
     const val MARKER = "fariin-pinned:"
     /** Limits.pinnedMessagesPerChat. */
-    const val MAX_PINS = 3
+    val MAX_PINS: Int get() = com.fariin.app.data.AppConfig.int(com.fariin.app.data.AppConfig.K.pinnedMessagesPerChat)
 
     data class Notice(val messageId: String, val label: String)
 
@@ -101,7 +101,7 @@ object PinRules {
  * bulkDelete (mine for everyone, the rest hidden for me in a 1:1 only).
  */
 object SelectRules {
-    const val MAX_FORWARD = 32
+    val MAX_FORWARD: Int get() = com.fariin.app.data.AppConfig.int(com.fariin.app.data.AppConfig.K.forwardSelectionMax)
 
     /** Rows that take a tick: a person's message or a tombstone; never a notice, call or pin line. */
     fun selectable(m: Message): Boolean = !m.isSystem && !m.isCall && PinRules.notice(m.text) == null

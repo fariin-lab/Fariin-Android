@@ -177,6 +177,7 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                             DiscoverRow(r, pill, joinShakes[r.cid] ?: 0, onOpen = { onOpen(r.cid) }) {
                                 // The same pill as Groups (iOS): spinner, then Following with its check;
                                 // a private channel ends on a grey "Requested", no toast.
+                                com.fariin.app.ui.components.SuccessHaptic.soft(ctx)   // a soft tap on Follow (owner 2026-11-13)
                                 joiningNow.add(r.cid)
                                 scope.launch {
                                     try {
