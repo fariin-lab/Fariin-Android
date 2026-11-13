@@ -1960,7 +1960,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 // A picture style: its own 9-slice picture on every message, unclipped, no run shape (bubbles/BubbleArtDraw.kt).
                 .then(if (art != null) Modifier.artBubble(art, c.dark, centre = m.linkPreview == null) else Modifier.clip(shape)
                 .then(if (styled != null) Modifier.styledFill(styled, shape, c.dark) else Modifier.background(if (isMe) myFill() else receivedFill()).then(receivedRim(isMe, shape)))
-                .padding(horizontal = if (kind == Message.MediaKind.VOICE) 13.dp else 14.dp, vertical = 7.dp)),
+                .padding(horizontal = if (kind == Message.MediaKind.VOICE) 13.dp else 14.dp, vertical = 5.dp)),
         ) {
             if (showSender && g.first) {
                 SenderLine(ui, m.authorId)
@@ -2299,7 +2299,8 @@ private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
     val bar = if (isMe) Color.White else senderColor(r.authorId)
     val name = if (r.authorId == ui.me) "You" else ui.names[r.authorId] ?: ui.title
     Row(
-        Modifier.padding(top = 3.dp, bottom = 5.dp).clip(RoundedCornerShape(6.dp))
+        // Across the bubble's full width, as the reference app's quote (owner 2026-11-13).
+        Modifier.fillMaxWidth().padding(top = 3.dp, bottom = 5.dp).clip(RoundedCornerShape(6.dp))
             .background(if (isMe) Color.White.copy(alpha = 0.18f) else bar.copy(alpha = 0.12f))
             .height(androidx.compose.foundation.layout.IntrinsicSize.Min),
     ) {
@@ -2316,13 +2317,23 @@ private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
             // A story reply quotes the story itself (iOS status quote): "Story" and its picture.
             // iOS replyLabel: the quote is a copy baked into the reply, so once the original is seen
             // deleted its words are not shown any more; a view-once original is named, not quoted.
-            Text(when {
-                r.isStatus -> "Story"
-                original?.deleted == true -> "This message was deleted"
-                original?.viewOnce == true -> "Photo"
-                else -> com.fariin.app.data.CardRules.previewWord(r.text) ?: r.text
-            }, fontSize = 12.sp, color = if (isMe) Color.White.copy(alpha = 0.85f) else c.label,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // What it was, with its small icon and a voice note's length ("Voice message (0:04)"),
+            // as the reply bar shows it (owner 2026-11-13, the reference app's quote).
+            val sub = if (isMe) Color.White.copy(alpha = 0.85f) else c.label
+            val icon = original?.takeIf { !it.deleted && !it.viewOnce && !r.isStatus }?.let { replyIcon(it) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (icon != null) {
+                    Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(icon), null, tint = sub, modifier = Modifier.size(13.dp))
+                    Spacer(Modifier.width(3.dp))
+                }
+                Text(when {
+                    r.isStatus -> "Story"
+                    original?.deleted == true -> "This message was deleted"
+                    original?.viewOnce == true -> "Photo"
+                    original != null -> replyLine(original, com.fariin.app.data.CardRules.previewWord(r.text) ?: r.text.ifEmpty { original.bodyText })
+                    else -> com.fariin.app.data.CardRules.previewWord(r.text) ?: r.text
+                }, fontSize = 12.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
         if (r.isStatus && !r.storyThumb.isNullOrEmpty()) {
             coil3.compose.AsyncImage(r.storyThumb, contentDescription = null,

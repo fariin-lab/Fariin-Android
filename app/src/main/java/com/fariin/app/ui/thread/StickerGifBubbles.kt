@@ -56,6 +56,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
@@ -234,9 +236,13 @@ private fun Modifier.semanticsLabel(text: String): Modifier =
 internal fun GifRow(m: Message, shape: Shape, fill: Color, hasHeader: Boolean, header: @Composable () -> Unit,
                     meta: @Composable () -> Unit) {
     val (w, h) = StickerGifRules.gifBox(m.width, m.height)
+    // A tap opens it full screen on black, as a photo opens (owner 2026-11-13, the reference app).
+    var open by remember { mutableStateOf(false) }
+    if (open) GifFullScreen(m.imageUrl) { open = false }
     Column(Modifier.width(w.dp).clip(shape).background(fill)) {
         if (hasHeader) Box(Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 4.dp)) { header() }
-        Box(Modifier.size(w.dp, h.dp).background(Fariin.colors.secondary.copy(alpha = 0.18f))) {
+        Box(Modifier.size(w.dp, h.dp).background(Fariin.colors.secondary.copy(alpha = 0.18f))
+            .clickable(enabled = m.sendState == null && !m.imageUrl.isNullOrEmpty(), onClickLabel = "Open GIF") { open = true }) {
             // Played as its small MP4 on the video chip (GifVideo), its still under it; a GIF with no
             // MP4 (not from Giphy) plays as the picture, as before.
             val hasMp4 = remember(m.imageUrl) { GifVideo.mp4Of(m.imageUrl) != null }
@@ -252,6 +258,20 @@ internal fun GifRow(m: Message, shape: Shape, fill: Color, hasHeader: Boolean, h
                     contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             }
             Box(Modifier.align(Alignment.BottomEnd).padding(6.dp)) { MetaCapsule { meta() } }
+        }
+    }
+}
+
+/** A GIF opened from the chat: full screen on black, fitted, playing; a tap or Back closes it. */
+@Composable
+private fun GifFullScreen(url: String?, onClose: () -> Unit) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onClose,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        Box(Modifier.fillMaxSize().background(Color.Black)
+            .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = onClose),
+            contentAlignment = Alignment.Center) {
+            AsyncImage(animatedRequest(url, true), contentDescription = "GIF", imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current),
+                contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth())
         }
     }
 }
@@ -588,13 +608,19 @@ private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, qu
     }
 }
 
-/** The tall GIF sheet (GifPickerView): "Search GIFs" field, trending until words, "Powered by GIPHY". */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+/**
+ * The tall GIF sheet (GifPickerView): "Search GIFs" field, trending until words, "Powered by GIPHY".
+ *
+ * Our own sheet in a full-screen window, not the system bottom sheet (owner 2026-11-13, recorded
+ * against the reference app on the Pixel): the system sheet pushed itself above the keyboard, so it
+ * jumped up under the status bar on every open of the keyboard and back down on every close. Here
+ * the window ignores the keyboard ("adjust nothing"), the sheet stays where it is, and the keyboard
+ * slides over its lower GIFs, as the reference app's does. Nearly the whole screen tall.
+ */
 @Composable
 internal fun GifSearchSheet(me: String, onDismiss: () -> Unit, onPick: (StickerGifRules.Gif) -> Unit) {
     val ctx = LocalContext.current
     val c = Fariin.colors
-    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<StickerGifRules.Gif>?>(null) }
     LaunchedEffect(query) {
@@ -602,24 +628,71 @@ internal fun GifSearchSheet(me: String, onDismiss: () -> Unit, onPick: (StickerG
         results = Giphy.search(ctx, query)
     }
     val focus = remember { FocusRequester() }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet) {
-        // Nearly the whole screen, as the reference app's GIF search (owner 2026-11-13: "ours looks
-        // short"): it opens tall, and with the keyboard up the grid still fills the room above it.
-        Column(Modifier.fillMaxWidth().fillMaxHeight(0.96f).imePadding()) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).height(40.dp).clip(RoundedCornerShape(12.dp))
-                .background(c.secondary.copy(alpha = 0.14f)).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), null, tint = c.secondary, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Box(Modifier.weight(1f)) {
-                    if (query.isEmpty()) Text("Search GIFs", fontSize = 17.sp, color = c.secondary)
-                    BasicTextField(query, { query = it }, singleLine = true,
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.label), cursorBrush = SolidColor(c.accent),
-                        modifier = Modifier.fillMaxWidth().focusRequester(focus))
-                }
+    val scope = rememberCoroutineScope()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
+    val tall = (screenH * 0.94f).dp
+    val tallPx = with(density) { tall.toPx() }
+    // 1 = off screen below, 0 = up. Slides in on open, follows a pull on the handle, slides out.
+    val off = remember { androidx.compose.animation.core.Animatable(1f) }
+    LaunchedEffect(Unit) { off.animateTo(0f, androidx.compose.animation.core.tween(280, easing = androidx.compose.animation.core.FastOutSlowInEasing)) }
+    var closing by remember { mutableStateOf(false) }
+    fun close(then: () -> Unit = onDismiss) {
+        if (closing) return
+        closing = true
+        scope.launch { off.animateTo(1f, androidx.compose.animation.core.tween(220)); then() }
+    }
+    androidx.compose.ui.window.Dialog(onDismissRequest = { close() },
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        val host = androidx.compose.ui.platform.LocalView.current
+        androidx.compose.runtime.DisposableEffect(host) {
+            (host.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window?.let { w ->
+                w.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+                w.setDimAmount(0f)
+                w.setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
             }
-            Box(Modifier.weight(1f)) { GifGrid(results, PaddingValues(6.dp), query, me = me, onGif = onPick) }
-            Text("Powered by GIPHY", fontSize = 11.sp, color = c.secondary,
-                modifier = Modifier.align(Alignment.CenterHorizontally).padding(vertical = 6.dp))
+            onDispose {}
+        }
+        Box(Modifier.fillMaxSize()) {
+            // The dim behind, fading with the sheet; a tap on it closes.
+            Box(Modifier.fillMaxSize().graphicsLayer { alpha = (1f - off.value).coerceIn(0f, 1f) }
+                .background(Color.Black.copy(alpha = 0.32f))
+                .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { close() })
+            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(tall)
+                .graphicsLayer { translationY = off.value * tallPx }
+                .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)).background(c.bg)) {
+                // The handle: a pull down past a third (or a quick flick) closes, else it springs back.
+                Box(Modifier.fillMaxWidth().height(28.dp).pointerInput(Unit) {
+                    val tracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
+                    detectVerticalDragGestures(
+                        onDragStart = { tracker.resetTracking() },
+                        onVerticalDrag = { ch, dy ->
+                            tracker.addPosition(ch.uptimeMillis, ch.position)
+                            scope.launch { off.snapTo((off.value + dy / tallPx).coerceIn(0f, 1f)) }
+                        },
+                        onDragEnd = {
+                            if (off.value > 0.33f || tracker.calculateVelocity().y > 1500f) close()
+                            else scope.launch { off.animateTo(0f, androidx.compose.animation.core.spring(stiffness = 500f)) }
+                        })
+                }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(36.dp, 5.dp).clip(RoundedCornerShape(3.dp)).background(c.secondary.copy(alpha = 0.4f)))
+                }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).height(40.dp).clip(RoundedCornerShape(12.dp))
+                    .background(c.secondary.copy(alpha = 0.14f)).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), null, tint = c.secondary, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Box(Modifier.weight(1f)) {
+                        if (query.isEmpty()) Text("Search GIFs", fontSize = 17.sp, color = c.secondary)
+                        BasicTextField(query, { query = it }, singleLine = true,
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.label), cursorBrush = SolidColor(c.accent),
+                            modifier = Modifier.fillMaxWidth().focusRequester(focus))
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Box(Modifier.weight(1f)) { GifGrid(results, PaddingValues(6.dp), query, me = me, onGif = { g -> close { onPick(g) } }) }
+                Text("Powered by GIPHY", fontSize = 11.sp, color = c.secondary,
+                    modifier = Modifier.align(Alignment.CenterHorizontally).navigationBarsPadding().padding(vertical = 6.dp))
+            }
         }
     }
 }

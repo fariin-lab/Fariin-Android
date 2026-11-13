@@ -405,9 +405,11 @@ internal fun VoiceBody(m: Message, cid: String, isMe: Boolean, width: Dp, meta: 
     }
 
     Column(Modifier.width(width)) {
-        Row(Modifier.fillMaxWidth().height(55.dp), verticalAlignment = Alignment.CenterVertically) {
+        // Compact as the reference app's (owner 2026-11-13, "our bubbles look bigger"): the row 48
+        // (was 55), so a voice note is about 60 tall, and the play disc 38 (was 44).
+        Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(44.dp).clip(CircleShape).background(tint.copy(alpha = if (loading || url == null) 0.22f else 1f))
+                Modifier.size(38.dp).clip(CircleShape).background(tint.copy(alpha = if (loading || url == null) 0.22f else 1f))
                     .clickable(enabled = url != null && !loading) {
                         scope.launch {
                             loading = true
@@ -424,7 +426,7 @@ internal fun VoiceBody(m: Message, cid: String, isMe: Boolean, width: Dp, meta: 
                     com.fariin.app.ui.components.FariinSpinner(size = 22.dp, color = tint)
                 } else {
                     Icon(if (playing) ImageVector.vectorResource(R.drawable.ic_sf_pause_fill) else ImageVector.vectorResource(R.drawable.ic_sf_play_fill),
-                        if (playing) "Pause" else "Play", tint = glyph, modifier = Modifier.size(28.dp))
+                        if (playing) "Pause" else "Play", tint = glyph, modifier = Modifier.size(24.dp))
                 }
             }
             Spacer(Modifier.width(8.dp))

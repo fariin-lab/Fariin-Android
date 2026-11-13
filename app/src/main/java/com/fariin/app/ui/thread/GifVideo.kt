@@ -6,6 +6,7 @@ import androidx.annotation.OptIn
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -122,6 +123,12 @@ internal fun GifMp4(gifUrl: String?, play: Boolean, modifier: Modifier, still: @
                 p?.setMediaItem(MediaItem.fromUri(mp4)); p?.prepare(); p?.playWhenReady = true
                 onDispose { p?.removeListener(l); p?.let { GifVideo.give(it) }; player = null; shown = false; if (p != null) heldAt = -1 }
             }
+            // Only while the app is on screen (owner 2026-11-13: minimized, our GIFs kept playing,
+            // the reference app's stop): paused when the app goes to the background, on again on return.
+            val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+            val alive = owner.lifecycle.currentStateFlow.collectAsState().value
+                .isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
+            androidx.compose.runtime.LaunchedEffect(player, alive) { player?.playWhenReady = alive }
             val p = player
             val vs = video
             if (p != null) AndroidView({ c -> TextureView(c).apply {
