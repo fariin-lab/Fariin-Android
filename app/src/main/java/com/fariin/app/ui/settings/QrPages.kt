@@ -299,27 +299,30 @@ internal fun MyQrSheet(profile: MyProfile?, onClose: () -> Unit, onScan: () -> U
     val name = profile?.name.orEmpty()
     QrPosterSheet(title = name.ifEmpty { handle }, subtitle = if (handle.isEmpty()) " " else "@$handle",
         link = if (handle.isEmpty()) QrRules.LINK_HOST else QrRules.userLink(handle), photoUrl = profile?.photoUrl,
-        hint = "Scan with the camera to chat", onClose = onClose, onScan = onScan)
+        hint = "Scan with the camera to chat", onClose = onClose, onScan = onScan,
+        shareText = QrRules.INVITE_SENTENCE + " " + QrRules.inviteLink(handle))
 }
 
 /** iOS GroupLinkQRSheet for a group: "Group · N members" under the name, "to join" under the code, no Scan. */
 @Composable
 internal fun ChannelQrSheet(title: String, link: String, photoUrl: String?, followers: Int, onClose: () -> Unit) {
     QrPosterSheet(title = title, subtitle = "Channel · " + followers + (if (followers == 1) " follower" else " followers"), link = link,
-        photoUrl = photoUrl, hint = "Scan with the camera to follow", onClose = onClose, onScan = null)
+        photoUrl = photoUrl, hint = "Scan with the camera to follow", onClose = onClose, onScan = null,
+        shareText = "Follow $title on Fariin: $link")
 }
 
 @Composable
 internal fun GroupQrSheet(title: String, link: String, photoUrl: String?, memberCount: Int, onClose: () -> Unit) {
     QrPosterSheet(title = title, subtitle = "Group · $memberCount member${if (memberCount == 1) "" else "s"}", link = link,
-        photoUrl = photoUrl, hint = "Scan with the camera to join", onClose = onClose, onScan = null)
+        photoUrl = photoUrl, hint = "Scan with the camera to join", onClose = onClose, onScan = null,
+        shareText = "Join $title on Fariin: $link")
 }
 
 /** The poster sheet both codes use (iOS GroupLinkQRSheet): the coloured ground, the card, the colours, the actions. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun QrPosterSheet(title: String, subtitle: String, link: String, photoUrl: String?, hint: String,
-                          onClose: () -> Unit, onScan: (() -> Unit)?) {
+                          onClose: () -> Unit, onScan: (() -> Unit)?, shareText: String = link) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -404,13 +407,11 @@ private fun QrPosterSheet(title: String, subtitle: String, link: String, photoUr
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 20.dp, bottom = 16.dp)) {
                     PosterAction(painterResource(R.drawable.ic_link_share), "Share", Modifier.weight(1f)) {
-                        scope.launch {
-                            val f = card() ?: return@launch flash("Could not save")
-                            val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
-                            val send = Intent(Intent.ACTION_SEND).setType("image/png").putExtra(Intent.EXTRA_STREAM, uri)
-                                .putExtra(Intent.EXTRA_TITLE, title).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            ctx.startActivity(Intent.createChooser(send, null))
-                        }
+                        // The invite line with the link, not the picture (owner 2026-11-13): a link
+                        // opens in one tap; the picture is Save's.
+                        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, shareText)
+                            .putExtra(Intent.EXTRA_TITLE, title)
+                        runCatching { ctx.startActivity(Intent.createChooser(send, null)) }
                     }
                     PosterAction(rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_save_down)), if (saving) "Saving…" else "Save", Modifier.weight(1f), enabled = !saving) {
                         if (com.fariin.app.media.GallerySaver.needsPermission(ctx)) askStorage.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE) else doSave()
