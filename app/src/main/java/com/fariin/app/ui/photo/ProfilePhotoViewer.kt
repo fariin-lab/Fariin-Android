@@ -236,6 +236,11 @@ fun ProfilePhotoViewer(
         if (bar.leavesOnClose) anim(3, barAlpha, 0f, tween(280)) { barAlpha = it }
         scope.launch {
             delay(CLOSE_LANDS_MS)
+            // The avatar shows again FIRST; the flying copy goes two frames later, so there is never
+            // a frame with neither (owner 2026-11-13: a blank flicker as it landed, over a sheet).
+            state.handoff = false
+            androidx.compose.runtime.withFrameNanos { }
+            androidx.compose.runtime.withFrameNanos { }
             state.finished()
         }
     }
