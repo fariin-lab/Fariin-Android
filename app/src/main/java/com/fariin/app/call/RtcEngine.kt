@@ -467,6 +467,19 @@ object CallAudio {
      * sound stayed at the ear. Every route change is mirrored here so the two always agree.
      */
     fun setRoute(context: Context, r: AudioRoute) {
+        // Off the main thread (owner 2026-11-13: "when I tap the speaker the action is late"): the
+        // audio service answers setCommunicationDevice only once the hardware has switched, up to a
+        // second on the Pixel, and the call screen froze that long after each tap. One thread keeps
+        // the taps in order; a call that ended meanwhile (stop) is never routed again.
+        val gen = generation
+        val app = context.applicationContext
+        routeThread.execute { if (gen == generation) applyRoute(app, r) }
+    }
+
+    private val routeThread = java.util.concurrent.Executors.newSingleThreadExecutor { Thread(it, "call-route") }
+    @Volatile private var generation = 0
+
+    private fun applyRoute(context: Context, r: AudioRoute) {
         val am = context.getSystemService(AudioManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val want = when (r) {
@@ -485,6 +498,7 @@ object CallAudio {
     }
 
     fun stop(context: Context) {
+        generation++   // a route still queued from this call is dropped
         val am = context.getSystemService(AudioManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) am.clearCommunicationDevice()
         else @Suppress("DEPRECATION") { am.isSpeakerphoneOn = false }

@@ -979,8 +979,10 @@ object GroupCall {
     fun setRoute(to: AudioRoute) {
         val h = routeHandler ?: return
         val d = h.availableAudioDevices.firstOrNull { routeKind(it) == to } ?: return
-        h.selectDevice(d)
+        // The button first, the switch a frame later: selecting the device waits for the audio
+        // hardware (up to a second), and run first it held the button's redraw that long.
         _ui.value = _ui.value.copy(route = _ui.value.route.copy(current = to))
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ runCatching { h.selectDevice(d) } }, 32)
     }
 
     /** iOS More > Flip Camera: front and back camera swap. */
