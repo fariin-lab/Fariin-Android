@@ -603,7 +603,9 @@ internal fun GifSearchSheet(me: String, onDismiss: () -> Unit, onPick: (StickerG
     }
     val focus = remember { FocusRequester() }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet) {
-        Column(Modifier.fillMaxWidth().height(560.dp).imePadding()) {
+        // Nearly the whole screen, as the reference app's GIF search (owner 2026-11-13: "ours looks
+        // short"): it opens tall, and with the keyboard up the grid still fills the room above it.
+        Column(Modifier.fillMaxWidth().fillMaxHeight(0.96f).imePadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).height(40.dp).clip(RoundedCornerShape(12.dp))
                 .background(c.secondary.copy(alpha = 0.14f)).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), null, tint = c.secondary, modifier = Modifier.size(18.dp))

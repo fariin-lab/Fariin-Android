@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -235,8 +236,29 @@ fun OfficialChatScreen(onBack: () -> Unit) {
                     }
                 }
             }
-            else Box(Modifier.clickable(onClickLabel = "Chat info") { showInfo = true }) { FariinTopBar(OfficialChannel.NAME, onBack = onBack, subtitle = OfficialChannel.SUBTITLE,
-                container = c.bgSecondary) {
+            // The chat header every other chat has (owner 2026-11-13: "no profile, too basic"; iOS
+            // OfficialChatView headerModel): back, the official mark, the name with its tick and
+            // "Official Chat" under it, the whole block opening the chat info; Search and the bell.
+            else Row(Modifier.fillMaxWidth().background(c.bgSecondary).statusBarsPadding().height(52.dp).padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                com.fariin.app.ui.components.FloatingBack(onBack)
+                Spacer(Modifier.width(16.dp))
+                Row(Modifier.weight(1f).clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                    .clickable(onClickLabel = "Chat info") { showInfo = true }.padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    OfficialAvatar(40.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(OfficialChannel.NAME, fontSize = 17.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                                color = c.label, maxLines = 1)
+                            Spacer(Modifier.width(5.dp))
+                            com.fariin.app.ui.components.VerifiedSeal(c.blue, Modifier.size(16.dp), "Official")
+                        }
+                        Text(OfficialChannel.SUBTITLE, fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                            color = if (c.dark) Color(0xFFD1D1D1) else Color(0xFF525252), maxLines = 1)
+                    }
+                }
                 // Search and the bell in floating circles, as the chat header's buttons.
                 com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_search_ios), "Search",
                     onClick = { searching = true; query = ""; fromNewest = 0 }, modifier = Modifier.padding(end = 8.dp))
@@ -265,7 +287,7 @@ fun OfficialChatScreen(onBack: () -> Unit) {
                         }
                     }
                 }
-            } }
+            }
         }
     }) { top ->
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState,
