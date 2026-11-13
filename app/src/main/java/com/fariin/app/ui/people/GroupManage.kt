@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import com.fariin.app.ui.photo.profilePhotoSource
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -538,9 +539,22 @@ internal fun MemberCard(cid: String, me: String, uid: String, conv: Map<String, 
     if (confirmBan) PersonConfirmSheet(face, name, "Ban $name?", GroupAdmins.BAN_BODY,
         listOf(PersonAction("Ban") { runNow { GroupManage.removeMember(cid, uid, name); Snack.show("$name was removed from the group.") } }),
         onDismiss = { confirmBan = false })
+    val cardPhoto = com.fariin.app.ui.photo.rememberProfilePhotoState()
+    // Over the sheet: the sheet is its own window, so the viewer gets a full-screen one above it.
+    if (cardPhoto.open) androidx.compose.ui.window.Dialog(onDismissRequest = {},
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false, dismissOnBackPress = false, dismissOnClickOutside = false)) {
+        (androidx.compose.ui.platform.LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider)
+            ?.window?.setDimAmount(0f)
+        Box(Modifier.fillMaxSize()) { com.fariin.app.ui.photo.ProfilePhotoViewer(cardPhoto, face) }
+    }
     ModalBottomSheet(onDismissRequest = onClose, sheetState = sheet, containerColor = c.bgSecondary) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Avatar(team.photos[uid]?.ifEmpty { null }, 96.dp)
+            // The photo opens out of its circle and lands back in it, the card staying open
+            // (owner 2026-11-13; the profile page's viewer).
+            Avatar(face, 96.dp, onResolved = cardPhoto::resolved,
+                modifier = Modifier.profilePhotoSource(cardPhoto).then(
+                    if (cardPhoto.hasPhoto) Modifier.clip(CircleShape).clickable(onClickLabel = "View photo") { cardPhoto.show() } else Modifier))
             Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(if (uid == me) "You" else name, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.label, maxLines = 1)
                 if (team.isStaff(uid)) {
