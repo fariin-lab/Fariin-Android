@@ -219,7 +219,7 @@ internal fun GoogleMap.markSpot(spot: LatLng, approx: Boolean, density: Float) {
  * it keeps every touch for the bubble (tap opens the full map, long-press the message menu).
  */
 @Composable
-internal fun LocationCardMap(loc: CardRules.Location, approx: Boolean, width: Dp, height: Dp) {
+internal fun LocationCardMap(loc: CardRules.Location, approx: Boolean, width: Dp, height: Dp, pin: Boolean = true) {
     val c = Fariin.colors
     val ctx = LocalContext.current
     val density = LocalDensity.current.density
@@ -239,7 +239,7 @@ internal fun LocationCardMap(loc: CardRules.Location, approx: Boolean, width: Dp
                             // A lite map opens the maps app on a tap by default; the bubble decides instead.
                             m.setOnMapClickListener { }
                             m.applyTheme(vc, dark)
-                            m.markSpot(spot, approx, density)
+                            if (pin) m.markSpot(spot, approx, density)
                         }
                     }
                 },

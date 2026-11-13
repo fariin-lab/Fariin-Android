@@ -16,9 +16,25 @@ import java.util.Locale
 object CardRules {
     const val CONTACT = "fariin-contact:"
     const val LOCATION = "fariin-location:"
+    /** Live location (owner 2026-11-13, both apps): start spot, end time, optional note (last). */
+    const val LIVE = "fariin-live:"
 
     data class Contact(val uid: String, val name: String, val photo: String?)
     data class Location(val lat: Double, val lon: Double, val label: String?)
+    data class Live(val lat: Double, val lon: Double, val untilMs: Long, val note: String?)
+
+    /** "fariin-live:<lat>|<lon>|<untilMs>|<note-or-empty>" (plan 2026-11-13-live-location-plan.md). */
+    fun live(text: String): Live? {
+        if (!text.startsWith(LIVE)) return null
+        val p = text.substring(LIVE.length).split("|", limit = 4)
+        if (p.size < 3) return null
+        val lat = p[0].toDoubleOrNull()?.takeIf { it.isFinite() && it in -90.0..90.0 } ?: return null
+        val lon = p[1].toDoubleOrNull()?.takeIf { it.isFinite() && it in -180.0..180.0 } ?: return null
+        val until = p[2].toLongOrNull()?.takeIf { it > 0 } ?: return null
+        return Live(lat, lon, until, p.getOrNull(3)?.ifEmpty { null })
+    }
+
+    fun liveText(lat: Double, lon: Double, untilMs: Long, note: String?) = "$LIVE$lat|$lon|$untilMs|${note ?: ""}"
 
     /** Message.contactCard: three parts, uid and name not empty. */
     fun contact(text: String): Contact? {
@@ -43,13 +59,14 @@ object CardRules {
     /** Swift prints a Double in its shortest form ("52.3676"), and so does Kotlin; each side reads the other's. */
     fun locationText(lat: Double, lon: Double, label: String?) = "$LOCATION$lat|$lon|${label ?: ""}"
 
-    fun isCard(text: String) = text.startsWith(CONTACT) || text.startsWith(LOCATION)
+    fun isCard(text: String) = text.startsWith(CONTACT) || text.startsWith(LOCATION) || text.startsWith(LIVE)
 
     /** Message.safeText and the chat-list preview: a noun, never the raw marker. */
     fun previewWord(text: String?): String? = when {
         text == null -> null
         text.startsWith(CONTACT) -> "Contact"
         text.startsWith(LOCATION) -> "Location"
+        text.startsWith(LIVE) -> "Live location"
         else -> null
     }
 

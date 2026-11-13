@@ -216,6 +216,7 @@ object SessionEnd {
         com.fariin.app.data.StoryLimits.reset()   // the daily story count and badge are per account
         com.fariin.app.data.ChatKey.lockedUntilMs = 0L   // a chat-key lockout is this account's
         com.fariin.app.media.VoicePlayer.stop()
+        com.fariin.app.location.LiveShareService.stopAll(c)   // no live location outlives the account on this phone
         java.io.File(c.filesDir, "story-outbox").deleteRecursively()  // unfinished story posts are this account's  // the next account must not inherit this one's feed
         com.fariin.app.data.ProfilePhotoHistory.wipe(c)  // my past profile photos
         com.fariin.app.data.Glow.Cache.clear(c)       // the Glowing grid's last answer, every account's

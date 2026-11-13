@@ -57,6 +57,8 @@ object AppLifecycle : DefaultLifecycleObserver {
         com.fariin.app.data.ChatHistoryPreloader.retry()
         // ...and filed into the phone's history, opened or not (device-storage phase 2).
         FirebaseAuth.getInstance().currentUser?.uid?.let { com.fariin.app.local.InboxSync.kick(app, it) }
+        // Live location shares still running from before the app was closed pick up again.
+        if (com.fariin.app.location.LiveShareService.shares.value.isEmpty()) runCatching { com.fariin.app.location.LiveShareService.restore(app) }
     }
 
     override fun onStop(owner: LifecycleOwner) {

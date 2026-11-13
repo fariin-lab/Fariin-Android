@@ -312,6 +312,9 @@ fun ThreadScreen(
     }
 }
 
+/** The chat's send, for cards that send from inside a bubble (the live map's Share My Location). */
+internal val LocalSendText = androidx.compose.runtime.staticCompositionLocalOf<((String) -> Unit)?> { null }
+
 @Composable
 private fun ThreadContent(
     ui: ThreadUi,
@@ -326,6 +329,7 @@ private fun ThreadContent(
     onSendFile: (Uri) -> Unit,
     onSendFiles: (List<Uri>) -> Unit,
 ) {
+    androidx.compose.runtime.CompositionLocalProvider(LocalSendText provides onSend) {
     val c = Fariin.colors
     // Long-press menu, delete question, info, reply and edit targets (MessageActions.kt).
     var callBackFor by remember { mutableStateOf<Message?>(null) }
@@ -1477,6 +1481,7 @@ private fun ThreadContent(
                 var attachCamera by remember { mutableStateOf(false) }
                 var pollOpen by remember { mutableStateOf(false) }
                 var locationOpen by remember { mutableStateOf(false) }
+                var liveOpen by remember { mutableStateOf(false) }
                 var contactOpen by remember { mutableStateOf(false) }
                 // What a group's members may send (iOS heldBackText / attachMediaOffText / slow mode):
                 // said in a snackbar before the send, the rules refuse it anyway.
@@ -1525,9 +1530,11 @@ private fun ThreadContent(
                 // No Contact tile: iOS took it off the attach sheet ("No phone numbers anywhere", 46d10cb2).
                 // Received cards still draw and open; the picker below waits for a Share-from-profile entry.
                 if (pollOpen) PollComposer(onDismiss = { pollOpen = false }) { marker -> onSend(marker) }
-                if (locationOpen) LocationPicker(onDismiss = { locationOpen = false }) { lat, lon, label ->
+                if (locationOpen) LocationPicker(onDismiss = { locationOpen = false },
+                    onShareLive = if (ui.channel == null) ({ locationOpen = false; liveOpen = true }) else null) { lat, lon, label ->
                     onSend(com.fariin.app.data.CardRules.locationText(lat, lon, label))
                 }
+                if (liveOpen) LiveSharePage(ui, onDismiss = { liveOpen = false }, onSend = onSend)
                 if (contactOpen) ContactPickSheet(ui.me, ui.cid, onDismiss = { contactOpen = false }) { card ->
                     onSend(com.fariin.app.data.CardRules.contactText(card.uid, card.name, card.photo))
                 }
@@ -1587,6 +1594,7 @@ private fun ThreadContent(
                     mentions = if (ui.isGroup) MentionSource(ui.members, ui.me, ui.names, ui.photos) else null)
             }
         }
+    }
     }
     }
 }
@@ -2019,6 +2027,11 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             }
             // Contact and location cards (CardBubbles.kt): markers in the sealed text, as iOS.
             if (!m.deleted) {
+                com.fariin.app.data.CardRules.live(m.text)?.let { live ->
+                    LiveBody(live, m.authorId, ui.photos[m.authorId], isMe, ui, minOf(maxW - 28.dp, 270.dp),
+                        LocalSendText.current ?: {}) { Meta(m, tick, isMe, is24h) }
+                    return@Column
+                }
                 com.fariin.app.data.CardRules.location(m.text)?.let { loc ->
                     LocationBody(loc, isMe, minOf(maxW - 28.dp, 260.dp)) { Meta(m, tick, isMe, is24h) }
                     return@Column

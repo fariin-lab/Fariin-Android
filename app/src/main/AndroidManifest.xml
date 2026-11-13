@@ -20,6 +20,8 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+    <!-- Live location (location/LiveShareService.kt): started from the app in front, no background permission. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <!-- Screen sharing in a 1:1 call: the call service takes the media projection type after the
@@ -295,6 +297,10 @@
             android:resizeableActivity="true"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:theme="@style/Theme.Fariin" />
+        <service
+            android:name=".location.LiveShareService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
         <service
             android:name=".call.CallService"
             android:exported="false"

@@ -108,10 +108,10 @@ import com.fariin.app.R
  * Photon (PhotonPlaces); when it fails the picker still sends the pin.
  */
 @Composable
-internal fun LocationPicker(onDismiss: () -> Unit, onSend: (lat: Double, lon: Double, label: String?) -> Unit) {
+internal fun LocationPicker(onDismiss: () -> Unit, onShareLive: (() -> Unit)? = null, onSend: (lat: Double, lon: Double, label: String?) -> Unit) {
     // A sheet over the chat, as iOS (.sheet with its grabber): the map keeps every drag of its own,
     // so the sheet moves by the strip at its top; X, Back and a tap on the dim close it too.
-    FariinSheetDialog(onDismiss, handle = true) { motion -> PickerPage({ motion.close() }, onSend) }
+    FariinSheetDialog(onDismiss, handle = true) { motion -> PickerPage({ motion.close() }, onShareLive, onSend) }
 }
 
 /** What the list under the header is showing: search answers or the places around the pin. */
@@ -122,9 +122,18 @@ private sealed interface Ask {
 
 @SuppressLint("MissingPermission")   // the map's blue dot is switched on only once access is held
 @Composable
-private fun PickerPage(onDismiss: () -> Unit, onSend: (lat: Double, lon: Double, label: String?) -> Unit) {
+private fun PickerPage(onDismiss: () -> Unit, onShareLive: (() -> Unit)?, onSend: (lat: Double, lon: Double, label: String?) -> Unit) {
     val c = Fariin.colors
     val ctx = LocalContext.current
+    var askLive by remember { mutableStateOf(false) }
+    if (askLive && onShareLive != null) com.fariin.app.ui.components.GlassAlert(onDismissRequest = { askLive = false },
+        title = "Share your live location?",
+        message = "Your spot will keep updating in this chat as you move, for as long as you choose, even when Fariin is closed. Stop it any time.",
+        actions = listOf(com.fariin.app.ui.components.GlassAlertAction("Cancel") {},
+            com.fariin.app.ui.components.GlassAlertAction("Continue", com.fariin.app.ui.components.GlassAlertStyle.Bold) {
+                ctx.getSharedPreferences("live_location", Context.MODE_PRIVATE).edit().putBoolean("explained", true).apply()
+                onShareLive()
+            }))
     val focus = LocalFocusManager.current
     var access by remember { mutableStateOf(LocAccess.of(ctx)) }
     var asked by remember { mutableStateOf(false) }
@@ -411,6 +420,12 @@ private fun PickerPage(onDismiss: () -> Unit, onSend: (lat: Double, lon: Double,
                 }
                 ResultsList(loading, results, note, canRetry, ::retry, ::pick)
             }
+            // Map or satellite (owner 2026-11-13): a globe above "my location"; on, it turns blue.
+            var satellite by remember { mutableStateOf(false) }
+            FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_globe), if (satellite) "Map view" else "Satellite view", {
+                satellite = !satellite
+                map?.mapType = if (satellite) GoogleMap.MAP_TYPE_HYBRID else GoogleMap.MAP_TYPE_NORMAL
+            }, Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 68.dp), tint = if (satellite) c.blue else c.label, circle = true)
             FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_location_fill), "My location", ::locateMe,
                 Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 12.dp),
                 tint = if (source == Source.MY_FIX && fix != null) c.blue else c.label, circle = true)
@@ -418,7 +433,11 @@ private fun PickerPage(onDismiss: () -> Unit, onSend: (lat: Double, lon: Double,
         BottomPanel(
             access = access, asked = asked, servicesOff = servicesOff, coarseOnly = coarseOnly, locked = locked,
             source = source, fix = fix, spot = spot, name = name, address = address, area = area,
-            resolving = resolving, sendExact = sendExact,
+            resolving = resolving, sendExact = sendExact, onShareLive = onShareLive?.let { go -> {
+                // The live question is asked here, on the location page, the first time (owner 2026-11-13).
+                if (ctx.getSharedPreferences("live_location", Context.MODE_PRIVATE).getBoolean("explained", false)) go()
+                else askLive = true
+            } },
             sendWord = if (mapsOk) "Send Location" else "Send My Location",
             onExact = { exact = it },
             onPrecise = { requestAccess() },
@@ -489,7 +508,7 @@ private fun ResultsList(loading: Boolean, results: List<PhotonPlaces.Place>, not
 private fun BottomPanel(
     access: LocAccess, asked: Boolean, servicesOff: Boolean, coarseOnly: Boolean, locked: Boolean,
     source: Source, fix: Location?, spot: LatLng?, name: String?, address: String?, area: String?,
-    resolving: Boolean, sendExact: Boolean, sendWord: String,
+    resolving: Boolean, sendExact: Boolean, sendWord: String, onShareLive: (() -> Unit)?,
     onExact: (Boolean) -> Unit, onPrecise: () -> Unit, onSettings: () -> Unit, onSend: () -> Unit,
 ) {
     val c = Fariin.colors
@@ -503,6 +522,20 @@ private fun BottomPanel(
         if (blocked != null) Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(blocked.first, fontSize = 13.sp, color = c.secondary, modifier = Modifier.weight(1f))
             TextButton(onClick = onSettings) { Text(blocked.second, color = c.accent) }
+        }
+        // Live location (owner 2026-11-13): above the spot, as the reference app puts it first.
+        if (onShareLive != null && access != LocAccess.NONE) {
+            Row(Modifier.fillMaxWidth().padding(bottom = 10.dp).clip(RoundedCornerShape(22.dp)).background(c.card)
+                .clickable(onClick = onShareLive).padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(36.dp).clip(CircleShape).background(c.accent), contentAlignment = Alignment.Center) {
+                    Icon(ImageVector.vectorResource(R.drawable.ic_location), null, tint = c.onAccent, modifier = Modifier.size(20.dp))
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Share location live", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.label)
+                    Text("Updates as you move, for as long as you choose", fontSize = 13.sp, color = c.secondary)
+                }
+            }
         }
         // The spot under the pin.
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(c.card).padding(14.dp)) {
