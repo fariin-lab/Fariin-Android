@@ -34,6 +34,8 @@ object HistoryPull {
 
     fun kick(ctx: Context, me: String) {
         if (!AppFeatures.historyPull || job?.isActive == true) return
+        // Not while the restore question is open: the gate kicks again once it is answered.
+        if (com.fariin.app.backup.ChatBackup.restoreQuestionOpen(me)) return
         job = scope.launch {
             delay(10_000)   // after the start's own work
             val crypto = CryptoHub.get(ctx)
@@ -41,13 +43,13 @@ object HistoryPull {
                 // 1:1 only (owner 2026-11-12): groups and channels stay on the server.
                 if (c.isChannel || c.isGroup || !c.users.contains(me)) continue
                 if (LocalDb.meta(me, "pull.${c.id}") == "done") continue
-                runCatching { pull(me, c.id, crypto) }
+                runCatching { pull(ctx, me, c.id, crypto) }
                 delay(500)
             }
         }
     }
 
-    private suspend fun pull(me: String, cid: String, crypto: com.fariin.app.crypto.FariinCrypto) {
+    private suspend fun pull(ctx: Context, me: String, cid: String, crypto: com.fariin.app.crypto.FariinCrypto) {
         val msgs = FirebaseFirestore.getInstance().collection("conversations").document(cid).collection("messages")
         // When I joined (groups): only a message from before that may be "not for me" for good.
         val joinedAt = runCatching {
@@ -57,6 +59,10 @@ object HistoryPull {
         val note = LocalDb.meta(me, "pull.$cid")?.split("|")
         var t0 = note?.getOrNull(1)?.toLongOrNull()
         var oldest = note?.getOrNull(0)?.toLongOrNull()
+        // The oldest message whose file is still not on this phone (iOS safety review item 6): kept in
+        // the note across pages and a kill; the first mark is set one millisecond below it.
+        var hold = note?.getOrNull(2)?.toLongOrNull()
+        fun progress() = "$oldest|$t0" + (hold?.let { "|$it" } ?: "")
         if (t0 == null) {
             val top = msgs.orderBy("createdAt", Query.Direction.DESCENDING).limit(1).get(Source.SERVER).await()
             val newest = top.documents.firstOrNull()?.getTimestamp("createdAt")?.toDate()?.time
@@ -64,7 +70,7 @@ object HistoryPull {
                 LocalDb.setSyncedUpTo(me, cid, 0L); LocalDb.setMeta(me, "pull.$cid", "done"); return
             }
             t0 = newest; oldest = newest + 1
-            LocalDb.setMeta(me, "pull.$cid", "$oldest|$t0")
+            LocalDb.setMeta(me, "pull.$cid", progress())
         }
         while (true) {
             val snap = msgs.orderBy("createdAt", Query.Direction.DESCENDING)
@@ -80,13 +86,19 @@ object HistoryPull {
                 raw.startsWith(com.fariin.app.crypto.Wire.ENCG1) && crypto.groupEnvelopeSkipsMe(raw, cid) }.mapTo(HashSet()) { it.id }
             if (page.any { it.id !in notForMe && (it.text == "…" || it.text == com.fariin.app.crypto.Wire.LOCKED) && !it.deleted }) return   // keys not in yet: try again later
             if (!LocalDb.saveNow(me, cid, page)) return
+            page.filter { MediaHold.missing(ctx, it) }.forEach { MediaHold.fetch(ctx, cid, crypto, it) }
+            val created = snap.documents.associate { it.id to (it.getTimestamp("createdAt")?.toDate()?.time ?: Long.MAX_VALUE) }
+            page.filter { MediaHold.missing(ctx, it) }.minOfOrNull { created[it.id] ?: Long.MAX_VALUE }
+                ?.let { h -> hold = minOf(hold ?: Long.MAX_VALUE, h) }
             val pageOldest = snap.documents.mapNotNull { it.getTimestamp("createdAt")?.toDate()?.time }.minOrNull()
-            if (pageOldest != null) { oldest = pageOldest; LocalDb.setMeta(me, "pull.$cid", "$oldest|$t0") }
+            if (pageOldest != null) { oldest = pageOldest; LocalDb.setMeta(me, "pull.$cid", progress()) }
             if (snap.size() < PAGE) break
         }
-        // The whole history up to T0 is on this phone: the mark starts, and the cursor with it.
-        LocalDb.setSyncedUpTo(me, cid, maxOf(LocalDb.syncedUpTo(me, cid) ?: 0L, t0!!))
+        // The whole history up to T0 is on this phone: the mark starts, and the cursor with it,
+        // below the oldest message whose file is still missing (InboxSync goes on from there).
+        val start = hold?.let { minOf(t0!!, it - 1) } ?: t0!!
+        LocalDb.setSyncedUpTo(me, cid, maxOf(LocalDb.syncedUpTo(me, cid) ?: 0L, start))
         LocalDb.setMeta(me, "pull.$cid", "done")
-        Cursors.advance(cid, t0)
+        if (start > 0) Cursors.advance(cid, start)
     }
 }

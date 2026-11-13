@@ -36,12 +36,12 @@ object InboxSync {
                 if (c.isChannel || c.isGroup || !c.users.contains(me)) continue
                 val mark = LocalDb.syncedUpTo(me, c.id) ?: continue
                 if (c.updatedAtMillis.toLong() <= mark) continue
-                runCatching { follow(me, c.id, mark, crypto) }
+                runCatching { follow(ctx, me, c.id, mark, crypto) }
             }
         }
     }
 
-    private suspend fun follow(me: String, cid: String, from: Long, crypto: com.fariin.app.crypto.FariinCrypto) {
+    private suspend fun follow(ctx: Context, me: String, cid: String, from: Long, crypto: com.fariin.app.crypto.FariinCrypto) {
         var mark = from
         val msgs = FirebaseFirestore.getInstance().collection("conversations").document(cid).collection("messages")
         // When I joined (groups): only a message from before that may be "not for me" for good.
@@ -64,13 +64,24 @@ object InboxSync {
             val notForMe = snap.documents.filter { d -> val raw = d.getString("text") ?: ""
                 joinedAt > 0 && (d.getTimestamp("createdAt")?.toDate()?.time ?: Long.MAX_VALUE) < joinedAt + 5000 &&
                 raw.startsWith(com.fariin.app.crypto.Wire.ENCG1) && crypto.groupEnvelopeSkipsMe(raw, cid) }.mapTo(HashSet()) { it.id }
-            if (page.any { it.id !in notForMe && (it.text == "…" || it.text == com.fariin.app.crypto.Wire.LOCKED) && !it.deleted }) return   // keys not in yet: the next kick tries again
-            if (!LocalDb.saveNow(me, cid, page)) return
+            // Hold points (iOS safety review items 5 and 6): a message whose key is not in yet ("…",
+            // a group lock), or whose file is not on this phone yet. Every other row is filed; the
+            // mark stops one millisecond below the OLDEST hold, and the missing files are asked for.
+            val created = snap.documents.associate { it.id to (it.getTimestamp("createdAt")?.toDate()?.time ?: Long.MAX_VALUE) }
+            val unopened = page.filter { it.id !in notForMe && (it.text == "…" || it.text == com.fariin.app.crypto.Wire.LOCKED) && !it.deleted }
+            if (!LocalDb.saveNow(me, cid, page.filter { it !in unopened })) return
+            // Ask for the missing files first, then hold only on what is still not here.
+            page.filter { it !in unopened && MediaHold.missing(ctx, it) }.forEach { MediaHold.fetch(ctx, cid, crypto, it) }
+            val waiting = page.filter { it !in unopened && MediaHold.missing(ctx, it) }
+            val holdAt = (unopened + waiting).minOfOrNull { created[it.id] ?: Long.MAX_VALUE }
             val newest = snap.documents.mapNotNull { it.getTimestamp("createdAt")?.toDate()?.time }.maxOrNull() ?: return
             val before = mark
-            mark = maxOf(mark, newest)
-            LocalDb.setSyncedUpTo(me, cid, mark)
-            Cursors.advance(cid, mark)
+            mark = maxOf(mark, if (holdAt != null) minOf(newest, holdAt - 1) else newest)
+            if (mark > before) {
+                LocalDb.setSyncedUpTo(me, cid, mark)
+                Cursors.advance(cid, mark)
+            }
+            if (holdAt != null) return   // the next kick goes on from here once keys or files are in
             if (snap.size() < PAGE || mark == before) return
         }
     }

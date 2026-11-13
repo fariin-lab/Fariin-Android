@@ -592,7 +592,7 @@ class ThreadRepository(
             val vouch = windowFromServer && !unopened && chSync == null && !isChannelChat() && !Wire.isGroupCid(cid) && times.isNotEmpty()
             com.fariin.app.local.LocalDb.save(me, cid, sorted, cursor = vouch,
                 oldestFiledMs = times.minOrNull(), newestFiledMs = times.maxOrNull(),
-                reachedStart = !_state.value.canLoadOlder && !olderFromCache)
+                reachedStart = !_state.value.canLoadOlder && !olderFromCache, mediaWatch = vouch)
         }
         scheduleBurn(Disappearing.nextExpiry(stamped, now))
         if (due.isNotEmpty()) burn(due)

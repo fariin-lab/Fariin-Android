@@ -76,7 +76,9 @@ object LocalDb {
      * the newest) is at or before the existing mark. No mark and not at the start = vouch for nothing.
      */
     fun save(uid: String, cid: String, messages: List<Message>, cursor: Boolean = false,
-             oldestFiledMs: Long? = null, newestFiledMs: Long? = null, reachedStart: Boolean = false) {
+             oldestFiledMs: Long? = null, newestFiledMs: Long? = null, reachedStart: Boolean = false,
+             /** Media first: the mark never passes one of these whose file is not on the phone yet. */
+             mediaWatch: Boolean = false) {
         val rows = messages.filter(::keepable)
         if (rows.isEmpty()) return
         val changed = rows.filter { written["$uid/$cid/${it.id}"] != it.hashCode() }
@@ -105,7 +107,13 @@ object LocalDb {
                     val newest = newestFiledMs
                     val mark = mark(db, cid)
                     if (reachedStart || (mark != null && oldestFiledMs != null && oldestFiledMs <= mark)) {
-                        val next = maxOf(mark ?: 0L, newest)
+                        // Media first (safety review item 6): never past a message whose file is missing.
+                        val hold = if (!mediaWatch) null else app?.let { ctx ->
+                            rows.filter { (mark == null || it.createdAtMillis.toLong() > mark) && it.sendState == null && MediaHold.missing(ctx, it) }
+                                .minOfOrNull { it.createdAtMillis.toLong() }
+                        }
+                        val capped = hold?.let { minOf(newest, it - 1) } ?: newest
+                        val next = maxOf(mark ?: 0L, capped)
                         if (mark == null || next > mark) setMark(db, cid, next)
                         Cursors.advance(cid, next)
                     }

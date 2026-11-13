@@ -40,6 +40,9 @@ class ChatMedia(
         // Used = young again, so the size cap (trim) drops the files nobody looked at for longest.
         ?.also { it.setLastModified(System.currentTimeMillis()) }
 
+    /** Whether the file is in the cache, without touching it (the mark's media hold asks often). */
+    fun has(url: String): Boolean = !isLocal(url) && key(url).let { it.exists() && it.length() > 0 }
+
     /** Seed the cache with what I just sent, under its URL (iOS stores the plain image the same way). */
     fun store(url: String, plain: ByteArray) {
         runCatching { atomicWrite(key(url), plain) }

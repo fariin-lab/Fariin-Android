@@ -284,6 +284,12 @@ fun ChatBackupGate(me: String) {
     var busy by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
 
+    // The restore question answered (any way): the history pull it held back starts now.
+    androidx.compose.runtime.LaunchedEffect(step) {
+        if (!ChatBackup.restoreQuestionOpen(me)) {
+            com.fariin.app.local.HistoryPull.kick(ctx, me); com.fariin.app.local.InboxSync.kick(ctx, me)
+        }
+    }
     // The Restore circle: look again, even though this backup was checked before.
     val reopen by ChatBackup.reopen.collectAsState()
     androidx.compose.runtime.LaunchedEffect(reopen) { if (reopen > 0) step = "look" }

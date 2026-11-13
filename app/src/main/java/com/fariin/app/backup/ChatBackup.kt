@@ -110,6 +110,13 @@ object ChatBackup {
     }
     fun hideBackUpCircle(uid: String) = LocalDb.setMeta(uid, "backup.asked", "dismissed")
 
+    /**
+     * The sign-in question "restore your backup?" is still open (safety review item 8, iOS
+     * SignInRestoreGate): the history pull waits, so marks made before the answer never hide the offer.
+     */
+    fun restoreQuestionOpen(uid: String): Boolean = ENABLED && LocalDb.meta(uid, "restore.checked") == null &&
+        LocalDb.meta(uid, "restored").isNullOrEmpty() && !LocalDb.hasSyncedMarks(uid)
+
     /** True when a restore was offered and skipped and that backup still waits (no automatic backup then). */
     fun restoreWaiting(ctx: Context, uid: String): Boolean = !LocalDb.meta(uid, "restore.waiting").isNullOrEmpty()
 

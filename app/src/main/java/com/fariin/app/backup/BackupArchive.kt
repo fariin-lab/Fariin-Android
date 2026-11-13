@@ -138,24 +138,31 @@ object BackupArchive {
         val chatRows = chatsPlain.toString(Charsets.UTF_8).lineSequence().filter { it.isNotBlank() }
             .mapNotNull { runCatching { @Suppress("UNCHECKED_CAST") (Canonical.decode(it) as Map<String, Any?>) }.getOrNull() }.toList()
         var read = 0
+        // Safety review item 7 (iOS 5af14a67f): a chat with any row that does not parse, convert or
+        // insert gets no mark (its server copy must stay); a lost row whose chat is unknown takes every mark.
+        val lost = HashSet<String>()
+        var lostUnknown = false
         for (name in chunks) {
             val plain = fetch(name)?.let { open(c, key, it) } ?: return false
             val rows = ArrayList<Map<String, Any?>>()
             for (line in plain.toString(Charsets.UTF_8).lineSequence()) {
                 if (line.isBlank()) continue
-                @Suppress("UNCHECKED_CAST") val r = (Canonical.decode(line) as? Map<String, Any?>) ?: continue
+                @Suppress("UNCHECKED_CAST") val r = runCatching { Canonical.decode(line) as? Map<String, Any?> }.getOrNull()
+                    ?: run { lostUnknown = true; null } ?: continue
                 read++
-                val cid = r["cid"] as? String ?: continue
+                val cid = r["cid"] as? String ?: run { lostUnknown = true; null } ?: continue
                 val wire = r["body"] as? String ?: ""
                 val own = if (wire == "{}" || wire.isEmpty()) wire else runCatching {
                     @Suppress("UNCHECKED_CAST") val w = Canonical.decode(wire) as Map<String, Any?>
                     WireBody.fromWire(w, cid)?.let { LocalJson.encodeMessage(it).toString() }
-                }.getOrNull() ?: continue
+                }.getOrNull() ?: run { lost.add(cid); null } ?: continue
                 rows.add(r + ("body" to own))
             }
-            LocalDb.importMessages(uid, rows)
+            if (runCatching { LocalDb.importMessages(uid, rows) }.isFailure) rows.forEach { (it["cid"] as? String)?.let(lost::add) }
         }
-        LocalDb.importChats(uid, chatRows)
+        LocalDb.importChats(uid, chatRows.map { r ->
+            if (lostUnknown || (r["cid"] as? String) in lost) r + ("synced_up_to" to null) else r
+        })
         return read == count
     }
 }

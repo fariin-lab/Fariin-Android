@@ -187,7 +187,9 @@ object ChannelService {
             when {
                 d?.get("available") == true -> null
                 d?.get("code") == "USERNAME_TAKEN" -> "This link is already taken."
-                else -> "This link can't be used."
+                // A locked name, word for word (owner 2026-11-12, iOS f94ddfaef): the server's own sentence.
+                d?.get("code") == "USERNAME_RESERVED" -> "Sorry, this username is invalid."
+                else -> (d?.get("message") as? String)?.takeIf { it.isNotBlank() } ?: "Sorry, this username is invalid."
             }
         } catch (_: Exception) { "Couldn't check the link. Try again." }
     }
