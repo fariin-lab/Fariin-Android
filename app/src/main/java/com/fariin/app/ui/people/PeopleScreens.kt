@@ -670,7 +670,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             // else the photo; this page has no story ring on Android, so a tap is the photo).
             Avatar(person?.photoUrl ?: conv?.photos?.get(uid), 100.dp, onResolved = photo::resolved,
                 modifier = Modifier.profilePhotoSource(photo).then(Modifier.profileMeltSource(melt))
-                    .then(if (photo.hasPhoto) Modifier.combinedClickable(onClickLabel = "View photo", onClick = { photo.show() },
+                    .then(if (photo.hasPhoto) Modifier.combinedClickable(interactionSource = null, indication = null,   // no grey flash when the photo lands back (owner 2026-11-13)
+                        onClickLabel = "View photo", onClick = { photo.show() },
                         onLongClickLabel = "View photo", onLongClick = {
                             haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                             photo.show()

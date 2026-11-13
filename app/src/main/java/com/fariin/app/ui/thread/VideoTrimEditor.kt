@@ -83,6 +83,7 @@ import com.fariin.app.ui.components.floating
 import com.fariin.app.ui.theme.FariinTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -104,7 +105,8 @@ internal class TrimState(val uri: Uri) {
     /** Not null while a handle or the play head is dragged: the player shows this frame. */
     var scrub by mutableStateOf<Long?>(null)
     var playing by mutableStateOf(false)
-    var thumbs by mutableStateOf<List<ImageBitmap>>(emptyList())
+    /** The filmstrip: one slot per frame, null until that frame is made (they fill in as they come). */
+    var thumbs by mutableStateOf<List<ImageBitmap?>>(emptyList())
     var poster by mutableStateOf<ImageBitmap?>(null)
     /** Width over height, rotation applied; 0 until read. */
     var ratio by mutableFloatStateOf(0f)
@@ -113,6 +115,11 @@ internal class TrimState(val uri: Uri) {
     val trimmed: Boolean get() = durationMs > 0 && (start > 50 || end < durationMs - 50)
 
     /** Length, shape, first frame and [count] filmstrip frames (iOS loadVideo: 10 single, 8 pager). */
+    /**
+     * The strip appears the moment the length is known (owner 2026-11-13: it showed late, after every
+     * frame was made). The poster and the frames are made side by side on two readers, each frame
+     * small from the start, and each slot fills as soon as its frame is ready.
+     */
     suspend fun load(ctx: android.content.Context, count: Int) {
         if (loaded) return
         loaded = true
@@ -125,23 +132,39 @@ internal class TrimState(val uri: Uri) {
             val rot = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
             if (rot == 90 || rot == 270) { val t = w; w = h; h = t }
             if (w > 0 && h > 0) ratio = w.toFloat() / h
-            poster = withContext(Dispatchers.IO) { frame(r, 0L, 1080) }?.asImageBitmap()
-            if (ms <= 0) return
-            durationMs = ms
-            if (end == 0L) end = ms
-            val out = ArrayList<ImageBitmap>(count)
-            for (i in 0 until count) {
-                val t = ms * i / (count - 1).coerceAtLeast(1)
-                withContext(Dispatchers.IO) { frame(r, t, 160) }?.let { out += it.asImageBitmap() }
+            if (ms > 0) {
+                durationMs = ms
+                if (end == 0L) end = ms
+                thumbs = List(count) { null }
             }
-            thumbs = out
+            kotlinx.coroutines.coroutineScope {
+                launch(Dispatchers.IO) { poster = frame(r, 0L, 1080)?.asImageBitmap() }
+                // One reader: the phone decodes these one at a time anyway (three readers side by side
+                // filled no faster on the Pixel).
+                if (ms > 0) launch(Dispatchers.IO) {
+                    val r2 = MediaMetadataRetriever()
+                    try {
+                        r2.setDataSource(ctx, uri)
+                        for (i in 0 until count) {
+                            val t = ms * i / (count - 1).coerceAtLeast(1)
+                            val bmp = frame(r2, t, 160)?.asImageBitmap() ?: continue
+                            withContext(Dispatchers.Main) { thumbs = thumbs.toMutableList().also { if (i < it.size) it[i] = bmp } }
+                        }
+                    } catch (_: Exception) {
+                    } finally { runCatching { r2.release() } }
+                }
+            }
         } catch (_: Exception) {
         } finally {
             runCatching { r.release() }
         }
     }
 
+    /** A frame [side] px on its long side, made at that size where the phone can (no full-size decode). */
     private fun frame(r: MediaMetadataRetriever, ms: Long, side: Int): Bitmap? {
+        // Keeps the frame's shape (rotation included) inside a side x side box.
+        if (android.os.Build.VERSION.SDK_INT >= 27 && side < 1080)
+            r.getScaledFrameAtTime(ms * 1000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, side, side)?.let { return it }
         val f = r.getFrameAtTime(ms * 1000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC) ?: return null
         val (w, h) = MediaRules.fit(f.width, f.height, side)
         if (w >= f.width) return f
@@ -233,7 +256,7 @@ internal fun TrimVideo(s: TrimState, active: Boolean, modifier: Modifier = Modif
  * [minMs] (or the clip). The strip is kept out of the system back swipe.
  */
 @Composable
-internal fun VideoTrimStrip(s: TrimState, modifier: Modifier = Modifier, stripHeight: Int = 40, handleW: Int = 12, minMs: Long = 1000) {
+internal fun VideoTrimStrip(s: TrimState, modifier: Modifier = Modifier, stripHeight: Int = 50, handleW: Int = 14, minMs: Long = 1000) {
     val density = LocalDensity.current
     val frameColor by animateColorAsState(if (s.trimmed) TrimYellow else TrimGrey, tween(200), label = "trimFrame")
     BoxWithConstraints(modifier.fillMaxWidth().height(stripHeight.dp).systemGestureExclusion()) {
@@ -307,24 +330,42 @@ internal fun VideoTrimStrip(s: TrimState, modifier: Modifier = Modifier, stripHe
             },
         ) {
             // Filmstrip and dimmed ends under one rounded clip.
-            Box(Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp))) {
-                Row(Modifier.fillMaxSize()) {
-                    for (t in s.thumbs) Image(t, null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxHeight())
+            Box(Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp))) {
+                // Each frame fades in over a dark slot as it is made (the strip itself is there at once).
+                // A slot not made yet shows the first frame that is, so the strip reads whole almost at
+                // once and each real frame takes its place as it comes.
+                val stand = s.thumbs.firstOrNull { it != null }
+                Row(Modifier.fillMaxSize().background(Color(0xFF2C2C2E))) {
+                    for (t in s.thumbs.map { it ?: stand }) androidx.compose.animation.Crossfade(targetState = t, modifier = Modifier.weight(1f).fillMaxHeight(),
+                        animationSpec = tween<Float>(180), label = "trimThumb") { bmp: ImageBitmap? ->
+                        if (bmp != null) Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        else Box(Modifier.fillMaxSize())
+                    }
                 }
                 Box(Modifier.width(with(density) { startX.toDp() }).fillMaxHeight().background(Color.Black.copy(alpha = 0.55f)))
                 Box(Modifier.offset { IntOffset(endX.roundToInt(), 0) }.width(with(density) { (wPx - endX).coerceAtLeast(0f).toDp() })
                     .fillMaxHeight().background(Color.Black.copy(alpha = 0.55f)))
             }
             Box(Modifier.offset { IntOffset(startX.roundToInt(), 0) }.width(with(density) { (endX - startX).coerceAtLeast(0f).toDp() })
-                .fillMaxHeight().border(3.dp, frameColor, RoundedCornerShape(8.dp)))
+                .fillMaxHeight().border(3.dp, frameColor, RoundedCornerShape(10.dp)))
             if (s.end > s.start) {
                 Box(Modifier.offset { IntOffset((headX - with(density) { 1.5.dp.toPx() }).roundToInt(), with(density) { (-4).dp.roundToPx() }) }
                     .width(3.dp).height((stripHeight + 8).dp).shadow(1.5.dp, CircleShape).background(Color.White, CircleShape))
             }
             for (x in listOf(leftHandle, rightHandle)) {
+                val left = x == leftHandle
                 Box(Modifier.offset { IntOffset(x.roundToInt(), 0) }.width(handleW.dp).fillMaxHeight()
+                    .shadow(2.dp, RoundedCornerShape((handleW / 2f).dp))
                     .background(frameColor, RoundedCornerShape((handleW / 2f).dp)), contentAlignment = Alignment.Center) {
-                    Box(Modifier.width(2.5.dp).height(18.dp).background(Color.Black.copy(alpha = 0.55f), CircleShape))
+                    // A small chevron pointing inward (‹ on the left handle, › on the right), drawn, not a font.
+                    androidx.compose.foundation.Canvas(Modifier.width(6.dp).height(12.dp)) {
+                        val p = androidx.compose.ui.graphics.Path().apply {
+                            if (left) { moveTo(size.width, 0f); lineTo(0f, size.height / 2); lineTo(size.width, size.height) }
+                            else { moveTo(0f, 0f); lineTo(size.width, size.height / 2); lineTo(0f, size.height) }
+                        }
+                        drawPath(p, Color.Black.copy(alpha = 0.7f), style = androidx.compose.ui.graphics.drawscope.Stroke(
+                            width = 2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+                    }
                 }
             }
         }
@@ -416,7 +457,7 @@ private fun VideoEditorBody(uri: Uri, caption: String, onCaption: (String) -> Un
                 }
                 // The strip's place is kept while the filmstrip loads, so the clip does not refit.
                 if (s.thumbs.isNotEmpty() && s.durationMs > 0) VideoTrimStrip(s, Modifier.padding(horizontal = 16.dp))
-                else Spacer(Modifier.height(40.dp))
+                else Spacer(Modifier.height(50.dp))
             }
             Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.Bottom) {
                 Box(

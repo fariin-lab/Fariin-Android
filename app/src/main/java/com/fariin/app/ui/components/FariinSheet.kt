@@ -126,7 +126,11 @@ fun FariinSheet(motion: SheetMotion, handle: Boolean = false, fill: Color? = nul
                     shape = RoundedCornerShape(lerpPx(size.width / 2f, r, g), lerpPx(size.width / 2f, r, g),
                         lerpPx(size.width / 2f, 0f, g), lerpPx(size.width / 2f, 0f, g))
                     clip = true
+                    // Closing: the shape fades out over its last stretch, so the real "+" is what is left
+                    // (owner 2026-11-13: a white blob with a big "+" showed, then jumped to the button).
+                    alpha = if (motion.shrinking) (g / 0.45f).coerceIn(0f, 1f) else 1f
                 } else {
+                    alpha = 1f
                     scaleX = 1f; scaleY = 1f; translationX = 0f; translationY = 0f
                     shape = RoundedCornerShape(topStart = SheetCorner, topEnd = SheetCorner); clip = true
                 }
@@ -136,7 +140,7 @@ fun FariinSheet(motion: SheetMotion, handle: Boolean = false, fill: Color? = nul
                 drawContent()
                 // The button's "+" over the shrunk sheet, fading as it grows (iOS: the glyph rides in).
                 val g = motion.grow.value
-                if (g < 0.5f && motion.source != null) {
+                if (g < 0.5f && motion.source != null && !motion.shrinking) {
                     val a = (1f - g / 0.5f).coerceIn(0f, 1f)
                     val arm = minOf(size.width, size.height) * 0.12f
                     val cx = size.width / 2f; val cy = size.height / 2f
@@ -301,6 +305,8 @@ class SheetMotion internal constructor(
     private var raw = 0f            // the finger's own travel; y is raw with the rubber band applied
     private var job: Job? = null
     private var closing = false
+    /** Shrinking back into its button: no glyph drawn, the shape melts into the real one. */
+    val shrinking: Boolean get() = closing
 
     private fun run(target: Float, velocity: Float, spec: AnimationSpec<Float>, end: () -> Unit = {}) {
         job?.cancel()

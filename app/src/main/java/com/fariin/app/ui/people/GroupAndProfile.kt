@@ -985,7 +985,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 modifier = Modifier.profilePhotoSource(photo).profileMeltSource(melt).then(
                 if (photoChoice != null) Modifier.combinedClickable(onClickLabel = "View story", onClick = photoChoice.tap,
                     onLongClickLabel = "View photo", onLongClick = photoChoice.hold).semantics { contentDescription = "Group photo" }
-                else if (photo.hasPhoto) Modifier.combinedClickable(onClickLabel = "View photo", onClick = { photo.show() },
+                else if (photo.hasPhoto) Modifier.combinedClickable(interactionSource = null, indication = null,   // no grey flash on landing
+                    onClickLabel = "View photo", onClick = { photo.show() },
                     onLongClickLabel = "View photo", onLongClick = {
                         photoHaptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                         photo.show()

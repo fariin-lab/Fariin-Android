@@ -556,7 +556,8 @@ internal fun MemberCard(cid: String, me: String, uid: String, conv: Map<String, 
             // (owner 2026-11-13; the profile page's viewer).
             Avatar(face, 96.dp, onResolved = cardPhoto::resolved,
                 modifier = Modifier.profilePhotoSource(cardPhoto).then(
-                    if (cardPhoto.hasPhoto) Modifier.clip(CircleShape).clickable(onClickLabel = "View photo") { cardPhoto.show() } else Modifier))
+                    if (cardPhoto.hasPhoto) Modifier.clip(CircleShape).clickable(interactionSource = null, indication = null,   // no grey flash when the photo lands back
+                        onClickLabel = "View photo") { cardPhoto.show() } else Modifier))
             Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(if (uid == me) "You" else name, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.label, maxLines = 1)
                 if (team.isStaff(uid)) {
