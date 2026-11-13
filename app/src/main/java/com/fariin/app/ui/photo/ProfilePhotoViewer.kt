@@ -123,6 +123,9 @@ class ProfilePhotoState internal constructor() {
     internal var seed: ImageBitmap? = null
     /** The avatar's rect in its window, px. */
     internal var source: Rect? = null
+    /** The open viewer's close (its collapse), for a host that gets Back itself (a popup). */
+    var closeRequest: (() -> Unit)? = null
+        internal set
 
     /** Avatar's answer: [has] = a photo is on screen, [bitmap] = what it drew (seeds the first frame). */
     fun resolved(has: Boolean, bitmap: ImageBitmap?) {
@@ -238,6 +241,8 @@ fun ProfilePhotoViewer(
     }
 
     BackHandler { close() }
+    // A host whose own window takes Back (a popup over a sheet) closes it through this.
+    state.closeRequest = { close() }
     // If the page goes away with the viewer up, the avatar must not stay hidden.
     DisposableEffect(Unit) { onDispose { state.handoff = false } }
 

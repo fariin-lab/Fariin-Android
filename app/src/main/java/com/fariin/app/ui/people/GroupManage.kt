@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import com.fariin.app.ui.photo.profilePhotoSource
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -540,17 +541,25 @@ internal fun MemberCard(cid: String, me: String, uid: String, conv: Map<String, 
         listOf(PersonAction("Ban") { runNow { GroupManage.removeMember(cid, uid, name); Snack.show("$name was removed from the group.") } }),
         onDismiss = { confirmBan = false })
     val cardPhoto = com.fariin.app.ui.photo.rememberProfilePhotoState()
-    // Over the sheet: the sheet is its own window, so the viewer gets a full-screen one above it.
-    if (cardPhoto.open) androidx.compose.ui.window.Dialog(onDismissRequest = {},
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false, dismissOnBackPress = false, dismissOnClickOutside = false)) {
-        (androidx.compose.ui.platform.LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider)
-            ?.window?.setDimAmount(0f)
-        Box(Modifier.fillMaxSize()) { com.fariin.app.ui.photo.ProfilePhotoViewer(cardPhoto, face,
-            // The whole photo, square corners; it closes back into the circle (owner 2026-11-13).
-            style = com.fariin.app.ui.photo.ProfilePhotoStyle(landsSquare = true)) }
-    }
     ModalBottomSheet(onDismissRequest = onClose, sheetState = sheet, containerColor = c.bgSecondary) {
+        // Over the card, in the card's OWN window (a popup at its origin, not a dialog of its own):
+        // the photo lands exactly on its circle and the card never moves (owner 2026-11-13: a separate
+        // window landed the photo ~16 dp high, then the card jumped down as it went).
+        val root = androidx.compose.ui.platform.LocalView.current.rootView
+        if (cardPhoto.open) androidx.compose.ui.window.Popup(
+            onDismissRequest = { cardPhoto.closeRequest?.invoke() },   // Back: the photo closes first, not the card
+            popupPositionProvider = object : androidx.compose.ui.window.PopupPositionProvider {
+                override fun calculatePosition(anchorBounds: androidx.compose.ui.unit.IntRect, windowSize: androidx.compose.ui.unit.IntSize,
+                    layoutDirection: androidx.compose.ui.unit.LayoutDirection, popupContentSize: androidx.compose.ui.unit.IntSize) =
+                    androidx.compose.ui.unit.IntOffset.Zero
+            },
+            properties = androidx.compose.ui.window.PopupProperties(focusable = true, clippingEnabled = false)) {
+            // The whole screen (the sheet window's root), not what the popup is offered.
+            val d = androidx.compose.ui.platform.LocalDensity.current
+            Box(Modifier.requiredSize(with(d) { root.width.toDp() }, with(d) { root.height.toDp() })) { com.fariin.app.ui.photo.ProfilePhotoViewer(cardPhoto, face,
+                // The whole photo, square corners; it closes back into the circle (owner 2026-11-13).
+                style = com.fariin.app.ui.photo.ProfilePhotoStyle(landsSquare = true)) }
+        }
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             // The photo opens out of its circle and lands back in it, the card staying open
             // (owner 2026-11-13; the profile page's viewer).
