@@ -555,6 +555,55 @@ class FariinCrypto(
         return noteOpen(other, r)
     }
 
+    /**
+     * Instant forward (iOS forward-instant, owner 2026-11-13): the file key of [meta] in [srcCid],
+     * wrapped again for [dstCid] ([dstMembers] for a group) exactly as a send would wrap it. The data
+     * nonce `n` stays, the bytes are never touched. Null = this cannot go instant (the old forward
+     * runs): a key that will not open, a target with no key, or plain and sealed mixed.
+     */
+    suspend fun rewrapFile(srcCid: String, meta: EncMeta, dstCid: String, dstMembers: Collection<String>?): EncMeta? {
+        val dstGroup = Wire.isGroupCid(dstCid)
+        val dstPlain = dstGroup && groupIsPlain(dstCid)
+        // Plain stays plain, only into another plain group; sealed never goes into a plain group.
+        if (meta.isPlain) return if (Wire.isGroupCid(srcCid) && dstPlain) EncMeta.PLAIN else null
+        if (dstPlain || meta.v != 1) return null
+        ensureReady()
+        val sk = mySecretKey ?: return null
+        val me = currentUid() ?: return null
+        // 1. Open the file key the way decryptBytes opens it for the SOURCE chat.
+        val fileKey: ByteArray = run {
+            val wraps = meta.w; val author = meta.a
+            if (wraps != null && author != null) {
+                runCatching { preloadKey(author) }
+                val cur = pubCache[author]
+                wraps[me]?.takeIf { cur != null }?.let { wire.openWrap(it, candidates(author, cur!!), sk)?.first }
+                    ?: (if (Wire.isGroupCid(srcCid)) releasedKey(meta.n) else null)
+            } else {
+                val other = otherUid(srcCid)
+                runCatching { preloadKey(other) }
+                val cur = pubCache[other] ?: return null
+                val wrapped = B64.decode(meta.k) ?: return null
+                val kn = B64.decode(meta.kn) ?: return null
+                wire.openBoxAny(wrapped, kn, candidates(other, cur), sk)?.first
+            }
+        } ?: return null
+        // 2. Wrap it for the TARGET the way a send does; 3. the data nonce is kept.
+        return try {
+            if (dstGroup) {
+                val members = dstMembers ?: return null
+                val wraps = LinkedHashMap<String, String>()
+                for ((uid, pub) in groupKeys(members)) wire.makeWrap(fileKey, pub, sk)?.let { wraps[uid] = it }
+                if (wraps.keys.none { it != me }) return null
+                EncMeta(v = 1, n = meta.n, k = "", kn = "", w = wraps, a = me)
+            } else {
+                val pub = keyForSending(Wire.otherUid(dstCid, me)) ?: return null
+                val kn = wire.randomNonce()
+                val wrapped = nacl.boxEasy(fileKey, kn, pub, sk) ?: return null
+                EncMeta(v = 1, n = meta.n, k = B64.encode(wrapped), kn = B64.encode(kn))
+            }
+        } catch (_: Exception) { null }
+    }
+
     @Volatile private var keysSinceCache: Pair<String, Long?>? = null
 
     /**

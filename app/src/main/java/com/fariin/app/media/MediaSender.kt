@@ -1,5 +1,6 @@
 package com.fariin.app.media
 
+import com.fariin.app.data.Message
 import com.fariin.app.crypto.EncMeta
 import com.fariin.app.crypto.FariinCrypto
 import com.fariin.app.crypto.Wire
@@ -284,6 +285,123 @@ class MediaSender(
         batch.commit().await()
         com.fariin.app.media.ChatSounds.sent()
         clientId?.let { UploadProgress.done(it) }
+    }
+
+    // ------------------------------------------------------------------ instant forward
+
+    /** The instant forward cannot be done; the caller sends the old way (nothing was written). */
+    class NotInstant(why: String) : Exception(why)
+
+    /**
+     * Instant forward (iOS forward-instant, spec fariin-plans/to-android/2026-11-13-instant-forward.md):
+     * every file key of [m] re-wrapped for this chat first (a key problem costs nothing), then the
+     * server copies the sealed files (forwardMedia) and ONE message is written the way a normal send
+     * writes that type, complete. Any refusal throws [NotInstant] before anything is left behind.
+     */
+    suspend fun instant(m: Message, srcCid: String, caption: String, forwarded: Boolean, clientId: String, clientTs: Double) {
+        if (m.viewOnce || m.uploading || m.sendState != null) throw NotInstant("not a settled media message")
+        val members = members()
+        val dst = convRef.collection("messages").document()
+        // 1. Every envelope re-wrapped for here (n kept). One that will not: the old forward.
+        suspend fun re(e: EncMeta?): EncMeta = e?.let { crypto.rewrapFile(srcCid, it, cid, members) } ?: throw NotInstant("key")
+        // 2. The files to copy, by their Storage path ("r2:" and anything not Storage: the old forward).
+        val urls = buildList {
+            when (m.mediaKind) {
+                Message.MediaKind.PHOTO -> add(m.imageUrl)
+                Message.MediaKind.VIDEO -> { add(m.videoUrl); add(m.thumbUrl) }
+                Message.MediaKind.VOICE -> add(m.audioUrl)
+                Message.MediaKind.FILE -> { add(m.fileUrl); m.thumbUrl?.let { add(it) } }
+                Message.MediaKind.ALBUM -> m.album.forEach { add(it.imageUrl); if (it.isVideo) add(it.videoUrl) }
+                else -> throw NotInstant("kind")
+            }
+        }.map { it ?: throw NotInstant("missing url") }.distinct()
+        if (urls.isEmpty() || urls.size > 40) throw NotInstant("count")
+        val pathOf = urls.associateWith { storagePath(it) ?: throw NotInstant("not storage") }
+        val metas: Map<String, EncMeta> = when (m.mediaKind) {
+            Message.MediaKind.ALBUM -> buildMap {
+                m.album.forEach { t -> put(t.imageUrl, re(t.enc)); if (t.isVideo) put(t.videoUrl!!, re(t.videoEnc)) }
+            }
+            Message.MediaKind.VIDEO -> mapOf(m.videoUrl!! to re(m.enc), m.thumbUrl!! to re(m.thumbEnc))
+            Message.MediaKind.FILE -> buildMap { put(m.fileUrl!!, re(m.enc)); m.thumbUrl?.let { put(it, re(m.thumbEnc)) } }
+            else -> mapOf(urls.first() to re(m.enc))
+        }
+        // 3. The server copy.
+        val res = try {
+            com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
+                .getHttpsCallable("forwardMedia").call(hashMapOf(
+                    "srcCid" to srcCid, "msgId" to m.id, "dstCid" to cid, "dstMsgId" to dst.id,
+                    "objects" to pathOf.values.toList())).await().getData() as? Map<*, *>
+        } catch (e: Exception) { throw NotInstant("forwardMedia: ${e.message}") }
+        if (res?.get("ok") != true) throw NotInstant("forwardMedia refused")
+        val newUrlByPath = (res["objects"] as? List<*>).orEmpty().mapNotNull { o ->
+            (o as? Map<*, *>)?.let { (it["src"] as? String)?.let { s -> (it["url"] as? String)?.let { u -> s to u } } }
+        }.toMap()
+        fun nu(old: String): String = newUrlByPath[pathOf[old]] ?: throw NotInstant("no copy for $old")
+        // 4. One message, written as that type's send writes it, complete (no `uploading`).
+        try {
+            val cap = sealOrNull(caption.trim(), members) ?: ""
+            val blur = sealOrNull(m.blurhash, members)
+            val thumb = sealOrNull(m.thumb, members)
+            val now = FieldValue.serverTimestamp()
+            val msg: Map<String, Any>
+            val preview: String
+            var lastUrl: String? = null; var lastEnc: EncMeta? = null; var lastImages: List<Map<String, Any>>? = null
+            when (m.mediaKind) {
+                Message.MediaKind.PHOTO -> {
+                    val u = nu(m.imageUrl!!); val e = metas.getValue(m.imageUrl)
+                    msg = MediaMessages.image(me, u, e, cap, clientTs, clientId, m.width?.toInt(), m.height?.toInt(), blur, thumb, now, forwarded = forwarded)
+                    preview = MediaRules.PHOTO_PREVIEW; lastUrl = u; lastEnc = e
+                }
+                Message.MediaKind.VIDEO -> {
+                    val tu = nu(m.thumbUrl!!); val te = metas.getValue(m.thumbUrl)
+                    msg = MediaMessages.videoAnnounce(me, tu, te, m.duration ?: 0.0, m.width ?: 0.0, m.height ?: 0.0, cap, clientTs,
+                        clientId, blur, thumb, forwarded, now) - "uploading" + MediaMessages.attachVideo(nu(m.videoUrl!!), metas.getValue(m.videoUrl), "").minus("uploading")
+                    preview = MediaRules.videoPreview(m.duration ?: 0.0); lastUrl = tu; lastEnc = te
+                }
+                Message.MediaKind.VOICE -> {
+                    msg = MediaMessages.audio(me, metas.getValue(m.audioUrl!!), m.duration ?: 0.0, m.waveform, clientTs, clientId, now, forwarded) -
+                        "uploading" + ("audioUrl" to nu(m.audioUrl))
+                    preview = MediaRules.voicePreview(m.duration ?: 0.0)
+                }
+                Message.MediaKind.FILE -> {
+                    val th = m.thumbUrl?.let { nu(it) to metas.getValue(it) }
+                    msg = MediaMessages.file(me, m.fileName ?: "File", (m.fileSize ?: 0L).toInt(), metas.getValue(m.fileUrl!!), clientTs, clientId,
+                        th?.first, th?.second, forwarded, now) - "uploading" + ("fileUrl" to nu(m.fileUrl))
+                    preview = MediaRules.FILE_PREVIEW
+                }
+                else -> {
+                    val tiles = m.album.map { t ->
+                        MediaMessages.Tile(nu(t.imageUrl), metas.getValue(t.imageUrl), t.width ?: 0.0, t.height ?: 0.0,
+                            t.videoUrl?.let { nu(it) }, t.videoUrl?.let { metas.getValue(it) }, t.duration ?: 0.0)
+                    }
+                    msg = MediaMessages.album(me, tiles, cap, clientTs, clientId, blur, thumb, forwarded, now)
+                    val cover = tiles.firstOrNull { !it.isVideo } ?: tiles.first()
+                    preview = MediaMessages.albumPreview(tiles); lastUrl = cover.imageUrl; lastEnc = cover.imageMeta
+                    lastImages = MediaMessages.lastImages(listOf(cover) + tiles.filter { it !== cover })
+                }
+            }
+            val batch = db.batch()
+            setMsg(batch, dst, members, msg)
+            batch.update(convRef, MediaMessages.convUpdate(me, preview, others(members), now, FieldValue.increment(1),
+                lastImageUrl = lastUrl, lastImageEnc = lastEnc, lastImages = lastImages))
+            batch.commit().await()
+        } catch (e: Exception) {
+            // The copy worked, the message did not: the copies go, then the old forward.
+            runCatching {
+                com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
+                    .getHttpsCallable("forwardMedia").call(hashMapOf("undo" to true, "dstCid" to cid, "dstMsgId" to dst.id)).await()
+            }
+            throw NotInstant("write: ${e.message}")
+        }
+        com.fariin.app.media.ChatSounds.sent()
+        UploadProgress.done(clientId)
+    }
+
+    /** The Storage object path of a Firebase download URL (…/o/<encoded path>?…); null for anything else (R2). */
+    private fun storagePath(url: String): String? {
+        if (!url.startsWith("https://firebasestorage.googleapis.com/")) return null
+        val enc = url.substringAfter("/o/", "").substringBefore('?').ifEmpty { return null }
+        return java.net.URLDecoder.decode(enc, "UTF-8").takeIf { it.startsWith("chat/") }
     }
 
     // ------------------------------------------------------------------ voice (forwarded notes)

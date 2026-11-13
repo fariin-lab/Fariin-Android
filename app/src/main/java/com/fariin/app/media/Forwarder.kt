@@ -16,8 +16,13 @@ import java.util.UUID
 /**
  * Forward (iOS ChatService.forwardMessage): the source's file is opened with the SOURCE chat's
  * keys, then sent again as a new message in each target, sealed for that target (1:1 enc1, group
- * seal, plain only in a plain group). Nothing is copied server side, so no target ever gets a
- * file it cannot open and the server never sees plain bytes. "Forwarded" follows iOS isForward.
+ * seal, plain only in a plain group). "Forwarded" follows iOS isForward.
+ *
+ * Instant first (owner 2026-11-13, "forwarding must be instant"): a photo, video, voice note, file or
+ * album is copied sealed inside the bucket by forwardMedia and only its small file key is wrapped
+ * again for the target ([MediaSender.instant]); the server still never sees plain bytes. Anything that
+ * cannot go that way (function not live, R2 links, plain/sealed mixed, a key that will not open)
+ * falls back to the old path above, unchanged.
  *
  * TODO (iOS has it): the live re-read of the source (an edit or delete in the last moments).
  */
@@ -29,8 +34,15 @@ object Forwarder {
         context: Context, me: String, crypto: FariinCrypto, m: Message, sourceCid: String, targets: List<String>,
     ): List<String> = withContext(Dispatchers.IO) {
         val src = ChatMedia(context, sourceCid, crypto)
-        // Open the source once, then send per target.
-        val payload = runCatching { open(context, src, m) }.getOrNull()
+        // Opened once, and only if some target needs the old forward: photos, videos, voice, files and
+        // albums first try the instant way (MediaSender.instant: a server copy and a re-wrapped key).
+        var opened = false
+        var payloadHeld: Payload? = null
+        suspend fun payload(): Payload? {
+            if (!opened) { opened = true; payloadHeld = runCatching { open(context, src, m) }.getOrNull() }
+            return payloadHeld
+        }
+        val instantKind = !m.isSticker && !m.isGif && m.mediaKind != null && m.mediaKind != Message.MediaKind.VIEW_ONCE
         val failed = mutableListOf<String>()
         // A post forwarded out of a channel says which channel (iOS forwardMessage + sealedFwdChannel);
         // one already forwarded from a channel keeps its channel. Never written into a channel.
@@ -41,7 +53,12 @@ object Forwarder {
         for (t in targets.distinct().take(MediaRules.FORWARD_CHATS_AT_ONCE)) {
             val fwd = MediaMessages.isForward(m.forwarded, sourceCid, t)
             val fc = fromChannel?.takeIf { !isChannel(t) }
-            val ok = runCatching { sendTo(context, me, crypto, t, m, payload, fwd, fc, source.takeIf { fwd }) }.isSuccess
+            val instant = instantKind && runCatching {
+                MediaSender(t, me, crypto, ChatMedia(context, t, crypto))
+                    .also { it.fwdChannelJson = fc; it.fwdSource = source.takeIf { fwd } }
+                    .instant(m, sourceCid, m.text, fwd, UUID.randomUUID().toString().uppercase(), System.currentTimeMillis().toDouble())
+            }.onFailure { android.util.Log.i("FariinForward", "old forward to $t: ${it.message}") }.isSuccess
+            val ok = instant || runCatching { sendTo(context, me, crypto, t, m, payload(), fwd, fc, source.takeIf { fwd }) }.isSuccess
             if (!ok) failed += t
         }
         failed

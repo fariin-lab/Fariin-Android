@@ -268,7 +268,7 @@ internal fun AttachSheet(
     // right at the rounded top, nothing above it (iOS; the old sheet kept a status-bar band there).
     // From the field's camera the sheet is never drawn: it rose for a moment before the camera app
     // came over it (owner's Pixel 2026-11-10, "it thinks I tapped +"). The camera, then the editor.
-    if (!cameraFirst) com.fariin.app.ui.components.FariinSheetDialog(motion, fill = com.fariin.app.ui.components.sheetFill, typing = true) { _ ->
+    if (!cameraFirst) com.fariin.app.ui.components.FariinSheetDialog(motion, fill = com.fariin.app.ui.components.sheetFill, typing = true, floating = true) { _ ->
         // Lists other than the photos open the sheet fully, as iOS does.
         androidx.compose.runtime.LaunchedEffect(page, folder) { if (page != SheetPage.PHOTOS || folder != null) motion.expand() }
         // The page runs to the screen's bottom edge; the gesture bar's strip is kept free by padding.

@@ -343,8 +343,8 @@ internal fun VideoOverlay(m: Message, ready: Boolean, showDuration: Boolean = tr
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
         // While the clip waits or comes down, the corner says its size instead (the download badge).
         if (showDuration) m.duration?.let { d ->
-            // iOS durationPill: 5 in from the corner, 0.5 dark, 11 semibold, 6 either side.
-            DurationPill(d, Modifier.padding(5.dp))
+            // iOS durationPill: 10 in from the corner, 0.5 dark, 11 semibold, 6 either side.
+            DurationPill(d, Modifier.padding(10.dp))   // was 5: clear of the round corner (2026-11-13)
         }
         // Never while it uploads ("ready, tap it" is not true then; the ring sits there).
         if (ready) PlayBadge(MediaRules.playBadgeSide(maxWidth.value, maxHeight.value).dp, Modifier.align(Alignment.Center))

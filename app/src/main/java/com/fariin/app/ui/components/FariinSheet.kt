@@ -98,60 +98,86 @@ fun rememberSheetMotion(onClosed: () -> Unit): SheetMotion {
  * a top strip drag the sheet, for pages whose own content takes every drag (a map).
  */
 @Composable
-fun FariinSheet(motion: SheetMotion, handle: Boolean = false, fill: Color? = null, content: @Composable () -> Unit) {
+fun FariinSheet(motion: SheetMotion, handle: Boolean = false, fill: Color? = null, floating: Boolean = false,
+                content: @Composable () -> Unit) {
     val c = Fariin.colors
     val bg = fill ?: c.bg
     LaunchedEffect(Unit) { motion.open() }
     val at = remember { arrayOfNulls<androidx.compose.ui.geometry.Rect>(1) }
+    val density = LocalDensity.current
+    val windowH = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height.toFloat()
+    // [floating] (the attach sheet, iOS AttachSheetController, owner 2026-11-13 with an iPhone video):
+    // a card inset from the sides and the bottom, rounded on all four corners.
+    val inset = if (floating) 8.dp else 0.dp
+    val insetPx = with(density) { inset.toPx() }
+    val cornerPx = with(density) { (if (floating) FloatCorner else SheetCorner).toPx() }
+    /** The sheet's visible rect in the window at grow [e] (0 = the button, 1 = itself). */
+    fun rectAt(e: Float, src: androidx.compose.ui.geometry.Rect, box: androidx.compose.ui.geometry.Rect): androidx.compose.ui.geometry.Rect {
+        val top = box.top + motion.y
+        val bottom = if (floating) windowH - insetPx else windowH
+        return androidx.compose.ui.geometry.Rect(lerpPx(src.left, box.left, e), lerpPx(src.top, top, e),
+            lerpPx(src.right, box.right, e), lerpPx(src.bottom, bottom, e))
+    }
     Box(Modifier.fillMaxSize()
         .drawBehind { drawRect(Color.Black.copy(alpha = 0.4f * motion.grow.value * (1f - motion.y / motion.full).coerceIn(0f, 1f))) }
-        .clickable(interactionSource = null, indication = null) { motion.close() }) {
-        Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 10.dp)
+        .clickable(interactionSource = null, indication = null) { motion.close() }
+        .drawWithContent {
+            drawContent()
+            // The last of a close (and the first of an open): a round glass bubble with the "+" on the
+            // button, the card fading into it (iOS: the sheet ends as the button).
+            val g = motion.grow.value
+            val src = if (g < 0.4f) motion.source?.invoke() else null
+            val box = at[0]
+            if (src != null && box != null && src.width > 0f) {
+                val r = rectAt(g, src, box)
+                val a = (1f - g / 0.4f).coerceIn(0f, 1f)
+                val d = minOf(r.width, r.height)
+                val cx = src.center.x + (r.center.x - src.center.x) * 0.5f
+                val cy = src.center.y + (r.center.y - src.center.y) * 0.5f
+                drawCircle(c.card.copy(alpha = a), d / 2f, Offset(cx, cy))
+                drawCircle(c.separator.copy(alpha = a * 0.6f), d / 2f, Offset(cx, cy),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
+                val arm = 8.dp.toPx() * (d / src.width).coerceIn(1f, 2.2f)
+                val sw = 2.dp.toPx()
+                val ink = c.label.copy(alpha = a)
+                drawLine(ink, Offset(cx - arm, cy), Offset(cx + arm, cy), sw, androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(ink, Offset(cx, cy - arm), Offset(cx, cy + arm), sw, androidx.compose.ui.graphics.StrokeCap.Round)
+            }
+        }) {
+        Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 10.dp).padding(horizontal = inset)
             .onGloballyPositioned { at[0] = it.boundsInWindow() }
             .offset { IntOffset(0, motion.y.toInt()) }
             .graphicsLayer {
-                // Grown from a button (SheetMotion.source): at 0 the sheet is a circle sitting on the
-                // button, at 1 it is itself; the corners round off as it goes.
                 val g = motion.grow.value
                 val src = if (g < 1f) motion.source?.invoke() else null
                 val box = at[0]
                 if (src != null && box != null && size.width > 0f) {
-                    val inv = 1f - g
-                    val sx = src.width / size.width; val sy = src.height / size.height
-                    scaleX = sx + (1f - sx) * g; scaleY = sy + (1f - sy) * g
-                    val cx = box.left + size.width / 2f; val cy = box.top + motion.y + size.height / 2f
-                    translationX = (src.center.x - cx) * inv
-                    translationY = (src.center.y - cy) * inv
-                    val r = SheetCorner.toPx()
-                    shape = RoundedCornerShape(lerpPx(size.width / 2f, r, g), lerpPx(size.width / 2f, r, g),
-                        lerpPx(size.width / 2f, 0f, g), lerpPx(size.width / 2f, 0f, g))
+                    // Grown from a button (SheetMotion.source): the card keeps its shape and scales
+                    // evenly toward the button, its page masked by the shrinking rect (no stretch).
+                    val r = rectAt(g, src, box)
+                    val s = (r.width / size.width).coerceAtLeast(0.01f)
+                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)
+                    scaleX = s; scaleY = s
+                    translationX = r.left - box.left
+                    translationY = r.top - (box.top + motion.y)
+                    val rad = lerpPx(minOf(src.width, src.height) / 2f, cornerPx, g) / s
+                    shape = roundedTop(r.height / s, rad, rad)
                     clip = true
-                    // Closing: the shape fades out over its last stretch, so the real "+" is what is left
-                    // (owner 2026-11-13: a white blob with a big "+" showed, then jumped to the button).
-                    alpha = if (motion.shrinking) (g / 0.45f).coerceIn(0f, 1f) else 1f
+                    alpha = if (motion.shrinking) ((g - 0.1f) / 0.4f).coerceIn(0f, 1f) else (g / 0.3f).coerceIn(0f, 1f)
                 } else {
-                    alpha = 1f
-                    scaleX = 1f; scaleY = 1f; translationX = 0f; translationY = 0f
-                    shape = RoundedCornerShape(topStart = SheetCorner, topEnd = SheetCorner); clip = true
+                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin.Center
+                    scaleX = 1f; scaleY = 1f; translationX = 0f; translationY = 0f; alpha = 1f
+                    shape = if (floating) {
+                        // The card ends [inset] above the window's bottom, its bottom corners round too.
+                        val vis = (windowH - insetPx - ((at[0]?.top ?: 0f) + motion.y)).coerceAtLeast(0f)
+                        roundedTop(vis, cornerPx, cornerPx)
+                    } else RoundedCornerShape(topStart = SheetCorner, topEnd = SheetCorner)
+                    clip = true
                 }
             }
             .drawBehind { drawRect(bg) }
-            .drawWithContent {
-                drawContent()
-                // The button's "+" over the shrunk sheet, fading as it grows (iOS: the glyph rides in).
-                val g = motion.grow.value
-                if (g < 0.5f && motion.source != null && !motion.shrinking) {
-                    val a = (1f - g / 0.5f).coerceIn(0f, 1f)
-                    val arm = minOf(size.width, size.height) * 0.12f
-                    val cx = size.width / 2f; val cy = size.height / 2f
-                    val col = c.label.copy(alpha = a)
-                    val sw = minOf(size.width, size.height) * 0.025f
-                    drawLine(col, Offset(cx - arm, cy), Offset(cx + arm, cy), sw)
-                    drawLine(col, Offset(cx, cy - arm), Offset(cx, cy + arm), sw)
-                }
-            }
             .clickable(interactionSource = null, indication = null) {}) {
-            Box(Modifier.weight(1f).graphicsLayer { alpha = ((motion.grow.value - 0.35f) / 0.45f).coerceIn(0f, 1f) }) {
+            Box(Modifier.weight(1f)) {
                 content()
                 if (handle) Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(SheetHandleStrip).sheetDrag(motion)) {
                     // The iOS grabber: 36 x 5, 6 dp from the top, grey that reads on a map and on a page.
@@ -162,6 +188,18 @@ fun FariinSheet(motion: SheetMotion, handle: Boolean = false, fill: Color? = nul
         }
     }
 }
+
+/** A rounded rect [h] tall from the top of the layer: corners [top] above and [bottom] below. */
+private fun roundedTop(h: Float, top: Float, bottom: Float) = androidx.compose.foundation.shape.GenericShape { size, _ ->
+    addRoundRect(androidx.compose.ui.geometry.RoundRect(0f, 0f, size.width, h.coerceAtMost(size.height),
+        topLeftCornerRadius = androidx.compose.ui.geometry.CornerRadius(top),
+        topRightCornerRadius = androidx.compose.ui.geometry.CornerRadius(top),
+        bottomLeftCornerRadius = androidx.compose.ui.geometry.CornerRadius(bottom),
+        bottomRightCornerRadius = androidx.compose.ui.geometry.CornerRadius(bottom)))
+}
+
+/** The floating card's corners. */
+private val FloatCorner = 36.dp
 
 private fun lerpPx(a: Float, b: Float, t: Float) = a + (b - a) * t
 
@@ -186,7 +224,7 @@ fun FariinSheetDialog(onDismiss: () -> Unit, handle: Boolean = false, content: @
  */
 @Composable
 fun FariinSheetDialog(motion: SheetMotion, handle: Boolean = false, fill: Color? = null, typing: Boolean = false,
-    content: @Composable (SheetMotion) -> Unit) {
+    floating: Boolean = false, content: @Composable (SheetMotion) -> Unit) {
     // A sheet opening over a screen that is typing takes that keyboard down (iOS lowers it too).
     val outerFocus = androidx.compose.ui.platform.LocalFocusManager.current
     val outerView = androidx.compose.ui.platform.LocalView.current
@@ -214,7 +252,7 @@ fun FariinSheetDialog(motion: SheetMotion, handle: Boolean = false, fill: Color?
             }
         }
         // A page swapped inside a sheet must never slide the page under the sheet (InnerPages).
-        FariinSheet(motion, handle, fill) { androidx.compose.runtime.CompositionLocalProvider(LocalInnerPages provides null) { content(motion) } }
+        FariinSheet(motion, handle, fill, floating) { androidx.compose.runtime.CompositionLocalProvider(LocalInnerPages provides null) { content(motion) } }
     }
 }
 
