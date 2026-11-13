@@ -135,9 +135,8 @@ internal fun LiveBody(live: CardRules.Live, authorId: String, photo: String?, is
             }
         }
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            // "● Live · 52 min left" while it runs; "Live · ended 5:31 AM" after (our words).
-            Box(Modifier.size(8.dp).clip(CircleShape).background(if (running) LiveGreen else sub))
-            Spacer(Modifier.width(6.dp))
+            // "Live · 52 min left" while it runs; "Live · ended 5:31 AM" after (our words). No status
+            // dot before it (owner 2026-11-13: the green/red dot looked cheap).
             Text(if (running) "Live · ${leftWords(live.untilMs - now)}" else "Live · ended ${clockWords(ctx, minOf(live.untilMs, doc?.updatedMs?.takeIf { doc.ended && it > 0 } ?: live.untilMs))}",
                 fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (running) ink else sub, modifier = Modifier.weight(1f), maxLines = 1)
             meta()
