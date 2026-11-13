@@ -14,10 +14,13 @@ import kotlin.math.sqrt
  * VoiceMessageView.swift (bar drawing), MessageRowLayout.swift (photoBox), storage.rules.
  */
 object MediaRules {
-    // ---- Limits.swift and storage.rules `chat/{cid}/{file}`: size < 64 MB, create only.
-    const val STORAGE_CHAT_LIMIT = 64L * 1024 * 1024
+    // ---- Limits.swift and storage.rules `chat/{cid}/{file}`: size < 102 MB, create only
+    // (owner 2026-11-13: chat videos up to 100 MB, plus 2 MB for the encryption bytes).
+    const val STORAGE_CHAT_LIMIT = 102L * 1024 * 1024
     const val FILE_UPLOAD_BYTES = 25L * 1024 * 1024
-    const val VIDEO_MESSAGE_BYTES = 64L * 1024 * 1024
+    const val VIDEO_MESSAGE_BYTES = 100L * 1024 * 1024
+    /** What the video export aims at, unchanged (iOS Limits.videoExportTargetBytes): only the cap moved. */
+    const val VIDEO_EXPORT_TARGET_BYTES = 62L * 1024 * 1024
     const val VOICE_NOTE_SECONDS = 30 * 60
     /** AudioRecorder.finish: a note under a second is not sent (it would read "0:00"). */
     const val VOICE_MIN_SECONDS = 1.0

@@ -115,7 +115,8 @@ class MediaTest {
         assertEquals(300 to 200, MediaRules.fit(300, 200, 1280))      // never enlarged
         assertEquals(1 to 1, MediaRules.fit(0, 0, 1280))
         assertEquals(40 to 30, MediaRules.fit(4000, 3000, MediaRules.THUMB_SIDE))
-        assertEquals(64L * 1024 * 1024, MediaRules.STORAGE_CHAT_LIMIT)
+        assertEquals(102L * 1024 * 1024, MediaRules.STORAGE_CHAT_LIMIT)
+        assertEquals(100L * 1024 * 1024, MediaRules.VIDEO_MESSAGE_BYTES)
     }
 
     @Test fun photoBoxLikeIos() {

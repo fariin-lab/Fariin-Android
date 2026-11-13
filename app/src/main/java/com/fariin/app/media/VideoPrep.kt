@@ -36,8 +36,8 @@ class VideoPrep(
     val height: Int,
 ) {
     companion object {
-        /** Limits.videoMessageBytes: storage.rules `chat/` takes 64 MB. */
-        const val MAX_BYTES = 64L * 1024 * 1024
+        /** Limits.videoMessageBytes: the send cap, 100 MB (owner 2026-11-13). */
+        const val MAX_BYTES = MediaRules.VIDEO_MESSAGE_BYTES
 
         /** [onProgress] gets the compression's 0..1 (a long clip takes minutes; the ring shows it). */
         suspend fun fromUri(context: Context, uri: Uri, outDir: File, id: String, onProgress: ((Float) -> Unit)? = null): VideoPrep? {
@@ -46,16 +46,14 @@ class VideoPrep(
             // A trimmed clip must go trimmed: if the full re-encode fails (some phones and the
             // emulator have no encoder for it), the cut alone is tried before the uncut original.
             val shortSide = if (SentQuality.videoHd(context, uri)) 1080 else 540
-            // A long clip gets a bitrate that fits the 64 MB limit (owner 2026-11-13: a 10-minute
-            // video at the fixed 2 Mbit/s came out far over it and the send stopped).
+            // A long clip aims at the export target (62 MB, as iOS): at the fixed 2 Mbit/s a
+            // 10-minute video came out near 150 MB. Short clips keep the usual bitrate. One encode
+            // only (owner 2026-11-13: no second, lower-quality pass); an overshoot up to the
+            // 100 MB cap still sends.
             val seconds = (cut?.let { it.last - it.first } ?: lengthMs(context, uri)) / 1000.0
-            val first = minOf(bitrateFor(shortSide), fitBitrate(seconds, 0.85))
-            var ok = transcode(context, uri, out, cut, shortSide = shortSide, bitrate = first, onProgress = onProgress) ||
+            val first = minOf(bitrateFor(shortSide), fitBitrate(seconds))
+            val ok = transcode(context, uri, out, cut, shortSide = shortSide, bitrate = first, onProgress = onProgress) ||
                 (cut != null && transcode(context, uri, out, cut, resize = false, onProgress = onProgress))
-            // Still over (an encoder that overshoots): once more at limit x 0.8 / length (iOS 349f309ed).
-            if (ok && out.length() > MAX_BYTES && seconds > 0) {
-                ok = transcode(context, uri, out, cut, shortSide = shortSide, bitrate = fitBitrate(seconds, 0.8), onProgress = onProgress)
-            }
             val file = if (ok && out.length() > 0) out else copyOriginal(context, uri, out) ?: return null
             if (file.length() > MAX_BYTES) { file.delete(); return null }
             return describe(file)
@@ -142,11 +140,11 @@ class VideoPrep(
             .setRequestedVideoEncoderSettings(VideoEncoderSettings.Builder().setBitrate(bitrate).build())
             .build()
 
-        /** The video bitrate that puts [seconds] of clip at [share] of the limit, leaving room for the
+        /** The video bitrate that puts [seconds] of clip at the export target, leaving room for the
          *  sound (up to 192 kbit/s); never below 250 kbit/s. Unknown length: no cap. */
-        fun fitBitrate(seconds: Double, share: Double): Int {
+        fun fitBitrate(seconds: Double): Int {
             if (seconds <= 0) return Int.MAX_VALUE
-            val total = MAX_BYTES * 8.0 * share / seconds
+            val total = MediaRules.VIDEO_EXPORT_TARGET_BYTES * 8.0 / seconds
             return (total - 192_000).toInt().coerceAtLeast(250_000)
         }
 
