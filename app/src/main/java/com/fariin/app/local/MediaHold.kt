@@ -40,7 +40,11 @@ object MediaHold {
         if (m.viewOnce && m.consumed) return false
         val w = wants(m)
         if (w.isEmpty()) return false
-        if (m.viewOnce) return true   // unopened: waits for the tap
+        if (m.viewOnce) {
+            // My own view-once: I can never open it on this phone, so there is nothing to wait for.
+            if (m.authorId == com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid) return false
+            return true   // unopened: waits for the tap
+        }
         if (m.localPath != null && java.io.File(m.localPath).exists()) return false
         val media = store(ctx)
         return w.any { !ChatMedia.isLocal(it.url) && !media.has(it.url) }
