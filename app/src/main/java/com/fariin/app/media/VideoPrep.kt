@@ -46,8 +46,16 @@ class VideoPrep(
             // A trimmed clip must go trimmed: if the full re-encode fails (some phones and the
             // emulator have no encoder for it), the cut alone is tried before the uncut original.
             val shortSide = if (SentQuality.videoHd(context, uri)) 1080 else 540
-            val ok = transcode(context, uri, out, cut, shortSide = shortSide, onProgress = onProgress) ||
+            // A long clip gets a bitrate that fits the 64 MB limit (owner 2026-11-13: a 10-minute
+            // video at the fixed 2 Mbit/s came out far over it and the send stopped).
+            val seconds = (cut?.let { it.last - it.first } ?: lengthMs(context, uri)) / 1000.0
+            val first = minOf(bitrateFor(shortSide), fitBitrate(seconds, 0.85))
+            var ok = transcode(context, uri, out, cut, shortSide = shortSide, bitrate = first, onProgress = onProgress) ||
                 (cut != null && transcode(context, uri, out, cut, resize = false, onProgress = onProgress))
+            // Still over (an encoder that overshoots): once more at limit x 0.8 / length (iOS 349f309ed).
+            if (ok && out.length() > MAX_BYTES && seconds > 0) {
+                ok = transcode(context, uri, out, cut, shortSide = shortSide, bitrate = fitBitrate(seconds, 0.8), onProgress = onProgress)
+            }
             val file = if (ok && out.length() > 0) out else copyOriginal(context, uri, out) ?: return null
             if (file.length() > MAX_BYTES) { file.delete(); return null }
             return describe(file)
@@ -82,11 +90,11 @@ class VideoPrep(
 
         /** [cut] is the editor's kept range in ms; when the cut cannot be made the whole original goes (iOS exportTrimmed nil). */
         private suspend fun transcode(context: Context, uri: Uri, out: File, cut: LongRange?, resize: Boolean = true, shortSide: Int = 540,
-                                      onProgress: ((Float) -> Unit)? = null): Boolean = withContext(Dispatchers.Main) {
+                                      bitrate: Int = bitrateFor(shortSide), onProgress: ((Float) -> Unit)? = null): Boolean = withContext(Dispatchers.Main) {
             suspendCancellableCoroutine { cont ->
                 val t = Transformer.Builder(context)
                     .setMuxerFactory(NoLocationMuxerFactory())   // never the place it was filmed
-                    .apply { if (resize) setEncoderFactory(encoderFor(context, shortSide)) }
+                    .apply { if (resize) setEncoderFactory(encoderFor(context, bitrate)) }
                     .setVideoMimeType(MimeTypes.VIDEO_H264)
                     .setAudioMimeType(MimeTypes.AUDIO_AAC)
                     .addListener(object : Transformer.Listener {
@@ -130,9 +138,25 @@ class VideoPrep(
          *  1080. Small enough to stream on a mobile network, the encoder's own choice otherwise. */
         fun bitrateFor(shortSide: Int): Int = if (shortSide >= 1080) 5_000_000 else 2_000_000
 
-        private fun encoderFor(context: Context, shortSide: Int) = DefaultEncoderFactory.Builder(context)
-            .setRequestedVideoEncoderSettings(VideoEncoderSettings.Builder().setBitrate(bitrateFor(shortSide)).build())
+        private fun encoderFor(context: Context, bitrate: Int) = DefaultEncoderFactory.Builder(context)
+            .setRequestedVideoEncoderSettings(VideoEncoderSettings.Builder().setBitrate(bitrate).build())
             .build()
+
+        /** The video bitrate that puts [seconds] of clip at [share] of the limit, leaving room for the
+         *  sound (up to 192 kbit/s); never below 250 kbit/s. Unknown length: no cap. */
+        fun fitBitrate(seconds: Double, share: Double): Int {
+            if (seconds <= 0) return Int.MAX_VALUE
+            val total = MAX_BYTES * 8.0 * share / seconds
+            return (total - 192_000).toInt().coerceAtLeast(250_000)
+        }
+
+        private fun lengthMs(context: Context, uri: Uri): Long {
+            val r = MediaMetadataRetriever()
+            return try {
+                r.setDataSource(context, uri)
+                r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+            } catch (_: Exception) { 0L } finally { runCatching { r.release() } }
+        }
 
         private suspend fun copyOriginal(context: Context, uri: Uri, out: File): File? = withContext(Dispatchers.IO) {
             val type = context.contentResolver.getType(uri) ?: ""
