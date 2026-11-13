@@ -120,6 +120,8 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     LaunchedEffect(Unit) { focus.clearFocus(force = true); keyboard?.hide() }
     LaunchedEffect(Unit) {
+        // The store demo (no server): its own six channels.
+        if (com.fariin.app.ui.debug.DemoChats.active) { rows = com.fariin.app.ui.debug.DemoSettings.channels; failed = false; loading = false; return@LaunchedEffect }
         try { rows = com.fariin.app.channel.ExploreCache.fetchChannels(ctx, me); failed = false } catch (_: Exception) { failed = true }
         loading = false
     }

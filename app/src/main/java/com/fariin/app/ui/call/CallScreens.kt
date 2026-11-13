@@ -1624,6 +1624,9 @@ private fun MemberTile(
             val scr = m.screen?.takeIf { large }
             if (scr != null) LiveKitVideo(scr, Modifier.fillMaxSize(), fit = true)
             else if (v != null) LiveKitVideo(v, Modifier.fillMaxSize(), mirror = isMe)
+            // The store demo's camera faces (its pictures stand in for the live video).
+            else if (com.fariin.app.ui.debug.DemoChats.active && m.photo != null) coil3.compose.AsyncImage(m.photo, null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
             else Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Avatar(m.photo, com.fariin.app.call.GroupStagePlan.avatarSize(w, hh).dp)
                 if (alone) {

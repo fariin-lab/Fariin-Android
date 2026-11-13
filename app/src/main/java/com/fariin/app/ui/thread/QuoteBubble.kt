@@ -75,7 +75,8 @@ private fun QuoteAlbumTiles(urls: List<String>) {
 @Composable
 internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta: (@Composable () -> Unit)? = null,
                               /** The message this card sits in (its chat is [openCid]): the server's `hosts`. */ hostMid: String? = null,
-                              /** The quoting post has its own photo, video or album: the compact row. */ compact: Boolean = false) {
+                              /** The quoting post has its own photo, video or album: the compact row. */ compact: Boolean = false,
+                              /** The words hold the post's own link (iOS 251b4be31, owner's design B): the small link card. */ postLink: Boolean = false) {
     val cards by QuoteStore.cards.collectAsState()
     // Every draw asks: a miss, or an answer older than two minutes, is fetched with the others on screen.
     SideEffect {
@@ -111,7 +112,7 @@ internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta:
                     // Opened as a thread: a follower sees the channel, a public visitor its posts from outside.
                     channelNav.open(q.cid)
                 }
-                .padding(10.dp),
+                .padding(if (postLink) 8.dp else 10.dp),
         ) {
             // Until the quote lands (iOS spec 2026-11-10 item 5): no "Channel post / Loading..." words,
             // grey pulsing bars over the photo, the name and two lines, at the card's own size.
@@ -125,6 +126,31 @@ internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta:
                 com.fariin.app.ui.components.SkeletonBlock(200.dp, 12.dp)
                 Spacer(Modifier.height(7.dp))
                 com.fariin.app.ui.components.SkeletonBlock(140.dp, 12.dp)
+                return@Column
+            }
+            // A post sent as its link (design B): the post's picture on the left (62, corners 9), then
+            // the channel's photo and name, two lines of the post, and "fariin.com".
+            if (postLink) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    if (image != null) {
+                        Box(Modifier.size(62.dp).clip(RoundedCornerShape(9.dp)).background(c.secondary.copy(alpha = 0.15f))) {
+                            coil3.compose.AsyncImage(image, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        }
+                        Spacer(Modifier.width(10.dp))
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Avatar(card?.photoUrl?.ifEmpty { null }, 18.dp, squircle = true, kind = AvatarKind.of(true, true))
+                            Spacer(Modifier.width(5.dp))
+                            Text(QuoteRules.heading(card), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = ink,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        val words = QuoteRules.body(card)
+                        if (words.isNotEmpty()) Text(words, fontSize = 13.sp, color = ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                            lineHeight = 17.sp, modifier = Modifier.padding(top = 2.dp))
+                        Text("fariin.com", fontSize = 12.sp, color = ink.copy(alpha = 0.6f), modifier = Modifier.padding(top = 2.dp))
+                    }
+                }
                 return@Column
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

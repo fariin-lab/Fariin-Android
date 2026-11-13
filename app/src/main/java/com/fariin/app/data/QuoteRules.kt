@@ -31,6 +31,11 @@ data class QuoteCard(
 
 /** The card's words and the cache's age rule, kept apart from the network so they can be tested. */
 object QuoteRules {
+    /** A channel post's own link in the words: fariin.com/<name>/<number or id>, or the private form
+     *  fariin.com/c/<cid>/<number or id>; not a profile (one part) and not a story (/s/) (iOS hasPostLink). */
+    private val POST_LINK = Regex("""fariin\.com/(?:c/[A-Za-z0-9]+|(?!s/)[A-Za-z0-9_]+)/(?!s/)[A-Za-z0-9]+(?![A-Za-z0-9/])""", RegexOption.IGNORE_CASE)
+    fun hasPostLink(text: String?): Boolean = text != null && POST_LINK.containsMatchIn(text)
+
     private val QID = Regex("^[a-z0-9]{16}$")
 
     /** How long an answer is trusted before the server is asked again (access can change). */

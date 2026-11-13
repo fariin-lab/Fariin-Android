@@ -14,17 +14,17 @@ import kotlinx.coroutines.delay
  */
 object DemoPeople : PeopleApi {
     override val me = DemoChats.ME
-    private var myName = "Abdi"
+    private var myName = "You"
     private var myHandle = "abdi_demo"
     private val blocked = HashSet<String>()
     private val everyone = listOf(
-        Person("amina", "Amina Yusuf", "amina", about = "Nairobi, Mombasa, home."),
-        Person("omar", "Omar", "omar_h"),
-        Person("hodan", "Hodan", "hodan"),
-        Person("ali", "Ali", "ali_m"),
-        Person("sahra", "Sahra", "sahra", privacy = mapOf("messages" to "contacts")),
-        Person("farah", "Farah", "farah"),
-        Person("ilhan", "Ilhan Warsame", "ilhan_w"),
+        Person("demo-hooyo", "Maya", "maya"),
+        Person("demo-ayaan", "Ayaan Warsame", "ayaan"),
+        Person("demo-cabdi", "Daniel", "daniel"),
+        Person("demo-khadra", "Sofia", "sofia"),
+        Person("demo-linnea", "Linnea", "linnea"),
+        Person("demo-ilhan", "Leo", "leo"),
+        Person("demo-faarax", "Lucas", "lucas"),
         Person("mustafe", "Mustafe", "mustafe"),
     )
 
@@ -37,9 +37,9 @@ object DemoPeople : PeopleApi {
     override suspend fun chatKeyExists(uid: String) = uid == "sahra" || uid == "ilhan"
     override suspend fun verifyChatKey(uid: String, pin: String): Result<String> {
         delay(400)
-        return if (pin == "123456") Result.success("d4") else Result.failure(Exception("Unable to verify Chat Key."))
+        return if (pin == "123456") Result.success("demo-hooyo") else Result.failure(Exception("Unable to verify Chat Key."))
     }
-    override suspend fun openChat(p: Person) = DemoChats.chats().firstOrNull { !it.isGroup && it.users.contains(p.uid) }?.id ?: "d1"
+    override suspend fun openChat(p: Person) = DemoChats.chats().firstOrNull { !it.isGroup && it.users.contains(p.uid) }?.id ?: "demo-hooyo"
     override suspend fun acceptRequest(cid: String) = true
     override suspend fun declineRequest(cid: String) = true
     override suspend fun isBlocked(uid: String) = uid in blocked
@@ -54,7 +54,7 @@ object DemoPeople : PeopleApi {
     override suspend fun claimUsername(h: String) { myHandle = h }
     override suspend fun saveName(name: String) { myName = name.trim() }
     override suspend fun uploadPhoto(jpegOrAny: ByteArray) {}
-    override suspend fun createGroup(title: String, members: List<String>, photo: ByteArray?, permissions: Map<String, Boolean>) = "d3"
+    override suspend fun createGroup(title: String, members: List<String>, photo: ByteArray?, permissions: Map<String, Boolean>) = "demo-trip"
     override suspend fun addMembers(cid: String, uids: List<String>): String? = null
     override suspend fun leaveGroup(cid: String) {}
     override suspend fun renameGroup(cid: String, title: String) {}
@@ -81,12 +81,11 @@ object DemoPeople : PeopleApi {
         val theirs = u.messages.filter { it.authorId != me && it.mediaKind == null && !it.isSystem }
         val mine = u.messages.filter { it.authorId == me && it.mediaKind == null }
         val r = HashMap<String, Map<String, String>>()
-        theirs.getOrNull(0)?.let { r[it.id] = mapOf(me to "❤️") }
-        mine.getOrNull(0)?.let { m -> r[m.id] = u.members.ifEmpty { listOf("amina", "hodan", "ali") }.filter { it != me }.associateWith { "😂" } }
-        theirs.getOrNull(1)?.let { r[it.id] = mapOf("hodan" to "👍", "ali" to "👍", me to "🙏", "amina" to "👍", "omar" to "👍") }
+
+        // The store demo carries its own reactions; nothing added here.
         return u.copy(messages = u.messages.map { m -> r[m.id]?.let { m.copy(reactions = it) } ?: m },
-            unreadAtOpen = 2, members = DemoChats.chats().firstOrNull { it.id == u.cid }?.users ?: emptyList(),
-            memberReads = mapOf("hodan" to System.currentTimeMillis().toDouble()), photos = u.photos)
+            unreadAtOpen = 0, members = DemoChats.chats().firstOrNull { it.id == u.cid }?.users ?: emptyList(),
+            memberReads = emptyMap(), photos = u.photos)
     }
 
     /** The made-up chat's actions: react, reply, edit and delete change the list in memory. */

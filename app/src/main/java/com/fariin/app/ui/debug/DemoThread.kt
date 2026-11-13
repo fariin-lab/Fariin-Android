@@ -5,81 +5,117 @@ import com.fariin.app.data.Receipts
 import com.fariin.app.ui.thread.ThreadUi
 
 /**
- * Made-up messages for the chat page in debug demo mode (`--ez demo true`), so it can be looked
- * at without an account. No Firebase is touched. Sending appends to the list in memory.
+ * The store demo's chats (owner 2026-11-13), the same words as the iPhone's App Store pictures
+ * (Kulan-iOS DemoMode.messages). Marketing material: read it out loud before changing a word.
+ * No Firebase is touched; sending appends to the list in memory.
  */
 object DemoThread {
     private const val ME = DemoChats.ME
-    private const val MIN = 60_000.0
-    private const val DAY = 24 * 60 * MIN
+    private const val S = 1000.0
 
-    fun ui(cid: String, nowMs: Double = System.currentTimeMillis().toDouble()): ThreadUi? {
+    fun ui(cid: String, nowMs: Double = DemoChats.shotNow().toDouble()): ThreadUi? {
         val conv = DemoChats.chats(nowMs.toLong()).firstOrNull { it.id == cid } ?: return null
-        val msgs = if (conv.isGroup) group(nowMs) else direct(conv.otherUid(ME), nowMs)
         return ThreadUi(
             title = conv.displayName(ME),
-            subtitle = if (conv.isGroup) "${conv.users.size} members" else "",
+            subtitle = if (conv.isGroup) conv.users.filter { it != ME }.joinToString(", ") { DemoChats.NAMES[it] ?: "" }.ifEmpty { "${conv.users.size} members" }
+                else "online",
             isGroup = conv.isGroup,
             me = ME,
-            messages = msgs,
-            // Read up to 30 minutes ago, delivered up to now: older ticks solid, newer faded.
-            receipts = if (conv.isGroup) Receipts(otherLastReadMillis = nowMs - 2 * DAY)
-            else Receipts(otherLastReadMillis = nowMs - 30 * MIN, otherDeliveredMillis = nowMs - 10 * MIN),
+            messages = messages(cid, nowMs),
+            receipts = Receipts(otherLastReadMillis = nowMs, otherDeliveredMillis = nowMs),
             names = conv.names,
+            photos = conv.photos + DemoChats.PHOTOS,
+            photoUrl = conv.avatarUrl ?: DemoChats.PHOTOS[conv.otherUid(ME)],
             cid = cid,
         )
     }
 
-    // Bundled with debug builds only (app/src/debug/assets/demo), opened by ChatMedia: no network.
-    private const val A = "asset://demo/"
     private val WAVE = listOf(8, 14, 30, 52, 61, 44, 25, 12, 30, 58, 72, 66, 40, 18, 9, 22, 47, 63, 55, 31,
         14, 8, 26, 49, 70, 64, 38, 20, 11, 28, 51, 60, 42, 24, 12, 7, 18, 35, 22, 10)
 
-    private fun photo(id: String, author: String, at: Double, file: String, w: Double, h: Double, caption: String = "") =
-        Message(id = id, authorId = author, text = caption, type = "image", createdAtMillis = at, clientTs = at,
-            imageUrl = A + file, width = w, height = h, blurhash = "LKO2?U%2Tw=w]~RBVZRi};RPxuwH")
-
-    private fun voice(id: String, author: String, at: Double, file: String, seconds: Double) =
-        Message(id = id, authorId = author, text = "", type = "audio", createdAtMillis = at, clientTs = at,
-            audioUrl = A + file, duration = seconds, waveform = WAVE)
-
-    private fun video(id: String, author: String, at: Double) =
-        Message(id = id, authorId = author, text = "", type = "video", createdAtMillis = at, clientTs = at,
-            videoUrl = A + "video.mp4", thumbUrl = A + "video_poster.jpg", width = 640.0, height = 426.0, duration = 3.0)
-
     private fun m(id: String, author: String, text: String, at: Double, reply: Message.ReplyRef? = null,
-                  state: Message.SendState? = null, edited: Boolean = false) =
-        Message(id = id, authorId = author, text = text, createdAtMillis = at, clientTs = at,
-            replyTo = reply, sendState = state, edited = edited, hasServerTime = state == null)
+                  reactions: Map<String, String> = emptyMap()) =
+        Message(id = id, authorId = author, text = text, createdAtMillis = at, clientTs = at, replyTo = reply,
+            reactions = reactions, hasServerTime = true)
 
-    private fun direct(other: String, now: Double) = listOf(
-        m("a1", other, "Hi! Are you coming to the study group tomorrow?", now - 2 * DAY - 40 * MIN),
-        m("a2", ME, "Yes, what time does it start?", now - 2 * DAY - 38 * MIN),
-        m("a3", other, "At 6, in the library on the second floor", now - 2 * DAY - 37 * MIN),
-        m("a4", ME, "Perfect", now - 2 * DAY - 36 * MIN),
-        m("y1", other, "Do you still have my maths notes?", now - DAY - 3 * 60 * MIN),
-        m("y2", ME, "I do, I will bring them with me. Sorry I kept them so long, they were really useful for the exam.", now - DAY - 2 * 60 * MIN, edited = true),
-        m("t1", other, "No problem at all", now - 90 * MIN),
-        m("t2", other, "Can you also bring the history book?", now - 89 * MIN),
-        m("t3", ME, "Sure", now - 60 * MIN, reply = Message.ReplyRef("t2", other, "Can you also bring the history book?")),
-        m("t4", ME, "Anything else?", now - 59 * MIN),
-        m("t5", other, "See you at 6, I will bring the books", now - 20 * MIN),
-        photo("p1", other, now - 19 * MIN, "photo_landscape.jpg", 1280.0, 853.0, "The view from the library"),
-        voice("v1", other, now - 18 * MIN, "voice.caf", 7.0),
-        photo("p2", ME, now - 12 * MIN, "photo_portrait.jpg", 720.0, 1280.0),
-        voice("v2", ME, now - 11 * MIN, "voice2.m4a", 4.0),
-        video("vd1", other, now - 8 * MIN),
-        m("t6", ME, "Great, see you then", now - 5 * MIN),
-        m("t7", ME, "On my way", now - 1 * MIN, state = Message.SendState.SENDING),
-    )
+    private fun photo(id: String, author: String, at: Double, name: String, w: Double, h: Double,
+                      reactions: Map<String, String> = emptyMap()) =
+        Message(id = id, authorId = author, text = "", type = "image", createdAtMillis = at, clientTs = at,
+            imageUrl = DemoChats.pic(name), width = w, height = h, reactions = reactions, hasServerTime = true)
 
-    private fun group(now: Double) = listOf(
-        Message(id = "s1", authorId = "hodan", text = "Hodan added Ali", type = "system", createdAtMillis = now - DAY - 5 * 60 * MIN),
-        m("g1", "hodan", "Did you get the photos from Saturday?", now - DAY - 4 * 60 * MIN),
-        m("g2", "hodan", "I sent them last night, there are a lot of them", now - DAY - 4 * 60 * MIN + 30_000),
-        m("g3", "ali", "Yes, they came out really well", now - DAY - 3 * 60 * MIN),
-        m("g4", ME, "Thank you for sending them!", now - DAY - 2 * 60 * MIN),
-        m("g5", "ali", "Dinner at our place on Friday?", now - 3 * 60 * MIN),
-        m("g6", ME, "I am in", now - 2 * 60 * MIN, reply = Message.ReplyRef("g5", "ali", "Dinner at our place on Friday?")),
-    )
+    private fun voice(id: String, author: String, at: Double, seconds: Double) =
+        Message(id = id, authorId = author, text = "", type = "audio", createdAtMillis = at, clientTs = at,
+            audioUrl = DemoChats.DIR + "voice.m4a", duration = seconds, waveform = WAVE, hasServerTime = true)
+
+    private fun messages(cid: String, n: Double): List<Message> {
+        fun t(sec: Double) = n + sec * S
+        return when (cid) {
+            // Store picture 2: a photo with a heart, a voice note, a reply, read ticks and emoji.
+            "demo-hooyo" -> {
+                val note = voice("h4", ME, t(-1100.0), 14.0)
+                listOf(
+                    m("h0", "demo-hooyo", "Are you coming this weekend? 🌞", t(-1900.0)),
+                    m("h1", ME, "Yes! Booked my flight ✈️", t(-1800.0)),
+                    photo("h2", "demo-hooyo", t(-1500.0), "demo-photo-beach", 1900.0, 900.0, mapOf(ME to "❤️")),
+                    m("h3", "demo-hooyo", "This is where we're going 😍", t(-1450.0)),
+                    note,
+                    m("h5", "demo-hooyo", "Haha can't wait to see you 🫶", t(-900.0),
+                        reply = Message.ReplyRef(note.id, ME, "Voice message")),
+                    m("h6", ME, "Me too. See you Friday! 🎉", t(-600.0)),
+                    m("h7", "demo-hooyo", "Did you get home safe?", t(-260.0)),
+                )
+            }
+            // Store picture 3: the Beach Trip group, a car photo with reactions and a celebration.
+            "demo-trip" -> listOf(
+                m("t0", "demo-linnea", "Who's driving on Saturday? 🚗", t(-2600.0)),
+                m("t1", "demo-cabdi", "I can, my car fits five", t(-2400.0)),
+                photo("t3", "demo-hooyo", t(-1500.0), "demo-photo-car", 2200.0, 1000.0,
+                    mapOf(ME to "❤️", "demo-cabdi" to "❤️", "demo-khadra" to "😍", "demo-linnea" to "❤️")),
+                m("t4", "demo-khadra", "Road trip! I'll bring snacks 🍉", t(-1200.0)),
+                m("t5", "demo-cabdi", "🎉🎉", t(-900.0)),
+                m("t6", ME, "Can't wait!! 🙌", t(-600.0)),
+            )
+            "demo-family" -> listOf(
+                m("f0", "demo-khadra", "Who is home tonight?", t(-3000.0)),
+                m("f1", ME, "Me, after work", t(-2800.0)),
+                photo("f2", "demo-hooyo", t(-400.0), "demo-photo-dinner", 1200.0, 900.0),
+                m("f3", "demo-hooyo", "Dinner is ready, come home 🍲", t(-90.0)),
+            )
+            "demo-ayaan" -> listOf(
+                m("a0", "demo-ayaan", "Subax wanaagsan", t(-33000.0)),
+                m("a1", ME, "Subax wanaagsan walaal", t(-32800.0)),
+                m("a2", "demo-ayaan", "Sawirkii aroostii ma i soo dirtay?", t(-9000.0)),
+                photo("a3", ME, t(-8800.0), "demo-photo-wedding", 1080.0, 1350.0),
+                m("a4", "demo-ayaan", "Mashallah, aad ayay u quruxsan tahay", t(-8600.0)),
+                m("a5", ME, "Mahadsanid", t(-8400.0)),
+                m("a6", "demo-ayaan", "I will call you tonight", t(-2100.0)),
+            )
+            "demo-cabdi" -> listOf(
+                m("c0", ME, "Did you hear the news?", t(-12000.0)),
+                m("c1", "demo-cabdi", "Yes! Wait, I'll send you a voice note", t(-8200.0)),
+                voice("c3", "demo-cabdi", t(-8000.0), 14.0),
+            )
+            "demo-khadra" -> listOf(
+                m("k0", "demo-khadra", "Dinner tonight was so good", t(-12400.0)),
+                photo("k1", "demo-khadra", t(-12000.0), "demo-photo-dinner", 1200.0, 900.0),
+            )
+            "demo-linnea" -> listOf(
+                m("l0", "demo-linnea", "Did you finish the reading?", t(-28000.0)),
+                m("l1", ME, "Almost. Two chapters left", t(-27600.0)),
+                m("l2", "demo-linnea", "Same. Coffee first though", t(-27200.0)),
+                m("l3", ME, "Always", t(-26800.0)),
+                m("l4", "demo-linnea", "See you at the library at 4?", t(-26000.0)),
+            )
+            "demo-ilhan" -> listOf(
+                m("i0", ME, "I brought your book back", t(-94000.0)),
+                m("i1", "demo-ilhan", "Thank you so much ❤️", t(-93000.0)),
+            )
+            "demo-faarax" -> listOf(
+                m("x0", "demo-faarax", "Football at five?", t(-178000.0)),
+                m("x1", ME, "I'm in", t(-177600.0)),
+                m("x2", "demo-faarax", "Are we still meeting tomorrow?", t(-176400.0)),
+            )
+            else -> emptyList()
+        }
+    }
 }

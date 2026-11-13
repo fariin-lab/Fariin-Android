@@ -104,8 +104,10 @@ class MainActivity : ComponentActivity() {
         // Debug builds only: `adb shell am start -n com.fariin.app/.MainActivity --ez demo true`
         // shows the shell with made-up chats, no sign-in and no Firebase. Add `--es thread d1`
         // (a 1:1) or `--es thread d3` (a group) to open straight into a made-up chat.
-        val demo = debuggable && intent.getBooleanExtra("demo", false)
+        // Debug and test builds (the Pixel's store pictures, owner 2026-11-13), never a store build.
+        val demo = (debuggable || resources.getBoolean(R.bool.fariin_test_build)) && intent.getBooleanExtra("demo", false)
         val demoThread = if (demo) intent.getStringExtra("thread") else null
+        com.fariin.app.ui.debug.DemoChats.active = demo
         DeviceRegistry.init(this)
         NotificationPoster.ensureChannels(this)
         takeOpenCid(intent)
@@ -655,8 +657,27 @@ class MainActivity : ComponentActivity() {
                 popEnterTransition = com.fariin.app.ui.components.Motion.popEnter(), popExitTransition = com.fariin.app.ui.components.Motion.popExit()) {
                 peopleRoutes(nav, demoPeople, chats = { DemoChats.chats() }, requests = { demoPeople.requests() },
                     groupDoc = { demoPeople.groupDoc(it) })
+                // The store's channels picture (`--es thread p:demochannels`): Explore with the demo's channels.
+                composable("demochannels") {
+                    com.fariin.app.ui.channels.FindChannelsScreen(DemoChats.ME, onBack = { finish() }, onOpen = {})
+                }
+                // The store's call picture (`--es thread p:democall`): the Beach Trip call, five friends on camera.
+                composable("democall") {
+                    val face = { n: String -> DemoChats.pic(n) }
+                    val members = listOf(
+                        com.fariin.app.call.GroupMember("demo-me", "You", false, true, null, face("demo-face-me"), local = true),
+                        com.fariin.app.call.GroupMember("emma", "Emma", true, true, null, face("demo-call-emma")),
+                        com.fariin.app.call.GroupMember("noah", "Noah", false, true, null, face("demo-call-noah")),
+                        com.fariin.app.call.GroupMember("grace", "Grace", false, false, null, face("demo-call-grace")),
+                        com.fariin.app.call.GroupMember("omar", "Omar", false, true, null, face("demo-call-omar")),
+                        com.fariin.app.call.GroupMember("george", "George", false, true, null, face("demo-call-george")),
+                    )
+                    com.fariin.app.ui.call.GroupCallScreen(com.fariin.app.call.GroupCallUi(cid = "demo-trip", title = "Beach Trip 🌴",
+                        joined = true, micOn = true, cameraOn = true, members = members, groupPhoto = face("demo-photo-trip")),
+                        onMic = {}, onCamera = {}, onLeave = { finish() })
+                }
                 composable("main") {
-                    MainShell(DemoChats.ME, ChatsUiState(loading = false, chats = DemoChats.chats(), requests = demoPeople.requests()),
+                    MainShell(DemoChats.ME, ChatsUiState(loading = false, chats = DemoChats.chats(), requests = emptyList()),
                         DemoChats.decryptor, onSignOut = { finish() })
                 }
                 composable("thread/{cid}") { entry ->

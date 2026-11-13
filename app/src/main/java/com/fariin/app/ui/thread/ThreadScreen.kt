@@ -464,6 +464,9 @@ private fun ThreadContent(
     val peopleNav = com.fariin.app.ui.people.LocalPeopleNav.current
     // Forward picker (media worker: ForwardSheet.kt).
     var forwardFor by remember { mutableStateOf<Message?>(null) }
+    // The quick forward arrow beside a group's photos, videos and links (QuickForward).
+    val quick by QuickForward.request.collectAsState()
+    LaunchedEffect(quick) { quick?.let { forwardFor = it; QuickForward.request.value = null } }
     forwardFor?.let { m -> ForwardSheet(ui.me, onDismiss = { forwardFor = null }, preview = listOf(m),
         onSendNote = { targets, note -> actions.onForwardWithNote(listOf(m), targets, note) }) }
     // Quote a channel post (iOS ForwardPicker pick-one mode): the same chats, one tap picks.
@@ -1955,6 +1958,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
         if (kind == Message.MediaKind.PHOTO || kind == Message.MediaKind.VIDEO || kind == Message.MediaKind.ALBUM) {
             MediaRow(ui, m, g, is24h, shape, maxW, tick, isMe, showSender, kind, onView)
             ui.channel?.let { com.fariin.app.ui.channels.PostShareButton(it, m) }
+            QuickForwardButton(ui, m, isMe)
             return@Row
         }
         // A typed story reply (iOS StoryReplyChrome): "You replied to their story" and the story's
@@ -2077,7 +2081,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             quoteId?.let { q ->
                 if (body.isNotEmpty()) Spacer(Modifier.height(6.dp))
                 QuoteCardBubble(q, chromeMe, ui.cid, hostMid = m.id, meta = if (chips.isEmpty()) ({ Meta(m, tick, isMe, is24h) }) else null,
-                    compact = m.mediaKind != null)
+                    compact = m.mediaKind != null, postLink = com.fariin.app.data.QuoteRules.hasPostLink(m.text))
             }
             if (ch != null && chips.isNotEmpty()) com.fariin.app.ui.channels.ChannelChipsInBubble(ch, m, chips) { Meta(m, tick, isMe, is24h) }
             // "N Quotes" along the bubble's bottom (PostQuotesUi.kt).
@@ -2086,6 +2090,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
         }
         }
         ui.channel?.let { com.fariin.app.ui.channels.PostShareButton(it, m) }
+        QuickForwardButton(ui, m, isMe)
     }
     // The red "!" alone says little: the words under the bubble, tappable too.
     if (failed) {
@@ -2329,7 +2334,9 @@ private fun StoryReaction(ui: ThreadUi, m: Message, glyph: String, isMe: Boolean
 @Composable
 private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
     val c = Fariin.colors
-    val bar = if (isMe) Color.White else senderColor(r.authorId)
+    // A quote of my own words wears Fariin's blue, never a palette colour (owner 2026-11-13: the green
+    // that "You" happened to get read as another app's colour).
+    val bar = if (isMe) Color.White else if (r.authorId == ui.me) c.blue else senderColor(r.authorId)
     val name = if (r.authorId == ui.me) "You" else ui.names[r.authorId] ?: ui.title
     Row(
         // Across the bubble's full width, as the reference app's quote (owner 2026-11-13).
@@ -3283,4 +3290,28 @@ private class ListPadding(private val density: androidx.compose.ui.unit.Density,
     override fun calculateBottomPadding() = with(density) { composerPx.intValue.coerceAtLeast(0).toDp() } + 8.dp
     override fun calculateLeftPadding(layoutDirection: androidx.compose.ui.unit.LayoutDirection) = 0.dp
     override fun calculateRightPadding(layoutDirection: androidx.compose.ui.unit.LayoutDirection) = 0.dp
+}
+
+
+/** One tap to Forward from beside a bubble (owner 2026-11-13, Android only for now). */
+internal object QuickForward {
+    val request = kotlinx.coroutines.flow.MutableStateFlow<Message?>(null)
+
+    /** In a group, someone else's photo, video, album, GIF, file or link; never a view-once or a restricted chat. */
+    fun wanted(ui: ThreadUi, m: Message, isMe: Boolean): Boolean =
+        ui.isGroup && ui.channel == null && !isMe && !m.deleted && !m.viewOnce && m.sendState == null && !m.isSystem &&
+            (m.mediaKind != null || m.linkPreview != null || m.type == "gif") &&
+            !com.fariin.app.data.ChatRestrictions.isOn(ui.cid)
+}
+
+/** The round forward arrow beside a bubble: the same 32 soft circle as a channel post's share. */
+@Composable
+private fun QuickForwardButton(ui: ThreadUi, m: Message, isMe: Boolean) {
+    if (!QuickForward.wanted(ui, m, isMe)) return
+    val c = Fariin.colors
+    Box(Modifier.padding(start = 8.dp).size(32.dp).clip(CircleShape)
+        .background(if (c.dark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f))
+        .clickable(onClickLabel = "Forward") { QuickForward.request.value = m }, contentAlignment = Alignment.Center) {
+        Icon(ImageVector.vectorResource(R.drawable.ic_menu_forward), "Forward", tint = c.label, modifier = Modifier.size(16.dp))
+    }
 }
