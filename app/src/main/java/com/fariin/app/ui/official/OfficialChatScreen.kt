@@ -1,6 +1,7 @@
 package com.fariin.app.ui.official
 
 import kotlinx.coroutines.tasks.await
+import com.fariin.app.ui.components.floating
 import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.res.vectorResource
 import android.text.format.DateFormat
@@ -343,9 +344,13 @@ fun OfficialChatScreen(onBack: () -> Unit) {
         // Somebody who blocked this chat before keeps Unblock to get it back (iOS: no Block since 2026-10-31).
         else if (view.state.blocked) TextButton({ OfficialChannel.setBlocked(false) },
             modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(vertical = 4.dp)) { Text("Unblock", color = c.accent) }
-        else Text(OfficialChannel.CANNOT_REPLY, style = MaterialTheme.typography.bodyMedium, color = c.secondary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(vertical = 16.dp, horizontal = 16.dp))
+        // In the message box's shape, a rounded glass pill where the composer would be (owner
+        // 2026-11-13, iOS cannotReplyBar): plain text there read as unfinished.
+        else Text(OfficialChannel.CANNOT_REPLY, fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+            color = c.secondary, textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp)
+                .floating(androidx.compose.foundation.shape.RoundedCornerShape(26.dp))
+                .padding(horizontal = 18.dp, vertical = 14.dp))
     }
 }
 
