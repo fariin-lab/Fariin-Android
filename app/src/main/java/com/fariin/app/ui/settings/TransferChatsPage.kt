@@ -1,5 +1,6 @@
 package com.fariin.app.ui.settings
 
+import androidx.compose.ui.graphics.drawscope.clipPath
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
@@ -123,6 +124,20 @@ internal fun TransferChatsPage(pop: () -> Unit, startScanning: Boolean = false) 
                     done = line == null
                 }
             }
+            // Where to aim: a rounded square in the middle, the space around it dimmed.
+            androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                val side = size.minDimension * 0.68f
+                val tl = androidx.compose.ui.geometry.Offset((size.width - side) / 2f, (size.height - side) / 2f - size.height * 0.06f)
+                val r = androidx.compose.ui.geometry.CornerRadius(28.dp.toPx())
+                val hole = androidx.compose.ui.graphics.Path().apply {
+                    addRoundRect(androidx.compose.ui.geometry.RoundRect(androidx.compose.ui.geometry.Rect(tl, androidx.compose.ui.geometry.Size(side, side)), r))
+                }
+                clipPath(hole, androidx.compose.ui.graphics.ClipOp.Difference) {
+                    drawRect(Color.Black.copy(alpha = 0.45f))
+                }
+                drawRoundRect(Color.White, tl, androidx.compose.ui.geometry.Size(side, side), r,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(3.dp.toPx()))
+            }
             Column(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Scan the code on your old phone", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White, textAlign = TextAlign.Center)
                 Text("On the old phone: Settings > Chats > Transfer Chats", fontSize = 14.sp, color = Color.White.copy(alpha = 0.75f), textAlign = TextAlign.Center)
@@ -157,7 +172,7 @@ internal fun TransferChatsPage(pop: () -> Unit, startScanning: Boolean = false) 
                 Choice("iPhone", "Any iPhone", target == "iphone") { target = "iphone" }
                 Spacer(Modifier.height(4.dp))
                 Text("Photos and videos are not moved yet. Your messages are locked on the way, and Fariin can't read them.",
-                    fontSize = 13.sp, color = c.tertiary, textAlign = TextAlign.Center)
+                    fontSize = 13.sp, color = c.secondary, textAlign = TextAlign.Center)
                 line?.let { Text(it, fontSize = 14.sp, color = c.red, textAlign = TextAlign.Center) }
             }
             Column(Modifier.padding(horizontal = 24.dp, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -178,6 +193,13 @@ private enum class StepState { DONE, NOW, LATER }
 @Composable
 private fun StepsPage(title: String, onCancel: (() -> Unit)?, content: @Composable () -> Unit) {
     val c = Fariin.colors
+    // The screen stays on while chats move (the reference app does the same): a phone that went to
+    // sleep would hide the code from the other phone's camera, or pause the transfer.
+    val view = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.DisposableEffect(view) {
+        view.keepScreenOn = true
+        onDispose { view.keepScreenOn = false }
+    }
     Column(Modifier.fillMaxSize().background(c.bgSecondary).statusBarsPadding().navigationBarsPadding()) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
