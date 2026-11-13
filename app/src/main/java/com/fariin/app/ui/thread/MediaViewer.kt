@@ -369,6 +369,8 @@ private fun ViewerBody(
     RestrictedWindow(restricted)
     val buttons = ViewerRules.buttons(page, pages, me, host?.deleteDialog != null, chatCanSend = host?.sendEdited != null)
         .let { if (restricted) it.copy(share = false, barSave = false, saveAll = 0, menuSave = false, draw = false) else it }
+        // A GIF moves: no pen on it.
+        .let { if (GifVideo.mp4Of(page.url) != null || page.url.substringBefore('?').endsWith(".gif", true)) it.copy(draw = false) else it }
     // The pen (iOS penEdit): the photo's plain copy opens in the editor, straight into drawing.
     var drawOn by remember { mutableStateOf<android.net.Uri?>(null) }
     val draw: () -> Unit = {
@@ -417,8 +419,12 @@ private fun ViewerBody(
         if (chromeAlpha > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = chromeAlpha * pose().bg }) {
             Column(Modifier.fillMaxSize()) {
                 ViewerHeader(ViewerRules.title(page, me, host?.nameOf ?: { null }), dateLine(ctx, page.atMillis), page.isVideo,
-                    onBack = { closeAnimated() }) { dismiss ->
-                    if (buttons.saveAll > 1) {
+                    onBack = { closeAnimated() },
+                    hasMenu = buttons.menuDelete || (!buttons.barSave && (buttons.saveAll > 1 || buttons.menuSave))) { dismiss ->
+                    // Save is in the ⋯ menu only when the bottom bar has no Save button (it holds
+                    // Delete there, on my own photo): two Saves on one screen (owner 2026-11-13).
+                    if (buttons.barSave) Unit
+                    else if (buttons.saveAll > 1) {
                         MenuRow("Save All (${buttons.saveAll})", painterResource(R.drawable.ic_sf_photo_on_rectangle)) {
                             dismiss(); save(ViewerRules.siblings(pages, page))
                         }
@@ -529,7 +535,7 @@ private fun dateLine(ctx: android.content.Context, atMillis: Double?): String {
 /** The floating header: back · name and date in a capsule · the overflow menu (iOS header / topBar). */
 @Composable
 private fun ViewerHeader(title: String, date: String, video: Boolean, onBack: () -> Unit,
-                         menu: @Composable (dismiss: () -> Unit) -> Unit) {
+                         hasMenu: Boolean = true, menu: @Composable (dismiss: () -> Unit) -> Unit) {
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp).padding(top = 4.dp),
         verticalAlignment = Alignment.CenterVertically) {
@@ -547,6 +553,8 @@ private fun ViewerHeader(title: String, date: String, video: Boolean, onBack: ()
         }
         Spacer(Modifier.weight(1f))
         var open by remember { mutableStateOf(false) }
+        // Nothing to offer, no ⋯ (an empty menu opened as a thin bar, owner 2026-11-13); the room is kept.
+        if (!hasMenu) { Spacer(Modifier.size(44.dp)); return@Row }
         Box {
             FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), "More", onClick = { open = true }, circle = true)
             GlassDropdown(open, onDismissRequest = { open = false }, shape = FariinMenu.shape, border = FariinMenu.border,
@@ -637,6 +645,20 @@ private fun ThumbStrip(pages: List<ViewerRules.Page>, pager: PagerState) {
 /** Pinch to zoom (1x to 5x), drag while zoomed, double tap for 2.5x and back; a single tap toggles the chrome. */
 @Composable
 private fun PhotoPage(p: ViewerRules.Page, current: Boolean, onTap: () -> Unit, onZoom: (Float) -> Unit) {
+    // A GIF moves here as it does in the chat (owner 2026-11-13: GIFs open in this viewer, with its
+    // header, Share and Save): drawn by the GIF loader, a tap toggles the chrome.
+    if (GifVideo.mp4Of(p.url) != null || p.url.substringBefore('?').endsWith(".gif", ignoreCase = true)) {
+        val tap by rememberUpdatedState(onTap)
+        Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures(onTap = { tap() }) }, contentAlignment = Alignment.Center) {
+            coil3.compose.AsyncImage(
+                coil3.request.ImageRequest.Builder(LocalContext.current).data(p.url).apply {
+                    decoderFactory(if (android.os.Build.VERSION.SDK_INT >= 28) coil3.gif.AnimatedImageDecoder.Factory() else coil3.gif.GifDecoder.Factory())
+                }.build(),
+                contentDescription = "GIF", imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current),
+                contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth())
+        }
+        return
+    }
     val file = rememberPlainFile(p.url, p.enc)
     val ctx = LocalContext.current
     // Full screen: twice the screen's long side keeps a 2x zoom sharp; a low-RAM phone stops at

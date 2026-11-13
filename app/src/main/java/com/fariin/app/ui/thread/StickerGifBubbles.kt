@@ -110,7 +110,12 @@ import com.fariin.app.R
 
 /** Settings > Power Saving: GIFs and animated stickers move. */
 @Composable
-private fun autoplay(): Boolean = PowerSaving.state.collectAsState().value.autoplayGifs
+private fun autoplay(): Boolean {
+    // Only while the app is in front (owner 2026-11-13: in the open-apps view our GIFs kept moving).
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    val front = owner.lifecycle.currentStateFlow.collectAsState().value.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+    return PowerSaving.state.collectAsState().value.autoplayGifs && front
+}
 
 /** A Coil request that animates GIF and WebP (Android 9+ decodes both; older phones GIF only). */
 @Composable
@@ -234,15 +239,16 @@ private fun Modifier.semanticsLabel(text: String): Modifier =
  */
 @Composable
 internal fun GifRow(m: Message, shape: Shape, fill: Color, hasHeader: Boolean, header: @Composable () -> Unit,
-                    meta: @Composable () -> Unit) {
+                    onOpen: (() -> Unit)? = null, meta: @Composable () -> Unit) {
     val (w, h) = StickerGifRules.gifBox(m.width, m.height)
-    // A tap opens it full screen on black, as a photo opens (owner 2026-11-13, the reference app).
+    // A tap opens it in the photo viewer (who sent it, when, Share, Save), as a photo opens
+    // (owner 2026-11-13); the plain black page only where there is no viewer to hand it to.
     var open by remember { mutableStateOf(false) }
     if (open) GifFullScreen(m.imageUrl) { open = false }
     Column(Modifier.width(w.dp).clip(shape).background(fill)) {
         if (hasHeader) Box(Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 4.dp)) { header() }
         Box(Modifier.size(w.dp, h.dp).background(Fariin.colors.secondary.copy(alpha = 0.18f))
-            .clickable(enabled = m.sendState == null && !m.imageUrl.isNullOrEmpty(), onClickLabel = "Open GIF") { open = true }) {
+            .clickable(enabled = m.sendState == null && !m.imageUrl.isNullOrEmpty(), onClickLabel = "Open GIF") { if (onOpen != null) onOpen() else open = true }) {
             // Played as its small MP4 on the video chip (GifVideo), its still under it; a GIF with no
             // MP4 (not from Giphy) plays as the picture, as before.
             val hasMp4 = remember(m.imageUrl) { GifVideo.mp4Of(m.imageUrl) != null }

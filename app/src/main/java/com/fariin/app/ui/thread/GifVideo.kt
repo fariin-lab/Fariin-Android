@@ -127,7 +127,7 @@ internal fun GifMp4(gifUrl: String?, play: Boolean, modifier: Modifier, still: @
             // the reference app's stop): paused when the app goes to the background, on again on return.
             val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
             val alive = owner.lifecycle.currentStateFlow.collectAsState().value
-                .isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
+                .isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
             androidx.compose.runtime.LaunchedEffect(player, alive) { player?.playWhenReady = alive }
             val p = player
             val vs = video

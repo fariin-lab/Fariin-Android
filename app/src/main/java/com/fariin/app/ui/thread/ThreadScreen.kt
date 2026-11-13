@@ -1764,6 +1764,25 @@ private fun DatePill(text: String) = NoticePill(text, vertical = 8.dp)
 @Composable
 private fun NoticePill(text: String, vertical: Dp = 4.dp, icon: Boolean = false) {
     val c = Fariin.colors
+    // A long notice (two lines and more) is a centred rounded card, not a wide strip with a capsule's
+    // ends (owner 2026-11-13: "the card is ugly"): at most 300 wide, centred words, the lock above
+    // the encryption notice.
+    if (text.length > 48) {
+        val keys = text == com.fariin.app.data.ThreadRepository.KEYS_NOTICE
+        Box(Modifier.fillMaxWidth().padding(vertical = vertical + 4.dp), contentAlignment = Alignment.Center) {
+            Column(Modifier.widthIn(max = 300.dp).clip(RoundedCornerShape(18.dp)).background(receivedFill())
+                .padding(horizontal = 16.dp, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                if (keys) {
+                    Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_sf_lock_fill), null,
+                        tint = c.secondary, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.height(6.dp))
+                }
+                Text(text, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = c.secondary, lineHeight = 18.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            }
+        }
+        return
+    }
     Box(Modifier.fillMaxWidth().padding(vertical = vertical), contentAlignment = Alignment.Center) {
         Row(Modifier.clip(CircleShape).background(receivedFill()).padding(horizontal = 12.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically) {
@@ -1918,7 +1937,8 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             }
             val fill = if (isMe) myFill() else receivedFill()
             if (m.isSticker) StickerRow(m, isMe, shape, fill, header) { Meta(m, tick, isMe, is24h, onMedia = m.replyTo == null) }
-            else GifRow(m, shape, fill, (showSender && g.first) || m.forwarded || m.replyTo != null, header) {
+            else GifRow(m, shape, fill, (showSender && g.first) || m.forwarded || m.replyTo != null, header,
+                onOpen = m.imageUrl?.let { u -> { onView(Viewing.Photo(u, m.enc, msg = m)) } }) {
                 Meta(m, tick, isMe, is24h, onMedia = true)
             }
             return@Row

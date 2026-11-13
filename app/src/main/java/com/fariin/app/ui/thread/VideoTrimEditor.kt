@@ -379,8 +379,13 @@ private fun VideoEditorBody(uri: Uri, caption: String, onCaption: (String) -> Un
         onSend(caption.trim())
     }
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
-        TrimVideo(s, active = true, modifier = Modifier.fillMaxSize().padding(top = topDp, bottom = bottomDp))
+    // The video keeps its resting size and place while the caption keyboard is up (owner 2026-11-13,
+    // iOS 826c00a62: it jumped down): its box is the height measured with the keyboard down,
+    // top-anchored, so the keyboard simply covers its lower part.
+    var restH by remember { mutableIntStateOf(0) }
+    Box(Modifier.fillMaxSize().background(Color.Black).onSizeChanged { if (!imeNow()) restH = it.height }) {
+        val videoBox = if (restH > 0) Modifier.fillMaxWidth().height(with(density) { restH.toDp() }) else Modifier.fillMaxSize()
+        TrimVideo(s, active = true, modifier = videoBox.padding(top = topDp, bottom = bottomDp))
 
         Box(
             Modifier.statusBarsPadding().padding(start = 12.dp, top = 6.dp).size(44.dp).floating()

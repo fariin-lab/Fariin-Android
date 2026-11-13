@@ -484,7 +484,9 @@ internal fun SwipeRow(enabled: Boolean, onReply: () -> Unit,
     val back = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
     val latest = androidx.compose.runtime.rememberUpdatedState(onReply)
     val latestMenu = androidx.compose.runtime.rememberUpdatedState(menu)
-    val showArrow by remember { androidx.compose.runtime.derivedStateOf { dx.floatValue < -4f } }
+    // Android: swipe RIGHT to reply (owner 2026-11-13, what Android people already know from the
+    // reference app); iOS keeps its left swipe. dx is positive, the arrow fades in on the left.
+    val showArrow by remember { androidx.compose.runtime.derivedStateOf { dx.floatValue > 4f } }
     // The open capsule: its two outer slots, and which is picked (-1 up, 0 reply, 1 down).
     var slots by remember { androidx.compose.runtime.mutableStateOf<Pair<SwipeActions.Slot?, SwipeActions.Slot?>?>(null) }
     var picked by remember { androidx.compose.runtime.mutableIntStateOf(0) }
@@ -495,7 +497,8 @@ internal fun SwipeRow(enabled: Boolean, onReply: () -> Unit,
         val from = dx.floatValue
         back[0]?.cancel()
         back[0] = scope.launch {
-            androidx.compose.animation.core.animate(from, 0f, animationSpec = androidx.compose.animation.core.tween(200)) { v, _ -> dx.floatValue = v }
+            // A soft spring home, a touch of bounce, as the reference app's.
+            androidx.compose.animation.core.animate(from, 0f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.7f, stiffness = 600f)) { v, _ -> dx.floatValue = v }
         }
     }
     val gesture = if (!enabled) Modifier else Modifier.pointerInput(Unit) {
@@ -510,16 +513,16 @@ internal fun SwipeRow(enabled: Boolean, onReply: () -> Unit,
             back[0]?.cancel()
             var y: Float
             var lastX = start.position.x
-            var raw = (down.position.x - start.position.x).coerceAtLeast(0f)
-            if (raw <= 0f) return@awaitEachGesture   // a swipe to the right is not ours
+            var raw = (start.position.x - down.position.x).coerceAtLeast(0f)
+            if (raw <= 0f) return@awaitEachGesture   // a swipe to the left is not ours
             while (true) {
                 val ev = awaitPointerEvent()
                 val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
                 if (!ch.pressed) break
-                raw = (raw - (ch.position.x - lastX)).coerceAtLeast(0f)
+                raw = (raw + (ch.position.x - lastX)).coerceAtLeast(0f)
                 lastX = ch.position.x; y = ch.position.y
                 ch.consume()
-                dx.floatValue = -SwipeReplyMath.eased(raw, trigger)
+                dx.floatValue = SwipeReplyMath.eased(raw, trigger)
                 if (raw >= trigger && !armed) {
                     armed = true; crossY = y; view.lightTap()
                     slots = latestMenu.value?.invoke(); picked = 0
@@ -554,13 +557,13 @@ internal fun SwipeRow(enabled: Boolean, onReply: () -> Unit,
     }
     Box(Modifier.fillMaxWidth().then(gesture).then(if (slots != null) Modifier.zIndex(1f) else Modifier)) {
         if (showArrow && slots == null) Icon(ImageVector.vectorResource(R.drawable.ic_menu_reply), null, tint = Fariin.colors.secondary,
-            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 16.dp).size(22.dp)
+            modifier = Modifier.align(Alignment.CenterStart).padding(start = 16.dp).size(22.dp)
                 .graphicsLayer {
-                    val p = SwipeReplyMath.progress(-dx.floatValue, trigger)
+                    val p = SwipeReplyMath.progress(dx.floatValue, trigger)
                     alpha = p; scaleX = SwipeReplyMath.arrowScale(p); scaleY = scaleX
                 })
         Box(Modifier.offset { IntOffset(dx.floatValue.roundToInt(), 0) }) { content() }
-        slots?.let { sl -> SwipeCapsule(sl, picked, Modifier.align(Alignment.CenterEnd).padding(end = 6.dp)) }
+        slots?.let { sl -> SwipeCapsule(sl, picked, Modifier.align(Alignment.CenterStart).padding(start = 6.dp)) }
     }
 }
 
