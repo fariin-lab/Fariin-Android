@@ -167,10 +167,14 @@ private fun Thumb(conv: Conversation, url: String, enc: com.fariin.app.crypto.En
     val media = remember(conv.id) {
         com.fariin.app.media.ChatMedia(ctx.applicationContext, conv.id, com.fariin.app.data.CryptoHub.get(ctx.applicationContext))
     }
-    val file by produceState<java.io.File?>(null, url) { value = media.file(url, enc) }
-    val bmp = com.fariin.app.ui.thread.rememberBitmap(file, 80)
+    // The file and its decode in one step (owner 2026-11-13: every list picture stayed an empty grey
+    // square; the file was there, a JPEG, but the two-stage load never handed the picture over).
+    val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, url) {
+        val f = media.file(url, enc) ?: return@produceState
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.fariin.app.ui.thread.decodeSampled(f, 80) }
+    }
     Box(Modifier.size(side).clip(RoundedCornerShape(corner)).background(Fariin.colors.placeholderFill)) {
-        if (bmp != null) Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        bmp?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
     }
 }
 
