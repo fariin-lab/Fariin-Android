@@ -40,6 +40,8 @@ data class Person(
     companion object {
         fun from(uid: String, d: Map<String, Any?>): Person = fromDoc(uid, d)
             .also { com.fariin.app.call.CallPrivacyIndex.record(uid, it.privacy) }
+            // The chat list's badge follows any fresh read of this person (an admin removed one).
+            .also { if (d.containsKey("name")) VerifiedPeople.note(uid, d["verification"]) }
 
         private fun fromDoc(uid: String, d: Map<String, Any?>): Person = Person(
             uid = uid,

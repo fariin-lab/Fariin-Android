@@ -546,7 +546,9 @@ internal fun MemberCard(cid: String, me: String, uid: String, conv: Map<String, 
             decorFitsSystemWindows = false, dismissOnBackPress = false, dismissOnClickOutside = false)) {
         (androidx.compose.ui.platform.LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider)
             ?.window?.setDimAmount(0f)
-        Box(Modifier.fillMaxSize()) { com.fariin.app.ui.photo.ProfilePhotoViewer(cardPhoto, face) }
+        Box(Modifier.fillMaxSize()) { com.fariin.app.ui.photo.ProfilePhotoViewer(cardPhoto, face,
+            // The whole photo, square corners; it closes back into the circle (owner 2026-11-13).
+            style = com.fariin.app.ui.photo.ProfilePhotoStyle(landsSquare = true)) }
     }
     ModalBottomSheet(onDismissRequest = onClose, sheetState = sheet, containerColor = c.bgSecondary) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {

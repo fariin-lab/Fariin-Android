@@ -797,6 +797,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         }, backdrop = if (menuGlass) menuBackdrop else null, caption = "Mute this chat for…", onDismiss = { personMuteMenu = false })
     // Over everything on the page: the round photo, out of the avatar and back into it.
     com.fariin.app.ui.photo.ProfilePhotoViewer(photo, person?.photoUrl ?: conv?.photos?.get(uid),
+        style = com.fariin.app.ui.photo.ProfilePhotoStyle(landsSquare = true),   // the whole photo, not a circle (owner 2026-11-13)
         bar = com.fariin.app.ui.photo.ProfilePhotoBar(leavesOnClose = true))
     }
 }
