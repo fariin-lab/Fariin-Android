@@ -34,6 +34,9 @@ import com.fariin.app.ui.theme.Fariin
  * Texts still waiting to send are wiped with the session: the line says how many and Cancel
  * becomes Wait (a send is tried now), as the old dialog did.
  */
+/** The "Delete messages from this phone" choice (iOS flag off 2026-11-14): off = not shown, messages kept. */
+private const val LOG_OUT_WIPE_CHOICE = false
+
 @Composable
 internal fun LogOutSheet(profile: MyProfile?, onDismiss: () -> Unit, onSignOut: () -> Unit) {
     val c = Fariin.colors
@@ -70,7 +73,8 @@ internal fun LogOutSheet(profile: MyProfile?, onDismiss: () -> Unit, onSignOut: 
                 color = c.label, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 16.dp))
             Text(warning ?: "You can log back in any time. Your messages stay on this phone.", fontSize = 15.sp, color = c.secondary,
                 textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
-            androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().padding(top = 16.dp)
+            // Hidden (iOS batch 2026-11-14 item 5): Log Out always keeps the messages; the code stays.
+            if (LOG_OUT_WIPE_CHOICE) androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().padding(top = 16.dp)
                 .clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp)).clickable(enabled = !busy) { wipeHistory = !wipeHistory }.padding(vertical = 8.dp, horizontal = 4.dp),
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 Box(Modifier.size(24.dp).clip(androidx.compose.foundation.shape.CircleShape)
