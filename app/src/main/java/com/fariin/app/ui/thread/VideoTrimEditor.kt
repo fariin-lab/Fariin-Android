@@ -420,13 +420,12 @@ private fun VideoEditorBody(uri: Uri, caption: String, onCaption: (String) -> Un
         onSend(caption.trim())
     }
 
-    // The video keeps its resting size and place while the caption keyboard is up (owner 2026-11-13,
-    // iOS 826c00a62: it jumped down): its box is the height measured with the keyboard down,
-    // top-anchored, so the keyboard simply covers its lower part.
-    var restH by remember { mutableIntStateOf(0) }
-    Box(Modifier.fillMaxSize().background(Color.Black).onSizeChanged { if (!imeNow()) restH = it.height }) {
-        val videoBox = if (restH > 0) Modifier.fillMaxWidth().height(with(density) { restH.toDp() }) else Modifier.fillMaxSize()
-        TrimVideo(s, active = true, modifier = videoBox.padding(top = topDp, bottom = bottomDp))
+    // With the caption keyboard up the video shrinks to fit the space above the caption bar (iOS
+    // batch 2026-11-14 item 3): it moves up and zooms out, never stays full size under the keyboard.
+    var chromePx by remember { mutableIntStateOf(0) }
+    val liveBottomDp = if (imeUp) with(density) { (chromePx + ime.getBottom(this)).toDp() } + 12.dp else bottomDp
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        TrimVideo(s, active = true, modifier = Modifier.fillMaxSize().padding(top = topDp, bottom = liveBottomDp))
 
         Box(
             Modifier.statusBarsPadding().padding(start = 12.dp, top = 6.dp).size(44.dp).floating()
@@ -443,7 +442,7 @@ private fun VideoEditorBody(uri: Uri, caption: String, onCaption: (String) -> Un
 
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().imePadding()
-                .onSizeChanged { if (!imeNow()) bottomPx = it.height }.navigationBarsPadding()
+                .onSizeChanged { chromePx = it.height; if (!imeNow()) bottomPx = it.height }.navigationBarsPadding()
                 .padding(top = 8.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {

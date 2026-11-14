@@ -140,6 +140,7 @@ private fun PagerBody(
     // The media sits between the top bar and the bottom chrome; the bottom height is not taken
     // while the keyboard is up, so the pages never move with it (as the single editor).
     var bottomPx by remember { mutableIntStateOf(0) }
+    var chromePx by remember { mutableIntStateOf(0) }
     val imeUp = WindowInsets.ime.getBottom(density) > 0
     val ime = WindowInsets.ime
     val imeNow = { ime.getBottom(density) > 0 }
@@ -190,7 +191,10 @@ private fun PagerBody(
             if (u != null && u in videos) {
                 val t = trimFor(u)
                 LaunchedEffect(u) { t.load(ctx, 8) }
-                TrimVideo(t, active = i == page, modifier = m)
+                // A video shrinks to fit above the caption bar while the keyboard is up (iOS batch
+                // 2026-11-14 item 3), instead of staying full size under it.
+                val vb = if (imeUp) with(density) { (chromePx + ime.getBottom(this)).toDp() } + 12.dp else bottomDp
+                TrimVideo(t, active = i == page, modifier = Modifier.fillMaxSize().padding(top = topDp, bottom = vb))
             } else if (u != null) PagerPage(u, m)
         }
 
@@ -203,7 +207,7 @@ private fun PagerBody(
 
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().imePadding()
-                .onSizeChanged { if (!imeNow()) bottomPx = it.height }.navigationBarsPadding()
+                .onSizeChanged { chromePx = it.height; if (!imeNow()) bottomPx = it.height }.navigationBarsPadding()
                 .padding(top = 8.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
