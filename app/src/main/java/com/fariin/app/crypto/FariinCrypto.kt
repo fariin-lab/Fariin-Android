@@ -561,32 +561,49 @@ class FariinCrypto(
      * nonce `n` stays, the bytes are never touched. Null = this cannot go instant (the old forward
      * runs): a key that will not open, a target with no key, or plain and sealed mixed.
      */
+    /** The 32 byte file key of a sealed [meta] in [srcCid], opened the way decryptBytes opens it; null when it will not. */
+    private suspend fun openFileKey(srcCid: String, meta: EncMeta): ByteArray? {
+        if (meta.v != 1) return null
+        ensureReady()
+        val sk = mySecretKey ?: return null
+        val me = currentUid() ?: return null
+        val wraps = meta.w; val author = meta.a
+        return if (wraps != null && author != null) {
+            runCatching { preloadKey(author) }
+            val cur = pubCache[author]
+            wraps[me]?.takeIf { cur != null }?.let { wire.openWrap(it, candidates(author, cur!!), sk)?.first }
+                ?: (if (Wire.isGroupCid(srcCid)) releasedKey(meta.n) else null)
+        } else {
+            val other = otherUid(srcCid)
+            runCatching { preloadKey(other) }
+            val cur = pubCache[other] ?: return null
+            val wrapped = B64.decode(meta.k) ?: return null
+            val kn = B64.decode(meta.kn) ?: return null
+            wire.openBoxAny(wrapped, kn, candidates(other, cur), sk)?.first
+        }
+    }
+
+    /**
+     * Instant forward of a SEALED file into a PLAIN group or channel (iOS fwd-plain-1114): the file
+     * key, opened here and handed to forwardMedia (`keys`) so the server writes the copy in the clear.
+     * Null when [dstCid] is not a plain group, [meta] is not sealed, or the key will not open (then
+     * the old forward runs). Never logged, never stored.
+     */
+    suspend fun plainForwardKey(srcCid: String, meta: EncMeta, dstCid: String): ByteArray? {
+        if (meta.v != 1 || !Wire.isGroupCid(dstCid) || !groupIsPlain(dstCid)) return null
+        return openFileKey(srcCid, meta)?.takeIf { it.size == 32 }
+    }
+
     suspend fun rewrapFile(srcCid: String, meta: EncMeta, dstCid: String, dstMembers: Collection<String>?): EncMeta? {
         val dstGroup = Wire.isGroupCid(dstCid)
         val dstPlain = dstGroup && groupIsPlain(dstCid)
         // Plain stays plain, only into another plain group; sealed never goes into a plain group.
         if (meta.isPlain) return if (Wire.isGroupCid(srcCid) && dstPlain) EncMeta.PLAIN else null
         if (dstPlain || meta.v != 1) return null
-        ensureReady()
+        // 1. Open the file key the way decryptBytes opens it for the SOURCE chat.
+        val fileKey: ByteArray = openFileKey(srcCid, meta) ?: return null
         val sk = mySecretKey ?: return null
         val me = currentUid() ?: return null
-        // 1. Open the file key the way decryptBytes opens it for the SOURCE chat.
-        val fileKey: ByteArray = run {
-            val wraps = meta.w; val author = meta.a
-            if (wraps != null && author != null) {
-                runCatching { preloadKey(author) }
-                val cur = pubCache[author]
-                wraps[me]?.takeIf { cur != null }?.let { wire.openWrap(it, candidates(author, cur!!), sk)?.first }
-                    ?: (if (Wire.isGroupCid(srcCid)) releasedKey(meta.n) else null)
-            } else {
-                val other = otherUid(srcCid)
-                runCatching { preloadKey(other) }
-                val cur = pubCache[other] ?: return null
-                val wrapped = B64.decode(meta.k) ?: return null
-                val kn = B64.decode(meta.kn) ?: return null
-                wire.openBoxAny(wrapped, kn, candidates(other, cur), sk)?.first
-            }
-        } ?: return null
         // 2. Wrap it for the TARGET the way a send does; 3. the data nonce is kept.
         return try {
             if (dstGroup) {

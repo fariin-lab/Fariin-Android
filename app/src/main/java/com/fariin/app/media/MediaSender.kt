@@ -320,7 +320,18 @@ class MediaSender(
         val members = members()
         val dst = convRef.collection("messages").document()
         // 1. Every envelope re-wrapped for here (n kept). One that will not: the old forward.
-        suspend fun re(e: EncMeta?): EncMeta = e?.let { crypto.rewrapFile(srcCid, it, cid, members) } ?: throw NotInstant("key")
+        // A sealed file into a plain group or channel (spec 2026-11-14-forward-sealed-into-plain): its
+        // file key goes to the server (`keys`), which writes the copy in the clear; the new envelope is
+        // the plain marker, as a plain group's own upload.
+        val keyByUrl = HashMap<String, Map<String, String>>()
+        suspend fun re(url: String, e: EncMeta?): EncMeta {
+            e ?: throw NotInstant("key")
+            crypto.plainForwardKey(srcCid, e, cid)?.let { k ->
+                keyByUrl[url] = mapOf("n" to e.n, "k" to com.fariin.app.crypto.B64.encode(k))
+                return EncMeta.PLAIN
+            }
+            return crypto.rewrapFile(srcCid, e, cid, members) ?: throw NotInstant("key")
+        }
         // 2. The files to copy, by their Storage path ("r2:" and anything not Storage: the old forward).
         val urls = buildList {
             when (m.mediaKind) {
@@ -336,22 +347,37 @@ class MediaSender(
         val pathOf = urls.associateWith { storagePath(it) ?: throw NotInstant("not storage") }
         val metas: Map<String, EncMeta> = when (m.mediaKind) {
             Message.MediaKind.ALBUM -> buildMap {
-                m.album.forEach { t -> put(t.imageUrl, re(t.enc)); if (t.isVideo) put(t.videoUrl!!, re(t.videoEnc)) }
+                m.album.forEach { t -> put(t.imageUrl, re(t.imageUrl, t.enc)); if (t.isVideo) put(t.videoUrl!!, re(t.videoUrl, t.videoEnc)) }
             }
-            Message.MediaKind.VIDEO -> mapOf(m.videoUrl!! to re(m.enc), m.thumbUrl!! to re(m.thumbEnc))
-            Message.MediaKind.FILE -> buildMap { put(m.fileUrl!!, re(m.enc)); m.thumbUrl?.let { put(it, re(m.thumbEnc)) } }
-            else -> mapOf(urls.first() to re(m.enc))
+            Message.MediaKind.VIDEO -> mapOf(m.videoUrl!! to re(m.videoUrl, m.enc), m.thumbUrl!! to re(m.thumbUrl, m.thumbEnc))
+            Message.MediaKind.FILE -> buildMap { put(m.fileUrl!!, re(m.fileUrl, m.enc)); m.thumbUrl?.let { put(it, re(it, m.thumbEnc)) } }
+            else -> mapOf(urls.first() to re(urls.first(), m.enc))
         }
-        // 3. The server copy.
+        val keys: Map<String, Map<String, String>> = keyByUrl.mapKeys { pathOf.getValue(it.key) }
+        // 3. The server copy (it reads, opens and writes the bytes when it has keys: a longer wait).
         val res = try {
+            val args = hashMapOf<String, Any>("srcCid" to srcCid, "msgId" to m.id, "dstCid" to cid, "dstMsgId" to dst.id,
+                "objects" to pathOf.values.toList())
+            if (keys.isNotEmpty()) args["keys"] = keys
             com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
-                .getHttpsCallable("forwardMedia").call(hashMapOf(
-                    "srcCid" to srcCid, "msgId" to m.id, "dstCid" to cid, "dstMsgId" to dst.id,
-                    "objects" to pathOf.values.toList())).await().getData() as? Map<*, *>
+                .getHttpsCallable("forwardMedia")
+                .also { if (keys.isNotEmpty()) it.setTimeout(180, java.util.concurrent.TimeUnit.SECONDS) }
+                .call(args).await().getData() as? Map<*, *>
         } catch (e: Exception) { throw NotInstant("forwardMedia: ${e.message}") }
         if (res?.get("ok") != true) throw NotInstant("forwardMedia refused")
-        val newUrlByPath = (res["objects"] as? List<*>).orEmpty().mapNotNull { o ->
-            (o as? Map<*, *>)?.let { (it["src"] as? String)?.let { s -> (it["url"] as? String)?.let { u -> s to u } } }
+        val answered = (res["objects"] as? List<*>).orEmpty().mapNotNull { it as? Map<*, *> }
+        // Every part sent with a key must come back opened; an older server copies the sealed bytes
+        // and ignores `keys`, and a plain marker over sealed bytes would be a file nobody can open.
+        val openedPaths = answered.filter { it["opened"] == true }.mapNotNull { it["src"] as? String }.toSet()
+        if (!openedPaths.containsAll(keys.keys)) {
+            runCatching {
+                com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
+                    .getHttpsCallable("forwardMedia").call(hashMapOf("undo" to true, "dstCid" to cid, "dstMsgId" to dst.id)).await()
+            }
+            throw NotInstant("keys not opened")
+        }
+        val newUrlByPath = answered.mapNotNull { o ->
+            (o["src"] as? String)?.let { s -> (o["url"] as? String)?.let { u -> s to u } }
         }.toMap()
         fun nu(old: String): String = newUrlByPath[pathOf[old]] ?: throw NotInstant("no copy for $old")
         // 4. One message, written as that type's send writes it, complete (no `uploading`).
