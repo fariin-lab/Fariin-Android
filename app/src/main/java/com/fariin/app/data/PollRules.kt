@@ -154,6 +154,18 @@ object PollRules {
     /** Message.safeText: reply quotes, notifications, copy. */
     fun safeText(p: PollCard) = "📊 ${p.question}"
 
+    /**
+     * A post's words for a quote card or the Quotes sheet (iOS poll-fast-1114): a poll reads
+     * "Poll: <question>", any other `fariin-xxx:` marker reads as [kind], plain words stay as they are.
+     * Never prints a raw marker.
+     */
+    fun cardWords(text: String, kind: String): String {
+        val t = text.trim()
+        if (!t.startsWith("fariin-")) return t
+        parse(t)?.let { return "Poll: ${it.question}" }
+        return kind
+    }
+
     /** PollComposerSheet.EndChoice, in seconds (null = never). */
     enum class EndChoice(val label: String, val seconds: Long?) {
         NEVER("Never", null), HOUR("In 1 hour", 3600), DAY("In 1 day", 86_400), WEEK("In 1 week", 604_800)

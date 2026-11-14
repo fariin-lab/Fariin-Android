@@ -95,4 +95,16 @@ class PostQuoteRulesTest {
         assertEquals(PostQuoteRules.Route.PUBLIC_PAGE, PostQuoteRules.route(pub, "c1", known = false))
         assertEquals(PostQuoteRules.Route.MY_CHANNEL, PostQuoteRules.route(QuotedIn("c2", "m"), "c1", known = false))
     }
+
+    /** Owner 2026-11-14: the Quotes sheet printed "fariin-poll:eyJ...". */
+    @Test fun markersNeverPrintRaw() {
+        val poll = PollRules.markerText("p1", "Lunch?", listOf("Rice", "Pasta"), multiple = false)
+        assertEquals("Poll: Lunch?", PostQuoteRules.cardText(poll, "text", false))
+        assertEquals("Post", PostQuoteRules.cardText("fariin-location:abc", "text", false))
+        assertEquals("Photo", PostQuoteRules.cardText("fariin-poll:broken", "image", false))
+        assertEquals("Hello", PostQuoteRules.cardText("  Hello ", "text", false))
+        assertEquals("Album", PostQuoteRules.cardText("", "image", true))
+        val card = QuoteRules.localCard("c", "m", "Ch", null, poll, "text", false)
+        assertEquals("Poll: Lunch?", QuoteRules.body(card))
+    }
 }

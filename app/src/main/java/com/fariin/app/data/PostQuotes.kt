@@ -85,7 +85,7 @@ object PostQuoteRules {
 
     /** The words on the post's card: its text, else what kind of post it is. */
     fun cardText(text: String?, type: String?, isAlbum: Boolean): String =
-        text?.trim().orEmpty().ifEmpty { kindName(type, isAlbum) }
+        PollRules.cardWords(text.orEmpty(), kindName(type, isAlbum)).ifEmpty { kindName(type, isAlbum) }
 
     /** A row's eye count: "1 view", "1.2K views". */
     fun viewsLine(n: Int): String = compact(n) + if (n == 1) " view" else " views"

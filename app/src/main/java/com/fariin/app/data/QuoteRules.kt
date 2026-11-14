@@ -72,13 +72,14 @@ object QuoteRules {
     /** The card's middle line. Null card: the quiet loading line. */
     fun body(c: QuoteCard?): String = when (c?.state) {
         null -> "Loading…"
-        QuoteCard.State.OK -> c.text.ifEmpty {
-            when (c.kind) {
+        QuoteCard.State.OK -> {
+            val kind = when (c.kind) {
                 "photo" -> "Photo"
                 "video" -> "Video"
                 "album" -> "Album"
                 else -> "Post"
             }
+            PollRules.cardWords(c.text, kind).ifEmpty { kind }
         }
         QuoteCard.State.DELETED -> "Post deleted"
         QuoteCard.State.HIDDEN -> "This channel is private"
