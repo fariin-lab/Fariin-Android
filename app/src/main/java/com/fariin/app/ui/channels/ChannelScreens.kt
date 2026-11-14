@@ -495,12 +495,14 @@ private fun BigButton(text: String, enabled: Boolean, busy: Boolean = false, tap
 }
 
 @Composable
-private fun Field(value: String, placeholder: String, single: Boolean, onChange: (String) -> Unit) {
+private fun Field(value: String, placeholder: String, single: Boolean,
+                  focus: androidx.compose.ui.focus.FocusRequester? = null, onChange: (String) -> Unit) {
     val c = Fariin.colors
     Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
         if (value.isEmpty()) Text(placeholder, fontSize = 17.sp, color = c.tertiary)
         BasicTextField(value, onChange, singleLine = single, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-            cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
+            cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth()
+                .then(if (focus != null) Modifier.focusRequester(focus) else Modifier))
     }
 }
 
@@ -541,10 +543,13 @@ private fun Details(name: String, about: String, creating: Boolean, error: Strin
                             onClick = { photoMenu = false; onRemovePhoto() })
                     }
                 }
-                Box(Modifier.weight(1f)) { Field(name, "Channel Name", true, onName) }
+                // The name field takes the keyboard as the page opens (iOS batch 2026-11-14 item 6).
+                val nameFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+                LaunchedEffect(Unit) { kotlinx.coroutines.delay(150); runCatching { nameFocus.requestFocus() } }
+                Box(Modifier.weight(1f)) { Field(name, "Channel Name", true, nameFocus, onName) }
             }
             Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(c.card)) {
-                Field(about, "Description", false, onAbout)
+                Field(about, "Description", false, onChange = onAbout)
             }
             Text("Optional. Tell people what your channel is about.", fontSize = 13.sp, color = c.secondary,
                 modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 8.dp))
