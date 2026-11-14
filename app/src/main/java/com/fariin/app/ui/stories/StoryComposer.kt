@@ -487,9 +487,11 @@ private fun renderItem(it: StoryItemState, card: Rect, textStory: Boolean): Pair
         val framed = zoom > 1.001f || kotlin.math.abs(pan.x) > 0.5f || kotlin.math.abs(pan.y) > 0.5f
         if (!art && !framed && !it.muted && range == null) return base to null
         val onCard = (art || framed) && card.width > 1f && shown.width > 1f
-        // 540 across like every story clip, the card's own shape, even sides for the encoder.
-        val cw = if (onCard) 540 else 0
-        val ch = if (onCard) (kotlin.math.round(540f * card.height / card.width / 2f).toInt() * 2).coerceAtLeast(2) else 0
+        // The card's own shape, 1080 across for a full-HD clip and 720 otherwise (iOS story-hd-1114),
+        // even sides for the encoder.
+        val across = com.fariin.app.data.StoryCameraRules.storyCanvasWidth(minOf(base.width, base.height))
+        val cw = if (onCard) across else 0
+        val ch = if (onCard) (kotlin.math.round(across * card.height / card.width / 2f).toInt() * 2).coerceAtLeast(2) else 0
         val visible = shown.intersect(card)
         val crop = if (onCard && framed && visible.width > 1f && visible.height > 1f) android.graphics.RectF(
             (visible.left - shown.left) / shown.width, (visible.top - shown.top) / shown.height,

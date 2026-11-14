@@ -82,7 +82,6 @@ class FariinApp : Application() {
         com.fariin.app.data.ContactNames.init(this)
         com.fariin.app.data.MsgPolicy.init(this)     // Message Requests on/off, as of the last open
         com.fariin.app.data.AppFeatures.init(this)   // the admin panel's switches, as of the last open
-        com.fariin.app.data.AppConfig.init(this)     // getAppConfig's launch snapshot for this account
         com.fariin.app.data.AppearancePrefs.applySplash(this)   // the next launch screen follows Night Mode
         StartClock.mark("features")
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
@@ -108,6 +107,9 @@ class FariinApp : Application() {
                 FirebaseApp.initializeApp(this)
             }
         }
+        // getAppConfig's launch snapshot for this account. After Firebase: it asks FirebaseAuth who is
+        // signed in, and debug builds start Firebase just above (before, every debug launch crashed).
+        com.fariin.app.data.AppConfig.init(this)
         // App Check (iOS AppCheckSetup): every Firebase call carries a token proving it comes from
         // this app on a real phone. Not on the local backend, which has no App Check.
         StartClock.mark("firebase")

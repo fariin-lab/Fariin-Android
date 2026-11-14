@@ -97,4 +97,20 @@ class StoryCameraRulesTest {
         assertEquals(StoryCameraRules.Swipe.TO_CAMERA, StoryCameraRules.swipe(dxDp = 90f, dyDp = 10f, textMode = true))
         assertEquals(StoryCameraRules.Swipe.NONE, StoryCameraRules.swipe(dxDp = 90f, dyDp = 10f, textMode = false))   // already there
     }
+
+    /** iOS story-hd-1114: short side >= 1000 keeps full HD; a square 1440 clip goes 1080 wide. */
+    @Test fun storyVideoKeepsFullHd() {
+        assertEquals(1080, StoryCameraRules.storyCanvasWidth(1440))
+        assertEquals(1080, StoryCameraRules.storyCanvasWidth(1080))
+        assertEquals(720, StoryCameraRules.storyCanvasWidth(720))
+        assertEquals(1080, StoryCameraRules.storyCutShortSide(2160))
+        assertEquals(720, StoryCameraRules.storyCutShortSide(720))
+        assertEquals(480, StoryCameraRules.storyCutShortSide(480))   // never scaled up
+        assertEquals(720, StoryCameraRules.storyCutShortSide(999))
+        assertEquals(emptyList<Int>(), StoryCameraRules.halvingSteps(1440, 1080))
+        assertEquals(emptyList<Int>(), StoryCameraRules.halvingSteps(2160, 1080))
+        assertEquals(listOf(1440), StoryCameraRules.halvingSteps(2160, 720))
+        assertEquals(listOf(2880, 1440), StoryCameraRules.halvingSteps(4000, 720))
+        assertTrue(StoryCameraRules.videoBitrate(1920, seconds = 90) > StoryCameraRules.videoBitrate(960, seconds = 90))
+    }
 }

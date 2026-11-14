@@ -125,7 +125,7 @@ object StoryMedia {
         try {
             r.setDataSource(context, uri)
             val ms = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
-            // Longer than one story's 90 s: posted as several 540p pieces (StoryUploads), so only
+            // Longer than one story's 90 s: posted as several 90 s pieces (StoryUploads), so only
             // the 10-minute pick limit applies, not the file size of the original.
             if (StoryLimits.pickTooLong(ms / 1000.0)) throw TooLong()
             if (StoryLimits.segments(ms / 1000.0).isEmpty() && bytes > StoryRules.VIDEO_MAX_BYTES) throw TooBig()

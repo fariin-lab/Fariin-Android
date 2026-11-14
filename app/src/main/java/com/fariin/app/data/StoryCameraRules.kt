@@ -41,6 +41,36 @@ object StoryCameraRules {
         return maxOf(600_000, minOf(target.toLong(), room).toInt())
     }
 
+    /** iOS story-hd-1114: a clip whose SHORT side is at least this keeps full HD. */
+    const val HD_FROM_SHORT_SIDE = 1000
+
+    /**
+     * Width of the story card a clip is laid on (9:16 card = 1080x1920 or 720x1280), by the clip's
+     * short side: full HD stays full HD, everything else is 720 (iOS). A 1440x1440 clip lands
+     * 1080 wide, not 720 (owner 2026-11-14: stories came out soft).
+     */
+    fun storyCanvasWidth(sourceShortSide: Int): Int = if (sourceShortSide >= HD_FROM_SHORT_SIDE) 1080 else 720
+
+    /** A plain cut's short side: 1080 or 720 like the card, never bigger than the clip (never scaled up). */
+    fun storyCutShortSide(sourceShortSide: Int): Int {
+        val want = storyCanvasWidth(sourceShortSide)
+        val s = if (sourceShortSide in 2 until want) sourceShortSide else want
+        return s / 2 * 2
+    }
+
+    /**
+     * The in-between short sides for a big shrink: the GPU scales bilinear, which drops detail past
+     * 2x, so a shrink goes down in halves (a 2x bilinear step averages four pixels). 2160 -> 720 =
+     * [1440]; 1440 -> 1080 = none. Largest first.
+     */
+    fun halvingSteps(sourceShortSide: Int, outShortSide: Int): List<Int> {
+        if (outShortSide < 2) return emptyList()
+        val out = ArrayList<Int>()
+        var s = outShortSide * 2
+        while (s < sourceShortSide) { out += s; s *= 2 }
+        return out.reversed()
+    }
+
     /** "00:05" on the red recording clock (iOS recordingClock). */
     fun clock(seconds: Int): String {
         val s = seconds.coerceAtLeast(0)
