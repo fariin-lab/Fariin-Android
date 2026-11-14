@@ -192,10 +192,31 @@ object PollRules {
      */
     fun cardWords(text: String, kind: String): String {
         val t = text.trim()
-        if (!t.startsWith("fariin-")) return t
+        if (!ANY_MARKER.containsMatchIn(t)) return t
         parse(t)?.let { return "Poll: ${it.question}" }
         return kind
     }
+
+    /** Any of our `fariin-xxx:` markers at the start of a text (iOS quoted poll spec 2026-11-14). */
+    private val ANY_MARKER = Regex("^fariin-[a-z0-9]+:")
+
+    /** A post's `pollCounts` map (string index to count), as Message reads it. */
+    fun readCounts(raw: Any?): Map<Int, Int> = (raw as? Map<*, *>)?.entries?.mapNotNull { (k, v) ->
+        val i = (k as? String)?.toIntOrNull()
+        val n = (v as? Number)?.toInt() ?: 0
+        if (i != null && n > 0) i to n else null
+    }?.toMap() ?: emptyMap()
+
+    /** The quoted poll card's footer (iOS QuotedPollView): no voting inside a quote, a tap opens the post. */
+    fun quoteFooter(voters: Int, open: Boolean, voted: Boolean): String = when {
+        !open -> if (voters > 0) "Poll ended · ${voteCount(voters)}" else "Poll ended"
+        voted -> voteCount(voters)
+        else -> if (voters > 0) "${voteCount(voters)} · tap to vote" else "Tap to vote"
+    }
+
+    /** The poll post link card's third line. */
+    fun linkLine(options: Int, voters: Int): String =
+        "$options option${if (options == 1) "" else "s"} · " + (if (voters > 0) "${voteCount(voters)} · " else "") + "fariin.com"
 
     /** PollComposerSheet.EndChoice, in seconds (null = never). */
     enum class EndChoice(val label: String, val seconds: Long?) {

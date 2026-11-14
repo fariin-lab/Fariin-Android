@@ -96,6 +96,27 @@ object PollVotes {
         }
     }
 
+    /** A channel poll post's server tally, read from the post itself (a quote of it has no Message). */
+    data class Tally(val counts: Map<Int, Int> = emptyMap(), val voters: Int = 0, val tallyAt: Double = 0.0,
+                     val closed: Boolean = false)
+
+    /**
+     * The quoted poll card's live numbers (iOS QuotedPollView): the ORIGINAL post's doc. A reader who
+     * may not read that post gets an error and keeps the bare card. Remove the registration when the
+     * card goes.
+     */
+    fun listenPost(cid: String, mid: String, onTally: (Tally) -> Unit): ListenerRegistration? {
+        if (cid.isEmpty() || mid.isEmpty()) return null
+        return db.collection("conversations").document(cid).collection("messages").document(mid)
+            .addSnapshotListener { snap, err ->
+                if (err != null || snap == null || !snap.exists()) return@addSnapshotListener
+                onTally(Tally(PollRules.readCounts(snap.get("pollCounts")),
+                    (snap.get("pollVoters") as? Number)?.toInt() ?: 0,
+                    (snap.get("pollTallyAt") as? Number)?.toDouble() ?: 0.0,
+                    snap.getBoolean("pollClosed") ?: false))
+            }
+    }
+
     /** Stop Poll (iOS PollService.stop): the creator closes it for good. */
     suspend fun stop(cid: String, mid: String) {
         db.collection("conversations").document(cid).collection("messages").document(mid)

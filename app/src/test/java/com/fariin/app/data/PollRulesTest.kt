@@ -228,4 +228,21 @@ class PollRulesTest {
         assertEquals(listOf(0), p.correct)
         assertEquals("https://x/c", p.imageAt(0)!!.url)
     }
+
+    @Test fun quotedPollWords() {
+        val m = PollRules.markerText("p", "Lunch?", listOf("Rice", "Pasta"), false)
+        assertEquals("Poll: Lunch?", PollRules.cardWords(m, "Post"))
+        assertEquals("Post", PollRules.cardWords("fariin-poll:broken", "Post"))
+        assertEquals("Post", PollRules.cardWords("fariin-xyz:abc", "Post"))
+        // Plain words that only start with our name stay as they are.
+        assertEquals("fariin-site is up", PollRules.cardWords("fariin-site is up", "Post"))
+        assertEquals("Tap to vote", PollRules.quoteFooter(0, open = true, voted = false))
+        assertEquals("3 votes · tap to vote", PollRules.quoteFooter(3, open = true, voted = false))
+        assertEquals("1 vote", PollRules.quoteFooter(1, open = true, voted = true))
+        assertEquals("Poll ended", PollRules.quoteFooter(0, open = false, voted = false))
+        assertEquals("Poll ended · 2 votes", PollRules.quoteFooter(2, open = false, voted = true))
+        assertEquals("3 options · fariin.com", PollRules.linkLine(3, 0))
+        assertEquals("2 options · 5 votes · fariin.com", PollRules.linkLine(2, 5))
+        assertEquals(mapOf(0 to 2, 2 to 1), PollRules.readCounts(mapOf("0" to 2L, "1" to 0L, "2" to 1, "x" to 4)))
+    }
 }

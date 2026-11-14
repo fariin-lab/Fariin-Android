@@ -23,6 +23,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -130,6 +135,9 @@ internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta:
             }
             // A post sent as its link (design B): the post's picture on the left (62, corners 9), then
             // the channel's photo and name, two lines of the post, and "fariin.com".
+            // A poll post (iOS quoted poll spec 2026-11-14): never the raw marker, a live mini poll.
+            val poll = card?.takeIf { it.state == QuoteCard.State.OK }?.let { com.fariin.app.data.PollRules.parse(it.text.trim()) }
+            if (poll != null && postLink) { QuotedPollLink(card, poll, ink); return@Column }
             if (postLink) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     if (image != null) {
@@ -163,10 +171,12 @@ internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta:
                     modifier = Modifier.weight(1f))
                 // A short "Quote" tag at the row's right end; the name shrinks to leave it room.
                 Spacer(Modifier.width(8.dp))
-                Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_quote), null, tint = ink.copy(alpha = 0.55f), modifier = Modifier.size(12.dp))
+                Icon(androidx.compose.ui.res.painterResource(if (poll != null) com.fariin.app.R.drawable.ic_sf_chart_bar_fill else com.fariin.app.R.drawable.ic_quote),
+                    null, tint = ink.copy(alpha = 0.55f), modifier = Modifier.size(12.dp))
                 Spacer(Modifier.width(2.dp))
-                Text("Quote", fontSize = 12.sp, color = ink.copy(alpha = 0.55f), maxLines = 1)
+                Text(if (poll != null) "Poll" else "Quote", fontSize = 12.sp, color = ink.copy(alpha = 0.55f), maxLines = 1)
             }
+            if (poll != null) { QuotedPollBody(card, poll, ink); return@Column }
             val body = QuoteRules.body(card)
             if (image != null && !compact) {
                 // A text-only quoting post (owner 2026-11-07): the quoted words full width, then the
@@ -212,6 +222,96 @@ internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta:
             }
         }
         if (meta != null) Box(Modifier.align(Alignment.End)) { meta() }
+    }
+}
+
+/** A quoted poll's live state: the original post's tally and my own vote doc (shared PollVotes listener). */
+private class QuotedPollState(val votes: Map<String, List<Int>>, val mine: List<Int>, val open: Boolean)
+
+@Composable
+private fun rememberQuotedPoll(card: QuoteCard, poll: com.fariin.app.data.PollCard): QuotedPollState {
+    val me = remember { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
+    var tally by remember(card.cid, card.mid) { mutableStateOf(com.fariin.app.data.PollVotes.Tally()) }
+    DisposableEffect(card.cid, card.mid) {
+        val reg = com.fariin.app.data.PollVotes.listenPost(card.cid, card.mid) { tally = it }
+        onDispose { reg?.remove() }
+    }
+    val flow = remember(card.cid, card.mid) { com.fariin.app.data.PollVotes.subscribe(card.cid, card.mid, me, true) }
+    DisposableEffect(card.cid, card.mid) { onDispose { com.fariin.app.data.PollVotes.release(card.cid, card.mid, true) } }
+    val v by flow.collectAsState()
+    val mine = v.byUid[me] ?: emptyList()
+    var now by remember { mutableStateOf(System.currentTimeMillis().toDouble()) }
+    LaunchedEffect(poll.endsAt) {
+        val wait = (poll.endsAt ?: return@LaunchedEffect) - System.currentTimeMillis()
+        if (wait > 0) { kotlinx.coroutines.delay(wait.toLong() + 50); now = System.currentTimeMillis().toDouble() }
+    }
+    val votes = com.fariin.app.data.PollRules.channelVotes(tally.counts, tally.voters, tally.tallyAt, mine, v.mineAt, me)
+    return QuotedPollState(votes, mine, com.fariin.app.data.PollRules.isOpen(poll, tally.closed, now))
+}
+
+/**
+ * The quote card's "mini poll (live)" (iOS QuotedPollView): the question, up to three bars, "+N more"
+ * and the footer. Fills and percents only once I have voted or the poll is over. No voting here: a
+ * tap opens the post, like any quote.
+ */
+@Composable
+private fun QuotedPollBody(card: QuoteCard, poll: com.fariin.app.data.PollCard, ink: Color) {
+    val st = rememberQuotedPoll(card, poll)
+    val results = com.fariin.app.data.PollRules.showResults(st.mine, st.open)
+    Spacer(Modifier.height(8.dp))
+    Text(poll.question, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = ink, maxLines = 3,
+        overflow = TextOverflow.Ellipsis, lineHeight = 19.sp)
+    Spacer(Modifier.height(8.dp))
+    poll.options.take(3).forEachIndexed { i, label ->
+        if (i > 0) Spacer(Modifier.height(6.dp))
+        val frac = if (results) com.fariin.app.data.PollRules.fraction(st.votes, i).toFloat().coerceIn(0f, 1f) else 0f
+        Box(Modifier.fillMaxWidth().height(28.dp).clip(RoundedCornerShape(14.dp)).background(ink.copy(alpha = 0.07f))) {
+            if (results && frac > 0f) Box(Modifier.fillMaxHeight().fillMaxWidth(frac)
+                .background(ink.copy(alpha = if (i in st.mine) 0.28f else 0.12f)))
+            Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = ink, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                if (results) {
+                    Spacer(Modifier.width(6.dp))
+                    Text(com.fariin.app.data.PollRules.percent(st.votes, i), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = ink)
+                }
+            }
+        }
+    }
+    if (poll.options.size > 3) Text("+${poll.options.size - 3} more", fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+        color = ink.copy(alpha = 0.55f), modifier = Modifier.padding(top = 6.dp))
+    Text(com.fariin.app.data.PollRules.quoteFooter(st.votes.size, st.open, st.mine.isNotEmpty()), fontSize = 12.sp,
+        color = ink.copy(alpha = 0.6f), modifier = Modifier.padding(top = 8.dp))
+}
+
+/** A poll post sent as its link (iOS quotedPollLink): our own drawn bar chart, then name, question and counts. */
+@Composable
+private fun QuotedPollLink(card: QuoteCard, poll: com.fariin.app.data.PollCard, ink: Color) {
+    val st = rememberQuotedPoll(card, poll)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)).background(ink.copy(alpha = 0.12f))) {
+            val bar = ink.copy(alpha = 0.85f)
+            androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                val w = 5.dp.toPx()
+                val gap = 4.dp.toPx()
+                val bottom = size.height / 2 + 10.dp.toPx()
+                val left = size.width / 2 - (3 * w + 2 * gap) / 2
+                listOf(11, 20, 15).forEachIndexed { i, h ->
+                    val hp = h.dp.toPx()
+                    drawRoundRect(bar, androidx.compose.ui.geometry.Offset(left + i * (w + gap), bottom - hp),
+                        androidx.compose.ui.geometry.Size(w, hp), androidx.compose.ui.geometry.CornerRadius(w / 2, w / 2))
+                }
+            }
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text("${QuoteRules.heading(card)} · Poll", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = ink,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(poll.question, fontSize = 13.sp, color = ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                lineHeight = 17.sp, modifier = Modifier.padding(top = 2.dp))
+            Text(com.fariin.app.data.PollRules.linkLine(poll.options.size, st.votes.size), fontSize = 12.sp,
+                color = ink.copy(alpha = 0.6f), maxLines = 1, modifier = Modifier.padding(top = 2.dp))
+        }
     }
 }
 
