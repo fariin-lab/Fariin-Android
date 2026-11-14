@@ -60,11 +60,44 @@ import com.fariin.app.R
  * system share on the right, the chats as a grid of faces, and one capsule at the bottom: Copy Link,
  * or "Send" once chats are picked (the link goes to each as a plain message).
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun LinkShareSheet(me: String, link: String, text: String = link, onDismiss: () -> Unit) {
-    val c = Fariin.colors
     val ctx = LocalContext.current
+    ShareWithSheet(me, onDismiss = onDismiss,
+        onSystemShare = {
+            val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                .putExtra(android.content.Intent.EXTRA_TEXT, text)
+            ctx.startActivity(android.content.Intent.createChooser(send, null).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        },
+        idleLabel = "Copy Link",
+        onIdle = {
+            (ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                .setPrimaryClip(android.content.ClipData.newPlainText("Link", link))
+            if (android.os.Build.VERSION.SDK_INT < 33) com.fariin.app.ui.components.Snack.show("Link copied")
+        },
+        onSend = { targets ->
+            com.fariin.app.ui.components.Snack.show(if (targets.size > 1) "Sent to ${targets.size} chats" else "Sent")
+            val crypto = CryptoHub.get(ctx.applicationContext)
+            // Off the sheet's scope, so closing it does not stop the sends.
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
+                for (t in targets) runCatching {
+                    com.fariin.app.data.ThreadRepository.openOrQuiet(t, me, crypto, this).sendForwardedText(text, forwarded = false)
+                }
+            }
+        })
+}
+
+/**
+ * The "Share with / Select chats" sheet itself, shared by a link and the video viewer (iOS): the
+ * search circle, the system share circle ([onSystemShare], null = none), the chat grid, and one
+ * capsule: [idleLabel] with nothing picked (null = no capsule until chats are picked), "Send to N"
+ * once chats are picked. The sheet closes before [onSystemShare] and [onIdle] run.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun ShareWithSheet(me: String, onDismiss: () -> Unit, onSystemShare: (() -> Unit)?, idleLabel: String?,
+                            onIdle: () -> Unit, onSend: (List<String>) -> Unit) {
+    val c = Fariin.colors
     val scope = rememberCoroutineScope()
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var searching by remember { mutableStateOf(false) }
@@ -84,11 +117,10 @@ internal fun LinkShareSheet(me: String, link: String, text: String = link, onDis
                     Text("Share with", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = c.label)
                     Text(if (chosen.isEmpty()) "Select chats" else "${chosen.size} selected", fontSize = 14.sp, color = c.secondary)
                 }
-                Box(Modifier.size(44.dp).floating(CircleShape).clickable {
-                    val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
-                        .putExtra(android.content.Intent.EXTRA_TEXT, text)
-                    close { ctx.startActivity(android.content.Intent.createChooser(send, null).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                if (onSystemShare != null) Box(Modifier.size(44.dp).floating(CircleShape).clickable {
+                    close { onSystemShare() }
                 }, contentAlignment = Alignment.Center) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_share), "More ways to share", tint = c.label) }
+                else Spacer(Modifier.size(44.dp))
             }
             if (searching) Box(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp).heightIn(min = 44.dp)
                 .clip(RoundedCornerShape(22.dp)).background(c.fieldFill).padding(horizontal = 16.dp, vertical = 11.dp)) {
@@ -125,29 +157,16 @@ internal fun LinkShareSheet(me: String, link: String, text: String = link, onDis
                 }
             }
             val sending = chosen.isNotEmpty()
-            Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp).height(52.dp).clip(CircleShape)
+            if (sending || idleLabel != null) Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp).height(52.dp).clip(CircleShape)
                 .background(c.label)
                 .clickable {
-                    if (!sending) {
-                        (ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
-                            .setPrimaryClip(android.content.ClipData.newPlainText("Link", link))
-                        if (android.os.Build.VERSION.SDK_INT < 33) com.fariin.app.ui.components.Snack.show("Link copied")
-                        close(); return@clickable
-                    }
+                    if (!sending) { close { onIdle() }; return@clickable }
                     val targets = chosen.toList()
-                    val crypto = CryptoHub.get(ctx.applicationContext)
-                    close {
-                        com.fariin.app.ui.components.Snack.show(if (targets.size > 1) "Sent to ${targets.size} chats" else "Sent")
-                    }
-                    // Off the sheet's scope, so closing it does not stop the sends.
-                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
-                        for (t in targets) runCatching {
-                            com.fariin.app.data.ThreadRepository.openOrQuiet(t, me, crypto, this).sendForwardedText(text, forwarded = false)
-                        }
-                    }
+                    close()
+                    onSend(targets)
                 }, contentAlignment = Alignment.Center) {
-                // iOS: "Send to N" in the same black capsule as Copy Link.
-                Text(if (sending) "Send to ${chosen.size}" else "Copy Link", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.bg)
+                // iOS: "Send to N" in the same black capsule as Copy Link / Save to Photos.
+                Text(if (sending) "Send to ${chosen.size}" else idleLabel.orEmpty(), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.bg)
             }
         }
     }

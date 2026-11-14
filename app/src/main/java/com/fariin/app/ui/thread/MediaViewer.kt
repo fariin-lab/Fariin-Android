@@ -139,6 +139,8 @@ class ViewerHost(
     val sendEdited: ((photo: android.net.Uri, caption: String, viewOnce: Boolean) -> Unit)? = null,
     /** The editor's view-once switch: one-to-one chats only, as the attach sheet. */
     val allowViewOnce: Boolean = false,
+    /** The video Share's chat grid (iOS "Share with"): forwards the message to the chats picked. Null = system share only. */
+    val forwardTo: ((Message, List<String>) -> Unit)? = null,
 )
 
 /**
@@ -387,6 +389,15 @@ private fun ViewerBody(
     var askDelete by remember { mutableStateOf(false) }
     val save = rememberSaver(media)
     val share: () -> Unit = { scope.launch { sharePage(ctx, media, page) } }
+    // A video's Share opens our "Share with / Select chats" (iOS batch 2026-11-14 item 9) where the
+    // message may be forwarded; otherwise (or an album tile, a view-once clip) the system share as before.
+    // Restricted chats (no forwarding, no saving) have no Share at all (buttons.share).
+    var shareSheetFor by remember { mutableStateOf<Message?>(null) }
+    val videoShare: () -> Unit = {
+        val m = page.messageId?.let { host?.message?.invoke(it) }
+        if (host?.forwardTo != null && m != null && page.albumParent == null && page.once == null && !restricted &&
+            com.fariin.app.data.MessageRules.canForward(m)) shareSheetFor = m else share()
+    }
 
     Box(Modifier.fillMaxSize().onSizeChanged { box = Size(it.width.toFloat(), it.height.toFloat()) }
         .graphicsLayer { alpha = if (opened) 1f else 0f }) {
@@ -444,7 +455,7 @@ private fun ViewerBody(
                     }
                 }
                 Spacer(Modifier.weight(1f))
-                if (page.isVideo) VideoPanel(video, canShare = buttons.share, onShare = share)
+                if (page.isVideo) VideoPanel(video, canShare = buttons.share, onShare = videoShare)
                 else {
                     if (pages.size > 1) ThumbStrip(pages, pager)
                     PhotoBar(buttons, onShare = share, onDraw = draw, onDelete = { askDelete = true },
@@ -459,6 +470,14 @@ private fun ViewerBody(
                 Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), "Play", tint = Fariin.colors.label, modifier = Modifier.size(40.dp))
             }
         }
+    }
+
+    shareSheetFor?.let { m ->
+        val sharedPage = page
+        ShareWithSheet(me, onDismiss = { shareSheetFor = null },
+            onSystemShare = { scope.launch { sharePage(ctx, media, sharedPage) } },
+            idleLabel = "Save to Photos", onIdle = { save(listOf(sharedPage)) },
+            onSend = { targets -> host?.forwardTo?.invoke(m, targets) })
     }
 
     drawOn?.let { u ->
@@ -825,4 +844,5 @@ internal fun viewerHost(ui: ThreadUi, actions: ThreadActions, onSendPick: ((List
         if (stop != null) actions.onNotice(stop) else pick(listOf(photo), caption, once && !ui.isGroup)
     } },
     allowViewOnce = !ui.isGroup,
+    forwardTo = actions.onForwardTo,
 )
