@@ -328,7 +328,8 @@ private fun GroupAdminsPage(cid: String, me: String, onBack: () -> Unit, push: (
                 }
                 team.sortedAdmins().forEach { uid ->
                     PersonLine(team.photos[uid]?.ifEmpty { null }, if (uid == me) "You" else team.names[uid] ?: "Admin",
-                        onClick = { push(GroupPage.Rights(uid)) }) {
+                        onClick = { push(GroupPage.Rights(uid)) },
+                        detail = GroupAdmins.promotedBy(uid, team.owner, team.adminBy, me, team.names)) {
                         Text(if (team.isOwner(uid)) "Owner" else "Admin", fontSize = 14.sp, color = c.secondary)
                     }
                 }

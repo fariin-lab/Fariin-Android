@@ -121,4 +121,14 @@ class GroupAdminsTest {
         assertEquals("p1", list.primary?.code)
         assertEquals(1, list.links.size)
     }
+
+    @Test fun promotedByLine() {
+        val by = mapOf("a" to "o", "b" to "me", "c" to "x")
+        val names = mapOf("o" to "Owner Name")
+        assertEquals("Promoted by Owner Name", GroupAdmins.promotedBy("a", "o", by, "me", names))
+        assertEquals("Promoted by You", GroupAdmins.promotedBy("b", "o", by, "me", names))
+        assertNull(GroupAdmins.promotedBy("o", "o", by, "me", names))       // the owner: no line
+        assertNull(GroupAdmins.promotedBy("d", "o", by, "me", names))       // an old admin, no entry
+        assertNull(GroupAdmins.promotedBy("c", "o", by, "me", names))       // no known name
+    }
 }

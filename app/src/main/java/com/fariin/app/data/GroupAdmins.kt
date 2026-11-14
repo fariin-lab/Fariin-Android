@@ -238,6 +238,18 @@ object GroupAdmins {
 
     // ---- Words (iOS) ---------------------------------------------------------------------------
 
+    /**
+     * The Administrators page's second line (iOS batch 2026-11-14 item 7): who made [uid] admin, from
+     * the conversation's `adminBy`. "Promoted by You" when it was me; none for the owner or an old
+     * admin with no entry (or no known name). Groups and channels both.
+     */
+    fun promotedBy(uid: String, owner: String, adminBy: Map<String, String>, me: String, names: Map<String, String>): String? {
+        if (uid == owner) return null
+        val by = adminBy[uid]?.ifEmpty { null } ?: return null
+        val who = if (by == me) "You" else names[by]?.ifEmpty { null } ?: return null
+        return "Promoted by $who"
+    }
+
     const val ADMINS_FOOTER = "The owner decides what each admin can do. Tap an admin to see what they can do, including removing members."
     const val MAKE_ADMIN_BODY = "They will be able to manage the group with the usual admin rights. You can change or remove them any time."
     const val DISMISS_BODY = "They stay in the group as a member. Their admin rights end at once."

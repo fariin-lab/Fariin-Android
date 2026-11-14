@@ -474,7 +474,8 @@ fun ChannelAdminsScreen(cid: String, me: String, onBack: () -> Unit, onOpen: (St
                 }
                 team.sorted().forEach { uid ->
                     // Tap an admin for what they can do (and Dismiss Admin, where I may).
-                    PersonLine(team.photos[uid], if (uid == me) "You" else team.names[uid] ?: "Admin", onClick = { onOpen(uid) }) {
+                    PersonLine(team.photos[uid], if (uid == me) "You" else team.names[uid] ?: "Admin", onClick = { onOpen(uid) },
+                        detail = com.fariin.app.data.GroupAdmins.promotedBy(uid, team.owner, team.adminBy, me, team.names)) {
                         Text(if (uid == team.owner) "Owner" else "Admin", fontSize = 14.sp, color = c.secondary)
                     }
                 }
@@ -653,7 +654,9 @@ fun ChannelAdminScreen(cid: String, me: String, uid: String, onBack: () -> Unit)
 // ---- Small pieces -----------------------------------------------------------------------------
 
 @Composable
-internal fun PersonLine(photo: String?, name: String, onClick: (() -> Unit)? = null, username: String = "", trailing: @Composable () -> Unit = {}) {
+internal fun PersonLine(photo: String?, name: String, onClick: (() -> Unit)? = null, username: String = "",
+                        /** A grey second line, e.g. "Promoted by <name>" on the Administrators page. */ detail: String? = null,
+                        trailing: @Composable () -> Unit = {}) {
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
         .heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -663,6 +666,7 @@ internal fun PersonLine(photo: String?, name: String, onClick: (() -> Unit)? = n
             Text(name, fontSize = 17.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
             // The follower's @username under the name (iOS, server listChannelFollowers `username`).
             if (username.isNotEmpty()) Text("@$username", fontSize = 14.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (!detail.isNullOrEmpty()) Text(detail, fontSize = 14.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         trailing()
     }
