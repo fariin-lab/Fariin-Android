@@ -93,6 +93,8 @@ interface PeopleApi {
     suspend fun safetyNumber(uid: String): String?
     suspend fun checkUsername(h: String): Pair<Boolean, String?>
     suspend fun claimUsername(h: String)
+    /** `usernameChangeStatus`: may I rename now? null when the server could not say (then nothing is blocked). */
+    suspend fun usernameChangeStatus(): UsernameChangeStatus? = null
     suspend fun saveName(name: String)
     suspend fun uploadPhoto(jpegOrAny: ByteArray)
     /** iOS ProfileStore.removePhoto: no picture, back to the letter. */
@@ -305,6 +307,16 @@ class FirestorePeople(
     }
 
     override suspend fun claimUsername(h: String) { call("claimUsername", mapOf("username" to h)) }
+
+    override suspend fun usernameChangeStatus(): UsernameChangeStatus? = runCatching {
+        val d = call("usernameChangeStatus", emptyMap()) ?: return null
+        UsernameChangeStatus(
+            canChange = d["canChange"] as? Boolean ?: true,
+            reason = d["reason"] as? String,
+            until = (d["until"] as? Number)?.toLong(),
+            takeBack = (d["takeBack"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+        )
+    }.getOrNull()
 
     /** ProfileStore name save: `users/{me}.name`, then `names.<me>` in every chat I am in. */
     override suspend fun saveName(name: String) {
@@ -749,3 +761,11 @@ object GroupRules {
         if (heirName == null) "You're the only member. The group will be empty."
         else "You own this group. If you leave, $heirName becomes the owner."
 }
+
+/**
+ * The server's up-front answer for the Username page (`usernameChangeStatus`, 2026-11-14).
+ * [reason] "hoarding" (too many given-up names still in their hold) or "daily" (too many changes in
+ * 24 h); [until] when a change is allowed again (ms); [takeBack] given-up names that can still be
+ * taken back while hoarding blocks every other name.
+ */
+data class UsernameChangeStatus(val canChange: Boolean, val reason: String?, val until: Long?, val takeBack: List<String>)

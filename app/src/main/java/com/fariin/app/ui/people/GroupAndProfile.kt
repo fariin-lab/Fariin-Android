@@ -23,6 +23,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -103,11 +104,12 @@ import androidx.compose.ui.res.painterResource
 import kotlinx.coroutines.Dispatchers
 
 @Composable
-private fun Field(value: String, placeholder: String, onChange: (String) -> Unit) {
+private fun Field(value: String, placeholder: String, enabled: Boolean = true, onChange: (String) -> Unit) {
     val c = Fariin.colors
     Box(Modifier.fillMaxWidth().padding(16.dp)) {
         if (value.isEmpty()) Text(placeholder, fontSize = 17.sp, color = c.secondary)
-        BasicTextField(value, onChange, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
+        // Not enabled: greyed, cannot take focus, so no keyboard (the Username page while a change is not allowed).
+        BasicTextField(value, onChange, enabled = enabled, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = if (enabled) c.label else c.secondary),
             cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
     }
 }
@@ -302,6 +304,13 @@ fun UsernameScreen(api: PeopleApi, current: String, onBack: () -> Unit) {
     var suggestions by remember { mutableStateOf<List<String>>(emptyList()) }
     var claiming by remember { mutableStateOf(false) }
     val unchanged = draft == current
+    // Asked on open (2026-11-14): when the server would refuse any change, say so now, with the date
+    // it is allowed again, instead of after Done. Until it answers, or if it fails, nothing is blocked.
+    var lock by remember { mutableStateOf<com.fariin.app.data.UsernameChangeStatus?>(null) }
+    var takingBack by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) { lock = api.usernameChangeStatus()?.takeIf { !it.canChange } }
+    val blocked = lock != null
+    val canSave = !blocked || (takingBack != null && draft == takingBack)
     LaunchedEffect(draft) {
         suggestions = emptyList()
         if (unchanged) { status = NameStatus.Quiet; return@LaunchedEffect }
@@ -321,23 +330,40 @@ fun UsernameScreen(api: PeopleApi, current: String, onBack: () -> Unit) {
         }
     }
     BarPage("Username", onBack = onBack, action = {
-            TextAction("Done", enabled = !claiming && (Usernames.isValid(draft) && status !is NameStatus.Taken && status !is NameStatus.Problem), busy = claiming) {
-                if (unchanged) { onBack(); return@TextAction }
+            if (canSave) PlainTextAction("Done", enabled = !claiming && (Usernames.isValid(draft) && status !is NameStatus.Taken && status !is NameStatus.Problem), busy = claiming) {
+                if (unchanged) { onBack(); return@PlainTextAction }
                 claiming = true
                 scope.launch {
                     try { api.claimUsername(draft); onBack() } catch (e: Exception) {
                         val msg = e.message ?: ""
                         status = if (msg.contains("taken", true)) NameStatus.Taken else NameStatus.Problem(msg.ifEmpty { "Couldn't save. Try again." })
+                        api.usernameChangeStatus()?.let { lock = it.takeIf { s -> !s.canChange } }
                     }
                     claiming = false
                 }
             }
         }, modifier = Modifier.background(c.bgSecondary)) { top ->
         androidx.compose.foundation.layout.Spacer(Modifier.height(top))
+        lock?.let { l ->
+            Text(usernameLockLine(l), fontSize = 13.sp, color = c.secondary,
+                modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 8.dp))
+        }
         SettingsSection { Row(verticalAlignment = Alignment.CenterVertically) {
             Text("@", fontSize = 17.sp, color = c.secondary, modifier = Modifier.padding(start = 16.dp))
-            Box(Modifier.weight(1f)) { Field(draft, "Username") { draft = Usernames.sanitize(it) } }
+            Box(Modifier.weight(1f)) { Field(draft, "Username", enabled = !blocked) { draft = Usernames.sanitize(it) } }
         } }
+        // Hoarding still lets a given-up name be taken back (the server frees its slot first).
+        val back = lock?.takeIf { it.reason == "hoarding" }?.takeBack.orEmpty()
+        if (back.isNotEmpty()) SettingsSection(header = "You can still take back:") {
+            back.forEach { n ->
+                Row(Modifier.fillMaxWidth().clickable { takingBack = n; draft = n }.padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text("@$n", fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
+                    if (takingBack == n) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = "Chosen",
+                        tint = c.blue, modifier = Modifier.size(16.dp))
+                }
+            }
+        }
         Column(Modifier.padding(horizontal = 32.dp)) {
             when (val s = status) {
                 NameStatus.Quiet -> {}
@@ -360,6 +386,39 @@ fun UsernameScreen(api: PeopleApi, current: String, onBack: () -> Unit) {
             Spacer(Modifier.height(6.dp))
             Text("This link opens a chat with you:", fontSize = 13.sp, color = c.secondary)
             Text(Usernames.profileLink(draft), fontSize = 13.sp, color = c.blue)
+        }
+    }
+}
+
+/**
+ * The Username page's top line while a change is not allowed: the day it is allowed again, or for
+ * the daily limit (lifts within 24 h) today or tomorrow at the time. Local date and time format.
+ */
+private fun usernameLockLine(l: com.fariin.app.data.UsernameChangeStatus): String {
+    val until = l.until ?: return "You can't change your username right now."
+    val day = java.text.DateFormat.getDateInstance(java.text.DateFormat.LONG).format(java.util.Date(until))
+    if (l.reason == "daily" && until - System.currentTimeMillis() <= 24L * 60 * 60 * 1000) {
+        val time = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(until))
+        val today = java.text.DateFormat.getDateInstance(java.text.DateFormat.LONG).format(java.util.Date())
+        return "You can change your username again ${if (day == today) "today" else "tomorrow"} at $time."
+    }
+    return "You can change your username again on $day."
+}
+
+/**
+ * A bar's word button drawn as text only: no capsule, box or press ripple behind it (owner photo
+ * 2026-11-14 showed a grey rectangle behind Done). Blue when it can be pressed, grey when not.
+ */
+@Composable
+private fun PlainTextAction(text: String, enabled: Boolean, busy: Boolean = false, onClick: () -> Unit) {
+    val c = Fariin.colors
+    val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val down by press.collectIsPressedAsState()
+    Box(Modifier.padding(end = 4.dp).height(44.dp)
+        .clickable(interactionSource = press, indication = null, enabled = enabled && !busy, onClick = onClick)
+        .padding(horizontal = 14.dp).alpha(if (down) 0.4f else 1f), contentAlignment = Alignment.Center) {
+        com.fariin.app.ui.components.BusyContent(busy, c.secondary, size = 20.dp) {
+            Text(text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = if (enabled) c.blue else c.secondary)
         }
     }
 }
