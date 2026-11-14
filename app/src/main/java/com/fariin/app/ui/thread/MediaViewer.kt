@@ -210,6 +210,11 @@ private fun ViewerWindow(zooms: Boolean) {
             // of the page behind showed above the black viewer.
             w.setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
             WindowCompat.setDecorFitsSystemWindows(w, false)
+            // The window paints under its own bars. Without this flag a dialog window does not, so the
+            // phone drew an opaque black status bar for it and faded that out AFTER the viewer had
+            // closed: a black strip over the chat for ~0.2 s (owner 2026-11-13, found frame by frame).
+            w.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+            @Suppress("DEPRECATION") w.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
             @Suppress("DEPRECATION") run {
                 w.statusBarColor = android.graphics.Color.TRANSPARENT
                 w.navigationBarColor = android.graphics.Color.TRANSPARENT
