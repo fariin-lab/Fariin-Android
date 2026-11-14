@@ -57,6 +57,10 @@ import com.fariin.app.media.VoicePlayer
 import com.fariin.app.ui.components.floating
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.res.vectorResource
 import com.fariin.app.R
 
@@ -75,6 +79,16 @@ internal class VideoCtl {
     /** While the finger is on the track: the clip is paused and the position is the finger's. */
     var scrubbing by mutableStateOf(false)
     private var resumeAfterScrub = false
+    /** The chosen playback speed (iOS "Playback Speed": 0.5x, Normal, 1.5x, 2x). */
+    var speed by mutableFloatStateOf(1f)
+        private set
+    /** A finger held on the left or right side: 2x until it lifts (iOS hold-to-speed). */
+    var held by mutableStateOf(false)
+        private set
+
+    fun applySpeed() { player?.setPlaybackSpeed(if (held) 2f else speed) }
+    fun chooseSpeed(s: Float) { speed = s; applySpeed() }
+    fun hold(on: Boolean) { if (held == on) return; held = on; applySpeed() }
 
     /** iOS togglePlay: at the end it starts again from the top. */
     fun togglePlay() {
@@ -143,7 +157,27 @@ internal fun VideoPage(p: ViewerRules.Page, current: Boolean, ctl: VideoCtl, chr
     val tap by rememberUpdatedState(onTap)
     // From the page showing (the tap, near enough) to the clip's first frame, for VSTREAM# lines.
     val shownAt = remember(p.url) { android.os.SystemClock.elapsedRealtime() }
-    Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures(onTap = { tap() }) }, contentAlignment = Alignment.Center) {
+    // Hold the left or right side = 2x while held (iOS batch 2026-11-14 item 9); not while scrubbing,
+    // and a move past the touch slop ends it. The lift after a hold does not toggle the chrome.
+    val holdScope = rememberCoroutineScope()
+    val heldOnce = remember { booleanArrayOf(false) }
+    val isCurrent by rememberUpdatedState(current)
+    Box(Modifier.fillMaxSize().pointerInput(Unit) {
+        detectTapGestures(
+            onPress = { o ->
+                heldOnce[0] = false
+                val side = o.x < size.width * 0.35f || o.x > size.width * 0.65f
+                val job = if (side && isCurrent) holdScope.launch {
+                    delay(viewConfiguration.longPressTimeoutMillis)
+                    if (!ctl.scrubbing && ctl.player != null) { heldOnce[0] = true; ctl.hold(true) }
+                } else null
+                tryAwaitRelease()
+                job?.cancel()
+                ctl.hold(false)
+            },
+            onTap = { if (heldOnce[0]) heldOnce[0] = false else tap() },
+        )
+    }, contentAlignment = Alignment.Center) {
         val player = if ((file != null || streaming) && current) remember(file, streaming) {
             VoicePlayer.stop()   // one sound at a time
             if (streaming) {
@@ -192,6 +226,7 @@ internal fun VideoPage(p: ViewerRules.Page, current: Boolean, ctl: VideoCtl, chr
                 }
                 player.addListener(listener)
                 ctl.player = player
+                ctl.applySpeed()
                 onDispose {
                     player.removeListener(listener)
                     if (ctl.player === player) { ctl.player = null; ctl.playing = false; ctl.firstFrame = false }
@@ -224,6 +259,14 @@ internal fun VideoPage(p: ViewerRules.Page, current: Boolean, ctl: VideoCtl, chr
             if (streaming) DownloadBadge("vstream:" + p.url, Fetch.LOADING, isVideo = false, showPill = false, showCross = false)
             else if (file == null) DownloadBadge(p.url, Fetch.LOADING, isVideo = true, showPill = false, showCross = false)
         }
+        // The small "2x" pill near the top while a hold plays fast.
+        if (current && ctl.held) Row(Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 64.dp)
+            .height(32.dp).floating(CircleShape).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("2x", fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = Fariin.colors.label)
+            Spacer(Modifier.width(4.dp))
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), null, tint = Fariin.colors.label, modifier = Modifier.size(12.dp))
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), null, tint = Fariin.colors.label, modifier = Modifier.size(12.dp).offset(x = (-4).dp))
+        }
     }
 }
 
@@ -237,7 +280,26 @@ internal fun VideoPanel(ctl: VideoCtl, canShare: Boolean, onShare: () -> Unit) {
     val c = Fariin.colors
     Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp).padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)) {
-        Scrubber(ctl)
+        // Playback Speed (iOS batch 2026-11-14 item 9): a round button just above the scrubber, at the right.
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.align(Alignment.End)) {
+                var menu by remember { mutableStateOf(false) }
+                BarButton(painterResource(R.drawable.ic_sf_gauge), "Playback Speed", size = 44.dp,
+                    enabled = ctl.player != null, onClick = { menu = true })
+                com.fariin.app.ui.components.GlassDropdown(expanded = menu, onDismissRequest = { menu = false },
+                    shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border,
+                    containerColor = com.fariin.app.ui.components.FariinMenu.container) {
+                    Text("Playback Speed", fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+                    listOf(0.5f to "0.5x", 1f to "Normal", 1.5f to "1.5x", 2f to "2x").forEach { (s, label) ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text(label) },
+                            trailingIcon = if (ctl.speed == s) ({ Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, Modifier.size(18.dp)) }) else null,
+                            onClick = { menu = false; ctl.chooseSpeed(s) })
+                    }
+                }
+            }
+            Scrubber(ctl)
+        }
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             BarButton(painterResource(com.fariin.app.R.drawable.ic_link_share), "Share", size = 44.dp,
                 enabled = canShare && ctl.player != null, onClick = onShare)
@@ -251,6 +313,7 @@ internal fun VideoPanel(ctl: VideoCtl, canShare: Boolean, onShare: () -> Unit) {
                 }
             } else Box(Modifier.floating(CircleShape)) { PlayGlyph(ctl) }
             Spacer(Modifier.weight(1f))
+            // Full Screen's place (iOS turns the clip to landscape): kept empty until MainActivity may rotate.
             Spacer(Modifier.size(44.dp))
         }
     }
