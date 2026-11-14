@@ -246,6 +246,9 @@ private fun ViewerBody(
     val pager = rememberPagerState(initialPage = start.coerceIn(0, (pages.size - 1).coerceAtLeast(0))) { pages.size }
     val page = pages.getOrNull(pager.currentPage) ?: return
     val video = remember { VideoCtl() }
+    // Only the viewer turns to landscape, and portrait comes back when it goes or the page turns.
+    VideoFullScreen(video)
+    LaunchedEffect(pager.currentPage) { video.fullScreen = false }
 
     // Chrome: fades in over 0.15 s linear as the viewer opens; a tap toggles it (0.25 s photo, 0.3 s video).
     var chromeHidden by remember { mutableStateOf(false) }
@@ -455,7 +458,11 @@ private fun ViewerBody(
                     }
                 }
                 Spacer(Modifier.weight(1f))
-                if (page.isVideo) VideoPanel(video, canShare = buttons.share, onShare = videoShare)
+                if (page.isVideo) VideoPanel(video, canShare = buttons.share, onShare = videoShare, onFullScreen = {
+                    // Full Screen: landscape, the controls away until a tap (iOS).
+                    video.fullScreen = !video.fullScreen
+                    if (video.fullScreen) chromeHidden = true
+                })
                 else {
                     if (pages.size > 1) ThumbStrip(pages, pager)
                     PhotoBar(buttons, onShare = share, onDraw = draw, onDelete = { askDelete = true },

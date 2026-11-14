@@ -85,6 +85,8 @@ internal class VideoCtl {
     /** A finger held on the left or right side: 2x until it lifts (iOS hold-to-speed). */
     var held by mutableStateOf(false)
         private set
+    /** Landscape with the controls away (iOS Full Screen); [VideoFullScreen] turns the window. */
+    var fullScreen by mutableStateOf(false)
 
     fun applySpeed() { player?.setPlaybackSpeed(if (held) 2f else speed) }
     fun chooseSpeed(s: Float) { speed = s; applySpeed() }
@@ -276,7 +278,7 @@ internal fun VideoPage(p: ViewerRules.Page, current: Boolean, ctl: VideoCtl, chr
  * capsule, on a clip of 20 s or more). Forward is not here on Android yet; its place is kept.
  */
 @Composable
-internal fun VideoPanel(ctl: VideoCtl, canShare: Boolean, onShare: () -> Unit) {
+internal fun VideoPanel(ctl: VideoCtl, canShare: Boolean, onShare: () -> Unit, onFullScreen: () -> Unit = {}) {
     val c = Fariin.colors
     Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp).padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -313,9 +315,46 @@ internal fun VideoPanel(ctl: VideoCtl, canShare: Boolean, onShare: () -> Unit) {
                 }
             } else Box(Modifier.floating(CircleShape)) { PlayGlyph(ctl) }
             Spacer(Modifier.weight(1f))
-            // Full Screen's place (iOS turns the clip to landscape): kept empty until MainActivity may rotate.
-            Spacer(Modifier.size(44.dp))
+            BarButton(painterResource(R.drawable.ic_sf_expand), if (ctl.fullScreen) "Exit Full Screen" else "Full Screen",
+                size = 44.dp, enabled = ctl.player != null, onClick = onFullScreen)
         }
+    }
+}
+
+/**
+ * Full Screen (iOS batch 2026-11-14 item 9): only the viewer turns. While [VideoCtl.fullScreen] the
+ * activity asks for SENSOR_LANDSCAPE (MainActivity handles the rotation itself, configChanges, so
+ * nothing restarts); the button again, turning the phone back upright, or the viewer going away puts
+ * portrait back. Call once per viewer.
+ */
+@Composable
+internal fun VideoFullScreen(ctl: VideoCtl) {
+    val ctx = LocalContext.current
+    val activity = remember(ctx) {
+        var c: android.content.Context? = ctx
+        while (c is android.content.ContextWrapper && c !is android.app.Activity) c = c.baseContext
+        c as? android.app.Activity
+    }
+    val portrait = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    // Leaving the viewer always puts portrait back, whatever state it was in.
+    DisposableEffect(activity) {
+        onDispose { ctl.fullScreen = false; activity?.requestedOrientation = portrait }
+    }
+    DisposableEffect(ctl.fullScreen, activity) {
+        val a = activity ?: return@DisposableEffect onDispose {}
+        if (!ctl.fullScreen) { a.requestedOrientation = portrait; return@DisposableEffect onDispose {} }
+        a.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        // Upright again after it has been on its side: back to portrait.
+        var sideways = false
+        val listener = object : android.view.OrientationEventListener(a) {
+            override fun onOrientationChanged(deg: Int) {
+                if (deg == ORIENTATION_UNKNOWN) return
+                if (deg in 60..120 || deg in 240..300) sideways = true
+                else if (sideways && (deg <= 20 || deg >= 340)) ctl.fullScreen = false
+            }
+        }
+        if (listener.canDetectOrientation()) listener.enable()
+        onDispose { listener.disable() }
     }
 }
 
