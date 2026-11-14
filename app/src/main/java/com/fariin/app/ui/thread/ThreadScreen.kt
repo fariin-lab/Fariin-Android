@@ -562,7 +562,7 @@ private fun ThreadContent(
     postMenuFor?.let { m ->
         if (ch != null) com.fariin.app.ui.channels.ChannelPostMenu(ch, m, onDismiss = { postMenuFor = null; postPreview = null }, preview = postPreview,
             onCopy = { copyOf(m, it); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
-            onDelete = { deleteFor = it }, onQuote = { quoteFor = it },
+            onDelete = { deleteFor = it }, onQuote = { quoteFor = it }, onForward = { forwardFor = it },
             // The owner's and admins' own tools, as the chat menu has them (iOS uses one menu for both).
             onSelect = if (com.fariin.app.data.SelectRules.selectable(m)) ({ selected.clear(); selected.add(it.rowId) }) else null,
             onEdit = if (MessageRules.canEdit(m, ui.me, System.currentTimeMillis().toDouble(), channel = true) && !com.fariin.app.data.CardRules.isCard(m.text))

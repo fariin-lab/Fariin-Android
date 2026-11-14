@@ -280,6 +280,8 @@ internal fun ChannelPostMenu(
     ch: ChannelThreadUi, m: Message, onDismiss: () -> Unit,
     onCopy: (String) -> Unit, onDelete: (Message) -> Unit,
     onQuote: ((Message) -> Unit)? = null,
+    /** Fariin's own forward picker (as iOS and the chat menu); null = the phone's share sheet. */
+    onForward: ((Message) -> Unit)? = null,
     onSelect: ((Message) -> Unit)? = null,
     onEdit: ((Message) -> Unit)? = null,
     onEditHistory: ((Message) -> Unit)? = null,
@@ -303,7 +305,10 @@ internal fun ChannelPostMenu(
         if (!m.deleted) {
             // A contact or location card is no text to copy (as the chat menu, MessageActions).
             if (!ch.info.restricted && m.bodyText.isNotEmpty() && !com.fariin.app.data.CardRules.isCard(m.text)) add(PostItem("Copy", ImageVector.vectorResource(R.drawable.ic_sf_doc_on_doc), badge = NewBadgeSpots.CHAT_MENU_COPY) { onCopy(m.bodyText) })
-            if (!ch.info.restricted) add(PostItem("Share", ImageVector.vectorResource(R.drawable.ic_menu_forward), badge = NewBadgeSpots.CHAT_MENU_FORWARD) { sharePost(ctx, ch.info, m) })
+            // "Forward" into my chats, as iOS (owner 2026-11-14: it said Share and opened the phone's sheet).
+            if (!ch.info.restricted && onForward != null && com.fariin.app.data.MessageRules.canForward(m))
+                add(PostItem("Forward", ImageVector.vectorResource(R.drawable.ic_menu_forward), badge = NewBadgeSpots.CHAT_MENU_FORWARD) { onDismiss(); onForward(m) })
+            else if (!ch.info.restricted && onForward == null) add(PostItem("Share", ImageVector.vectorResource(R.drawable.ic_menu_forward), badge = NewBadgeSpots.CHAT_MENU_FORWARD) { sharePost(ctx, ch.info, m) })
             // Quote into a chat of mine with my own words (iOS 6848baf9): where the post may be forwarded.
             // Not when the channel turned Quotes off, for anyone (the server refuses everyone then).
             if (onQuote != null && !ch.info.restricted && com.fariin.app.data.MessageRules.canQuote(m) && !ch.info.quotesOff)
