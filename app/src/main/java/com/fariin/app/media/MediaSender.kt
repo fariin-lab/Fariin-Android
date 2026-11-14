@@ -120,6 +120,23 @@ class MediaSender(
 
     private fun progress(clientId: String?): ((Float) -> Unit)? = clientId?.let { id -> { f -> UploadProgress.set(id, f) } }
 
+    // ------------------------------------------------------------------ poll picture
+
+    /**
+     * One poll option's picture (iOS uploadPollImage, poll-media-1114): [jpeg] is already the 512 px
+     * JPEG, sealed exactly like a photo in this chat (1:1 sealed, sealed group for its members, plain
+     * group or channel in the clear) and stored where a photo is, `chat/{cid}/{id}.enc`, under a fresh
+     * message-style id. No message doc: the poll's own text carries the url and the key.
+     */
+    suspend fun pollImage(jpeg: ByteArray): com.fariin.app.data.PollImage {
+        require(jpeg.isNotEmpty()) { "That picture could not be read." }
+        val members = members()
+        val (cipher, meta) = sealBytes(jpeg, members)
+        val fileId = convRef.collection("messages").document().id
+        val url = uploadRetrying(cipher, MediaRules.imagePath(cid, fileId))
+        return com.fariin.app.data.PollImage(url, meta.takeIf { !it.isPlain })
+    }
+
     // ------------------------------------------------------------------ photo
 
     suspend fun image(

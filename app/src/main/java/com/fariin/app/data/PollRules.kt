@@ -24,9 +24,15 @@ data class PollCard(
     val correct: List<Int> = emptyList(),
     /** When voting ends (ms), null = never. */
     val endsAt: Double? = null,
+    /** One picture per option or null (iOS poll-media-1114 `imgs`); empty = no pictures at all. */
+    val images: List<PollImage?> = emptyList(),
 ) {
     val isQuiz: Boolean get() = correct.isNotEmpty()
+    fun imageAt(i: Int): PollImage? = images.getOrNull(i)
 }
+
+/** An option's picture: where it is, and its key unless it sits in the clear (plain group/channel). */
+data class PollImage(val url: String, val enc: com.fariin.app.crypto.EncMeta? = null)
 
 object PollRules {
     const val MARKER = "fariin-poll:"
@@ -52,18 +58,43 @@ object PollRules {
                 .mapNotNull { (quiz.opt(it) as? Number)?.toInt() }.filter { it >= 0 && it < opts.size }
             val ends = (obj.opt("ends") as? Number)?.toDouble() ?: 0.0
             PollCard(id, q, opts, obj.optBoolean("multi", false), obj.optBoolean("anon", false),
-                correct, if (ends > 0) ends else null)
+                correct, if (ends > 0) ends else null, readImages(obj.optJSONArray("imgs"), opts.size))
         } catch (_: Exception) { null }
     }
 
-    /** Message.pollMarkerText: `anon`, `quiz` and `ends` only when set, as iOS writes them. */
+    /** `imgs` is read only when it is a list exactly as long as `opts`; a null or url-less entry = no picture. */
+    fun readImages(arr: JSONArray?, count: Int): List<PollImage?> {
+        if (arr == null || arr.length() != count) return emptyList()
+        val out = (0 until count).map { i ->
+            val o = arr.optJSONObject(i) ?: return@map null
+            val url = o.optString("url", "").takeIf { it.isNotEmpty() } ?: return@map null
+            val enc = o.optJSONObject("enc")?.let { e ->
+                val m = HashMap<String, Any?>()
+                e.keys().forEach { k -> m[k] = if (k == "w") e.optJSONObject("w")?.let { w ->
+                    w.keys().asSequence().associateWith { w.optString(it) } } else e.opt(k) }
+                com.fariin.app.crypto.EncMeta.fromMap(m)
+            }
+            PollImage(url, enc)
+        }
+        return if (out.all { it == null }) emptyList() else out
+    }
+
+    /** Message.pollMarkerText: `anon`, `quiz`, `ends` and `imgs` only when set, as iOS writes them. */
     fun markerText(id: String, question: String, options: List<String>, multiple: Boolean,
-                   hideVoters: Boolean = false, correct: List<Int> = emptyList(), endsAt: Double? = null): String {
+                   hideVoters: Boolean = false, correct: List<Int> = emptyList(), endsAt: Double? = null,
+                   images: List<PollImage?> = emptyList()): String {
         val obj = JSONObject()
         obj.put("id", id).put("q", question).put("opts", JSONArray(options)).put("multi", multiple)
         if (hideVoters) obj.put("anon", true)
         if (correct.isNotEmpty()) obj.put("quiz", JSONArray(correct))
         if (endsAt != null) obj.put("ends", endsAt.toLong())
+        if (images.size == options.size && images.any { it != null }) obj.put("imgs", JSONArray().also { a ->
+            images.forEach { im ->
+                if (im == null) a.put(JSONObject.NULL) else a.put(JSONObject().put("url", im.url).also { o ->
+                    im.enc?.takeIf { !it.isPlain }?.let { e -> o.put("enc", JSONObject(e.asMap())) }
+                })
+            }
+        })
         return MARKER + Base64.getEncoder().encodeToString(obj.toString().toByteArray(Charsets.UTF_8))
     }
 
@@ -179,11 +210,22 @@ object PollRules {
 
     /** PollComposerSheet.send: the marker for what was typed (blank options dropped). */
     fun compose(id: String, question: String, options: List<String>, multiple: Boolean, hideVoters: Boolean,
-                quiz: Boolean, right: List<Boolean>, ends: EndChoice, nowMs: Double): String {
+                quiz: Boolean, right: List<Boolean>, ends: EndChoice, nowMs: Double,
+                images: List<PollImage?> = emptyList()): String {
+        // Order on send = order on screen: quiz marks and pictures go by the final, kept rows.
         val kept = options.indices.filter { options[it].isNotBlank() }
         return markerText(id, question.trim(), kept.map { options[it].trim() }, multiple && !quiz, hideVoters,
             if (quiz) kept.indices.filter { right.getOrElse(kept[it]) { false } } else emptyList(),
-            ends.seconds?.let { nowMs + it * 1000.0 })
+            ends.seconds?.let { nowMs + it * 1000.0 }, kept.map { images.getOrNull(it) })
+    }
+
+    /** Drag to reorder (iOS poll-media-1114): a filled row moves; the empty row at the end stays last. */
+    fun <T> move(list: List<T>, from: Int, to: Int, lastIsEmpty: Boolean): List<T> {
+        val limit = if (lastIsEmpty) list.size - 2 else list.size - 1
+        if (from !in 0..limit) return list
+        val out = list.toMutableList()
+        out.add(to.coerceIn(0, limit), out.removeAt(from))
+        return out
     }
 
     /** The composer's next option appears by itself: one empty row at the end while there is room,

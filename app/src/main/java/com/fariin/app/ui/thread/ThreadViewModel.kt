@@ -222,6 +222,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         onSendBold = { t, r, ids, fmt -> vm.repo.sendText(t, r, ids, fmt) },
         onSendSticker = { s, r -> vm.repo.sendSticker(s, r) },
         onSendGif = { g, r -> vm.repo.sendGif(g, r) },
+        onPollImage = { jpeg -> vm.repo.uploadPollImage(jpeg) },
         onEdit = { m, t, fmt -> vm.viewModelScope.launch { if (!vm.repo.editMessage(m, t, fmt)) notice = "Couldn't edit this message." } },
         onDeleteForEveryone = { m ->
             vm.viewModelScope.launch {

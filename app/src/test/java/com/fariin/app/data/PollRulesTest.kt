@@ -182,4 +182,50 @@ class PollRulesTest {
         val fresh = PollRules.channelVotes(mapOf(0 to 2), 2, tallyAt = 50.0, mine = listOf(1), mineAt = 100.0, me = "me")
         assertEquals(3, fresh.size); assertEquals(2, PollRules.count(fresh, 0))
     }
+
+    // iOS poll-media-1114: a picture per option, `imgs` as long as `opts`.
+    @Test fun imagesRoundTrip() {
+        val enc = com.fariin.app.crypto.EncMeta(1, "n1", "k1", "kn1")
+        val m = PollRules.markerText("p", "Lunch?", listOf("Pizza", "Sushi"), false,
+            images = listOf(PollImage("https://x/a.enc", enc), null))
+        val o = json(m)
+        val imgs = o.getJSONArray("imgs")
+        assertEquals(2, imgs.length())
+        assertEquals("https://x/a.enc", imgs.getJSONObject(0).getString("url"))
+        assertEquals("k1", imgs.getJSONObject(0).getJSONObject("enc").getString("k"))
+        assertTrue(imgs.isNull(1))
+        val p = PollRules.parse(m)!!
+        assertEquals("https://x/a.enc", p.imageAt(0)!!.url)
+        assertEquals("kn1", p.imageAt(0)!!.enc!!.kn)
+        assertNull(p.imageAt(1))
+    }
+
+    @Test fun plainGroupPictureHasNoEnc() {
+        val m = PollRules.markerText("p", "Q", listOf("a", "b"), false,
+            images = listOf(null, PollImage("https://x/b.enc", com.fariin.app.crypto.EncMeta.PLAIN)))
+        assertFalse(json(m).getJSONArray("imgs").getJSONObject(1).has("enc"))
+        assertNull(PollRules.parse(m)!!.imageAt(1)!!.enc)
+    }
+
+    @Test fun noPicturesNoKeyAndBadLengthIgnored() {
+        assertFalse(json(PollRules.markerText("p", "Q", listOf("a", "b"), false, images = listOf(null, null))).has("imgs"))
+        val o = JSONObject().put("id", "p").put("q", "Q").put("opts", org.json.JSONArray(listOf("a", "b"))).put("multi", false)
+            .put("imgs", org.json.JSONArray().put(JSONObject().put("url", "https://x")))
+        val m = PollRules.MARKER + Base64.getEncoder().encodeToString(o.toString().toByteArray())
+        assertEquals(emptyList<PollImage?>(), PollRules.parse(m)!!.images)
+    }
+
+    @Test fun reorderKeepsEmptyRowLastAndQuizFollows() {
+        val rows = listOf("a", "b", "c", "")
+        assertEquals(listOf("b", "c", "a", ""), PollRules.move(rows, 0, 5, lastIsEmpty = true))
+        assertEquals(rows, PollRules.move(rows, 3, 0, lastIsEmpty = true))   // the empty row never moves
+        // Compose after a move: the quiz mark and the picture ride with their row.
+        val pic = PollImage("https://x/c")
+        val m = PollRules.compose("p", "Q", listOf("c", "a", ""), false, false, true, listOf(true, false, false),
+            PollRules.EndChoice.NEVER, 0.0, listOf(pic, null, null))
+        val p = PollRules.parse(m)!!
+        assertEquals(listOf("c", "a"), p.options)
+        assertEquals(listOf(0), p.correct)
+        assertEquals("https://x/c", p.imageAt(0)!!.url)
+    }
 }

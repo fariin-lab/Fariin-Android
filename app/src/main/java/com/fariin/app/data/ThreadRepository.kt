@@ -1302,6 +1302,11 @@ class ThreadRepository(
     }
 
     /** iOS ChatService.sendGif: the public GIPHY link and its size, `text` empty; the list says "GIF". */
+    /** A poll option's picture, stored like a photo in this chat (MediaSender.pollImage). */
+    suspend fun uploadPollImage(jpeg: ByteArray): PollImage =
+        // This phone already has the picture: seed the cache so the bubble draws it at once (iOS).
+        sender.pollImage(jpeg).also { media?.store(it.url, jpeg) }
+
     fun sendGif(g: StickerGifRules.Gif, reply: Message?) {
         val tap = System.currentTimeMillis().toDouble()
         val clientId = UUID.randomUUID().toString().uppercase()
