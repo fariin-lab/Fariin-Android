@@ -115,6 +115,7 @@ class ThreadRepository(
     private val olderPageIds = ArrayList<Set<String>>()
     /** Sends this phone has started, by clientId, until the server echo carries the same clientId. */
     private val pending = ConcurrentHashMap<String, Message>()
+    private var echoWatch: kotlinx.coroutines.Job? = null
     /** My own media files by clientId: drawn and played locally until the server copy has its URL. */
     private val localFiles = ConcurrentHashMap<String, String>()
     /** The picked files of my photo, video or album sends by clientId, in tile order: the bubble
@@ -166,14 +167,21 @@ class ThreadRepository(
             val fromDb = com.fariin.app.local.LocalDb.newest(me, cid, com.fariin.app.local.LocalCache.THREAD_CAP)
             val saved = (fromDb.ifEmpty { LocalCache.loadThread(me, cid) })
                 .filter { !HiddenMessages.isHidden(it.id) && !Disappearing.isExpired(it, now) }
-            if (saved.isNotEmpty()) {
+            // A forward just sent here is in the first frame too, under the saved rows.
+            val echoes = ForwardEchoes.of(cid).filter { e -> saved.none { it.rowId == e.rowId } }
+            if (saved.isNotEmpty() || echoes.isNotEmpty()) {
                 // Owner's Pixel 2026-11-09: a first open after launch slid in empty and the rows came
                 // a beat later, a second open was full at once. The saved rows now draw on the first
                 // frame always (as iOS ThreadMessageCache paints before the push); rows the list knows
                 // are newer arrive from the listener at the bottom, as a message arriving would.
-                seeded = true
-                _state.update { it.copy(messages = order.sort(saved), loaded = true) }
+                if (saved.isNotEmpty()) seeded = true
+                _state.update { it.copy(messages = order.sort(saved + echoes), loaded = saved.isNotEmpty() || it.loaded) }
             }
+        }
+        // A forward that fails here takes its bubble away; one that lands is swapped in by rebuild.
+        if (echoWatch == null) echoWatch = scope.launch(kotlinx.coroutines.Dispatchers.Main.immediate) {
+            var last = ForwardEchoes.version.value
+            ForwardEchoes.version.collect { v -> if (v != last) { last = v; if (liveDocs.isNotEmpty() || olderDocs.isNotEmpty()) rebuild() } }
         }
         open[cid] = this
         // A group I was removed from earlier this session (iOS FormerGroups): its last copy, no listeners.
@@ -567,6 +575,11 @@ class ThreadRepository(
                 !all.containsKey(cidKey) -> all[cidKey] = localCards[cidKey]?.let { p.copy(linkPreview = it) } ?: p
                 cidKey !in unconfirmed -> pending.remove(cidKey)
             }
+        }
+        // A forward on its way here (ForwardEchoes): drawn until the real message (same clientId) is in.
+        for (e in ForwardEchoes.of(cid)) {
+            val k = e.clientId ?: continue
+            if (!all.containsKey(k)) all[k] = e else ForwardEchoes.remove(cid, k)
         }
         // While only the saved copy is on screen, a pending send joins it instead of replacing it.
         val shown = if (seeded && liveDocs.isEmpty() && olderDocs.isEmpty())
@@ -1165,10 +1178,10 @@ class ThreadRepository(
 
     /** A text forwarded into this chat (iOS sendText with `forwarded`), straight to the server. */
     suspend fun sendForwardedText(text: String, forwarded: Boolean, fwdChannelJson: String? = null,
-                                  fwdSource: Message.ForwardSource? = null, fmt: String? = null) {
+                                  fwdSource: Message.ForwardSource? = null, fmt: String? = null,
+                                  clientId: String = UUID.randomUUID().toString().uppercase()) {
         val t = text.trim()
         if (t.isEmpty()) return
-        val clientId = UUID.randomUUID().toString().uppercase()
         val ts = System.currentTimeMillis().toDouble()
         // The source's bold goes along only while the words are exactly the ones it was measured on.
         val f = fmt?.takeIf { t == text }

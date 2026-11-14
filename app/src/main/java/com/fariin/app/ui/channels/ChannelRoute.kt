@@ -52,7 +52,9 @@ fun channelNav(nav: NavHostController) = ChannelNav(
 
 /** The channel pages' routes, added to the signed-in NavHost. */
 fun NavGraphBuilder.channelRoutes(nav: NavHostController, me: String, chats: () -> List<com.fariin.app.data.Conversation> = { emptyList() }) {
-    page("official") { com.fariin.app.ui.official.OfficialChatScreen(onBack = { nav.popBackStack() }) }
+    page("official") { com.fariin.app.ui.official.OfficialChatScreen(onBack = { nav.popBackStack() },
+        onInfo = { nav.navigate("officialinfo") { launchSingleTop = true } }) }
+    page("officialinfo") { com.fariin.app.ui.official.OfficialInfoRoute(onBack = { nav.popBackStack() }) }
     page("findchannels") {
         FindChannelsScreen(me, onBack = { nav.popBackStack() }, onOpen = { cid -> nav.navigate("thread/$cid") })
     }

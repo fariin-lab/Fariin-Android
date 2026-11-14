@@ -72,9 +72,32 @@ import com.fariin.app.ui.components.FariinTopBar
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.launch
 
+/** Search asked for on the official chat's info page: the chat opens its search when it is back on top. */
+object OfficialSearchAsk { val asked = kotlinx.coroutines.flow.MutableStateFlow(false) }
+
+/**
+ * The official chat's info page as its own page (owner 2026-11-14: it opened with no slide while every
+ * other page slides in): [onOpenImage]'s picture shows full screen over it.
+ */
+@Composable
+fun OfficialInfoRoute(onBack: () -> Unit) {
+    var zoomed by remember { mutableStateOf<String?>(null) }
+    OfficialInfoPage(onBack = onBack, onSearch = { OfficialSearchAsk.asked.value = true; onBack() },
+        onOpenImage = { zoomed = it })
+    zoomed?.let { url ->
+        androidx.compose.ui.window.Dialog(onDismissRequest = { zoomed = null },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+            Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black).clickable { zoomed = null },
+                contentAlignment = Alignment.Center) {
+                AsyncImage(url, contentDescription = "Photo", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+            }
+        }
+    }
+}
+
 /** The official chat's page (iOS OfficialChatView): announcements, their buttons, no composer. */
 @Composable
-fun OfficialChatScreen(onBack: () -> Unit) {
+fun OfficialChatScreen(onBack: () -> Unit, onInfo: (() -> Unit)? = null) {
     val c = Fariin.colors
     val view by OfficialChannel.view.collectAsState()
     val context = LocalContext.current
@@ -198,6 +221,11 @@ fun OfficialChatScreen(onBack: () -> Unit) {
             }
         }
     }
+    // Search from the info page (a page of its own now): the chat searches once it is back.
+    val searchAsked by OfficialSearchAsk.asked.collectAsState()
+    LaunchedEffect(searchAsked) {
+        if (searchAsked) { OfficialSearchAsk.asked.value = false; searching = true; query = ""; fromNewest = 0 }
+    }
     if (showInfo && !selecting) {
         OfficialInfoPage(onBack = { showInfo = false },
             onSearch = { showInfo = false; searching = true; query = ""; fromNewest = 0 },
@@ -245,7 +273,7 @@ fun OfficialChatScreen(onBack: () -> Unit) {
                 com.fariin.app.ui.components.FloatingBack(onBack)
                 Spacer(Modifier.width(16.dp))
                 Row(Modifier.weight(1f).clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
-                    .clickable(onClickLabel = "Chat info") { showInfo = true }.padding(vertical = 4.dp),
+                    .clickable(onClickLabel = "Chat info") { if (onInfo != null) onInfo() else showInfo = true }.padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     OfficialAvatar(40.dp)
                     Spacer(Modifier.width(12.dp))

@@ -32,6 +32,8 @@ object Forwarder {
     /** Forwards [m] from [sourceCid] to each of [targets]; returns the targets that failed. */
     suspend fun forward(
         context: Context, me: String, crypto: FariinCrypto, m: Message, sourceCid: String, targets: List<String>,
+        /** Per target, the clientId its bubble already shows under (ForwardEchoes); else a new one. */
+        clientIds: Map<String, String> = emptyMap(),
     ): List<String> = withContext(Dispatchers.IO) {
         val src = ChatMedia(context, sourceCid, crypto)
         // Opened once, and only if some target needs the old forward: photos, videos, voice, files and
@@ -53,13 +55,17 @@ object Forwarder {
         for (t in targets.distinct().take(MediaRules.FORWARD_CHATS_AT_ONCE)) {
             val fwd = MediaMessages.isForward(m.forwarded, sourceCid, t)
             val fc = fromChannel?.takeIf { !isChannel(t) }
+            val clientId = clientIds[t] ?: UUID.randomUUID().toString().uppercase()
             val instant = instantKind && runCatching {
                 MediaSender(t, me, crypto, ChatMedia(context, t, crypto))
                     .also { it.fwdChannelJson = fc; it.fwdSource = source.takeIf { fwd } }
-                    .instant(m, sourceCid, m.text, fwd, UUID.randomUUID().toString().uppercase(), System.currentTimeMillis().toDouble())
+                    .instant(m, sourceCid, m.text, fwd, clientId, System.currentTimeMillis().toDouble())
             }.onFailure { android.util.Log.i("FariinForward", "old forward to $t: ${it.message}") }.isSuccess
-            val ok = instant || runCatching { sendTo(context, me, crypto, t, m, payload(), fwd, fc, source.takeIf { fwd }) }.isSuccess
+            val ok = instant || runCatching { sendTo(context, me, crypto, t, m, payload(), fwd, fc, source.takeIf { fwd }, clientId) }.isSuccess
             if (!ok) failed += t
+            // Landed or not, the chat's own row takes over (or nothing, on a failure): the echo goes
+            // once the real one is in (ThreadRepository.rebuild), or now when there is none.
+            if (!ok) clientIds[t]?.let { com.fariin.app.data.ForwardEchoes.remove(t, it) }
         }
         failed
     }
@@ -147,10 +153,9 @@ object Forwarder {
 
     private suspend fun sendTo(
         context: Context, me: String, crypto: FariinCrypto, target: String, m: Message, payload: Payload?, fwd: Boolean,
-        fwdChannelJson: String?, source: Message.ForwardSource?,
+        fwdChannelJson: String?, source: Message.ForwardSource?, clientId: String,
     ) {
         val ts = System.currentTimeMillis().toDouble()
-        val clientId = UUID.randomUUID().toString().uppercase()
         val sender = MediaSender(target, me, crypto, ChatMedia(context, target, crypto))
             .also { it.fwdChannelJson = fwdChannelJson; it.fwdSource = source }
         // Registered with MediaSend like a send from the composer (owner 2026-11-11, iOS fwd-cancel):
@@ -170,7 +175,7 @@ object Forwarder {
             is Payload.Doc -> registered { sender.file((payload as Payload.Doc).prep, fwd, clientId, ts) }
             Payload.Text -> ThreadRepository(target, me, crypto, CoroutineScope(SupervisorJob() + Dispatchers.IO))
                 .sendForwardedText(m.text, fwd, fwdChannelJson, source,
-                    fmt = com.fariin.app.data.TextFormat.serialize(m.bold, m.text.length))
+                    fmt = com.fariin.app.data.TextFormat.serialize(m.bold, m.text.length), clientId = clientId)
             is Payload.Sticker -> ThreadRepository(target, me, crypto, CoroutineScope(SupervisorJob() + Dispatchers.IO))
                 .sendSticker((payload as Payload.Sticker).ref, null)
             is Payload.Gif -> ThreadRepository(target, me, crypto, CoroutineScope(SupervisorJob() + Dispatchers.IO))

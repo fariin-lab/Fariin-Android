@@ -332,11 +332,35 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         // forward is seen arriving; the work runs off this screen so leaving it does not stop it.
         onForwardWithNote = { msgs, targets, note ->
             val land = targets.singleOrNull()?.takeIf { it != cid }
+            val ordered = msgs.sortedBy { it.createdAtMillis }
+            // One chat picked: the forwards are already in it, sending, when it opens (owner 2026-11-14,
+            // the big messengers' forward: you and the message land together, not the message later).
+            val ids = HashMap<String, String>()
+            if (land != null) {
+                val now = System.currentTimeMillis().toDouble()
+                // "Forwarded from <this group or channel>" on the bubble from the first frame, as the
+                // real message will say (Forwarder.sourceOf / channelJson, from the chat list here).
+                val here = com.fariin.app.data.ChatsNow.find(cid)?.takeIf { it.isGroup || it.isChannel }
+                for ((i, m) in ordered.withIndex()) {
+                    if (!com.fariin.app.data.ForwardEchoes.drawable(m) || (m.mediaKind == null && m.text.isBlank())) continue
+                    val id = java.util.UUID.randomUUID().toString().uppercase()
+                    ids[m.rowId] = id
+                    val fwd = com.fariin.app.media.MediaMessages.isForward(m.forwarded, cid, land)
+                    var echo = com.fariin.app.data.ForwardEchoes.echoOf(m, me, id, fwd, now + i)
+                    if (here != null && !m.forwarded && fwd) {
+                        val title = here.displayName(me); val photo = here.displayPhoto(me)
+                        echo = echo.copy(forwardSource = com.fariin.app.data.Message.ForwardSource.make(cid, m.id, title, photo, false, here.isChannel),
+                            fwdChannel = if (here.isChannel) com.fariin.app.data.Message.FwdChannel(cid, title, photo.orEmpty(), "") else null)
+                    }
+                    com.fariin.app.data.ForwardEchoes.add(land, echo)
+                }
+            }
             val work = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
             work.launch {
                 var failedChats = 0
-                for (m in msgs.sortedBy { it.createdAtMillis }) {
-                    failedChats += com.fariin.app.media.Forwarder.forward(app, me, crypto, m, cid, targets).size
+                for (m in ordered) {
+                    val pinned = if (land != null) ids[m.rowId]?.let { mapOf(land to it) }.orEmpty() else emptyMap()
+                    failedChats += com.fariin.app.media.Forwarder.forward(app, me, crypto, m, cid, targets, pinned).size
                 }
                 if (note.isNotBlank()) for (t in targets.distinct().take(com.fariin.app.media.MediaRules.FORWARD_CHATS_AT_ONCE)) {
                     com.fariin.app.data.ThreadRepository(t, me, crypto, work).sendText(note)
