@@ -73,7 +73,7 @@ object PlayedVoice {
 
     /** Chat list: the newest message is someone else's voice note not played yet. */
     fun lastVoiceUnplayed(conv: Conversation, me: String, upTo: Map<String, Double>): Boolean {
-        if (!conv.lastMessageCipher.startsWith("🎤 Voice message") || conv.lastIsMine(me) || conv.leaksBlocked(me)) return false
+        if (!ForwardMark.strip(conv.lastMessageCipher).startsWith("🎤 Voice message") || conv.lastIsMine(me) || conv.leaksBlocked(me)) return false
         return conv.updatedAtMillis > (upTo[conv.id] ?: 0.0)
     }
 }

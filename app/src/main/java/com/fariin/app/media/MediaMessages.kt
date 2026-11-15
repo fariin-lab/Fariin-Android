@@ -176,9 +176,11 @@ object MediaMessages {
     fun convUpdate(
         me: String, lastMessage: String, others: Collection<String>, serverTime: Any, increment: Any,
         lastImageUrl: String? = null, lastImageEnc: EncMeta? = null, lastImages: List<Map<String, Any>>? = null,
+        forwarded: Boolean = false,
     ): Map<String, Any> = buildMap {
         if (!lastImages.isNullOrEmpty() && lastImages.size > 1) put("lastImages", lastImages)
-        put("lastMessage", lastMessage)
+        // A forward's marker starts with the chat list's arrow mark (ForwardMark).
+        put("lastMessage", com.fariin.app.data.ForwardMark.markIf(forwarded, lastMessage))
         put("lastSender", me)
         put("updatedAt", serverTime)
         if (lastImageUrl != null && lastImageEnc != null) {

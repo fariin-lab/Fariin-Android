@@ -1532,7 +1532,12 @@ class ThreadRepository(
         val other = Wire.otherUid(cid, me)
         val cipher = crypto.encryptForConversation(cid, t)
         // A quote sent with no words of mine: the list says "Quoted post" (sealed like any preview), not a blank line.
-        val lastCipher = if (t.isEmpty() && quote != null) crypto.encryptForConversation(cid, QUOTED_POST) else cipher
+        // A forward's line starts with the arrow mark (ForwardMark), sealed with it.
+        val lastCipher = when {
+            forwarded -> crypto.encryptForConversation(cid, ForwardMark.mark(if (t.isEmpty() && quote != null) QUOTED_POST else t))
+            t.isEmpty() && quote != null -> crypto.encryptForConversation(cid, QUOTED_POST)
+            else -> cipher
+        }
         val local = CryptoHub.listedConversation(cid)
         val answering = local != null && !local.isGroup && local.startedBy.isNotEmpty() && !local.accepted &&
             local.lastSender.isNotEmpty() && local.lastSender != me
@@ -1647,7 +1652,11 @@ class ThreadRepository(
         // iOS freshGroupMembers: a member removed elsewhere is not wrapped for.
         val members = freshMembers()
         val cipher = crypto.sealForGroup(t, members, cid)
-        val lastCipher = if (t.isEmpty() && quote != null) crypto.sealForGroup(QUOTED_POST, members, cid) else cipher
+        val lastCipher = when {
+            forwarded -> crypto.sealForGroup(ForwardMark.mark(if (t.isEmpty() && quote != null) QUOTED_POST else t), members, cid)
+            t.isEmpty() && quote != null -> crypto.sealForGroup(QUOTED_POST, members, cid)
+            else -> cipher
+        }
         val batch = db.batch()
         val msg = hashMapOf<String, Any>(
             "text" to cipher,
@@ -1790,7 +1799,9 @@ class ThreadRepository(
                 update["lastImages"] = FieldValue.delete()
             } else {
                 val gone = d["deleted"] == true
-                val line = if (gone) "This message was deleted" else summaryText(d)
+                // A forward's clear label keeps its arrow mark; sealed words cannot be re-marked here.
+                val label = if (gone) "This message was deleted" else summaryText(d)
+                val line = if (!gone && d["forwarded"] == true && label.isNotEmpty() && !label.startsWith("enc")) ForwardMark.mark(label) else label
                 update["lastMessage"] = line
                 update["lastSender"] = d["authorId"] as? String ?: ""
                 val kind = d["type"] as? String ?: ""

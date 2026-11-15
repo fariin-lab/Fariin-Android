@@ -260,7 +260,7 @@ internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsul
 @Composable
 internal fun ChatListThumb(conv: com.fariin.app.data.Conversation, show: Boolean) {
     val url = conv.lastImageUrl
-    val marker = conv.lastMessageCipher
+    val marker = com.fariin.app.data.ForwardMark.strip(conv.lastMessageCipher)
     val isMedia = marker.startsWith("📷") || marker.startsWith("🎥") || marker.startsWith("🎬")
     if (!show || url.isNullOrEmpty() || conv.lastImageEnc == null || !isMedia) return
     val ctx = LocalContext.current

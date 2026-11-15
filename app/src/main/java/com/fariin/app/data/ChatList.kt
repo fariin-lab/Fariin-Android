@@ -92,6 +92,8 @@ object ChatList {
         val reactionPictures: Boolean = false,
         /** Someone reacted to MY message: the grey heart beside the badge (iOS freshReactionEmoji). */
         val heart: Boolean = false,
+        /** The newest message is a forward (ForwardMark): the arrow glyph leads the line. */
+        val forwarded: Boolean = false,
         val plain: String = prefix + text,
     )
 
@@ -145,7 +147,7 @@ object ChatList {
     fun senderPrefix(c: Conversation, me: String, senderName: (String) -> String?): String {
         if (!c.isGroup || c.isChannel || c.lastSender.isEmpty() || c.lastSender == me) return ""
         if (hiddenByBlock(c, c.lastSender, c.updatedAtMillis)) return ""
-        val raw = c.lastMessageCipher
+        val raw = ForwardMark.strip(c.lastMessageCipher)
         if (!(raw.startsWith("enc") || badge(raw) != null || c.lastIsPlainText)) return ""
         val n = senderName(c.lastSender) ?: c.names[c.lastSender] ?: "Someone"
         return "${n.split(" ").first()}: "
@@ -226,19 +228,22 @@ object ChatList {
             val heart = c.lastReactionBy != me && c.lastReactionToAuthor == me
             return reactionParts(c, line, heart)
         }
-        val raw = c.lastMessageCipher
+        // A forward's clear marker carries the arrow mark: read off here, drawn by the row.
+        val rawSplit = ForwardMark.split(c.lastMessageCipher)
+        val raw = rawSplit.text
         val prefix = senderPrefix(c, me, senderName)
         val hidden = hiddenByBlock(c, c.lastSender, c.updatedAtMillis)
         // iOS isPhotoPreview: the little picture, and the words without their emoji.
         if (!hidden && (raw.startsWith("📷") || raw.startsWith("🎥") || raw.startsWith("🎬")) && !c.lastImageUrl.isNullOrEmpty()) {
             val label = listOf("🎥 ", "📷 ", "🎬 ").firstOrNull { raw.startsWith(it) }?.let { raw.removePrefix(it) } ?: "Photo"
-            return RowPreview(label, prefix = prefix, photo = true)
+            return RowPreview(label, prefix = prefix, photo = true, forwarded = rawSplit.forwarded)
         }
         if (!hidden) {
             val call = lastIsCall(c)
             val mine = (call || raw == "This message was deleted") && c.lastIsMine(me)
             badge(raw, mine)?.let { (icon, words) ->
-                return RowPreview(words, prefix = prefix, icon = icon, missed = words.startsWith("Missed"), isCall = call)
+                return RowPreview(words, prefix = prefix, icon = icon, missed = words.startsWith("Missed"), isCall = call,
+                    forwarded = rawSplit.forwarded && !call)
             }
         }
         if (raw.isEmpty()) {
@@ -249,7 +254,11 @@ object ChatList {
         // iOS decodedLast. Suspended or disabled by Fariin: the reason, never its last message.
         if (c.fariinLocked()) return RowPreview(if (c.isChannel) "This channel is unavailable" else "This group is unavailable")
         if (hidden) return RowPreview("")
-        val text = (if (c.isGroup && c.e2eeOff && c.lastIsPlainText) raw else decryptor.previewText(c, me)) ?: "Message"
+        val opened = (if (c.isGroup && c.e2eeOff && c.lastIsPlainText) raw else decryptor.previewText(c, me)) ?: "Message"
+        // A sealed forward's arrow mark comes out with the words.
+        val textSplit = ForwardMark.split(opened)
+        val text = textSplit.text
+        val fwd = rawSplit.forwarded || textSplit.forwarded
         // Sealed before this phone's keys (iOS): its own line, never the lock. A newer lock stays,
         // it can still heal.
         if (text == com.fariin.app.crypto.Wire.LOCKED) {
@@ -258,17 +267,19 @@ object ChatList {
         }
         // A channel never shows an admin's wallpaper line (owner 2026-11-07).
         if (c.isChannel && isWallpaperNotice(text)) return RowPreview("")
+        // An opened line can be a clear marker too (a sealed forward of a voice note, a file).
+        if (fwd) badge(text)?.let { (icon, words) -> return RowPreview(words, prefix = prefix, icon = icon, forwarded = true) }
         return when {
-            text.startsWith(CardRules.CONTACT) -> RowPreview("Contact", prefix = prefix, icon = PreviewIcon.CONTACT)
-            text.startsWith(CardRules.LOCATION) -> RowPreview("Location", prefix = prefix, icon = PreviewIcon.LOCATION)
-            text.startsWith(CardRules.LIVE) -> RowPreview("Live location", prefix = prefix, icon = PreviewIcon.LOCATION)
+            text.startsWith(CardRules.CONTACT) -> RowPreview("Contact", prefix = prefix, icon = PreviewIcon.CONTACT, forwarded = fwd)
+            text.startsWith(CardRules.LOCATION) -> RowPreview("Location", prefix = prefix, icon = PreviewIcon.LOCATION, forwarded = fwd)
+            text.startsWith(CardRules.LIVE) -> RowPreview("Live location", prefix = prefix, icon = PreviewIcon.LOCATION, forwarded = fwd)
             text.startsWith(PinRules.MARKER) -> RowPreview("Pinned a message", prefix = prefix, icon = PreviewIcon.PIN)
-            PollRules.isPoll(text) -> RowPreview(PollRules.PREVIEW.removePrefix("📊 "), prefix = prefix, icon = PreviewIcon.POLL)   // the icon is the 📊: it showed twice
+            PollRules.isPoll(text) -> RowPreview(PollRules.PREVIEW.removePrefix("📊 "), prefix = prefix, icon = PreviewIcon.POLL, forwarded = fwd)   // the icon is the 📊: it showed twice
             // A newer build's feature this one does not know: never the raw marker.
             featureMarker.find(text)?.value?.let { it !in knownMarkers } == true ->
                 RowPreview("Message from a newer version", icon = PreviewIcon.NEWER)
-            featureMarker.containsMatchIn(text) -> RowPreview("Message", prefix = prefix)
-            else -> RowPreview(text, prefix = prefix)
+            featureMarker.containsMatchIn(text) -> RowPreview("Message", prefix = prefix, forwarded = fwd)
+            else -> RowPreview(text, prefix = prefix, forwarded = fwd)
         }
     }
 

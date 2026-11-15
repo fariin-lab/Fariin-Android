@@ -159,7 +159,7 @@ class MediaSender(
         batch.update(convRef, MediaMessages.convUpdate(me,
             if (viewOnce) MediaRules.VIEW_ONCE_PREVIEW else MediaRules.PHOTO_PREVIEW, others(members),
             FieldValue.serverTimestamp(), FieldValue.increment(1),
-            lastImageUrl = if (viewOnce) null else url, lastImageEnc = if (viewOnce) null else meta))
+            lastImageUrl = if (viewOnce) null else url, lastImageEnc = if (viewOnce) null else meta, forwarded = forwarded))
         batch.commit().await()
         com.fariin.app.media.ChatSounds.sent()
         clientId?.let { UploadProgress.done(it) }
@@ -187,7 +187,7 @@ class MediaSender(
             captionCipher, clientTs, clientId, sealOrNull(v.poster.blurhash, members), sealOrNull(v.poster.thumbB64, members),
             forwarded, FieldValue.serverTimestamp()))
         batch.update(convRef, MediaMessages.convUpdate(me, MediaRules.videoPreview(v.duration), others(members),
-            FieldValue.serverTimestamp(), FieldValue.increment(1), lastImageUrl = thumbUrl, lastImageEnc = thMeta))
+            FieldValue.serverTimestamp(), FieldValue.increment(1), lastImageUrl = thumbUrl, lastImageEnc = thMeta, forwarded = forwarded))
         MediaSend.noteAnnounced(clientId, msgRef.id)   // before the write: a Cancel during it still takes it down
         batch.commit().await()
         onAnnounced(msgRef.id)
@@ -223,7 +223,7 @@ class MediaSender(
         setMsg(batch, msgRef, members, MediaMessages.file(me, f.name, f.bytes.size, meta, clientTs, clientId, thumbUrl, thumbMeta,
             forwarded, FieldValue.serverTimestamp()))
         batch.update(convRef, MediaMessages.convUpdate(me, MediaRules.FILE_PREVIEW, others(members),
-            FieldValue.serverTimestamp(), FieldValue.increment(1)))
+            FieldValue.serverTimestamp(), FieldValue.increment(1), forwarded = forwarded))
         MediaSend.noteAnnounced(clientId, msgRef.id)
         batch.commit().await()
         val url = uploadRetrying(cipher, MediaRules.filePath(cid, msgRef.id), progress(clientId))
@@ -298,7 +298,7 @@ class MediaSender(
         val ordered = listOf(cover) + tiles.filter { it !== cover }
         batch.update(convRef, MediaMessages.convUpdate(me, MediaMessages.albumPreview(tiles), others(members),
             FieldValue.serverTimestamp(), FieldValue.increment(1), lastImageUrl = cover.imageUrl, lastImageEnc = cover.imageMeta,
-            lastImages = MediaMessages.lastImages(ordered)))
+            lastImages = MediaMessages.lastImages(ordered), forwarded = forwarded))
         batch.commit().await()
         com.fariin.app.media.ChatSounds.sent()
         clientId?.let { UploadProgress.done(it) }
@@ -426,7 +426,7 @@ class MediaSender(
             val batch = db.batch()
             setMsg(batch, dst, members, msg)
             batch.update(convRef, MediaMessages.convUpdate(me, preview, others(members), now, FieldValue.increment(1),
-                lastImageUrl = lastUrl, lastImageEnc = lastEnc, lastImages = lastImages))
+                lastImageUrl = lastUrl, lastImageEnc = lastEnc, lastImages = lastImages, forwarded = forwarded))
             batch.commit().await()
         } catch (e: Exception) {
             // The copy worked, the message did not: the copies go, then the old forward.
@@ -457,7 +457,7 @@ class MediaSender(
         val batch = db.batch()
         setMsg(batch, msgRef, members, MediaMessages.audio(me, meta, duration, waveform, clientTs, clientId, FieldValue.serverTimestamp(), forwarded))
         batch.update(convRef, MediaMessages.convUpdate(me, MediaRules.voicePreview(duration), others(members),
-            FieldValue.serverTimestamp(), FieldValue.increment(1)))
+            FieldValue.serverTimestamp(), FieldValue.increment(1), forwarded = forwarded))
         batch.commit().await()
         val url = uploadRetrying(cipher, MediaRules.audioPath(cid, msgRef.id))
         media?.store(url, data)

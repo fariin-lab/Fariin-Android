@@ -203,6 +203,14 @@ internal fun ChatRowPreviewText(
         inline[key] = InlineTextContent(Placeholder(sp(size), sp(size), PlaceholderVerticalAlign.TextCenter)) { PreviewGlyph(icon, tint) }
     }
     val secondary = SpanStyle(color = c.secondary)
+    // A forward (ForwardMark): our forward arrow first, before the picture, icon or words.
+    fun AnnotatedString.Builder.forwardArrow() {
+        if (!preview.forwarded) return
+        inline["fwd"] = InlineTextContent(Placeholder(sp(14.dp), sp(14.dp), PlaceholderVerticalAlign.TextCenter)) {
+            Icon(ImageVector.vectorResource(R.drawable.ic_menu_forward), null, tint = c.secondary, modifier = Modifier.fillMaxSize())
+        }
+        appendInlineContent("fwd", "[forwarded]"); append(" ")
+    }
     val text: AnnotatedString = when {
         live != null -> buildAnnotatedString {
             // owner 2026-10-27: the kind of call in bold green, then " · In call" in grey.
@@ -251,6 +259,7 @@ internal fun ChatRowPreviewText(
             pushStyle(secondary); append(" " + preview.text); pop()
         }
         preview.photo -> buildAnnotatedString {
+            forwardArrow()
             // An album is a stack (owner 2026-10-04): up to three, the first in front on the right,
             // only while its first picture IS the current thumbnail.
             val stack = if (conv.lastImages.firstOrNull()?.url == conv.lastImageUrl) conv.lastImages else emptyList()
@@ -276,6 +285,7 @@ internal fun ChatRowPreviewText(
             prefixed(preview, c.label, secondary)
         }
         preview.icon != null -> buildAnnotatedString {
+            forwardArrow()
             // A missed call's icon is red, the words grey; an unheard voice note's mic is the accent.
             val tint = when {
                 preview.missed -> c.red
@@ -286,7 +296,7 @@ internal fun ChatRowPreviewText(
             appendInlineContent("g", "[icon]"); append(" ")
             prefixed(preview, c.label, secondary)
         }
-        else -> buildAnnotatedString { prefixed(preview, c.label, secondary) }
+        else -> buildAnnotatedString { forwardArrow(); prefixed(preview, c.label, secondary) }
     }
     Text(
         text, style = MaterialTheme.typography.bodyMedium, color = c.secondary,
