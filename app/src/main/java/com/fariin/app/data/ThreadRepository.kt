@@ -1084,16 +1084,22 @@ class ThreadRepository(
      * re-sent every 10 s; false once the last one ends, fails or is cancelled. Same Typing
      * Indicators switch and membership check as typing.
      */
+    private val sendingWrites = kotlinx.coroutines.sync.Mutex()
+
     private fun publishSending() {
-        val kinds = sendingNow.values.toSet()
-        val kind = when { "video" in kinds -> "video"; "photo" in kinds -> "photo"; "file" in kinds -> "file"; else -> null }
-        if (kind != null && !PrivacySettings.typingIndicators()) return
         if (Wire.isGroupCid(cid) && me !in ((_state.value.conv["users"] as? List<*>) ?: emptyList<Any>())) return
         SendScope.launch {
-            try {
-                val v = MessageRules.sendingValue(kind, System.currentTimeMillis())
-                convRef.set(mapOf("typing" to mapOf(me to v)), SetOptions.merge()).await()
-            } catch (_: Exception) {}
+            // One write at a time, each with the state as it is WHEN it runs: a fast photo's "off"
+            // used to overtake its "on" and the "on" landed last and stayed (Pixel test 2026-11-14).
+            sendingWrites.withLock {
+                val kinds = sendingNow.values.toSet()
+                val kind = when { "video" in kinds -> "video"; "photo" in kinds -> "photo"; "file" in kinds -> "file"; else -> null }
+                if (kind != null && !PrivacySettings.typingIndicators()) return@withLock
+                try {
+                    val v = MessageRules.sendingValue(kind, System.currentTimeMillis())
+                    convRef.set(mapOf("typing" to mapOf(me to v)), SetOptions.merge()).await()
+                } catch (_: Exception) {}
+            }
         }
     }
 
