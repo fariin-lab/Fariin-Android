@@ -146,11 +146,11 @@ fun chatHeaderDark(cid: String): Boolean? {
         is ChatWallpaper.Animated -> w.wallpaper?.topIsDark(dark)
         is ChatWallpaper.Solid -> HeaderBackdrop.luminance(w.hex) < HeaderBackdrop.SWITCH
         is ChatWallpaper.Gradient, is ChatWallpaper.Preset -> w.theme?.let { g ->
-            remember(g.id, dark) { HeaderBackdrop.band(WallpaperArt.mesh(g, dark), 0f)?.let { it < HeaderBackdrop.SWITCH } }
+            remember(g.id, dark) { HeaderBackdrop.memo("g:${g.id}:$dark") { HeaderBackdrop.band(WallpaperArt.mesh(g, dark), 0f) }?.let { it < HeaderBackdrop.SWITCH } }
         }
         // The photo darkened by 0.20 black in dark mode (drawWallpaper): 0.8 in sRGB, about 0.61 in light.
         is ChatWallpaper.Photo -> photo?.let { p ->
-            remember(p, dark) { HeaderBackdrop.band(p, if (dark) 0.39f else 0f)?.let { it < HeaderBackdrop.SWITCH } }
+            remember(p, dark) { HeaderBackdrop.memo("p:${System.identityHashCode(p)}:${p.width}x${p.height}:$dark") { HeaderBackdrop.band(p, if (dark) 0.39f else 0f) }?.let { it < HeaderBackdrop.SWITCH } }
         }
     }
 }
@@ -158,6 +158,11 @@ fun chatHeaderDark(cid: String): Boolean? {
 /** The header's measured backdrop (iOS WallpaperBlur.averageLuminance). */
 internal object HeaderBackdrop {
     const val SWITCH = 0.179f
+
+    // Each band measured once per picture and appearance: a photo's was copied, scaled and read
+    // again on every chat open, in the opening frame (Pixel trace 2026-11-15).
+    private val bands = android.util.LruCache<String, Array<Float?>>(16)
+    fun memo(key: String, make: () -> Float?): Float? = (bands.get(key) ?: arrayOf(make()).also { bands.put(key, it) })[0]
 
     private fun lin(v: Int): Float {
         val c = v / 255f

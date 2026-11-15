@@ -216,11 +216,16 @@ internal fun decodeSampled(f: File, targetPx: Int, maxLongPx: Int = 0, lowRam: B
     val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(f.absolutePath, o)
     val sample = MediaRules.sampleFor(o.outWidth, o.outHeight, targetPx, maxLongPx)
-    BitmapFactory.decodeFile(f.absolutePath, BitmapFactory.Options().apply {
+    fun decode(hw: Boolean) = BitmapFactory.decodeFile(f.absolutePath, BitmapFactory.Options().apply {
         inSampleSize = sample
         // Photos are JPEGs (no see-through parts): half the memory a pixel on a low-RAM phone.
         if (lowRam && o.outMimeType == "image/jpeg") inPreferredConfig = Bitmap.Config.RGB_565
-    })?.asImageBitmap()
+        // Elsewhere the picture goes to the GPU here, on this background thread, once. A plain
+        // bitmap was sent up again by the screen's drawing thread whenever the GPU cache was full,
+        // every frame of a chat's slide-in (Pixel trace 2026-11-15: 5-8 pictures, 6 ms a frame).
+        else if (hw) inPreferredConfig = Bitmap.Config.HARDWARE
+    })
+    (decode(hw = true) ?: decode(hw = false))?.asImageBitmap()
 }.getOrNull()
 
 /**
@@ -370,7 +375,7 @@ internal fun DurationPill(seconds: Double, modifier: Modifier = Modifier) {
 @Composable
 internal fun PlayBadge(side: Dp, modifier: Modifier = Modifier) {
     Box(modifier.size(side).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
-        Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), "Play video", tint = Color.White, modifier = Modifier.size(side * 0.62f))
+        Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_sf_play_fill), "Play video", tint = Color.White, modifier = Modifier.size(side * 0.62f))
     }
 }
 

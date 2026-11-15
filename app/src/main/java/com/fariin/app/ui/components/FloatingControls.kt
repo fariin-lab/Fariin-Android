@@ -95,9 +95,9 @@ fun FloatingBack(onBack: () -> Unit, modifier: Modifier = Modifier, contentDescr
     val c = Fariin.colors
     val close = LocalBackIsClose.current
     IconButton(onClick = onBack, modifier = modifier.size(44.dp).then(if (circle || glassBar()) Modifier.floating() else Modifier)) {
-        if (close) Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = c.label, modifier = Modifier.size(18.dp))
+        if (close) Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = c.label, modifier = Modifier.size(18.dp))
         // Centred and the iOS size (owner 2026-11-10: it was 20 dp pushed 6 dp right, small and thin).
-        else Icon(ImageVector.vectorResource(R.drawable.ic_back_arrow), contentDescription = contentDescription, tint = c.label,
+        else Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_back_arrow), contentDescription = contentDescription, tint = c.label,
             modifier = Modifier.size(24.dp))
     }
 }
@@ -145,7 +145,7 @@ fun FloatingSearchField(value: String, onChange: (String) -> Unit, prompt: Strin
             .padding(start = 14.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), contentDescription = null, tint = c.secondary, modifier = Modifier.size(20.dp))
+        Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_search_ios), contentDescription = null, tint = c.secondary, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(8.dp))
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             if (value.isEmpty()) Text(prompt, fontSize = 17.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -163,7 +163,7 @@ fun FloatingSearchField(value: String, onChange: (String) -> Unit, prompt: Strin
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearch?.invoke() }))
         }
         if (value.isNotEmpty()) Box(Modifier.size(36.dp).clip(CircleShape).clickable { onChange("") }, contentAlignment = Alignment.Center) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Clear", tint = c.secondary, modifier = Modifier.size(18.dp))
+            Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_sf_xmark), contentDescription = "Clear", tint = c.secondary, modifier = Modifier.size(18.dp))
         }
         if (value.isEmpty()) Spacer(Modifier.width(10.dp))
     }

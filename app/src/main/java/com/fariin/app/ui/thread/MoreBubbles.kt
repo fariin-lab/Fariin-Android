@@ -319,7 +319,7 @@ internal fun ReplyThumb(o: Message, side: Dp, modifier: Modifier = Modifier) {
     Box(box.background(fill), contentAlignment = Alignment.Center) {
         if (bmp != null) Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         if (o.mediaKind == Message.MediaKind.VIDEO) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), null, tint = Color.White, modifier = Modifier.size(side * 0.5f))
+            Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_sf_play_fill), null, tint = Color.White, modifier = Modifier.size(side * 0.5f))
         }
     }
 }

@@ -1672,7 +1672,7 @@ private fun SelectTick(on: Boolean) {
         .background(if (on) c.blue else Color.Transparent)
         .border(1.5.dp, if (on) c.blue else c.secondary.copy(alpha = 0.6f), CircleShape),
         contentAlignment = Alignment.Center) {
-        if (on) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = Color.White, modifier = Modifier.size(16.dp))
+        if (on) Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_sf_checkmark), null, tint = Color.White, modifier = Modifier.size(16.dp))
     }
 }
 
@@ -1712,7 +1712,7 @@ private fun SafetyChangedPill(peer: String, name: String, onOpen: () -> Unit) {
             .clickable { com.fariin.app.crypto.SafetyKeyLog.acknowledge(peer); onOpen() }
             .padding(horizontal = 14.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_lock), null, tint = c.label, modifier = Modifier.size(13.dp))
+            Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_sf_lock), null, tint = c.label, modifier = Modifier.size(13.dp))
             Spacer(Modifier.width(8.dp))
             Text("${name.ifEmpty { "Their" }}'s safety number changed".replace("Their's", "Their"),
                 fontSize = 13.sp, fontWeight = FontWeight.Medium, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -1790,7 +1790,7 @@ private fun HeaderBody(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Uni
             // search (iOS 93160b88, owner 2026-11-07). No bell there: the bottom Mute bar mutes.
             // A visitor gets neither (Search needs following).
             ui.channel?.takeIf { it.role != com.fariin.app.channel.ChannelRules.Role.VISITOR }?.let {
-                com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_search_ios),
+                com.fariin.app.ui.components.FloatingIcon(androidx.compose.ui.res.painterResource(R.drawable.ic_search_ios),
                     contentDescription = "Search", onClick = { InChatSearchLink.request(ui.cid) }, circle = !CHAT_TOP_SOLID)
             }
             HeaderMenu(ui, onToggleMute)
@@ -1811,9 +1811,9 @@ private fun HeaderMenu(ui: ThreadUi, onToggleMute: () -> Unit) {
     val c = Fariin.colors
     var open by remember { mutableStateOf(false) }
     Box(Modifier.padding(start = 8.dp)) {
-        com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More", onClick = { open = true }, circle = !CHAT_TOP_SOLID)
+        com.fariin.app.ui.components.FloatingIcon(androidx.compose.ui.res.painterResource(R.drawable.ic_more_ios), contentDescription = "More", onClick = { open = true }, circle = !CHAT_TOP_SOLID)
         GlassDropdown(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(text = { Text("Search") }, leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), null) },
+            DropdownMenuItem(text = { Text("Search") }, leadingIcon = { Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_search_ios), null) },
                 onClick = { open = false; InChatSearchLink.request(ui.cid) })
             ui.muted?.let { muted ->
                 DropdownMenuItem(text = { Text(if (muted) "Unmute" else "Mute") },
@@ -2228,7 +2228,12 @@ private fun MediaRow(
     // picture is measured; everything under it is measured to that width in the same pass, so the
     // first frame is final (no measuring after layout).
     Layout(
-        modifier = Modifier.widthIn(max = maxW).clip(shape).background(if (lifted) Color.Transparent else if (isMe) myFill() else receivedFill())
+        // Drawn once into its own layer, then moved as one picture: a run's bubble has mixed corners,
+        // a clip the GPU cannot do in one step, so each picture under it was masked again and sent
+        // up to the GPU on every frame of the chat's slide-in (Pixel trace 2026-11-15, 6 ms a frame).
+        modifier = Modifier.widthIn(max = maxW)
+            .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+            .clip(shape).background(if (lifted) Color.Transparent else if (isMe) myFill() else receivedFill())
             .then(if (lifted) Modifier else receivedRim(isMe, shape)),
         content = {
         if (header) {
@@ -2480,7 +2485,7 @@ private fun Meta(m: Message, tick: Tick, isMe: Boolean, is24h: Boolean, onMedia:
         Text((if (m.edited && !m.deleted) "edited " else "") + time, fontSize = 11.sp, color = metaColor, maxLines = 1)
         if (channelPending) {
             Spacer(Modifier.width(3.dp))
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_clock), contentDescription = "Sending", tint = metaColor, modifier = Modifier.size(13.dp))
+            Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_sf_clock), contentDescription = "Sending", tint = metaColor, modifier = Modifier.size(13.dp))
         }
         if (isMe && !m.deleted) {
             // Sent one drawn check, delivered and read two (iOS BubbleTicks), at their drawn size.
@@ -2495,7 +2500,7 @@ private fun Meta(m: Message, tick: Tick, isMe: Boolean, is24h: Boolean, onMedia:
                     else if (styledInk != null) (if (tick == Tick.READ) styledInk else metaColor)   // styled: 80% so the ticks read
                     else Color.White.copy(alpha = if (tick == Tick.READ) 1f else 0.55f)
                 if (drawn != null) Icon(androidx.compose.ui.res.painterResource(drawn), contentDescription = tickDescription(tick), tint = tint)
-                else Icon(ImageVector.vectorResource(R.drawable.ic_sf_clock), contentDescription = tickDescription(tick), tint = tint, modifier = Modifier.size(14.dp))
+                else Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_sf_clock), contentDescription = tickDescription(tick), tint = tint, modifier = Modifier.size(14.dp))
             }
         }
     }
@@ -2828,7 +2833,7 @@ private fun Composer(
                     Text(MediaRules.durationLabel(kotlin.math.floor(elapsed)), style = TextStyle(fontSize = 17.sp, color = c.label,
                         fontFeatureSettings = "tnum"))
                     Spacer(Modifier.weight(1f))
-                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), null, tint = c.secondary, modifier = Modifier.size(20.dp))
+                    Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_sf_chevron_left), null, tint = c.secondary, modifier = Modifier.size(20.dp))
                     Text("Slide to cancel", fontSize = 15.sp, color = c.secondary,
                         modifier = Modifier.graphicsLayer { translationX = slide.coerceAtMost(0f) / 2 })
                     Spacer(Modifier.width(12.dp))
@@ -2836,7 +2841,7 @@ private fun Composer(
             } else {
                 Box(Modifier.size(COMPOSER_BUTTON).onGloballyPositioned { AttachSource.rect = it.boundsInWindow() }
                     .floating().clickable { lightTap(); onAttach() }, contentAlignment = Alignment.Center) {
-                    Icon(ImageVector.vectorResource(R.drawable.ic_plus_ios), contentDescription = "Attach", tint = c.label, modifier = Modifier.size(26.dp))
+                    Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_plus_ios), contentDescription = "Attach", tint = c.label, modifier = Modifier.size(26.dp))
                 }
                 Spacer(Modifier.width(8.dp))
                 // The pill: 40 at one line, corners of 20 (a capsule until it grows), the field 14 in.
@@ -2853,6 +2858,14 @@ private fun Composer(
                 ) {
                     val fieldText = TextStyle(fontSize = 17.sp, lineHeight = 22.sp)
                     if (draft.isEmpty()) Text(placeholder, style = fieldText, color = c.tertiary, maxLines = 1)
+                    // The field itself from the second frame on: the chat slides in from off screen, so
+                    // its first frame shows none of it, and building a text field was about 2 ms of
+                    // that opening frame (Pixel trace 2026-11-15). Saved words stand in meanwhile.
+                    var fieldLive by remember { mutableStateOf(false) }
+                    if (!fieldLive) {
+                        LaunchedEffect(Unit) { androidx.compose.runtime.withFrameNanos { }; fieldLive = true }
+                        if (draft.isNotEmpty()) Text(draft, style = fieldText.copy(color = c.label), maxLines = 6, modifier = Modifier.fillMaxWidth())
+                    } else {
                     // A channel post: the selection menu gets "Bold" (iOS Format > Bold).
                     val fieldView = androidx.compose.ui.platform.LocalView.current
                     val boldBar = remember(fieldView) { BoldTextToolbar(fieldView) }
@@ -2892,6 +2905,7 @@ private fun Composer(
                             .semantics { contentDescription = placeholder },
                     )
                     }
+                    }
                 }
                 // The field's icons, 24 each, 32 apart, the last one centred 24 in from the pill's end
                 // (iOS fieldIconPitch / micTrailing); dimmer than the mic (label at 55%). The camera
@@ -2925,7 +2939,7 @@ private fun Composer(
                     Modifier.size(COMPOSER_BUTTON).floating(fill = myFill()).clickable { sendVoice() },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_up), contentDescription = "Send voice message", tint = Color.White, modifier = Modifier.size(22.dp))
+                    Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_sf_arrow_up), contentDescription = "Send voice message", tint = Color.White, modifier = Modifier.size(22.dp))
                 }
             } else if ((draft.isNotBlank() || sendsWithoutText) && !recording) {
                 Box(
@@ -2943,7 +2957,7 @@ private fun Composer(
                     contentAlignment = Alignment.Center,
                 ) {
                     // iOS: a tick while editing (the change is saved, not sent), the arrow otherwise.
-                    Icon(ImageVector.vectorResource(if (prefill != null) R.drawable.ic_sf_checkmark else R.drawable.ic_sf_arrow_up),
+                    Icon(androidx.compose.ui.res.painterResource(if (prefill != null) R.drawable.ic_sf_checkmark else R.drawable.ic_sf_arrow_up),
                         contentDescription = if (prefill != null) "Save" else "Send", tint = Color.White, modifier = Modifier.size(22.dp))
                 }
             } else Box(Modifier.size(COMPOSER_BUTTON)) {
@@ -3010,7 +3024,7 @@ private fun Composer(
                     contentAlignment = Alignment.Center,
                 ) {
                     // iOS: the mic drawn in a 24 box, at its own shape (owner 2026-11-10: "stretched").
-                    Icon(ImageVector.vectorResource(R.drawable.ic_mic), contentDescription = "Record a voice message. Tap for hands-free, hold to record",
+                    Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_mic), contentDescription = "Record a voice message. Tap for hands-free, hold to record",
                         tint = if (recording) Color.White else c.label, modifier = Modifier.size(24.dp))
                 }
             }
@@ -3419,6 +3433,6 @@ private fun QuickForwardButton(ui: ThreadUi, m: Message, isMe: Boolean) {
     Box(Modifier.padding(start = 8.dp).size(32.dp).clip(CircleShape)
         .background(if (c.dark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f))
         .clickable(onClickLabel = "Forward") { QuickForward.request.value = m }, contentAlignment = Alignment.Center) {
-        Icon(ImageVector.vectorResource(R.drawable.ic_menu_forward), "Forward", tint = c.label, modifier = Modifier.size(16.dp))
+        Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_menu_forward), "Forward", tint = c.label, modifier = Modifier.size(16.dp))
     }
 }
