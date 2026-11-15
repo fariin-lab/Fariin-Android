@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.drawLayer
@@ -144,10 +145,22 @@ object PageMotion {
 
     private var run = 0
 
+    /**
+     * On a LOW phone the change is light (owner 2026-11-15, after the reference apps on a cheap phone;
+     * the Pixel 5, which measures AVERAGE, keeps the full slide): the new page fades in over [LITE_MS] while it slides [LITE_SHIFT_DP], the page under it
+     * stays still, and back is the same reversed. Fixed when a change begins, so it never switches midway.
+     */
+    var lite by androidx.compose.runtime.mutableStateOf(false)
+        private set
+    /** The page's width and the light slide in pixels, written by [PageFrame]'s layout. */
+    internal var widthPx = 0
+    internal var liteShiftPx = 0f
+
     /** A new top page: from the composition that first sees it, so its first frame is placed right. */
     fun begin(newTop: String, oldTop: String?, isForward: Boolean) {
         if (newTop == top) return
         run++
+        lite = com.fariin.app.perf.PowerSaving.state.value.deviceClass == com.fariin.app.perf.PerfClass.LOW
         other = oldTop; top = newTop; forward = isForward
         e = if (oldTop == null || !Motion.on) 1f else 0f
     }
@@ -187,8 +200,8 @@ object PageMotion {
             held = null
             if (mine != run) return
         }
-        val ms = if (forward) Motion.PAGE_MS else Motion.PAGE_BACK_MS
-        val ease = if (forward) Motion.PageEase else Motion.BackEase
+        val ms = if (lite) LITE_MS else if (forward) Motion.PAGE_MS else Motion.PAGE_BACK_MS
+        val ease = if (lite) Motion.Decelerate else if (forward) Motion.PageEase else Motion.BackEase
         try {
             var last = androidx.compose.runtime.withFrameNanos { it }
             var v = 0f
@@ -210,6 +223,14 @@ object PageMotion {
     fun offset(id: String?): Float {
         if (id == null) return 0f
         val p = e
+        if (lite && p < 1f) {
+            val s = if (widthPx > 0) liteShiftPx / widthPx else 0f
+            return when (id) {
+                top -> if (forward) (1f - p) * s else 0f
+                other -> if (forward) 0f else p * s
+                else -> if (top == null) 0f else 1f
+            }
+        }
         return when (id) {
             top -> if (forward) 1f - p else -Motion.UNDER_SHIFT * (1f - p)
             other -> if (forward) -Motion.UNDER_SHIFT * p else p
@@ -217,6 +238,16 @@ object PageMotion {
             // a new change starts): never drawn in place. Owner's Pixel 2026-11-09: a chat closed
             // and another opened within a second flashed the closed chat full screen for 4 frames.
             else -> if (top == null) 0f else 1f
+        }
+    }
+
+    /** How opaque a page is: below 1 only in a light change (the arriving page, or the one leaving). */
+    fun alpha(id: String?): Float {
+        if (!lite || e >= 1f || id == null) return 1f
+        return when (id) {
+            top -> if (forward) e else 1f
+            other -> if (forward) 1f else 1f - e
+            else -> 1f
         }
     }
 
@@ -236,6 +267,9 @@ private const val HOLD_MAX_MS = 200L
 /** A frame slower than this is a stall: it moves the slide by [STALL_STEP_MS] only. */
 private const val SLOW_FRAME_MS = 25f
 private const val STALL_STEP_MS = 6f
+/** The light change on a LOW phone ([PageMotion.lite]): length and slide. */
+private const val LITE_MS = 150
+private val LITE_SHIFT_DP = 48.dp
 
 /** A nav host page placed by [PageMotion]. */
 @Composable
@@ -249,7 +283,14 @@ fun PageFrame(id: String, content: @Composable () -> Unit) {
     androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()
         .layout { m, c ->
             val p = m.measure(c)
+            PageMotion.widthPx = p.width
+            PageMotion.liteShiftPx = LITE_SHIFT_DP.toPx()
             layout(p.width, p.height) { p.place((PageMotion.offset(id) * p.width).toInt(), 0) }
+        }
+        // The light change's fade (PageMotion.alpha), read in the draw phase only; no offscreen copy.
+        .graphicsLayer {
+            alpha = PageMotion.alpha(id)
+            compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
         }
         // While the page moves, its touches go nowhere (PageMotion.moving). After the move, so it
         // covers the page where it is: on the frame, a page that had slid away still caught every
