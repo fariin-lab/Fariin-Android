@@ -725,17 +725,24 @@ internal fun PollComposer(onDismiss: () -> Unit, upload: (suspend (ByteArray) ->
                 if (quiz) Footnote("Tap the circle next to the right answer.")
                 Spacer(Modifier.height(20.dp))
                 Group {
-                    Setting("Multiple answers", multiple, enabled = !quiz) { on ->
+                    Setting("Multiple answers", multiple, enabled = !quiz, icon = R.drawable.ic_sf_checklist) { on ->
                         multiple = on
                         if (!on) { var seen = false; for (k in opts.indices) if (opts[k].right) { if (seen) opts[k] = opts[k].copy(right = false) else seen = true } }
                     }
-                    Setting("Hide who voted", hideVoters) { hideVoters = it }
-                    Setting("Quiz", quiz) { on -> quiz = on; if (on) multiple = false }
+                    SettingLine()
+                    Setting("Hide who voted", hideVoters, icon = R.drawable.ic_eye_off) { hideVoters = it }
+                    SettingLine()
+                    Setting("Quiz", quiz, icon = R.drawable.ic_sf_graduationcap) { on -> quiz = on; if (on) multiple = false }
+                    SettingLine()
                     Box {
                         Row(Modifier.fillMaxWidth().clickable { endsMenu = true }.padding(vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically) {
+                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_timer), null, tint = c.secondary, modifier = Modifier.size(22.dp))
+                            Spacer(Modifier.width(14.dp))
                             Text("Ends", fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
-                            Text(ends.label, fontSize = 17.sp, color = c.secondary)
+                            Text(ends.label, fontSize = 17.sp, color = c.label)
+                            Spacer(Modifier.width(4.dp))
+                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_up_down), null, tint = c.label, modifier = Modifier.size(14.dp))
                         }
                         GlassDropdown(expanded = endsMenu, onDismissRequest = { endsMenu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
                             PollRules.EndChoice.entries.forEach { e ->
@@ -791,10 +798,21 @@ private fun Field(value: String, hint: String, maxLines: Int, onChange: (String)
     }
 }
 
+/** The thin line between two settings, starting under the words (iOS inset separator). */
 @Composable
-private fun Setting(title: String, on: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
+private fun SettingLine() {
+    Box(Modifier.fillMaxWidth().padding(start = 36.dp).height(0.5.dp).background(Fariin.colors.separator))
+}
+
+@Composable
+private fun Setting(title: String, on: Boolean, enabled: Boolean = true, icon: Int? = null, onChange: (Boolean) -> Unit) {
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        // Each setting wears its iOS outline icon (owner 2026-11-14, iPhone screenshot).
+        if (icon != null) {
+            Icon(ImageVector.vectorResource(icon), null, tint = c.secondary, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(14.dp))
+        }
         Text(title, fontSize = 17.sp, color = if (enabled) c.label else c.secondary, modifier = Modifier.weight(1f))
         com.fariin.app.ui.components.FariinSwitch(checked = on, onCheckedChange = onChange, enabled = enabled)
     }

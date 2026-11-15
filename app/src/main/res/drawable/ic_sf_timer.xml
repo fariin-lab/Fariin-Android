@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Our own drawing in the iOS outline style, for the place iOS uses "timer": an open ring with a
+     hand from the centre. Not Material. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M12,3.5A8.5,8.5 0,1 1,5.99 5.99"
+        android:strokeColor="#FF000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:fillColor="#00000000" />
+    <path android:pathData="M12,3.5V6.2"
+        android:strokeColor="#FF000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:fillColor="#00000000" />
+    <path android:pathData="M8.4,8.4L12.6,12.6"
+        android:strokeColor="#FF000000" android:strokeWidth="1.6" android:strokeLineCap="round" android:fillColor="#00000000" />
+    <path android:pathData="M12,12m-1,0a1,1 0,1 1,2,0a1,1 0,1 1,-2,0" android:fillColor="#FF000000" />
+</vector>
