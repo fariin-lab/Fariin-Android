@@ -312,6 +312,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
             }
         },
         onEnsureLoaded = { id -> vm.repo.ensureLoaded(id) },
+        onHiddenByBlock = { id -> vm.repo.isHiddenByBlock(id) },
         onSearchCorpus = { vm.repo.searchCorpus() },
         onReachMatch = { id -> vm.repo.ensureLoaded(id, maxPages = com.fariin.app.data.ChatSearch.JUMP_PAGES) },
         onEditHistory = { m -> vm.repo.editHistory(m) },

@@ -115,6 +115,8 @@ data class ThreadActions(
     val onUnpin: (String) -> Unit = {},
     /** Pages older history until the message is loaded (iOS ensureLoaded); false when out of reach. */
     val onEnsureLoaded: suspend (String) -> Boolean = { false },
+    /** iOS isHiddenByBlock: the message was sent while I had its author blocked, so it is never shown. */
+    val onHiddenByBlock: (String) -> Boolean = { false },
     /** In-chat search: the newest messages opened on this phone (iOS MessageSearch.loadChat), and
      *  paging far enough to reach any match it can return (iOS ensureLoaded maxPages 18). */
     val onSearchCorpus: suspend () -> List<com.fariin.app.data.ChatSearch.Item> = { emptyList() },

@@ -200,6 +200,8 @@ data class ThreadUi(
 /** The timer in force and since when, for the bubble's timer mark (iOS MessageRowContext.timer). */
 internal data class TimerMark(val seconds: Int = 0, val sinceMs: Double? = null)
 internal val LocalTimerMark = androidx.compose.runtime.staticCompositionLocalOf { TimerMark() }
+/** A reply's quote tapped: go to the original (null in select mode, where a tap ticks the row). */
+internal val LocalQuoteJump = androidx.compose.runtime.compositionLocalOf<((String) -> Unit)?> { null }
 
 /**
  * The chat page, after Kulan-iOS ThreadView + MessageList: my bubbles on the right in the chat
@@ -859,6 +861,28 @@ private fun ThreadContent(
             if (flashId == row) flashId = null
         }
     }
+    // A reply's quote tapped (iOS jumpToQuotedOriginal): already here, or paged in, it is centred
+    // and lit; sent while I had its author blocked, "Not available"; out of reach, "Original message
+    // isn't loaded" (never "deleted": a deleted original is still a row, its tombstone, and we go there).
+    // A newer tap or the down arrow makes a jump still paging stale: it neither scrolls nor speaks.
+    val quoteSeq = remember { intArrayOf(0) }
+    fun jumpToQuote(id: String) {
+        val seq = ++quoteSeq[0]
+        scope.launch {
+            val here = uiNow.value.messages.any { it.id == id }
+            val found = here || (!actions.onHiddenByBlock(id) && actions.onEnsureLoaded(id))
+            if (seq != quoteSeq[0]) return@launch
+            val list = uiNow.value.messages
+            val i = list.indexOfFirst { it.id == id }
+            val o = com.fariin.app.data.ReplyJumpRules.outcome(found && i >= 0, actions.onHiddenByBlock(id))
+            com.fariin.app.data.ReplyJumpRules.notice(o)?.let { actions.onNotice(it); return@launch }
+            landCentred(listState, list.size - 1 - i)
+            val row = list[i].rowId
+            flashId = row
+            kotlinx.coroutines.delay(2000)
+            if (flashId == row) flashId = null
+        }
+    }
     // A quote card's tap opened this channel (or was tapped in it): once its messages are in, scroll to the post and light it.
     val quoteJump by com.fariin.app.data.QuoteStore.pendingJump.collectAsState()
     LaunchedEffect(ui.cid, ui.loaded, quoteJump) {
@@ -1089,8 +1113,10 @@ private fun ThreadContent(
             val timerMark = TimerMark(ui.disappearSeconds,
                 remember(ui.messages, ui.disappearSeconds) { com.fariin.app.data.Disappearing.timerSince(ui.messages) })
             val linkTap = rememberBubbleLinkTap(ui, actions.onNotice)
+            val quoteTap = remember { { id: String -> jumpToQuote(id) } }
             androidx.compose.runtime.CompositionLocalProvider(LocalTimerMark provides timerMark, LocalSearchTerm provides search.term,
                 LocalBubbleLinkTap provides linkTap,
+                LocalQuoteJump provides (if (selecting) null else quoteTap),
                 // Nothing INSIDE the list may draw glass from the list itself: the group's welcome card
                 // (a list row) did, and the backdrop recorded a layer that contained its own reader, an
                 // endless render tree that crashed the app (RenderThread SIGSEGV, 2026-11-06).
@@ -1339,6 +1365,7 @@ private fun ThreadContent(
             // iOS: hidden while a voice note is being recorded.
             if (!atBottom && !search.active && !voiceRecording) {
                 JumpArrow((ui.messages.size - seenCount).coerceAtLeast(0), onClick = {
+                    quoteSeq[0]++   // a quote jump still paging is dropped (iOS jumpSeq)
                     // iOS two-stage arrow: the first tap goes to the first unread message, once, and
                     // only when the "Unread Messages" divider is still below everything on screen;
                     // otherwise (and every tap after) to the newest.
@@ -2355,9 +2382,21 @@ private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
     // that "You" happened to get read as another app's colour).
     val bar = if (isMe) Color.White else if (r.authorId == ui.me) c.blue else senderColor(r.authorId)
     val name = if (r.authorId == ui.me) "You" else ui.names[r.authorId] ?: ui.title
+    // A tap goes to the original (iOS jumpToQuotedOriginal); a story's quote opens the story while it
+    // is live (iOS onTapStoryQuote). Not in select mode, where the tap ticks the row.
+    val jump = LocalQuoteJump.current
+    var story by remember { mutableStateOf<com.fariin.app.data.StoryGroup?>(null) }
+    story?.let { sg -> com.fariin.app.ui.stories.StoryViewerDialog(ui.me, listOf(sg), 0, com.fariin.app.data.ChatsNow.list, onClose = { story = null }) }
+    val tap: (() -> Unit)? = when {
+        jump == null -> null
+        !r.isStatus -> ({ jump(r.id) })
+        r.storyThumb.isNullOrEmpty() -> null
+        else -> ({ com.fariin.app.data.LiveStories.find(com.fariin.app.data.LiveStories.state.value, r.id, r.authorId)?.let { story = it.first } })
+    }
     Row(
         // Across the bubble's full width, as the reference app's quote (owner 2026-11-13).
         Modifier.fillMaxWidth().padding(top = 3.dp, bottom = 5.dp).clip(RoundedCornerShape(6.dp))
+            .then(if (tap != null) Modifier.clickable(onClick = tap) else Modifier)
             .background(if (isMe) Color.White.copy(alpha = 0.18f) else bar.copy(alpha = 0.12f))
             .height(androidx.compose.foundation.layout.IntrinsicSize.Min),
     ) {
@@ -3139,6 +3178,33 @@ private suspend fun glideTo(listState: androidx.compose.foundation.lazy.LazyList
     androidx.compose.runtime.withFrameNanos { }
     if (glide) listState.animateScrollBy(-screen.toFloat(),
         androidx.compose.animation.core.tween(360, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+}
+
+/**
+ * A reply quote's landing (iOS list `.message`): a row already wholly on screen stays put; one partly
+ * on screen glides to the centre of the band between the header and the composer; one off screen is
+ * snapped a third of a screen short, on the side it is coming from, and glides the rest, so a long
+ * jump never builds every row on the way inside an animation.
+ */
+private suspend fun landCentred(listState: androidx.compose.foundation.lazy.LazyListState, index: Int) {
+    fun band(): Int = listState.layoutInfo.let { it.viewportSize.height - it.beforeContentPadding - it.afterContentPadding }
+    val curve = androidx.compose.animation.core.tween<Float>(320, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+    listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }?.let { row ->
+        val usable = band()
+        if (com.fariin.app.data.ReplyJumpRules.fullyVisible(row.offset, row.size, usable)) return
+        listState.animateScrollBy(com.fariin.app.data.ReplyJumpRules.scrollToCentre(row.offset, row.size, usable).toFloat(), curve)
+        return
+    }
+    val older = index > listState.firstVisibleItemIndex   // reversed: a higher index is further up, in the history
+    listState.scrollToItem(index)
+    val row = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: return
+    val usable = band()
+    val toCentre = com.fariin.app.data.ReplyJumpRules.scrollToCentre(row.offset, row.size, usable)
+    // Going up into the history the rows travel down, going back toward the newest they travel up.
+    val run = (usable / 3).toFloat().let { if (older) it else -it }
+    listState.scrollBy(toCentre - run)
+    withFrameNanos { }
+    listState.animateScrollBy(run, curve)
 }
 
 /** Rows within this many of the target: the plain animated scroll (it was smooth over a short way). */

@@ -1993,6 +1993,13 @@ class ThreadRepository(
         }
     }
 
+    /** iOS isHiddenByBlock: a fetched message left out because I had its author blocked when it was sent. */
+    fun isHiddenByBlock(id: String): Boolean {
+        val d = liveDocs[id] ?: olderDocs[id] ?: return false
+        val author = d.getString("authorId") ?: return false
+        return author != me && BlockList.hides(author, Conversation.millis(d.get("createdAt")))
+    }
+
     /** iOS ensureLoaded: page older history until [id] is in the window (at most [maxPages] pages). */
     suspend fun ensureLoaded(id: String, maxPages: Int = 12): Boolean {
         repeat(maxPages) {
