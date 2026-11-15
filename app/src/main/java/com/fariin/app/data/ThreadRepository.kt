@@ -1104,6 +1104,8 @@ class ThreadRepository(
     }
 
     private fun sendingStart(clientId: String) {
+        // Never in a channel (iOS the same): followers do not see admins at work.
+        if (isChannelChat()) return
         val kind = sendingKind(clientId) ?: return
         sendingNow[clientId] = kind
         publishSending()
