@@ -1280,12 +1280,13 @@ internal fun ChatRow(
     var activityExpired by remember(conv.id) { mutableStateOf(false) }
     LaunchedEffect(conv.typingRawKey) {
         activityExpired = false
-        if (conv.typing.isEmpty() && conv.recording.isEmpty()) return@LaunchedEffect
+        if (conv.typing.isEmpty() && conv.recording.isEmpty() && conv.sending.isEmpty()) return@LaunchedEffect
         kotlinx.coroutines.delay(com.fariin.app.data.MessageRules.TYPING_EXPIRY_MS)
         activityExpired = true
     }
     val recording = if (activityExpired) null else ChatList.recordingLabel(conv, me)
-    val typing = if (activityExpired) null else ChatList.typingLabel(conv, me)
+    // Typing first, then "sending a photo…" in the same accent line (owner 2026-11-14).
+    val typing = if (activityExpired) null else (ChatList.typingLabel(conv, me) ?: ChatList.sendingLabel(conv, me))
     // A call with this chat going on now: the green line above everything.
     val liveCall = (liveCallState ?: LiveCallRow.live.collectAsState()).value
     val onCall = liveCall?.takeIf { LiveCallRow.cid(me, it) == conv.id }

@@ -182,6 +182,23 @@ object MessageRules {
     const val RECORDING_REFRESH_MS = 10_000L
 
     /**
+     * "Sending a photo…" (owner 2026-11-14, shared with iOS): while my media uploads, `typing.<me>` =
+     * "photo-<seconds>" / "video-<seconds>" / "file-<seconds>", re-sent every [RECORDING_REFRESH_MS],
+     * false when the upload ends, fails or is cancelled. Old builds read it as nothing (no "text"/"audio").
+     */
+    fun sendingValue(kind: String?, nowMs: Long): Any = if (kind != null) "$kind-${nowMs / 1000}" else false
+    val SENDING_KINDS = listOf("photo", "video", "file")
+
+    /** The kind someone is sending ("photo", "video", "file"), or null. */
+    fun isSending(v: Any?): String? {
+        val s = v as? String ?: return null
+        return SENDING_KINDS.firstOrNull { s.startsWith("$it-") }
+    }
+
+    /** The words for a kind: "sending a photo". */
+    fun sendingWords(kind: String): String = "sending a $kind"
+
+    /**
      * The header's live line from `typing` (iOS presenceSubtitle): typing first, then recording.
      * A 1:1 says "typing…" / "recording…"; a group names one person or counts them ("N people
      * typing…"). None at all with my own Typing Indicators off (it is mutual), or when [live] is
@@ -192,11 +209,18 @@ object MessageRules {
         if (!typingPref || !live) return null
         val typers = typing.filter { (k, v) -> k != me && isTyping(v) }.keys.mapNotNull { it as? String }.sorted()
         val recorders = typing.filter { (k, v) -> k != me && isRecording(v) }.keys.mapNotNull { it as? String }.sorted()
+        val senders = typing.mapNotNull { (k, v) -> val kind = isSending(v); if (k != me && k is String && kind != null) k to kind else null }
+            .sortedBy { it.first }
         fun group(uids: List<String>, verb: String) =
             if (uids.size == 1) "${name(uids[0]) ?: "Someone"} is $verb…" else "${uids.size} people $verb…"
         return when {
             typers.isNotEmpty() -> if (isGroup) group(typers, "typing") else "typing…"
             recorders.isNotEmpty() -> if (isGroup) group(recorders, "recording") else "recording…"
+            senders.isNotEmpty() -> {
+                val kinds = senders.map { it.second }.distinct()
+                val verb = if (kinds.size == 1) sendingWords(kinds[0]) else "sending files"
+                if (isGroup) group(senders.map { it.first }, verb) else "$verb…"
+            }
             else -> null
         }
     }
