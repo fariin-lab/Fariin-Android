@@ -1049,7 +1049,7 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
     val remotes = g.members.filter { it.id != meId }
     // Gone, or no picture any more (camera and screen off): back to the grid (iOS 686b9eed5).
     LaunchedEffect(g.members.map { Triple(it.id, it.video != null, it.screen != null) }) {
-        if (focus != null && remotes.none { it.id == focus && (it.video != null || it.screen != null) }) focus = null
+        if (focus != null && remotes.none { it.id == focus && (it.video != null || it.screen != null || it.videoHeld) }) focus = null
     }
     // iOS: no pin in the two-person look (the other person is the whole stage already).
     LaunchedEffect(remotes.size) { if (remotes.size < 2) focus = null }
@@ -1069,6 +1069,8 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
         }
         if (p == null) announced = null
     }
+    // A LOW phone always receives the pinned person's camera (GroupVideoRules.liveVideo).
+    LaunchedEffect(focus) { GroupCall.stageFocus(focus) }
     val chrome = rememberChrome(allowed)
     val shown by animateFloatAsState(if (chrome.visible) 1f else 0f, tween(280), label = "chrome")
     val waitingScreen = g.linkRoom == null && !g.cameraOn && !g.waiting && (g.connecting || (g.joined && remotes.isEmpty()))
@@ -1117,7 +1119,7 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
                             // A strip tile goes large (pinned); my own tile does nothing (iOS).
                             // Only someone with a picture (camera or screen) goes large (iOS 686b9eed5).
                             val t = remotes.firstOrNull { it.id == id }
-                            if (id != meId && t != null && (t.video != null || t.screen != null) && (remotes.size >= 2 || presenter != null)) focus = id
+                            if (id != meId && t != null && (t.video != null || t.screen != null || t.videoHeld) && (remotes.size >= 2 || presenter != null)) focus = id
                         },
                         // iOS GroupCallFocusView: a tap on the large tile shows or hides the controls,
                         // a swipe down unpins it.
@@ -1453,7 +1455,7 @@ private fun DuoFeed(big: GroupMember, meId: String?) {
 private fun DuoCardContent(m: GroupMember) {
     val v = m.video
     Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
-        if (v != null) LiveKitVideo(v, Modifier.fillMaxSize(), mirror = m.local)
+        if (v != null) LiveKitVideo(v, Modifier.fillMaxSize(), mirror = m.local, small = true)
         else {
             Avatar(m.photo, 54.dp)
             Icon(ImageVector.vectorResource(R.drawable.ic_call_video_off), null, tint = Color.White.copy(alpha = 0.85f),
@@ -1623,7 +1625,7 @@ private fun MemberTile(
             // shows their face, not a second unreadable copy of the screen (iOS preferScreen).
             val scr = m.screen?.takeIf { large }
             if (scr != null) LiveKitVideo(scr, Modifier.fillMaxSize(), fit = true)
-            else if (v != null) LiveKitVideo(v, Modifier.fillMaxSize(), mirror = isMe)
+            else if (v != null) LiveKitVideo(v, Modifier.fillMaxSize(), mirror = isMe, small = !large && !alone)
             // The store demo's camera faces (its pictures stand in for the live video).
             else if (com.fariin.app.ui.debug.DemoChats.active && m.photo != null) coil3.compose.AsyncImage(m.photo, null,
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
@@ -1989,8 +1991,12 @@ private fun SheetSection(content: @Composable () -> Unit) {
  * would tear or flash.
  */
 @Composable
-private fun LiveKitVideo(track: io.livekit.android.room.track.VideoTrack, modifier: Modifier, mirror: Boolean = false, fit: Boolean = false) {
+private fun LiveKitVideo(track: io.livekit.android.room.track.VideoTrack, modifier: Modifier, mirror: Boolean = false, fit: Boolean = false,
+                         small: Boolean = false) {
     val room = GroupCall.room() ?: return
+    // The renderer is a View, so LiveKit's adaptive stream sees whether it is on screen and its size.
+    // A small tile on a LOW phone reports a capped size: the server sends it the small layer.
+    val capped = small && com.fariin.app.perf.PowerSaving.state.value.deviceClass == com.fariin.app.perf.PerfClass.LOW
     AndroidView(modifier = modifier, factory = { ctx ->
         TextureViewRenderer(ctx).also {
             room.initVideoRenderer(it)
@@ -1998,14 +2004,23 @@ private fun LiveKitVideo(track: io.livekit.android.room.track.VideoTrack, modifi
         }
     }, update = { r ->
         r.setMirror(mirror)
-        val old = r.tag as? io.livekit.android.room.track.VideoTrack
-        if (old !== track) { old?.removeRenderer(r); track.addRenderer(r); r.tag = track }
+        val old = r.tag as? BoundTrack
+        if (old?.track !== track || old.capped != capped) {
+            old?.track?.removeRenderer(r)
+            val remote = track as? io.livekit.android.room.track.RemoteVideoTrack
+            if (capped && remote != null) remote.addRenderer(r, com.fariin.app.call.SmallTileVisibility(r, com.fariin.app.call.GroupVideoRules.LOW_SMALL_TILE_MAX))
+            else track.addRenderer(r)
+            r.tag = BoundTrack(track, capped)
+        }
     }, onRelease = { r ->
-        (r.tag as? io.livekit.android.room.track.VideoTrack)?.removeRenderer(r)
+        (r.tag as? BoundTrack)?.track?.removeRenderer(r)
         r.release()
     })
 }
 
+
+/** The track a tile's renderer is on, and whether it reports a capped size. */
+private class BoundTrack(val track: io.livekit.android.room.track.VideoTrack, val capped: Boolean)
 
 /** My own profile photo, from this phone's copy first, then the server (calls' own tiles). */
 @Composable

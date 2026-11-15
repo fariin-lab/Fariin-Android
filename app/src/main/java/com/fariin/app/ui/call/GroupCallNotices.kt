@@ -8,6 +8,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,6 +61,34 @@ internal fun GroupCallNotes(g: GroupCallUi, modifier: Modifier = Modifier) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         JoinLeaveBanner(g)
         TopToast(g.toast)
+        if (g.videoPaused && g.joined) VideoPausedCard()
+    }
+}
+
+/**
+ * Other people's cameras are paused (poor network for a while, or a hot phone): the same small pill,
+ * with the one way back. It stays until the video comes back.
+ */
+@Composable
+private fun VideoPausedCard() {
+    Box(Modifier.fillMaxWidth().padding(top = 8.dp, start = 24.dp, end = 24.dp), contentAlignment = Alignment.Center) {
+        Row(
+            Modifier.clip(CircleShape).background(Color(0xFF1C1C1E).copy(alpha = 0.82f))
+                .heightIn(min = 36.dp)
+                .padding(start = 12.dp, end = 6.dp, top = 5.dp, bottom = 5.dp)
+                .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            androidx.compose.material3.Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_video_slash),
+                null, tint = Color.White.copy(alpha = 0.92f), modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Video paused to keep the call smooth", color = Color.White.copy(alpha = 0.92f), fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold, maxLines = 2, modifier = Modifier.weight(1f, fill = false))
+            Spacer(Modifier.width(8.dp))
+            Text("Turn video back on", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                modifier = Modifier.clip(CircleShape).background(Color.White).clickable { GroupCall.resumeVideo() }
+                    .padding(horizontal = 10.dp, vertical = 6.dp))
+        }
     }
 }
 

@@ -201,6 +201,8 @@ data class GroupMember(
     val connecting: Boolean = false,
     /** Their camera is on but no picture came within the wait (iOS videoUnavailable): "Can't show video". */
     val videoUnavailable: Boolean = false,
+    /** Their camera is on but this phone is not receiving it (a LOW phone's tile cap, or video paused): their photo shows. */
+    val videoHeld: Boolean = false,
 )
 
 /** Someone at a call link's door (callLinks/{roomId}/requests/{uid}, status pending). */
@@ -265,6 +267,8 @@ data class GroupCallUi(
     val mutingAll: Boolean = false,
     /** A host action the server refused, for the people sheet's alert. */
     val adminError: String? = null,
+    /** Other people's cameras are paused to keep the call smooth (poor network or a hot phone). */
+    val videoPaused: Boolean = false,
 )
 
 data class CallReaction(val id: Long, val uid: String, val name: String, val emoji: String)
@@ -540,7 +544,17 @@ object GroupCall {
     private suspend fun connectRoom(app: Context, cid: String, title: String, video: Boolean, requireLive: Boolean, pass: GroupPass) {
         run {
             try {
-                val r = LiveKit.create(app)
+                // Adaptive stream: a tile that is off screen gets nothing and each tile gets the layer
+                // that fits its size; dynacast: a layer nobody watches is not sent.
+                val r = LiveKit.create(app, io.livekit.android.RoomOptions(adaptiveStream = true, dynacast = true))
+                // My camera by phone class (GroupVideoRules.camera); a HIGH phone keeps the SDK's own.
+                GroupVideoRules.camera(com.fariin.app.perf.PowerSaving.state.value.deviceClass)?.let { c ->
+                    r.videoTrackCaptureDefaults = r.videoTrackCaptureDefaults.copy(
+                        captureParams = io.livekit.android.room.track.VideoCaptureParameter(c.width, c.height, c.fps))
+                    r.videoTrackPublishDefaults = r.videoTrackPublishDefaults.copy(
+                        videoEncoding = io.livekit.android.room.track.VideoEncoding(c.maxBitrate, c.fps), simulcast = true,
+                        simulcastLayers = if (c.twoLayers) listOf(io.livekit.android.room.track.VideoPreset169.H180) else r.videoTrackPublishDefaults.simulcastLayers)
+                }
                 // A shared screen at 15 frames a second (10 on a low-end phone), 960 on its long side
                 // below a high-end phone: the screen was the heaviest thing a call did (owner 2026-11-10).
                 run {
@@ -711,6 +725,71 @@ object GroupCall {
         return if (p.trackPublications.isEmpty() && now - arrived < 5_000 && now - joinedAtMs > 5_000) 1 else 0
     }
 
+    // ------------------------------------------------------------ which cameras I receive
+
+    /** When each person last held the speaker ring (the "latest speakers" of the LOW tile cap). */
+    private val lastSpoke = HashMap<String, Long>()
+    /** The person the screen shows large (pinned), from the screen. */
+    private var stageFocus: String? = null
+    private val videoGate = ReceiveVideoGate()
+    private var lastLive: Set<String>? = null
+
+    private fun lowPhone() = com.fariin.app.perf.PowerSaving.state.value.deviceClass == com.fariin.app.perf.PerfClass.LOW
+
+    /** Everyone whose camera is on, in the order they came, and the ones of them to receive. */
+    private fun liveSet(r: Room): Pair<List<String>, Set<String>> {
+        val withCamera = r.remoteParticipants.values.filter { p ->
+            p.getTrackPublication(Track.Source.CAMERA)?.let { it.muted != true } == true
+        }.mapNotNull { it.identity?.value }.sortedBy { firstSeen[it] ?: Long.MAX_VALUE }
+        val live = when {
+            videoGate.paused -> emptySet()
+            lowPhone() -> GroupVideoRules.liveVideo(withCamera, stageFocus, _ui.value.activeSpeaker, lastSpoke, GroupVideoRules.LOW_LIVE_TILES)
+            else -> withCamera.toSet()
+        }
+        return withCamera to live
+    }
+
+    /**
+     * Subscribes the cameras to receive and drops the rest (nothing downloaded, nothing decoded).
+     * Returns the people whose camera is on but held. Shared screens are always received.
+     */
+    private fun applyLiveVideo(r: Room): Set<String> {
+        val (withCamera, live) = liveSet(r)
+        lastLive = live
+        r.remoteParticipants.values.forEach { p ->
+            val uid = p.identity?.value ?: return@forEach
+            val pub = p.getTrackPublication(Track.Source.CAMERA) as? io.livekit.android.room.track.RemoteTrackPublication ?: return@forEach
+            val want = !videoGate.paused && (!lowPhone() || uid in live || pub.muted)
+            if (pub.isDesired != want) try { pub.setSubscribed(want) } catch (e: Exception) { Log.w(TAG, "subscribe", e) }
+        }
+        return withCamera.toSet() - live
+    }
+
+    /** The screen's pinned person: on a LOW phone they always get a live tile. */
+    fun stageFocus(id: String?) { if (stageFocus != id) { stageFocus = id; refresh() } }
+
+    /** "Turn video back on". */
+    fun resumeVideo() {
+        videoGate.resume()
+        _ui.value = _ui.value.copy(videoPaused = false)
+        refresh()
+    }
+
+    private fun phoneHot(): Boolean {
+        if (android.os.Build.VERSION.SDK_INT < 29) return false
+        val pm = appContext?.getSystemService(android.os.PowerManager::class.java) ?: return false
+        return pm.currentThermalStatus >= android.os.PowerManager.THERMAL_STATUS_SEVERE
+    }
+
+    /** Once a second: the poor-network / hot-phone pause, and a LOW phone's latest speakers. */
+    private fun checkVideo(r: Room) {
+        val q = r.localParticipant.connectionQuality
+        val poor = q == ConnectionQuality.POOR || q == ConnectionQuality.LOST
+        val changed = videoGate.update(System.currentTimeMillis(), poor && _ui.value.joined, phoneHot())
+        if (changed) _ui.value = _ui.value.copy(videoPaused = videoGate.paused)
+        if (changed || (lowPhone() && liveSet(r).second != lastLive)) refresh()
+    }
+
     private fun refresh() {
         val r = room ?: return
         if (r.remoteParticipants.isNotEmpty()) someoneCame = true
@@ -724,17 +803,21 @@ object GroupCall {
             lastRemote = here
         }
         val all: List<Participant> = listOf<Participant>(r.localParticipant) + r.remoteParticipants.values
+        val held = applyLiveVideo(r)
         val members = all.map { p ->
             val uid = p.identity?.value ?: ""
             val face = faces[uid]
             val cam = p.getTrackPublication(Track.Source.CAMERA)
             val scr = if (p === r.localParticipant) null else p.getTrackPublication(Track.Source.SCREEN_SHARE)
+            val isHeld = uid in held
+            if (isHeld) cameraWaitSince.remove(uid)
+            val media = if (isHeld) 0 else mediaState(p, uid, cam)
             GroupMember(
                 id = uid,
                 name = p.name?.takeIf { it.isNotEmpty() } ?: face?.first ?: if (p === r.localParticipant) "You" else "Member",
                 speaking = p.isSpeaking,
                 micOn = p.isMicrophoneEnabled,
-                video = (cam?.track as? VideoTrack)?.takeIf { cam?.muted != true },
+                video = (cam?.track as? VideoTrack)?.takeIf { cam?.muted != true && !isHeld },
                 photo = face?.second,
                 // iOS role(of:): a group chat's call reads roles from the group as it is now; the
                 // attribute was frozen at join.
@@ -746,8 +829,9 @@ object GroupCall {
                 joinedAtMs = firstSeen.getOrPut(uid) { System.currentTimeMillis() },
                 screenSinceMs = if ((scr?.track as? VideoTrack) != null && scr?.muted != true)
                     screenSince.getOrPut(uid) { System.currentTimeMillis() } else { screenSince.remove(uid); 0L },
-                connecting = mediaState(p, uid, cam) == 1,
-                videoUnavailable = mediaState(p, uid, cam) == 2,
+                connecting = media == 1,
+                videoUnavailable = media == 2,
+                videoHeld = isHeld,
             )
         }
         firstSeen.keys.retainAll(all.mapNotNull { it.identity?.value }.toSet())
@@ -857,6 +941,7 @@ object GroupCall {
                 tickSpeaker(); delay(250)
                 // A tile waiting for media (connecting / can't show) moves on by itself, once a second.
                 if (++n % 4 == 0 && _ui.value.members.any { it.connecting }) refresh()
+                if (n % 4 == 0) checkVideo(r)
             }
         }
     }
@@ -865,9 +950,11 @@ object GroupCall {
         val r = room ?: return
         // My own tile never takes the ring while anyone else is here (iOS: local is never ranked).
         val speaking = r.remoteParticipants.values.filter { it.isSpeaking }.mapNotNull { it.identity?.value }.toSet()
-        if (tracker.update(speaking, System.currentTimeMillis()) || _ui.value.activeSpeaker != tracker.activeSpeakerId) {
+        val now = System.currentTimeMillis()
+        if (tracker.update(speaking, now) || _ui.value.activeSpeaker != tracker.activeSpeakerId) {
             _ui.value = _ui.value.copy(activeSpeaker = tracker.activeSpeakerId)
         }
+        tracker.activeSpeakerId?.let { lastSpoke[it] = now }
     }
 
     private var requestsReg: ListenerRegistration? = null
@@ -1041,6 +1128,7 @@ object GroupCall {
         groupReg?.remove(); groupReg = null
         team = null; linkKey = null; passRole = CallRole.PARTICIPANT; sawMicBlocked = false; firstSeen.clear(); screenSince.clear(); cameraWaitSince.clear()
         ticks?.cancel(); ticks = null
+        lastSpoke.clear(); stageFocus = null; videoGate.reset(); lastLive = null
         tracker.update(emptySet(), Long.MAX_VALUE / 2)
         if (link != null && _ui.value.waiting) {
             // Giving up while still waiting withdraws the request (the rules allow it only while pending).
