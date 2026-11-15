@@ -129,4 +129,24 @@ class MessageRulesTest {
             "grp") { _, uid -> if (uid == "a") "👍" else "" }
         assertEquals(mapOf("a" to "👍"), m.reactions)
     }
+
+    /** "sending a photo…" (owner 2026-11-14): values, reading, and the header line's order. */
+    @Test fun sendingStatus() {
+        assertEquals("photo-1700", MessageRules.sendingValue("photo", 1_700_000L))
+        assertEquals(false, MessageRules.sendingValue(null, 1_700_000L))
+        assertEquals("photo", MessageRules.isSending("photo-1700"))
+        assertEquals("video", MessageRules.isSending("video-1700"))
+        assertEquals("file", MessageRules.isSending("file-1700"))
+        assertEquals(null, MessageRules.isSending("text-1700"))
+        assertEquals(null, MessageRules.isSending("audio-1700"))
+        assertEquals(null, MessageRules.isSending(true))
+        assertEquals(false, MessageRules.isTyping("photo-1700"))
+        val names = mapOf("a" to "Ali", "b" to "Bo")
+        assertEquals("sending a photo…", MessageRules.liveLine(mapOf("a" to "photo-1"), "me", false, true, true) { names[it] })
+        assertEquals("Ali is sending a video…", MessageRules.liveLine(mapOf("a" to "video-1"), "me", true, true, true) { names[it] })
+        assertEquals("typing…", MessageRules.liveLine(mapOf("a" to "photo-1", "b" to "text-1"), "me", false, true, true) { names[it] })
+        assertEquals("recording…", MessageRules.liveLine(mapOf("a" to "photo-1", "b" to "audio-1"), "me", false, true, true) { names[it] })
+        assertEquals(null, MessageRules.liveLine(mapOf("a" to "photo-1"), "me", false, false, true) { names[it] })
+        assertEquals(null, MessageRules.liveLine(mapOf("me" to "photo-1"), "me", false, true, true) { names[it] })
+    }
 }

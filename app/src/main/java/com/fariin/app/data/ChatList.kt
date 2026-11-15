@@ -322,6 +322,18 @@ object ChatList {
         return if (names.size == 1) "${names[0]} is typing…" else "${names.joinToString(", ")} are typing…"
     }
 
+    /** "sending a photo…" / "Ali is sending a video…" (owner 2026-11-14): after typing and recording. */
+    fun sendingLabel(c: Conversation, me: String, nowMs: Double = System.currentTimeMillis().toDouble()): String? {
+        if (c.isBlockedByMe(me)) return null
+        val who = c.others(me).filter { c.sending[it] != null && c.activityFresh(it, nowMs) && !hiddenByBlock(c, it, nowMs) }
+        if (who.isEmpty()) return null
+        val kinds = who.mapNotNull { c.sending[it] }.distinct()
+        val words = if (kinds.size == 1) MessageRules.sendingWords(kinds[0]) else "sending files"
+        if (!c.isGroup) return "$words…"
+        val names = who.map { (c.names[it] ?: "Someone").split(" ").first() }
+        return if (names.size == 1) "${names[0]} is $words…" else "${names.joinToString(", ")} are $words…"
+    }
+
     /** The preview line under the name, as one string (the widget). */
     fun previewLine(c: Conversation, me: String, decryptor: MessageDecryptor, senderName: (String) -> String?): String =
         rowPreview(c, me, decryptor, senderName).plain

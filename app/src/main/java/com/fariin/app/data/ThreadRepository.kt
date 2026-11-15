@@ -1059,6 +1059,62 @@ class ThreadRepository(
         }
     }
 
+    // ------------------------------------------------------------------ "sending a photo…"
+
+    /** My uploads running in this chat now, clientId to kind ("photo", "video", "file"). */
+    private val sendingNow = ConcurrentHashMap<String, String>()
+    @Volatile private var sendingTicker: Job? = null
+
+    /** The kind a pending media bubble is sending, or null (a voice note says "recording" instead). */
+    private fun sendingKind(clientId: String): String? {
+        val m = pending[clientId] ?: return "photo"
+        return when (m.mediaKind) {
+            Message.MediaKind.VIDEO -> "video"
+            Message.MediaKind.ALBUM -> if (m.album.any { it.isVideo }) "video" else "photo"
+            Message.MediaKind.FILE -> "file"
+            Message.MediaKind.VOICE -> null
+            Message.MediaKind.VIEW_ONCE -> "photo"
+            else -> if (m.type == "video") "video" else "photo"
+        }
+    }
+
+    /**
+     * "sending a photo…" (owner 2026-11-14, shared with iOS): while any of my uploads runs here,
+     * `typing.<me>` = "photo-<s>" / "video-<s>" / "file-<s>" (a video anywhere wins, then photo),
+     * re-sent every 10 s; false once the last one ends, fails or is cancelled. Same Typing
+     * Indicators switch and membership check as typing.
+     */
+    private fun publishSending() {
+        val kinds = sendingNow.values.toSet()
+        val kind = when { "video" in kinds -> "video"; "photo" in kinds -> "photo"; "file" in kinds -> "file"; else -> null }
+        if (kind != null && !PrivacySettings.typingIndicators()) return
+        if (Wire.isGroupCid(cid) && me !in ((_state.value.conv["users"] as? List<*>) ?: emptyList<Any>())) return
+        SendScope.launch {
+            try {
+                val v = MessageRules.sendingValue(kind, System.currentTimeMillis())
+                convRef.set(mapOf("typing" to mapOf(me to v)), SetOptions.merge()).await()
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun sendingStart(clientId: String) {
+        val kind = sendingKind(clientId) ?: return
+        sendingNow[clientId] = kind
+        publishSending()
+        if (sendingTicker?.isActive != true) sendingTicker = SendScope.launch {
+            while (sendingNow.isNotEmpty()) {
+                kotlinx.coroutines.delay(MessageRules.RECORDING_REFRESH_MS)
+                if (sendingNow.isNotEmpty()) publishSending()
+            }
+        }
+    }
+
+    private fun sendingEnd(clientId: String) {
+        if (sendingNow.remove(clientId) == null) return
+        if (sendingNow.isEmpty()) sendingTicker?.cancel()
+        publishSending()
+    }
+
     /** Runs one media send; a failure leaves a red bubble whose tap runs the same work again. */
     private fun runMediaSend(clientId: String, work: suspend () -> Unit): Job {
         // On the app's scope, not the chat's: leaving the chat right after Send cancelled the chat's
@@ -1068,6 +1124,7 @@ class ThreadRepository(
         val job = SendScope.launch(Dispatchers.IO, start = kotlinx.coroutines.CoroutineStart.LAZY) {
             // A try again starts its rings over (a failed send's were settled).
             com.fariin.app.media.UploadProgress.reset(clientId)
+            sendingStart(clientId)
             try {
                 work()
                 retryMedia.remove(clientId)
@@ -1079,7 +1136,7 @@ class ThreadRepository(
                 com.fariin.app.media.UploadProgress.done(clientId)
                 pending[clientId]?.let { pending[clientId] = it.copy(sendState = Message.SendState.FAILED) }
                 rebuild()
-            }
+            } finally { sendingEnd(clientId) }
         }
         com.fariin.app.media.MediaSend.register(clientId, job)
         job.start()
@@ -1371,6 +1428,7 @@ class ThreadRepository(
         )
         rebuild()
         val job = scope.launch(Dispatchers.IO, start = kotlinx.coroutines.CoroutineStart.LAZY) {
+            sendingStart(clientId)
             try {
                 photoNow(prep, clientId, tap)
                 com.fariin.app.media.MediaSend.finish(clientId)
@@ -1379,7 +1437,7 @@ class ThreadRepository(
                 retryPhoto[clientId] = prep
                 pending[clientId]?.let { pending[clientId] = it.copy(sendState = Message.SendState.FAILED) }
                 rebuild()
-            }
+            } finally { sendingEnd(clientId) }
         }
         com.fariin.app.media.MediaSend.register(clientId, job)
         job.start()

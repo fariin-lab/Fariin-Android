@@ -104,6 +104,8 @@ data class Conversation(
      *  [typingAt] is each flag's refresh time in seconds (0 / absent from an older build). */
     val typing: Map<String, Boolean> = emptyMap(),
     val recording: Map<String, Boolean> = emptyMap(),
+    /** "photo-<s>" / "video-<s>" / "file-<s>": who is sending what right now (MessageRules.isSending). */
+    val sending: Map<String, String> = emptyMap(),
     val typingAt: Map<String, Double> = emptyMap(),
     /** A digest of the raw typing map: the row's 15 s self-clear restarts whenever it changes. */
     val typingRawKey: String = "",
@@ -316,6 +318,8 @@ data class Conversation(
                     (k as? String)?.takeIf { MessageRules.isTyping(v) }?.let { it to true } }?.toMap() ?: emptyMap(),
                 recording = (data["typing"] as? Map<*, *>)?.mapNotNull { (k, v) ->
                     (k as? String)?.takeIf { MessageRules.isRecording(v) }?.let { it to true } }?.toMap() ?: emptyMap(),
+                sending = (data["typing"] as? Map<*, *>)?.mapNotNull { (k, v) ->
+                    val kind = MessageRules.isSending(v); if (k is String && kind != null) k to kind else null }?.toMap() ?: emptyMap(),
                 typingAt = (data["typing"] as? Map<*, *>)?.mapNotNull { (k, v) ->
                     val at = (v as? String)?.substringAfter('-', "")?.toDoubleOrNull()
                     if (k is String && at != null) k to at else null }?.toMap() ?: emptyMap(),
