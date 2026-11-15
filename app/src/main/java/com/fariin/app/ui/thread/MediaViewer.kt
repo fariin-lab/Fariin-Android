@@ -848,8 +848,8 @@ internal fun viewerHost(ui: ThreadUi, actions: ThreadActions, onSendPick: ((List
             com.fariin.app.data.GroupAdmins.slowWait(doc, ui.me,
                 ui.messages.lastOrNull { it.authorId == ui.me && !it.isSystem }?.createdAtMillis, System.currentTimeMillis().toDouble())
                 ?: com.fariin.app.data.GroupAdmins.heldBack(doc, ui.me, com.fariin.app.data.GroupAdmins.SendKind.PHOTOS)
-        if (stop != null) actions.onNotice(stop) else pick(listOf(photo), caption, once && !ui.isGroup)
+        if (stop != null) actions.onNotice(stop) else pick(listOf(photo), caption, once && ui.channel == null)
     } },
-    allowViewOnce = !ui.isGroup,
+    allowViewOnce = ui.channel == null,   // groups too, as iOS (owner 2026-11-14); never a channel
     forwardTo = actions.onForwardTo,
 )

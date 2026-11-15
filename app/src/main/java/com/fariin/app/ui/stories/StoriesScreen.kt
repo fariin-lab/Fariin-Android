@@ -481,6 +481,14 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             }
             item { Spacer(Modifier.height(24.dp)) }
         }
+        // The round camera at the bottom right (owner 2026-11-14: Android people look there, not at the
+        // Add Story row): the page's main action, in the same place and style as New Chat on Chats.
+        if (live) androidx.compose.material3.IconButton(onClick = addStory,
+            modifier = Modifier.align(Alignment.BottomEnd)
+                .padding(end = 16.dp, bottom = com.fariin.app.ui.shell.bottomBarInset() + 16.dp)
+                .size(56.dp).floating(fill = c.accent)) {
+            Icon(ImageVector.vectorResource(R.drawable.ic_story_camera), contentDescription = "Add Story", tint = c.onAccent)
+        }
     }
     viewing?.let { (groups, start) ->
         // Live copies of the rings, so a story posted or deleted meanwhile is not stale when opened.

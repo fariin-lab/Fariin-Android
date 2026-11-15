@@ -53,6 +53,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
@@ -255,10 +256,21 @@ private fun EditorBody(
     Box(Modifier.fillMaxSize().background(Color.Black).onSizeChanged { if (!imeNow() || box == IntSize.Zero) box = it }) {
         picture?.let { p ->
             Canvas(Modifier.fillMaxSize()) {
-                if (img.width > 0f) drawImage(
-                    p, dstOffset = IntOffset(img.left.toInt(), img.top.toInt()),
-                    dstSize = IntSize(img.width.toInt(), img.height.toInt()), filterQuality = FilterQuality.High,
-                )
+                // The photo with rounded corners, as iOS draws it before Send (owner 2026-11-14); the
+                // sent file is untouched, only this preview is rounded. Square while the pen is out.
+                if (img.width > 0f) {
+                    val r = if (drawing) 0f else 20.dp.toPx()
+                    val frame = androidx.compose.ui.graphics.Path().apply {
+                        addRoundRect(androidx.compose.ui.geometry.RoundRect(img.left, img.top, img.left + img.width, img.top + img.height,
+                            androidx.compose.ui.geometry.CornerRadius(r, r)))
+                    }
+                    clipPath(frame) {
+                        drawImage(
+                            p, dstOffset = IntOffset(img.left.toInt(), img.top.toInt()),
+                            dstSize = IntSize(img.width.toInt(), img.height.toInt()), filterQuality = FilterQuality.High,
+                        )
+                    }
+                }
             }
         }
         if (picture == null) com.fariin.app.ui.components.FariinSpinner(Modifier.align(Alignment.Center), size = 30.dp, stroke = 3.dp, color = Color.White)

@@ -1519,7 +1519,7 @@ private fun ThreadContent(
                     val stop = slow() ?: links ?: long
                     if (stop != null && editing == null) actions.onNotice(stop) else send(t, ids, fmt)
                 }
-                if (attachOpen) AttachSheet(allowViewOnce = !ui.isGroup, onDismiss = { attachOpen = false; attachCamera = false; AttachKeyboard.release() },
+                if (attachOpen) AttachSheet(allowViewOnce = ui.channel == null, onDismiss = { attachOpen = false; attachCamera = false; AttachKeyboard.release() },
                     cameraFirst = attachCamera,
                     onSendMedia = { uris, cap, once ->
                         val kinds = uris.map { if ((resolver.getType(it) ?: "").startsWith("video/")) com.fariin.app.data.GroupAdmins.SendKind.VIDEOS

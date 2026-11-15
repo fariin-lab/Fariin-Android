@@ -554,7 +554,9 @@ private fun RecentTile(item: RecentMedia.Item, number: Int, onToggle: () -> Unit
         .semantics { contentDescription = if (item.isVideo) "Video" else "Photo" }) {
         bmp?.let {
             Image(it, null, contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().then(if (chosen) Modifier.padding(6.dp).clip(RoundedCornerShape(8.dp)) else Modifier))
+                // A chosen picture stays full size; the numbered circle is the answer (owner 2026-11-14:
+                // it shrank with a gap round it, iOS does not).
+                modifier = Modifier.fillMaxSize())
         }
         if (item.isVideo) {
             Row(Modifier.align(Alignment.BottomStart).padding(6.dp).clip(RoundedCornerShape(50))

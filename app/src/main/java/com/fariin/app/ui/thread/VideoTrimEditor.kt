@@ -51,6 +51,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -336,10 +337,17 @@ internal fun VideoTrimStrip(s: TrimState, modifier: Modifier = Modifier, stripHe
                 // once and each real frame takes its place as it comes.
                 val stand = s.thumbs.firstOrNull { it != null }
                 Row(Modifier.fillMaxSize().background(Color(0xFF2C2C2E))) {
-                    for (t in s.thumbs.map { it ?: stand }) androidx.compose.animation.Crossfade(targetState = t, modifier = Modifier.weight(1f).fillMaxHeight(),
-                        animationSpec = tween<Float>(180), label = "trimThumb") { bmp: ImageBitmap? ->
-                        if (bmp != null) Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                        else Box(Modifier.fillMaxSize())
+                    // The stand-in stays fully drawn and only the real frame fades in ON TOP: a crossfade
+                    // let both go half see-through and every slot flashed the dark ground in turn, a
+                    // grey patch sweeping across the strip (owner 2026-11-14, Pixel recording).
+                    for (t in s.thumbs) Box(Modifier.weight(1f).fillMaxHeight()) {
+                        stand?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+                        if (t != null && t !== stand) {
+                            val a = remember(t) { androidx.compose.animation.core.Animatable(0f) }
+                            androidx.compose.runtime.LaunchedEffect(t) { a.animateTo(1f, tween(180)) }
+                            Image(t, null, contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize().graphicsLayer { this.alpha = a.value })
+                        }
                     }
                 }
                 Box(Modifier.width(with(density) { startX.toDp() }).fillMaxHeight().background(Color.Black.copy(alpha = 0.55f)))
