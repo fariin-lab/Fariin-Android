@@ -358,6 +358,9 @@ fun StoryViewer(
     // through) opens the channel or group page, with Join / Follow there, or the chat with the person.
     // Everything else stays as it was: the in-app browser over the story.
     val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
+    // The story holds still while a post link is being checked, so its last seconds cannot run out
+    // and close the viewer (and the check with it) between the bubble's tap and the channel opening.
+    var postOpening by remember { mutableStateOf(false) }
     val openLink: (String) -> Unit = { url ->
         val post = com.fariin.app.data.StoryPostLink.ref(url)
         if (post != null) {
@@ -365,18 +368,21 @@ fun StoryViewer(
             // channel opens, one in my chats or follows, or one whose document says it is a channel
             // (a public one a visitor may read). Anything else does nothing; never the browser.
             val (cid, mid) = post
-            scope.launch {
-                val known = com.fariin.app.data.ChatsNow.findAny(cid)?.isChannel == true ||
-                    com.fariin.app.channel.ChannelFollows.entries.value.containsKey(cid)
-                val channel = known || runCatching {
-                    com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("conversations")
-                        .document(cid).get().await().getBoolean("channel") == true
-                }.getOrDefault(false)
-                if (!channel) return@launch
-                onClose()
-                // The channel's thread scrolls to the post and lights it once its messages are in.
-                com.fariin.app.data.QuoteStore.pendingJump.value = com.fariin.app.data.QuoteStore.Jump(cid, mid)
-                channelNav.open(cid)
+            if (!postOpening) scope.launch {
+                postOpening = true
+                try {
+                    val known = com.fariin.app.data.ChatsNow.findAny(cid)?.isChannel == true ||
+                        com.fariin.app.channel.ChannelFollows.entries.value.containsKey(cid)
+                    val channel = known || runCatching {
+                        com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("conversations")
+                            .document(cid).get().await().getBoolean("channel") == true
+                    }.getOrDefault(false)
+                    if (!channel) return@launch
+                    onClose()
+                    // The channel's thread scrolls to the post and lights it once its messages are in.
+                    com.fariin.app.data.QuoteStore.pendingJump.value = com.fariin.app.data.QuoteStore.Jump(cid, mid)
+                    channelNav.open(cid)
+                } finally { postOpening = false }
             }
         } else if (com.fariin.app.data.StoryLinkCardRules.opensInApp(url)) {
             onClose()
@@ -808,7 +814,7 @@ fun StoryViewer(
                         convs.firstOrNull { !it.isGroup && it.users.contains(st.authorUid) && it.users.contains(me) }?.isBlockedByMe(me) == true) },
                     onRepost = { st -> startRepost(st, g) },
                     me = me, group = g, card = cardOf(g), active = page == pager.currentPage && !pager.isScrollInProgress,
-                    paused = sheetFor != null || profileUid != null || confirmDelete != null || replyFocused || hero.live || reposting.value || guideUp || editViewersFor != null || reportUp,
+                    paused = postOpening || sheetFor != null || profileUid != null || confirmDelete != null || replyFocused || hero.live || reposting.value || guideUp || editViewersFor != null || reportUp,
                     // The bars and caption stay inside the shrinking card and fade as it shrinks (iOS);
                     // over a third of the pull they were gone in a frame on a quick swipe.
                     chrome = {
