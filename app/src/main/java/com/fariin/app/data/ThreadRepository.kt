@@ -164,7 +164,8 @@ class ThreadRepository(
             val now = System.currentTimeMillis().toDouble()
             // The phone's own history first (device-storage plan phase 1), the old sealed copy
             // only until the database has this chat.
-            val fromDb = com.fariin.app.local.LocalDb.newest(me, cid, com.fariin.app.local.LocalCache.THREAD_CAP)
+            val fromDb = ThreadRowsPrefetch.take(me, cid)
+                ?: com.fariin.app.local.LocalDb.newest(me, cid, com.fariin.app.local.LocalCache.THREAD_CAP)
             val saved = (fromDb.ifEmpty { LocalCache.loadThread(me, cid) })
                 .filter { !HiddenMessages.isHidden(it.id) && !Disappearing.isExpired(it, now) }
             // A forward just sent here is in the first frame too, under the saved rows.

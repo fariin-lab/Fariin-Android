@@ -381,9 +381,18 @@ class MainActivity : ComponentActivity() {
             nav.navigate("joinlink/$key/${if (video) "video" else "voice"}") { launchSingleTop = true }
         }
         val people = remember(me) { com.fariin.app.data.FirestorePeople(me, crypto) }
-        CompositionLocalProvider(LocalOpenChat provides { conv -> nav.navigate("thread/${conv.id}") { launchSingleTop = true } },
-            com.fariin.app.ui.people.LocalPeopleNav provides com.fariin.app.ui.people.peopleNav(nav, people),
-            com.fariin.app.ui.channels.LocalChannelNav provides com.fariin.app.ui.channels.channelNav(nav)) {
+        // Made once, not on every recomposition: this root recomposes on each page change, and a new
+        // lambda or nav object here was a new CompositionLocal value, so every chat row rebuilt on the
+        // tap frame and again on the close frame (~11 ms of a 48 ms frame, trace 2026-11-15).
+        val openChatFn: (com.fariin.app.data.Conversation) -> Unit = remember(nav, me) { { conv ->
+            // The saved rows start loading now, off the main thread, while the page is set up.
+            com.fariin.app.data.ThreadRowsPrefetch.prefetch(me, conv.id)
+            nav.navigate("thread/${conv.id}") { launchSingleTop = true } } }
+        val peopleNavObj = remember(nav, people) { com.fariin.app.ui.people.peopleNav(nav, people) }
+        val channelNavObj = remember(nav) { com.fariin.app.ui.channels.channelNav(nav) }
+        CompositionLocalProvider(LocalOpenChat provides openChatFn,
+            com.fariin.app.ui.people.LocalPeopleNav provides peopleNavObj,
+            com.fariin.app.ui.channels.LocalChannelNav provides channelNavObj) {
             // A profile, invite or story link opened from outside the app (App Links).
             com.fariin.app.ui.thread.ExternalLinkHost(me)
             com.fariin.app.ui.people.EditProfileSheetHost(people)

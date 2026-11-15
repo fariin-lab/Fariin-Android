@@ -118,11 +118,17 @@ internal class GatedFile(val file: File?, val state: Fetch, val url: String? = n
 internal fun rememberGatedFile(url: String?, enc: EncMeta?, kind: AutoDownload.Kind?): GatedFile {
     val media = chatMedia()
     val ctx = LocalContext.current
-    var file by remember(url) { mutableStateOf(url?.let { media.cached(it) }) }
+    var file by remember(url) { mutableStateOf(url?.let { media.peek(it) }) }
+    // Marked used in the background, not in the chat's opening frame.
+    LaunchedEffect(url) { file?.let { f -> withContext(Dispatchers.IO) { media.touch(f) } } }
     var state by remember(url) {
-        val auto = url == null || ChatMedia.isLocal(url) || kind == null || AutoDownload.allowedNow(ctx, kind)
-        // A transfer already running (started by a tap, then scrolled away and back) is picked up.
-        mutableStateOf(when { url == null || file != null -> Fetch.DONE; auto || ChatMedia.isFetching(url) -> Fetch.LOADING; else -> Fetch.WAITING })
+        // A picture already here is DONE without asking the network rules (a system call per bubble
+        // on the chat's opening frame, trace 2026-11-15).
+        if (url == null || file != null) mutableStateOf(Fetch.DONE) else {
+            val auto = ChatMedia.isLocal(url) || kind == null || AutoDownload.allowedNow(ctx, kind)
+            // A transfer already running (started by a tap, then scrolled away and back) is picked up.
+            mutableStateOf(if (auto || ChatMedia.isFetching(url)) Fetch.LOADING else Fetch.WAITING)
+        }
     }
     LaunchedEffect(url, state) {
         if (state == Fetch.LOADING && url != null) {

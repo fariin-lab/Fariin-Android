@@ -57,7 +57,10 @@ object PowerRules {
         // of a tab change (24.6 -> 11.8 ms); the switch in Power Saving still turns it on.
         return PowerChoices(blur = cls == PerfClass.HIGH, animations = on, autoplayVideos = on, autoplayGifs = on, followBatterySaver = true)
     }
-    fun glass(sdk: Int, cls: PerfClass, blurAllowed: Boolean) = sdk >= 31 && cls != PerfClass.LOW && blurAllowed
+    // Glass (blur and the liquid backdrop) only on a high-end phone, whatever the switch says (owner
+    // 2026-11-15: cheaper phones never use the liquid glass). Every glass surface reads this one rule
+    // and draws its plain fill in the same shape, colour and rim instead.
+    fun glass(sdk: Int, cls: PerfClass, blurAllowed: Boolean) = sdk >= 31 && cls == PerfClass.HIGH && blurAllowed
 }
 
 object PowerSaving {

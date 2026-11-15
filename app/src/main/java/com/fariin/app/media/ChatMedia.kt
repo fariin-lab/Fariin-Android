@@ -40,6 +40,15 @@ class ChatMedia(
         // Used = young again, so the size cap (trim) drops the files nobody looked at for longest.
         ?.also { it.setLastModified(System.currentTimeMillis()) }
 
+    /**
+     * [cached] without marking it used: the disk write moved off the main thread (a chat's first
+     * frame paid it once per picture). The caller marks it with [touch] in the background.
+     */
+    fun peek(url: String): File? = if (isLocal(url)) null else key(url).takeIf { it.exists() && it.length() > 0 }
+
+    /** Marks [f] used (young again for the size cap). Disk work: off the main thread. */
+    fun touch(f: File) { runCatching { f.setLastModified(System.currentTimeMillis()) } }
+
     /** Whether the file is in the cache, without touching it (the mark's media hold asks often). */
     fun has(url: String): Boolean = !isLocal(url) && key(url).let { it.exists() && it.length() > 0 }
 

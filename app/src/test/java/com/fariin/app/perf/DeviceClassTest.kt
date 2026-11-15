@@ -70,7 +70,8 @@ class DeviceClassTest {
     }
 
     @Test fun glassNeedsAndroid12NotLowAndBlur() {
-        assertTrue(PowerRules.glass(31, PerfClass.AVERAGE, true))
+        assertFalse(PowerRules.glass(31, PerfClass.AVERAGE, true))
+        assertTrue(PowerRules.glass(31, PerfClass.HIGH, true))
         assertFalse(PowerRules.glass(30, PerfClass.HIGH, true))
         assertFalse(PowerRules.glass(34, PerfClass.LOW, true))
         assertFalse(PowerRules.glass(34, PerfClass.HIGH, false))
