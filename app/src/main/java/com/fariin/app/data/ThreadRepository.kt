@@ -876,6 +876,8 @@ class ThreadRepository(
                 turn.withLock {
                     if (Wire.isGroupCid(cid)) sendGroup(e.text, e.clientId, e.ts, ref, mentions = e.mentions, fmt = e.fmt) else sendDirect(e.text, e.clientId, e.ts, ref, fmt = e.fmt)
                 }
+                // How long the server took to have it: a slow one is not a clock sample (ThreadOrder).
+                order.noteAck(e.clientId, System.currentTimeMillis() - e.ts)
                 SendQueue.remove(me, e.clientId)
                 styleAtSend.remove(e.clientId)
                 cardFor.remove(e.clientId)?.let { u -> on.launch { attachCard(e.clientId, u) } }
@@ -1652,7 +1654,25 @@ class ThreadRepository(
     }
 
     /** iOS freshGroupMembers: the member list from the SERVER; the cached one when offline. */
-    private suspend fun freshMembers(): List<String> = try {
+    private suspend fun freshMembers(): List<String> {
+        heldMembers()?.let { return it }
+        return serverMembers()
+    }
+
+    /**
+     * The members as the chat's own live listener has them from the server. A server read of a
+     * document that is already listened to is answered from that same copy, only after waiting its
+     * turn behind every change the listener is still taking in: 1 to 4.5 s per send in a busy group
+     * on a cheap phone. Null while the listener has no server copy (then the server is asked).
+     */
+    private fun heldMembers(): List<String>? {
+        val snap = latestConv ?: return null
+        if (convReg == null || snap.metadata.isFromCache || !snap.exists()) return null
+        if (snap.getBoolean("e2ee") == false) CryptoHub.notePlainGroup(cid)
+        return (snap.get("users") as? List<*>)?.filterIsInstance<String>()?.takeIf { it.isNotEmpty() }
+    }
+
+    private suspend fun serverMembers(): List<String> = try {
         val snap = convRef.get(Source.SERVER).await()
         if (snap.getBoolean("e2ee") == false) CryptoHub.notePlainGroup(cid)
         (snap.get("users") as? List<*>)?.filterIsInstance<String>()

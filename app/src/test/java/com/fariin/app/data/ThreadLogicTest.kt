@@ -110,6 +110,51 @@ class ThreadLogicTest {
         assertEquals(listOf("p", "t"), o.sort(listOf(text, photo)).map { it.id })
     }
 
+    private fun mine(id: String, tap: Double, stamp: Double? = null) = Message(id = id, clientId = id, authorId = "me",
+        text = id, createdAtMillis = stamp ?: tap, clientTs = tap, hasServerTime = stamp != null,
+        sendState = if (stamp == null) Message.SendState.SENDING else null)
+
+    @Test fun slowSendDoesNotPushTheNextOneBelowNewerMessages() {
+        // Busy group, cheap phone (2026-11-15): one send took 20 s to reach the server.
+        val o = ThreadOrder()
+        val a = msg("a", "x", 1_000.0, clientTs = 1_000.0)
+        val slow = mine("s1", 2_000.0, stamp = 22_000.0)
+        o.noteAck("s1", 20_000.0)
+        assertEquals(0.0, o.offsetMs("me"), 0.0)
+        // The next one, tapped at 30 s, still on its way: at the end, below what came in meanwhile.
+        val b = msg("b", "x", 30_500.0, clientTs = 30_500.0)
+        val next = mine("s2", 30_000.0)
+        assertEquals(listOf("a", "s1", "b", "s2"), o.sort(listOf(a, slow, b, next)).map { it.id })
+        // Acked at 31 s: its server place, above everything that came later (it was stuck at 50 s).
+        val c = msg("c", "x", 40_000.0, clientTs = 40_000.0)
+        val acked = mine("s2", 30_000.0, stamp = 31_000.0)
+        assertEquals(listOf("a", "s1", "b", "s2", "c"), o.sort(listOf(c, acked, b, slow, a)).map { it.id })
+    }
+
+    @Test fun pendingSitsAtTheEndInTapOrder() {
+        val o = ThreadOrder()
+        val a = msg("a", "x", 10_000.0, clientTs = 10_000.0)
+        // My phone's clock 8 s behind the server: the raw tap time would put them above "a".
+        val p1 = mine("p1", 3_000.0)
+        val p2 = mine("p2", 3_500.0)
+        assertEquals(listOf("a", "p1", "p2"), o.sort(listOf(p2, a, p1)).map { it.id })
+    }
+
+    @Test fun clockOffsetIgnoresOutliersAndIsClamped() {
+        assertEquals(0.0, ThreadOrder.robustOffset(listOf(20_000.0)), 0.0)            // too few
+        assertEquals(0.0, ThreadOrder.robustOffset(listOf(100.0, 20_000.0)), 0.0)
+        assertEquals(110.0, ThreadOrder.robustOffset(listOf(100.0, 110.0, 130.0, 20_000.0, 120.0)), 0.0)
+        assertEquals(5_000.0, ThreadOrder.robustOffset(listOf(9_000.0, 9_100.0, 9_200.0)), 0.0)
+        assertEquals(-5_000.0, ThreadOrder.robustOffset(listOf(-9_000.0, -9_100.0, -9_200.0)), 0.0)
+        // A send whose own trip took over 2 s is not a sample.
+        val o = ThreadOrder()
+        val rows = (1..4).map { i -> mine("m$i", i * 1_000.0, stamp = i * 1_000.0 + 200.0) } +
+            mine("slow", 9_000.0, stamp = 29_000.0)
+        o.noteAck("slow", 20_000.0)
+        o.sort(rows)
+        assertEquals(200.0, o.offsetMs("me"), 0.0)
+    }
+
     // ------------------------------------------------------------ parsing
 
     @Test fun parseMessage() {

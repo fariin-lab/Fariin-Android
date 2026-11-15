@@ -117,39 +117,83 @@ object ThreadLogic {
 }
 
 /**
- * Where a message sits, iOS ThreadRepository `assignOrderKeys`: the server stamp decides between
- * people; within one author the keys follow TAP order (a slow photo keeps its place above a text
- * typed after it); a row still in flight uses its tap time shifted by its author's measured clock
- * offset; and a key never changes once given, so a bubble does not jump when its ack lands.
+ * Where a message sits (iOS ThreadRepository `assignOrderKeys`, outlier fix 2026-11-15):
+ * 1. A message with a server stamp takes the stamp as its key. Within one author the keys follow
+ *    TAP order (a slow photo keeps its place above a text typed after it). Between two stamped
+ *    rows of one author (two phones, two clocks) the stamps alone decide. The key never changes
+ *    once given.
+ * 2. A message still on its way (no server stamp) sits at the END, below everything stamped, in
+ *    the order it was tapped. Its key is not kept: once the server has it, rule 1 places it.
+ *    (It used to keep the key it got while in flight, its tap time plus its author's clock
+ *    offset; one 20 s slow send made that offset 20 s, and the next message stayed below newer
+ *    ones for good.)
+ * 3. The clock offset is only a tie-in for in-flight rows: measured from sends that reached the
+ *    server fast (a send whose own trip took over [SLOW_ACK_MS] is left out), at least
+ *    [MIN_SAMPLES] of them, the low quarter (network delay only ever adds), clamped to [MAX_OFFSET_MS].
  */
 class ThreadOrder {
     private val sticky = HashMap<String, Double>()
     private var offsets: Map<String, Double> = emptyMap()
+    /** rowId -> ms from my tap to the server's ack, for my own sends (written from the send's thread). */
+    private val ackTrip = java.util.concurrent.ConcurrentHashMap<String, Double>()
+
+    /** My send [rowId] was acked [tripMs] after its tap. */
+    fun noteAck(rowId: String, tripMs: Double) { ackTrip[rowId] = tripMs }
+
+    /** The offset in use for [author] (tests). */
+    fun offsetMs(author: String): Double = offsets[author] ?: 0.0
 
     fun sort(msgs: Collection<Message>): List<Message> {
-        // Median clock offset per author, from rows that have both halves.
-        offsets = msgs.filter { it.hasServerTime && it.clientTs != null }
+        offsets = msgs.filter { it.hasServerTime && it.clientTs != null && (ackTrip[it.rowId] ?: 0.0) <= SLOW_ACK_MS }
             .groupBy { it.authorId }
-            .mapValues { (_, l) -> l.map { it.createdAtMillis - it.clientTs!! }.sorted().let { it[it.size / 2] } }
-        for ((author, list) in msgs.groupBy { it.authorId }) {
-            val offset = offsets[author] ?: 0.0
-            val tapOrdered = list.sortedWith(compareBy<Message> { it.clientTs ?: it.createdAtMillis }.thenBy { it.rowId })
+            .mapValues { (_, l) -> robustOffset(l.map { it.createdAtMillis - it.clientTs!! }) }
+        fun tap(m: Message) = m.clientTs ?: m.createdAtMillis
+        val keys = HashMap<String, Double>()
+        // Rule 1: stamped rows (and the rare row with no stamp that is not a send of mine on its way).
+        for ((_, list) in msgs.filter { !inFlight(it) }.groupBy { it.authorId }) {
             var runningMax = Double.NEGATIVE_INFINITY
             var runningMaxHasServerTime = false
-            for (m in tapOrdered) {
-                val kept = sticky[m.rowId]
-                if (kept != null) {
-                    runningMax = maxOf(runningMax, kept)
-                    runningMaxHasServerTime = m.hasServerTime
-                    continue
+            for (m in list.sortedWith(compareBy<Message> { tap(it) }.thenBy { it.rowId })) {
+                val k = sticky[m.rowId] ?: run {
+                    // Two stamped rows first seen stamped: the stamps alone decide. Otherwise tap order
+                    // holds (the photo rule), also for my row that drew in flight and is stamped now.
+                    val wasInFlight = m.rowId in drawnInFlight
+                    val raw = if (m.hasServerTime) m.createdAtMillis else tap(m) + (offsets[m.authorId] ?: 0.0)
+                    val free = m.hasServerTime && runningMaxHasServerTime && !wasInFlight
+                    (if (free) raw else maxOf(raw, runningMax + 1.0)).also { sticky[m.rowId] = it }
                 }
-                val raw = if (m.hasServerTime) m.createdAtMillis else (m.clientTs ?: m.createdAtMillis) + offset
-                val k = if (m.hasServerTime && runningMaxHasServerTime) raw else maxOf(raw, runningMax + 1.0)
-                sticky[m.rowId] = k
-                runningMax = k
+                drawnInFlight.remove(m.rowId)
+                keys[m.rowId] = k
+                runningMax = maxOf(runningMax, k)
                 runningMaxHasServerTime = m.hasServerTime
             }
         }
-        return msgs.sortedWith(compareBy<Message> { sticky[it.rowId] ?: it.createdAtMillis }.thenBy { it.rowId })
+        // Rule 2: in-flight rows at the end, in tap order.
+        var end = keys.values.maxOrNull() ?: Double.NEGATIVE_INFINITY
+        for (m in msgs.filter { inFlight(it) }.sortedWith(compareBy<Message> { tap(it) }.thenBy { it.rowId })) {
+            val k = maxOf(tap(m) + (offsets[m.authorId] ?: 0.0), end + 1.0)
+            keys[m.rowId] = k
+            drawnInFlight.add(m.rowId)
+            end = k
+        }
+        return msgs.sortedWith(compareBy<Message> { keys[it.rowId] ?: it.createdAtMillis }.thenBy { it.rowId })
+    }
+
+    private val drawnInFlight = HashSet<String>()
+
+    /** A send of mine the server has not stamped yet (sending, or failed). */
+    private fun inFlight(m: Message) = !m.hasServerTime && m.sendState != null
+
+    companion object {
+        const val SLOW_ACK_MS = 2_000.0
+        const val MIN_SAMPLES = 3
+        const val MAX_OFFSET_MS = 5_000.0
+
+        /** server minus tap, per send: none until [MIN_SAMPLES]; the low quarter; at most +-[MAX_OFFSET_MS]. */
+        fun robustOffset(samples: List<Double>): Double {
+            if (samples.size < MIN_SAMPLES) return 0.0
+            val s = samples.sorted()
+            return s[s.size / 4].coerceIn(-MAX_OFFSET_MS, MAX_OFFSET_MS)
+        }
     }
 }
