@@ -38,9 +38,10 @@ import com.fariin.app.local.Drafts
 val LocalOpenChat = staticCompositionLocalOf<(Conversation) -> Unit> { {} }
 
 class ThreadViewModel(cid: String, me: String, crypto: FariinCrypto, context: Context) : ViewModel() {
-    init { HiddenMessages.load(context) }
+    // The phone's class first: the repository picks its redraw interval from it (cheap after launch).
+    init { HiddenMessages.load(context); com.fariin.app.perf.DeviceClass.get(context) }
     val repo = ThreadRepository(cid, me, crypto, viewModelScope, media = ChatMedia(context, cid, crypto)).also { it.start() }
-    override fun onCleared() { repo.stop(); repo.stopChannelSync() }
+    override fun onCleared() { repo.flushRead(); repo.stop(); repo.stopChannelSync() }
 }
 
 /** The live chat for [cid]: listener, receipts, send, and mark read like iOS. */
@@ -399,14 +400,16 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     LaunchedEffect(cid) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             var handled: String? = null
-            combine(vm.repo.state, atBottom) { st, bottom -> st to bottom }.collect { (st, bottom) ->
+            // Busy groups: one read mark per 2.5 s at most while open (never one per message), and
+            // the one still owed goes when the chat is left or the app goes to the background.
+            try { combine(vm.repo.state, atBottom) { st, bottom -> st to bottom }.collect { (st, bottom) ->
                 if (!st.loaded || !bottom || st.former) return@collect
                 // A group's doc is written only by its members: a visitor reading a public channel
                 // from outside (or a member before the doc has come) sends no read mark.
                 if (com.fariin.app.crypto.Wire.isGroupCid(cid) && me !in ((st.conv["users"] as? List<*>) ?: emptyList<Any>())) return@collect
                 val newest = st.messages.lastOrNull { it.authorId != me }?.rowId ?: ""
-                if (newest != handled) { handled = newest; vm.repo.markRead() }
-            }
+                if (newest != handled) { handled = newest; vm.repo.markReadThrottled() }
+            } } finally { vm.repo.flushRead() }
         }
     }
     val uploadCancel = remember(vm, me) { UploadCancel(me, vm.repo::cancelMediaSend, vm.repo::cancelAlbumItem) }

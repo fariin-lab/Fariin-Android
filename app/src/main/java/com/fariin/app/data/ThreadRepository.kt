@@ -105,8 +105,25 @@ class ThreadRepository(
 
     private val order = ThreadOrder()
     /** Raw docs by id, so a key arriving later can re-open them. */
+    // The message listener answers on a background thread (busy groups, 2026-11-15) while older
+    // pages answer on main: every change and every walk of these two maps holds [docsLock].
     private val liveDocs = LinkedHashMap<String, DocumentSnapshot>()
     private val olderDocs = LinkedHashMap<String, DocumentSnapshot>()
+    private val docsLock = Any()
+    /** Busy groups: listener answers redraw at most once per interval (150 ms, 250 ms on a LOW phone). */
+    private val msgGate = PublishGate(BusyChatRules.publishIntervalMs(com.fariin.app.perf.DeviceClass.peek()))
+    private val convGate = PublishGate(BusyChatRules.publishIntervalMs(com.fariin.app.perf.DeviceClass.peek()))
+    /** Bumped by each message listener answer; [rebuild] notes the value it drew, so a timed redraw
+     *  that a direct rebuild already covered is skipped. */
+    @Volatile private var docsSeq = 0L
+    @Volatile private var builtSeq = 0L
+    @Volatile private var owedSynced = false
+    @Volatile private var firstMsgAnswer = true
+    @Volatile private var firstConvAnswer = true
+    @Volatile private var latestConv: DocumentSnapshot? = null
+    /** The screen closed: a timed redraw still queued on the listener thread does nothing. (Not
+     *  msgReg: the first answer can reach the listener thread before msgReg is assigned.) */
+    @Volatile private var closed = false
     /** Older messages drawn from the phone's own history before the server's page lands (phase 1). */
     private val dbOlder = java.util.concurrent.ConcurrentHashMap<String, Message>()
     /** One listener per older page, so an edit, delete or reaction on an older message shows at once. */
@@ -132,8 +149,8 @@ class ThreadRepository(
     private val cardFor = ConcurrentHashMap<String, String>()
     /** The media sends (iOS ChatService media paths), see media/MediaSender. */
     private val sender: MediaSender by lazy { MediaSender(cid, me, crypto, media, db) }
-    private var msgReg: ListenerRegistration? = null
-    private var convReg: ListenerRegistration? = null
+    @Volatile private var msgReg: ListenerRegistration? = null
+    @Volatile private var convReg: ListenerRegistration? = null
     private var presenceReg: ListenerRegistration? = null
     private var otherReg: ListenerRegistration? = null
     private var myReg: ListenerRegistration? = null
@@ -227,12 +244,17 @@ class ThreadRepository(
 
     private fun startListeners() {
         if (msgReg != null) return
+        closed = false
+        firstMsgAnswer = true
+        firstConvAnswer = true
         msgReg = convRef.collection("messages")
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .limit(PAGE_SIZE)
             // Metadata too: a media message's last write (attach the file URL, drop `uploading`)
             // changes no value the server adds, so without this the "sending" mark never clears.
-            .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { snap, err ->
+            // Answered on the background thread: parse, open and sort happen there, the screen
+            // only gets the finished list (a busy group froze cheap phones on main).
+            .addSnapshotListener(listenExec, com.google.firebase.firestore.MetadataChanges.INCLUDE) { snap, err ->
                 if (snap == null) {
                     msgFailed = true
                     _state.update { it.copy(loaded = true, synced = true, error = LoadFailure.of(err)) }
@@ -240,38 +262,35 @@ class ThreadRepository(
                 }
                 if (_state.value.error != null) _state.update { it.copy(error = null) }
                 // Never blank an open thread on an empty offline snapshot (iOS), nor the saved copy.
-                if (snap.metadata.isFromCache && snap.isEmpty && (liveDocs.isNotEmpty() || seeded)) return@addSnapshotListener
+                if (snap.metadata.isFromCache && snap.isEmpty && (synchronized(docsLock) { liveDocs.isNotEmpty() } || seeded)) return@addSnapshotListener
+                // The first answer and any change to my own message draw at once (no added send
+                // latency); everything else is folded into one redraw per interval.
+                val urgent = firstMsgAnswer || snap.documentChanges.any { it.document.getString("authorId") == me }
+                firstMsgAnswer = false
                 seeded = false
                 live = true
                 windowFromServer = !snap.metadata.isFromCache
-                keepSlidOut(snap.documents, full = snap.size() >= PAGE_SIZE)
-                liveDocs.clear()
-                for (d in snap.documents) liveDocs[d.id] = d
+                synchronized(docsLock) {
+                    keepSlidOut(snap.documents, full = snap.size() >= PAGE_SIZE)
+                    liveDocs.clear()
+                    for (d in snap.documents) liveDocs[d.id] = d
+                    docsSeq++
+                }
                 if (!snap.metadata.isFromCache && snap.size() < PAGE_SIZE) _state.update { it.copy(canLoadOlder = false) }
-                rebuild(loaded = true)
-                if (!snap.metadata.isFromCache && !_state.value.synced) _state.update { it.copy(synced = true) }
+                if (!snap.metadata.isFromCache) owedSynced = true
+                askRedraw(urgent)
             }
-        convReg = convRef.addSnapshotListener { snap, err ->
-            // Removed from the group (or left on another phone): the rules refuse a non-member's
-            // read, so the listener ends refused. Asked once more, as iOS confirmRemovedFromGroup.
-            if (snap == null) {
-                if (Wire.isGroupCid(cid) && (err as? com.google.firebase.firestore.FirebaseFirestoreException)?.code ==
-                    com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) confirmRemoved()
+        convReg = convRef.addSnapshotListener(listenExec) { snap, err ->
+            // Busy groups: every member's lastRead, unreadCount and typing write lands here. The
+            // newest copy is kept and handled at most once per interval; the first one at once.
+            if (snap != null) {
+                latestConv = snap
+                val wait = convGate.ask(System.currentTimeMillis(), urgent = firstConvAnswer) ?: return@addSnapshotListener
+                firstConvAnswer = false
+                if (wait == 0L) handleConv() else listenExec.schedule({ handleConv() }, wait, java.util.concurrent.TimeUnit.MILLISECONDS)
                 return@addSnapshotListener
             }
-            val data = snap.data
-            if (data == null) {
-                if (Wire.isGroupCid(cid) && !snap.metadata.isFromCache) confirmRemoved()
-                return@addSnapshotListener
-            }
-            if (me in ((data["users"] as? List<*>) ?: emptyList<Any>())) wasMember = true
-            if (wasMember && !snap.metadata.isFromCache && FormerGroups.isFormer(cid, data, me)) { becomeFormer(data); return@addSnapshotListener }
-            val startBefore = if (Wire.isGroupCid(cid)) GroupManage.historyStart(_state.value.conv, me) else null
-            _state.update { it.copy(receipts = Receipts.from(data, me, cid), conv = data) }
-            // Chat History for new members changed (or my join time arrived): the list is cut again.
-            if (Wire.isGroupCid(cid) && msgReg != null && GroupManage.historyStart(data, me) != startBefore) rebuild()
-            if (data["e2ee"] == false) CryptoHub.notePlainGroup(cid)
-            syncPins(PinRules.pinnedIds(data))
+            onConv(null, err)
         }
         if (!Wire.isGroupCid(cid)) attachPresence(Wire.otherUid(cid, me))
         // A block or unblock made while the chat is open re-filters what shows.
@@ -283,6 +302,54 @@ class ThreadRepository(
             crypto.preloadKeys(members.filter { it != me })
             CryptoHub.bumpKeys()
             rebuild()
+        }
+    }
+
+    /** One redraw from listener answers: at once when [urgent], else folded per [msgGate] (listener thread only). */
+    private fun askRedraw(urgent: Boolean) {
+        val wait = msgGate.ask(System.currentTimeMillis(), urgent) ?: return
+        if (wait == 0L) redrawFromListener() else listenExec.schedule({ redrawFromListener() }, wait, java.util.concurrent.TimeUnit.MILLISECONDS)
+    }
+
+    private fun redrawFromListener() {
+        msgGate.ran(System.currentTimeMillis())
+        if (closed || _state.value.former) return
+        if (docsSeq != builtSeq || !_state.value.loaded) rebuild(loaded = true)
+        if (owedSynced) {
+            owedSynced = false
+            if (!_state.value.synced) _state.update { it.copy(synced = true) }
+        }
+    }
+
+    private fun handleConv() {
+        convGate.ran(System.currentTimeMillis())
+        if (closed || _state.value.former) return
+        onConv(latestConv ?: return, null)
+    }
+
+    /** The conversation document's answer (listener thread). */
+    private fun onConv(snap: DocumentSnapshot?, err: Exception?) {
+        run {
+            // Removed from the group (or left on another phone): the rules refuse a non-member's
+            // read, so the listener ends refused. Asked once more, as iOS confirmRemovedFromGroup.
+            if (snap == null) {
+                if (Wire.isGroupCid(cid) && (err as? com.google.firebase.firestore.FirebaseFirestoreException)?.code ==
+                    com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) confirmRemoved()
+                return@run
+            }
+            val data = snap.data
+            if (data == null) {
+                if (Wire.isGroupCid(cid) && !snap.metadata.isFromCache) confirmRemoved()
+                return@run
+            }
+            if (me in ((data["users"] as? List<*>) ?: emptyList<Any>())) wasMember = true
+            if (wasMember && !snap.metadata.isFromCache && FormerGroups.isFormer(cid, data, me)) { becomeFormer(data); return@run }
+            val startBefore = if (Wire.isGroupCid(cid)) GroupManage.historyStart(_state.value.conv, me) else null
+            _state.update { it.copy(receipts = Receipts.from(data, me, cid), conv = data) }
+            // Chat History for new members changed (or my join time arrived): the list is cut again.
+            if (Wire.isGroupCid(cid) && msgReg != null && GroupManage.historyStart(data, me) != startBefore) rebuild()
+            if (data["e2ee"] == false) CryptoHub.notePlainGroup(cid)
+            syncPins(PinRules.pinnedIds(data))
         }
     }
 
@@ -361,6 +428,7 @@ class ThreadRepository(
     }
 
     fun stop() {
+        closed = true
         backJob?.cancel(); backJob = null
         open.remove(cid, this)
         presenceReg?.remove(); presenceReg = null
@@ -409,7 +477,7 @@ class ThreadRepository(
     fun loadOlder() {
         val s = _state.value
         if (!s.canLoadOlder || s.loadingOlder || !s.loaded) return
-        val oldest = (liveDocs.values + olderDocs.values).mapNotNull { it.getTimestamp("createdAt") }.minOrNull() ?: return
+        val oldest = synchronized(docsLock) { (liveDocs.values + olderDocs.values).toList() }.mapNotNull { it.getTimestamp("createdAt") }.minOrNull() ?: return
         // The phone's own history (device-storage plan phase 1, same rule as iOS): used for an
         // older page only when the server cannot answer (offline, or nothing in 8 s). Online the
         // server stays the authority, so a message deleted for everyone never comes back from a
@@ -451,9 +519,11 @@ class ThreadRepository(
                         if (gone.isNotEmpty()) { gone.forEach { dbOlder.remove(it) }; com.fariin.app.local.LocalDb.forget(me, cid, gone) }
                     }
                     var added = 0
-                    for (d in snap.documents) {
-                        if (!liveDocs.containsKey(d.id) && !olderDocs.containsKey(d.id)) added++
-                        if (!liveDocs.containsKey(d.id)) olderDocs[d.id] = d
+                    synchronized(docsLock) {
+                        for (d in snap.documents) {
+                            if (!liveDocs.containsKey(d.id) && !olderDocs.containsKey(d.id)) added++
+                            if (!liveDocs.containsKey(d.id)) olderDocs[d.id] = d
+                        }
                     }
                     olderPageIds[page] = ids
                     // A short page from the server is the start of the chat; nothing new means the same.
@@ -464,10 +534,12 @@ class ThreadRepository(
                 }
                 // A later change on this page: edits, reactions, delete-for-everyone, or a message
                 // the server removed (gone from this page and from every other one).
-                for (d in snap.documents) if (!liveDocs.containsKey(d.id)) olderDocs[d.id] = d
-                for (id in olderPageIds[page]) {
-                    if (id in ids || liveDocs.containsKey(id)) continue
-                    if (olderPageIds.withIndex().none { (i, set) -> i != page && id in set }) olderDocs.remove(id)
+                synchronized(docsLock) {
+                    for (d in snap.documents) if (!liveDocs.containsKey(d.id)) olderDocs[d.id] = d
+                    for (id in olderPageIds[page]) {
+                        if (id in ids || liveDocs.containsKey(id)) continue
+                        if (olderPageIds.withIndex().none { (i, set) -> i != page && id in set }) olderDocs.remove(id)
+                    }
                 }
                 olderPageIds[page] = ids
                 if (page == olderPageIds.size - 1 && !snap.metadata.isFromCache && snap.size() < PAGE_SIZE)
@@ -501,6 +573,14 @@ class ThreadRepository(
 
     @Synchronized
     private fun rebuild(loaded: Boolean? = null) {
+        // The maps as they are now: the listener thread may change them while this runs.
+        val liveDocs: Map<String, DocumentSnapshot>
+        val olderDocs: Map<String, DocumentSnapshot>
+        synchronized(docsLock) {
+            liveDocs = LinkedHashMap(this.liveDocs)
+            olderDocs = LinkedHashMap(this.olderDocs)
+            builtSeq = docsSeq
+        }
         val all = LinkedHashMap<String, Message>()
         val unconfirmed = HashSet<String>()
         val now = System.currentTimeMillis().toDouble()
@@ -1995,7 +2075,7 @@ class ThreadRepository(
 
     /** iOS isHiddenByBlock: a fetched message left out because I had its author blocked when it was sent. */
     fun isHiddenByBlock(id: String): Boolean {
-        val d = liveDocs[id] ?: olderDocs[id] ?: return false
+        val d = synchronized(docsLock) { liveDocs[id] ?: olderDocs[id] } ?: return false
         val author = d.getString("authorId") ?: return false
         return author != me && BlockList.hides(author, Conversation.millis(d.get("createdAt")))
     }
@@ -2150,6 +2230,33 @@ class ThreadRepository(
         scope.launch { markReadNow(readReceipts) }
     }
 
+    /** While a chat is open: the read mark at most once per 2.5 s (BusyChatRules, same rule on
+     *  iOS); new messages in between fold into one trailing write. Same fields as [markRead]. */
+    private val readThrottle = ReadThrottle()
+    private var readTimer: Job? = null
+
+    fun markReadThrottled() {
+        val wait = readThrottle.ask(System.currentTimeMillis()) ?: return
+        if (wait == 0L) { markRead(); return }
+        readTimer = readScope.launch {
+            delay(wait)
+            if (readThrottle.takeOwed(System.currentTimeMillis())) markReadOn(readScope)
+        }
+    }
+
+    /** Leaving the chat or the app going to the background: a read mark still owed goes now. */
+    fun flushRead() {
+        if (!readThrottle.takeOwed(System.currentTimeMillis())) return
+        readTimer?.cancel(); readTimer = null
+        markReadOn(readScope)
+    }
+
+    /** [markRead] on a scope that outlives the chat screen (a flush on leaving must still land). */
+    private fun markReadOn(on: CoroutineScope) {
+        if (readMutex.isLocked) { readOwed = true; return }
+        on.launch { markReadNow() }
+    }
+
     /** [markRead] awaited (the notification's Mark as read, with no chat screen). */
     suspend fun markReadNow(readReceipts: Boolean = PrivacySettings.readReceipts()) {
         readMutex.withLock {
@@ -2179,7 +2286,7 @@ class ThreadRepository(
         val member = CryptoHub.listedConversation(cid)?.users?.contains(me) == true
         if (!member && !com.fariin.app.channel.ChannelFollows.follows(cid)) return   // a visitor: the window path
         val sync = ChannelSync(cid, me, convRef, scope, PAGE_SIZE,
-            held = { (olderDocs.values + liveDocs.values).toList() },
+            held = { synchronized(docsLock) { (olderDocs.values + liveDocs.values).toList() } },
             onChange = { loaded -> rebuild(loaded) },
             setOlder = { loading, can -> _state.update { it.copy(loadingOlder = loading ?: it.loadingOlder, canLoadOlder = can ?: it.canLoadOlder) } },
         )
@@ -2201,6 +2308,12 @@ class ThreadRepository(
     }
 
     companion object {
+        /** One background thread for the open chats' listeners (message window and chat doc). */
+        /** Read marks owed when a chat is left are written here, past the screen's own scope. */
+        private val readScope = CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+        private val listenExec: java.util.concurrent.ScheduledExecutorService =
+            java.util.concurrent.Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "fariin-chat-listen").apply { isDaemon = true } }
+
         /** The one row standing for the messages sealed before this phone's keys (iOS words). */
         const val KEYS_NOTICE_ID = "fariin-keys-notice"
         const val KEYS_NOTICE = "Messages from before you signed in on this device aren't available here. They're end-to-end encrypted."

@@ -62,6 +62,9 @@ object DeviceClass {
         return if (mhz.isEmpty()) null else (mhz.sum() / mhz.size).toInt()
     }
 
+    /** The class if it was already measured this run (no context needed); null before. */
+    fun peek(): PerfClass? = cached
+
     /** The saved class, measuring once when there is none. Cheap after the first call. */
     fun get(context: Context): PerfClass {
         cached?.let { return it }

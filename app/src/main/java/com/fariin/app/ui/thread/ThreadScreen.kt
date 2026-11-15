@@ -429,9 +429,23 @@ private fun ThreadContent(
     val context = LocalContext.current
     val is24h = remember { DateFormat.is24HourFormat(context) }
     val now = remember(ui.messages) { System.currentTimeMillis().toDouble() }
-    val geometry = remember(ui.messages) { ThreadLogic.geometry(ui.messages) }
-    // Newest at the bottom: the list is reversed, so index 0 is the newest message.
-    val reversed = remember(ui.messages) { ui.messages.indices.reversed().toList() }
+    // Worked out again only from where the list changed (a busy group adds rows many times a second).
+    val geometryCache = remember(ui.cid) { com.fariin.app.data.IncrementalGeometry() }
+    val geometry = remember(ui.messages) { geometryCache.update(ui.messages) }
+    // Newest at the bottom: the list is reversed, so index 0 is the newest message (a view, no copy).
+    val reversed = remember(ui.messages) { val n = ui.messages.size
+        object : AbstractList<Int>() { override val size = n; override fun get(index: Int) = n - 1 - index } }
+    // LOW phones in a busy group: more than 3 new rows in a second draw without arrival animations.
+    val lowPhone = remember { com.fariin.app.perf.DeviceClass.get(context) == com.fariin.app.perf.PerfClass.LOW }
+    val burstMeter = remember(ui.cid) { com.fariin.app.data.ArrivalBurst() }
+    val burstPrevLast = remember(ui.cid) { arrayOfNulls<String>(1) }
+    val bursting = remember(ui.messages) {
+        if (!lowPhone) false else {
+            val fresh = com.fariin.app.data.ArrivalBurst.newAtEnd(ui.messages, burstPrevLast[0])
+            burstPrevLast[0] = ui.messages.lastOrNull()?.rowId
+            burstMeter.note(android.os.SystemClock.elapsedRealtime(), fresh)
+        }
+    }
     // Pin notices ask whether the pinned message was deleted since: one look-up table per list,
     // built only once a notice asks (each notice used to search the whole list on every rebuild).
     val deletedById = remember(ui.messages) { lazy {
@@ -1141,8 +1155,9 @@ private fun ThreadContent(
                     // that lands live at the newest rises a short way into place (ArrivalMotion.kt).
                     val flight = rememberSendFlight(sendMotion, m, ui.me, isNewest = i == ui.messages.lastIndex,
                         atBottom = { listState.firstVisibleItemIndex <= 1 })
-                    val glide = if (flight != null) null else rememberArrivalGlide(arrivalMotion, m)
-                    Column(Modifier.animateItem(fadeInSpec = if (flight != null || glide != null) null else rowFade, placementSpec = rowPlace, fadeOutSpec = null)
+                    val glide = if (flight != null) null else rememberArrivalGlide(arrivalMotion, m)?.takeIf { !bursting }
+                    Column(Modifier.animateItem(fadeInSpec = if (flight != null || glide != null || bursting) null else rowFade,
+                        placementSpec = if (bursting) null else rowPlace, fadeOutSpec = null)
                         .sendFlight(flight)
                         .arrivalGlide(glide)
                         .fillMaxWidth().padding(top = g.gapDp.dp)) {

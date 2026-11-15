@@ -36,7 +36,17 @@ object LocalDb {
     private var app: Context? = null
     private val helpers = ConcurrentHashMap<String, Helper>()
     /** What was last written per row, so an unchanged message is never written again. */
-    private val written = ConcurrentHashMap<String, Int>()
+    // The Message object too: the thread keeps the same object for a message that did not change,
+    // so most rows are known unchanged without hashing them (busy groups, 2026-11-15).
+    private class Seen(val m: Message, val hash: Int)
+    private val written = ConcurrentHashMap<String, Seen>()
+    private fun unchanged(key: String, m: Message): Boolean {
+        val w = written[key] ?: return false
+        if (w.m === m) return true
+        if (w.hash != m.hashCode()) return false
+        written[key] = Seen(m, w.hash)   // same content in a new object: next time by identity
+        return true
+    }
 
     fun init(c: Context) { if (app == null) app = c.applicationContext }
 
@@ -81,9 +91,9 @@ object LocalDb {
              mediaWatch: Boolean = false) {
         val rows = messages.filter(::keepable)
         if (rows.isEmpty()) return
-        val changed = rows.filter { written["$uid/$cid/${it.id}"] != it.hashCode() }
+        val changed = rows.filter { !unchanged("$uid/$cid/${it.id}", it) }
         if (changed.isEmpty()) return
-        for (m in changed) written["$uid/$cid/${m.id}"] = m.hashCode()
+        for (m in changed) written["$uid/$cid/${m.id}"] = Seen(m, m.hashCode())
         io.launch {
             val db = db(uid) ?: return@launch
             val now = System.currentTimeMillis()
@@ -138,7 +148,7 @@ object LocalDb {
                         m.expiresAtMillis?.let { put("expires_at", it.toLong()) } ?: putNull("expires_at")
                         put("body", if (m.deleted) "{}" else LocalJson.encodeMessage(m).toString()); put("updated_at", now)
                     }, SQLiteDatabase.CONFLICT_REPLACE)
-                    written["$uid/$cid/${m.id}"] = m.hashCode()
+                    written["$uid/$cid/${m.id}"] = Seen(m, m.hashCode())
                 }
                 db.setTransactionSuccessful()
             } finally { db.endTransaction() }

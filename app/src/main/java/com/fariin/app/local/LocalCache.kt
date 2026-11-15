@@ -136,9 +136,20 @@ object LocalCache {
     fun saveThread(uid: String, cid: String, messages: List<Message>) {
         val kept = LocalJson.windowToKeep(messages, THREAD_CAP)
         if (kept.isEmpty()) return   // an empty first answer never wipes what was kept
+        // The same message objects as the last save (the thread keeps an unchanged message's
+        // object): nothing to write, and no hash of the whole list (busy groups, 2026-11-15).
+        val before = threadMemo["$uid/$cid"]
+        if (before != null && sameObjects(before, kept) && lastWritten.containsKey("t:$uid/$cid")) return
         threadMemo["$uid/$cid"] = kept
         val f = dir(uid)?.let { File(File(it, "threads"), safe(cid) + ".bin") } ?: return
         schedule("t:$uid/$cid", f, kept.hashCode()) { LocalJson.encodeMessages(kept) }
+    }
+
+    /** Same size and the very same objects in the same places. */
+    internal fun sameObjects(a: List<Message>, b: List<Message>): Boolean {
+        if (a.size != b.size) return false
+        for (i in a.indices) if (a[i] !== b[i]) return false
+        return true
     }
 
     fun forgetThread(uid: String, cid: String) {
