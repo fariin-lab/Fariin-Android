@@ -145,6 +145,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.tasks.await
 import com.fariin.app.data.StoryMedia
 import coil3.request.allowHardware
 import kotlin.math.abs
@@ -356,8 +357,28 @@ fun StoryViewer(
     // person's shows Chat). The story closes, and the app's link host (the one outside links go
     // through) opens the channel or group page, with Join / Follow there, or the chat with the person.
     // Everything else stays as it was: the in-app browser over the story.
+    val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
     val openLink: (String) -> Unit = { url ->
-        if (com.fariin.app.data.StoryLinkCardRules.opensInApp(url)) {
+        val post = com.fariin.app.data.StoryPostLink.ref(url)
+        if (post != null) {
+            // A channel post's "View post" (iOS ChannelPostLink.storyTarget + open, 2026-11-15): only a
+            // channel opens, one in my chats or follows, or one whose document says it is a channel
+            // (a public one a visitor may read). Anything else does nothing; never the browser.
+            val (cid, mid) = post
+            scope.launch {
+                val known = com.fariin.app.data.ChatsNow.findAny(cid)?.isChannel == true ||
+                    com.fariin.app.channel.ChannelFollows.entries.value.containsKey(cid)
+                val channel = known || runCatching {
+                    com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("conversations")
+                        .document(cid).get().await().getBoolean("channel") == true
+                }.getOrDefault(false)
+                if (!channel) return@launch
+                onClose()
+                // The channel's thread scrolls to the post and lights it once its messages are in.
+                com.fariin.app.data.QuoteStore.pendingJump.value = com.fariin.app.data.QuoteStore.Jump(cid, mid)
+                channelNav.open(cid)
+            }
+        } else if (com.fariin.app.data.StoryLinkCardRules.opensInApp(url)) {
             onClose()
             com.fariin.app.ui.thread.ExternalLinks.pending.value = url
         } else linkTap(TextLinks.Span(0, url.length, TextLinks.Kind.WEB, url))
@@ -1775,7 +1796,7 @@ private fun StoryTapLayer(
                 .size(with(d) { r.width.toDp() }, with(d) { r.height.toDp() })
                 .graphicsLayer { rotationZ = Math.toDegrees(t.rotation).toFloat() }
                 .clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null,
-                    onClickLabel = if (t === REPOST_TAP) "Show who posted it" else "Visit link") { if (armed != t) onArm(t) },
+                    onClickLabel = if (t === REPOST_TAP) "Show who posted it" else visitLabel(t.url)) { if (armed != t) onArm(t) },
         )
     }
     val a = armed ?: return
@@ -1788,7 +1809,7 @@ private fun StoryTapLayer(
     val cx = r.center.x.coerceIn(minOf(margin, cw / 2), maxOf(cw - margin, cw / 2))
     val top = if (above) r.top - gap - bubbleH else r.bottom + gap
     val who = if (a === REPOST_TAP) person else null
-    VisitLinkBubble(tailDown = above, onTap = { if (who != null) onPerson() else onOpen(a.url) }, person = who,
+    VisitLinkBubble(tailDown = above, onTap = { if (who != null) onPerson() else onOpen(a.url) }, person = who, label = visitLabel(a.url),
         modifier = Modifier.layout { m, c ->
             val p = m.measure(c.copy(minWidth = 0, minHeight = 0))
             layout(c.maxWidth, c.maxHeight) { p.place((cx - p.width / 2f).roundToInt(), top.roundToInt()) }
@@ -1800,9 +1821,12 @@ private const val VISIT_ROW = 50
 private val REPOST_TAP = StoryTapTarget(x = 0.5, y = 0.5, w = 0.40, h = 0.76, rotation = 0.0, url = "fariin://repost")
 private const val VISIT_TAIL = 9
 
+/** A channel post's card (Repost to Story) says "View post"; every other link "Visit link" (iOS tapAreas title). */
+private fun visitLabel(url: String) = if (com.fariin.app.data.StoryPostLink.ref(url) != null) "View post" else "Visit link"
+
 /** iOS VisitLinkBubble: "Visit link >" on a dark rounded body, its tail pointing at the area. */
 @Composable
-private fun VisitLinkBubble(tailDown: Boolean, onTap: () -> Unit, modifier: Modifier, person: Pair<String, String?>? = null) {
+private fun VisitLinkBubble(tailDown: Boolean, onTap: () -> Unit, modifier: Modifier, person: Pair<String, String?>? = null, label: String = "Visit link") {
     val shape = remember(tailDown) { VisitBubbleShape(tailDown) }
     Row(
         modifier.shadow(10.dp, shape, ambientColor = Color.Black.copy(alpha = 0.2f), spotColor = Color.Black.copy(alpha = 0.2f))
@@ -1816,7 +1840,7 @@ private fun VisitLinkBubble(tailDown: Boolean, onTap: () -> Unit, modifier: Modi
             Spacer(Modifier.width(10.dp))
             Text(person.first, color = Color.White, fontSize = 17.sp, maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 200.dp))
-        } else Text("Visit link", color = Color.White, fontSize = 17.sp)
+        } else Text(label, color = Color.White, fontSize = 17.sp)
         Spacer(Modifier.width(6.dp))
         Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), contentDescription = null,
             tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
