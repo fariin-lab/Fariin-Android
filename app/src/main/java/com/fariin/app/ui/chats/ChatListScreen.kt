@@ -678,7 +678,10 @@ fun ChatListScreen(
                 } }
                 else -> LazyColumn(Modifier.fillMaxSize().then(if (glass) Modifier.hazeSource(haze) else Modifier)
                     .then(if (glassLayer != null) Modifier.layerBackdrop(glassLayer) else Modifier), state = listState,
-                    contentPadding = PaddingValues(top = pad.calculateTopPadding(), bottom = com.fariin.app.ui.shell.bottomBarInset() + 72.dp)) {
+                    // The end clears the floating buttons: the tab bar, the FAB's 16 margin, the camera (48),
+                    // 16 between, New Chat (56), 8 of air, and their lift over the Things you can do card or
+                    // a snack bar. Mid-list the buttons float over rows; the last row always scrolls clear.
+                    contentPadding = PaddingValues(top = pad.calculateTopPadding(), bottom = com.fariin.app.ui.shell.bottomBarInset() + 144.dp + fabLift)) {
                     // An invisible first row. At the top the list keeps this row in place, so anything new
                     // above the old first chat (a new group, a chat moved up by a message, the Pinned
                     // section after a pin, the Archived row) shows at once instead of landing just above

@@ -1131,6 +1131,12 @@ private fun ThreadContent(
                 remember(ui.messages, ui.disappearSeconds) { com.fariin.app.data.Disappearing.timerSince(ui.messages) })
             val linkTap = rememberBubbleLinkTap(ui, actions.onNotice)
             val quoteTap = remember { { id: String -> jumpToQuote(id) } }
+            // While the jump arrow shows, the list's end is padded by the arrow's gutter (its 40 circle,
+            // 10 under it, 8 over it), so it never sits on the time and ticks of the newest bubble.
+            // Eased in and out, so the rows glide up rather than jump; read only in layout.
+            val arrowGap = androidx.compose.animation.core.animateDpAsState(
+                if (!atBottom && !search.active && !voiceRecording) 50.dp else 0.dp,
+                androidx.compose.animation.core.tween(180), label = "arrowGap")
             androidx.compose.runtime.CompositionLocalProvider(LocalTimerMark provides timerMark, LocalSearchTerm provides search.term,
                 LocalBubbleLinkTap provides linkTap,
                 LocalQuoteJump provides (if (selecting) null else quoteTap),
@@ -1145,6 +1151,7 @@ private fun ThreadContent(
                     .then(if (walled) com.fariin.app.ui.components.chatWallpaperStripOf(ui.cid) else Modifier) else Modifier), state = listState, reverseLayout = true,
                 contentPadding = remember(density, composerPx) { ListPadding(density, composerPx) }.also {
                     it.top = with(density) { topBarPx.toDp() } + 8.dp
+                    it.arrowGap = arrowGap
                 },
             ) {
                 itemsIndexed(reversed, key = { _, i -> ui.messages[i].rowId },
@@ -3402,7 +3409,9 @@ internal val LocalPanelMoving = androidx.compose.runtime.compositionLocalOf { fa
 private class ListPadding(private val density: androidx.compose.ui.unit.Density, private val composerPx: androidx.compose.runtime.MutableIntState) : androidx.compose.foundation.layout.PaddingValues {
     var top by mutableStateOf(0.dp)
     override fun calculateTopPadding() = top
-    override fun calculateBottomPadding() = with(density) { composerPx.intValue.coerceAtLeast(0).toDp() } + 8.dp
+    /** The jump arrow's gutter while it shows (0 at the bottom). */
+    var arrowGap: androidx.compose.runtime.State<androidx.compose.ui.unit.Dp>? = null
+    override fun calculateBottomPadding() = with(density) { composerPx.intValue.coerceAtLeast(0).toDp() } + 8.dp + (arrowGap?.value ?: 0.dp)
     override fun calculateLeftPadding(layoutDirection: androidx.compose.ui.unit.LayoutDirection) = 0.dp
     override fun calculateRightPadding(layoutDirection: androidx.compose.ui.unit.LayoutDirection) = 0.dp
 }
