@@ -22,6 +22,14 @@ class ThreadOpenRulesTest {
 
     @Test fun theReadersDragWins() = assertFalse(ThreadOpenRules.restoresPlace(0, false, null, userDragged = true))
 
+    @Test fun rowsSettle700msAfterTheServersFirstAnswer() {
+        assertFalse(ThreadOpenRules.placeSettled(0L, 5_000))                 // no answer yet
+        assertFalse(ThreadOpenRules.placeSettled(1_000, 1_000))
+        assertFalse(ThreadOpenRules.placeSettled(1_000, 1_699))
+        assertTrue(ThreadOpenRules.placeSettled(1_000, 1_700))
+        assertTrue(ThreadOpenRules.placeSettled(1_000, 60_000))
+    }
+
     @Test fun aPushOpenCountsOnlyForItsChatWhileFresh() {
         val p = PushOpen("c1", "m9", atMs = 1_000)
         assertEquals("m9", p.midFor("c1", 1_000))

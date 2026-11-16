@@ -76,16 +76,26 @@ object Motion {
     // A one-pixel slide, never a fade: the 0.99 alpha drew every page see-through for the whole
     // hold, the chat list showing faintly through a channel with its edge as a line down the middle
     // (owner's Pixel 2026-11-09, dark mode).
-    fun holdIn(): EnterTransition = slideInHorizontally(tween(HOLD_MS)) { 1 }
-    fun holdOut(): ExitTransition = slideOutHorizontally(tween(HOLD_MS)) { 1 }
+    fun holdIn(ms: Int = HOLD_MS): EnterTransition = slideInHorizontally(tween(ms)) { 1 }
+    fun holdOut(ms: Int = HOLD_MS): ExitTransition = slideOutHorizontally(tween(ms)) { 1 }
+
+    /**
+     * A page opened from the chat list holds only this long. The list's own entry ("main") is
+     * see-through (the list is drawn outside the nav host), so nothing of it needs keeping while the
+     * new page slides in. The change's end (the new page resumed, the old entry let go) then comes
+     * just after the slide, while the phone still runs fast, not a second later on a phone gone idle,
+     * where it was a slow frame of its own (Pixel 5 trace 2026-11-15).
+     */
+    const val FROM_LIST_HOLD_MS = 600
+    private fun AnimatedContentTransitionScope<NavBackStackEntry>.fromList() = initialState.destination.route == "main"
 
     // The nav host only holds both pages; PageMotion moves them (see there).
     fun enter(): AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        if (!on) EnterTransition.None else holdIn()
+        if (!on) EnterTransition.None else holdIn(if (fromList()) FROM_LIST_HOLD_MS else HOLD_MS)
     }
 
     fun exit(): AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        if (!on) ExitTransition.None else holdOut()
+        if (!on) ExitTransition.None else holdOut(if (fromList()) FROM_LIST_HOLD_MS else HOLD_MS)
     }
 
     fun popEnter(): AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
@@ -256,6 +266,9 @@ object PageMotion {
      *  the next back press found no chat to close and left the app ("lost the track"). */
     val moving: Boolean get() = e < 1f
 
+    /** [id] was closed with Back (the page a back change replaced) and that change has landed. */
+    fun closedAndLanded(id: String?): Boolean = id != null && !forward && id == other && e >= 1f
+
     /** Whether a page is on screen at all: the top one, or the one it is replacing while that moves. */
     fun shows(id: String?): Boolean = id != null && (id == top || (id == other && e < 1f))
 }
@@ -277,6 +290,13 @@ fun PageFrame(id: String, content: @Composable () -> Unit) {
     val inner = androidx.compose.runtime.remember { InnerPages() }
     val innerOld = androidx.compose.ui.graphics.rememberGraphicsLayer()
     val innerScope = androidx.compose.runtime.rememberCoroutineScope()
+    // A page closed with Back is off screen once its slide lands, but the nav host keeps it for its
+    // whole hold (HOLD_MS) and then took it apart in one slow frame of its own, a second later on a
+    // phone already gone idle (Pixel 5 trace 2026-11-15: 20 to 45 ms). Its content goes in the frame
+    // the slide lands, while that frame is being built anyway; a popped page never comes back.
+    val closed by androidx.compose.runtime.remember(id) {
+        androidx.compose.runtime.derivedStateOf { PageMotion.closedAndLanded(id) }
+    }
     // Moved in placement, not in a draw layer: the header's blur (Haze) finds where the page is
     // from placement, and a layer-only move left it a frame behind, so it drew the messages sharp
     // for single frames while the page slid (owner's Pixel 2026-11-09).
@@ -304,7 +324,7 @@ fun PageFrame(id: String, content: @Composable () -> Unit) {
             }
         }
         .drawWithContentCompat(inner, innerOld, innerScope)) {
-        androidx.compose.runtime.CompositionLocalProvider(LocalInnerPages provides inner) { content() }
+        if (!closed) androidx.compose.runtime.CompositionLocalProvider(LocalInnerPages provides inner) { content() }
     }
 }
 

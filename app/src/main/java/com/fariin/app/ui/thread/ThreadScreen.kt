@@ -826,10 +826,13 @@ private fun ThreadContent(
     // Rows glide only once the open has settled: while the first answers land (the server's page
     // replacing the phone's copy, quote cards filling in) they are simply placed, so rows never
     // cross on the way in (owner 2026-11-07, channel open on the Pixel). Live arrivals still glide.
-    var placeSettled by remember(ui.cid) { mutableStateOf(false) }
-    LaunchedEffect(ui.cid, ui.loaded && ui.synced) {
-        if (ui.loaded && ui.synced && !placeSettled) { kotlinx.coroutines.delay(700); placeSettled = true }
-    }
+    // Settled = 700 ms after the server's first answer. Read from the clock when the list is built
+    // again (a row arriving or moving builds it), not flipped by a timer: the timer's flip rebuilt
+    // every row of an idle chat a second after it opened, one slow frame each time (Pixel 5 trace
+    // 2026-11-15). Nothing moves between the two, so nothing needs the flip until the next change.
+    val syncedAt = remember(ui.cid) { longArrayOf(0L) }
+    if (ui.loaded && ui.synced && syncedAt[0] == 0L) syncedAt[0] = android.os.SystemClock.uptimeMillis()
+    val placeSettled = ThreadOpenRules.placeSettled(syncedAt[0], android.os.SystemClock.uptimeMillis())
     val rowPlace = remember(anim, placeSettled) { if (placeSettled) com.fariin.app.ui.components.Motion.itemOffset else null }
     // Rows fade in only once the open has settled (a message arriving while I read). The rows
     // the chat opens with are simply there: owner's Pixel 2026-11-09, a first open after launch
