@@ -32,8 +32,17 @@ class FariinApp : Application() {
     override fun onCreate() {
         super.onCreate()
         StartClock.mark("app.start")
-        // A launcher icon pick the app died before finishing leaves two icons; finish it.
-        runCatching { com.fariin.app.ui.settings.AppIcons.heal(this) }
+        // Off the main thread (package manager calls and prefs files, slow on a 2-core phone):
+        // a launcher icon pick the app died before finishing leaves two icons, finish it; and the
+        // next launch screen follows Night Mode. Neither is needed for this launch's first frame.
+        Thread({
+            runCatching { com.fariin.app.ui.settings.AppIcons.heal(this) }
+            runCatching { com.fariin.app.data.AppearancePrefs.applySplash(this) }
+        }, "startup-io").apply { isDaemon = true }.start()
+        // The caches below give memory back when the app leaves the screen or the phone runs low,
+        // and are sized from this phone's per-app memory class.
+        MemoryTrim.init(this)
+        registerComponentCallbacks(MemoryTrim.callbacks)
         // The picture loader, set ONCE before any screen draws. It was set by MainActivity's content,
         // so a call that woke the app straight into CallActivity made the loader first, and opening
         // the app then crashed ("singleton image loader has already been created") and dropped the
@@ -42,11 +51,14 @@ class FariinApp : Application() {
                 val lowRam = com.fariin.app.media.LowEnd.isLowRam(ctx)
                 ImageLoader.Builder(ctx)
                     .components { add(FariinPhotoFetcher.Factory()) }
-                    // Decoded pictures kept in memory: a smaller share of the app's memory on a
-                    // low-RAM phone (Android Go, 1 GB), and 2 bytes a pixel there instead of 4.
+                    // Decoded pictures kept in memory: a share of the NORMAL per-app heap
+                    // (memoryClass), 15% on a low-RAM phone and 2 bytes a pixel there. Not
+                    // maxSizePercent: with largeHeap on, the loader takes its share of
+                    // largeMemoryClass instead (often 512 MB), and pictures filled the headroom
+                    // largeHeap is there for (sealing a 100 MB video in memory).
                     .memoryCache {
                         coil3.memory.MemoryCache.Builder()
-                            .maxSizePercent(ctx, com.fariin.app.media.LowEnd.memoryCachePercent(lowRam))
+                            .maxSizeBytes(com.fariin.app.media.LowEnd.memoryCacheBytes(MemoryTrim.memoryClassMb, lowRam))
                             .build()
                     }
                     .let { if (lowRam) it.allowRgb565(true) else it }
@@ -59,6 +71,7 @@ class FariinApp : Application() {
                     }
                     .build()
         }
+        MemoryTrim.register("pictures") { coil3.SingletonImageLoader.get(this).memoryCache?.clear() }
         StartClock.mark("coil")
         CoroutineSafety.install()   // an uncaught server refusal in a coroutine no longer closes the app
         // Not needed for the first frame (owner 2026-11-09: the app felt heavy to open; the reference
@@ -82,7 +95,6 @@ class FariinApp : Application() {
         com.fariin.app.data.ContactNames.init(this)
         com.fariin.app.data.MsgPolicy.init(this)     // Message Requests on/off, as of the last open
         com.fariin.app.data.AppFeatures.init(this)   // the admin panel's switches, as of the last open
-        com.fariin.app.data.AppearancePrefs.applySplash(this)   // the next launch screen follows Night Mode
         StartClock.mark("features")
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         // The benchmark build (release code, debug key, never shipped) may use the local backend too.
@@ -148,9 +160,15 @@ class FariinApp : Application() {
         // The saved chat list, read and opened now on its own thread (owner 2026-11-09: "close the app
         // and open, never comfortable"). The list asked for it only after its first frame was built,
         // and the launch logo waited ~140 ms more for the disk; now it is in memory by then.
+        // Drafts (Keystore + AES-GCM + JSON) and the names I gave people (JSON) are decoded on the
+        // thread below, not here; a reader that comes first waits for the decode (local/LoadOnce).
+        com.fariin.app.local.Drafts.init(this)
         FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
             Thread({
                 runCatching { com.fariin.app.local.LocalCache.loadChats(uid) }
+                // The chat list's rows show "Draft:" and my names for people.
+                runCatching { com.fariin.app.local.Drafts.preload() }
+                runCatching { com.fariin.app.data.ContactNames.preload() }
                 runCatching { com.fariin.app.local.LocalCache.loadFollows(uid) }
                 // The keys too (sodium load, Keystore unwrap): the first rows' previews need them.
                 runCatching { com.fariin.app.data.CryptoHub.get(this).prewarm() }
@@ -158,7 +176,6 @@ class FariinApp : Application() {
                 .apply { priority = Thread.MAX_PRIORITY }.start()
         }
         StartClock.mark("localcache")
-        com.fariin.app.local.Drafts.init(this)
         com.fariin.app.local.SendQueue.init(this)
         // The time zone rules and date formats load on first use, about 100 ms on a cheap phone,
         // and the first use was the opening chat's day separators. Loaded here off the main thread.

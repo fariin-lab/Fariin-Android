@@ -69,19 +69,32 @@ object AppUpdateGate {
         if (started) return
         started = true
         val app = c.applicationContext
-        runCatching { app.packageManager.getPackageInfo(app.packageName, 0) }.getOrNull()?.let {
-            build = if (android.os.Build.VERSION.SDK_INT >= 28) it.longVersionCode.toInt() else @Suppress("DEPRECATION") it.versionCode
-            version = it.versionName ?: ""
-        }
-        decision = load(app)
-        present(app)
-        // Once at start; every return to the front checks again (onForeground). The old 10-minute
-        // loop called the server in the background too, waking the radio (battery audit 2026-11-05).
-        scope.launch { check(app) }
+        // The package manager call and the saved answer are read off the main thread (app start on
+        // a cheap phone); the answer is shown a moment later, well before anyone can act on it.
+        Thread({
+            var b = 0; var v = ""
+            runCatching { app.packageManager.getPackageInfo(app.packageName, 0) }.getOrNull()?.let {
+                b = if (android.os.Build.VERSION.SDK_INT >= 28) it.longVersionCode.toInt() else @Suppress("DEPRECATION") it.versionCode
+                v = it.versionName ?: ""
+            }
+            val saved = load(app)
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                build = b; version = v
+                decision = saved
+                present(app)
+                ready = true
+                // Once at start; every return to the front checks again (onForeground). The old 10-minute
+                // loop called the server in the background too, waking the radio (battery audit 2026-11-05).
+                scope.launch { check(app) }
+            }
+        }, "update-gate").apply { isDaemon = true }.start()
     }
 
+    /** True once the build number is known: a check before that would send build 0. */
+    @Volatile private var ready = false
+
     /** On a return to the front (FariinApp's lifecycle). */
-    fun onForeground(c: Context) { if (started) scope.launch { check(c.applicationContext) } }
+    fun onForeground(c: Context) { if (ready) scope.launch { check(c.applicationContext) } }
 
     private suspend fun check(app: Context) {
         val data = mapOf("build" to build, "version" to version, "android" to android.os.Build.VERSION.RELEASE,

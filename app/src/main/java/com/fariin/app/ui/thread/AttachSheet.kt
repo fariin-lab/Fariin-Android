@@ -513,10 +513,11 @@ private enum class SheetPage { PHOTOS, ALBUMS, GIFS, FILES }
  */
 internal object AttachWarm {
     @Volatile var recents: List<RecentMedia.Item> = emptyList()
-    /** Grid thumbnails by address, about 24 MB of them. */
-    val thumbs = object : android.util.LruCache<Uri, androidx.compose.ui.graphics.ImageBitmap>(24 * 1024 * 1024) {
+    /** Grid thumbnails by address, about 24 MB of them on a 256 MB heap (scaled to the phone's),
+     *  emptied when the app leaves the screen. */
+    val thumbs = object : android.util.LruCache<Uri, androidx.compose.ui.graphics.ImageBitmap>(com.fariin.app.MemoryTrim.scaled(24 * 1024 * 1024)) {
         override fun sizeOf(key: Uri, value: androidx.compose.ui.graphics.ImageBitmap) = value.width * value.height * 4
-    }
+    }.also { c -> com.fariin.app.MemoryTrim.register("attach-thumbs") { c.evictAll() } }
     private const val FIRST = 18
 
     suspend fun warm(context: android.content.Context) = withContext(Dispatchers.IO) {

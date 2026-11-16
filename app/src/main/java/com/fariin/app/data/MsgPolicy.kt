@@ -29,9 +29,14 @@ object MsgPolicy {
     private const val FILE = "msg_policy"
     private const val KEY = "requests"
 
-    @Volatile private var global = true
+    @Volatile private var globalValue = true
+    /** The saved answer, read on first use instead of at app start (a prefs file on the main thread). */
+    private val saved = com.fariin.app.local.LoadOnce { prefs?.let { globalValue = it.getBoolean(KEY, true) } }
+    private var globalOn: Boolean
+        get() { saved.ensure(); return globalValue }
+        set(v) { saved.ensure(); globalValue = v }
     private val overrides = ConcurrentHashMap<String, Boolean>()
-    private var prefs: android.content.SharedPreferences? = null
+    @Volatile private var prefs: android.content.SharedPreferences? = null
     private var configReg: ListenerRegistration? = null
     private var meReg: ListenerRegistration? = null
 
@@ -40,9 +45,8 @@ object MsgPolicy {
         private set
 
     fun init(c: Context) {
-        val p = c.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
-        prefs = p
-        global = p.getBoolean(KEY, true)
+        // Opening the handle starts the platform's own background read; nothing waits for it here.
+        prefs = c.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
     }
 
     fun start(me: String) {
@@ -80,7 +84,7 @@ object MsgPolicy {
     }
 
     /** Does a stranger's first message to [uid] arrive as a request? */
-    fun requestsOn(uid: String): Boolean = overrides[uid] ?: global
+    fun requestsOn(uid: String): Boolean = overrides[uid] ?: globalOn
 
     // iOS MsgPolicy chatKeyRequired / chatKeyVisible (config/msgPolicy, users/{uid}.msgPolicy):
     // shipped default on. A hidden Chat Key turns its requirement off too.
@@ -111,8 +115,8 @@ object MsgPolicy {
     } ?: runCatching { ref.get(Source.CACHE).await() }.getOrNull()
 
     private fun setGlobal(v: Boolean) {
-        if (v == global) return
-        global = v
+        if (v == globalOn) return
+        globalOn = v
         prefs?.edit()?.putBoolean(KEY, v)?.apply()
         bump()
     }

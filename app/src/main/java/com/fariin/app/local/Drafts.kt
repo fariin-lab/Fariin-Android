@@ -27,28 +27,34 @@ object Drafts {
     private val _map = MutableStateFlow<Map<String, String>>(emptyMap())
     val map: StateFlow<Map<String, String>> = _map.asStateFlow()
     @Volatile private var file: File? = null
-    @Volatile private var loaded = false
     private val io = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pending: Job? = null
-
-    fun init(c: Context) {
-        if (loaded) return
-        synchronized(this) {
-            if (loaded) return
-            val f = File(File(c.applicationContext.noBackupFilesDir, "local-v1"), "drafts.bin")
-            file = f
-            _map.value = try {
-                if (f.exists()) AtRest.open(f.readBytes())?.toString(Charsets.UTF_8)?.let(::decode) ?: emptyMap() else emptyMap()
-            } catch (_: Exception) { emptyMap() }
-            loaded = true
-        }
+    /** drafts.bin read, unsealed (Keystore + AES-GCM) and decoded once, off the main thread when
+     *  the start-up thread gets there first; every read and write below waits for it. */
+    private val disk = LoadOnce {
+        val f = file
+        val m = try {
+            if (f != null && f.exists()) AtRest.open(f.readBytes())?.toString(Charsets.UTF_8)?.let(::decode) ?: emptyMap() else emptyMap()
+        } catch (_: Exception) { emptyMap() }
+        // Anything set while the file was read cannot exist: set() waits for this read.
+        _map.value = m
     }
 
-    fun text(cid: String): String = _map.value[cid] ?: ""
+    /** Cheap, at app start: only remembers where the file is. The read is [preload] or the first use. */
+    fun init(c: Context) {
+        if (file != null) return
+        file = File(File(c.applicationContext.noBackupFilesDir, "local-v1"), "drafts.bin")
+    }
+
+    /** Reads the file now (a start-up thread). */
+    fun preload() = disk.ensure()
+
+    fun text(cid: String): String { disk.ensure(); return _map.value[cid] ?: "" }
     /** Chats holding a draft, for the Log Out warning (iOS unsentSummary). */
-    fun count(): Int = _map.value.values.count { it.isNotBlank() }
+    fun count(): Int { disk.ensure(); return _map.value.values.count { it.isNotBlank() } }
 
     fun set(cid: String, text: String) {
+        disk.ensure()
         val t = text.trim()
         val old = _map.value[cid] ?: ""
         if (old == t) return
@@ -65,6 +71,8 @@ object Drafts {
     fun flush() {
         val f = file ?: return
         io.launch {
+            // Never write before the file was read: that would replace it with a partial map.
+            disk.ensure()
             synchronized(this@Drafts) {
                 // The map as it is NOW, so an older write landing late can never bring back a
                 // draft that was sent or wiped since.
@@ -81,6 +89,7 @@ object Drafts {
 
     /** Sign-out: drafts are unsent words, they go with the session. */
     fun clear() {
+        disk.ensure()
         synchronized(this) {
             pending?.cancel(); pending = null
             _map.value = emptyMap()

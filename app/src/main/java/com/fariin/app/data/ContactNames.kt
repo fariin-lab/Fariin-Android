@@ -23,35 +23,47 @@ object ContactNames {
     const val NOTE_LIMIT = 100
 
     private val cards = mutableStateMapOf<String, ContactCard>()
-    private var app: Context? = null
-
-    fun init(c: Context) {
-        if (app != null) return
-        app = c.applicationContext
-        val raw = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null) ?: return
+    @Volatile private var app: Context? = null
+    /** The saved cards, parsed once: by the start-up thread ([preload]) or the first reader. */
+    private val disk = com.fariin.app.local.LoadOnce {
+        val c = app ?: return@LoadOnce
+        val raw = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null) ?: return@LoadOnce
+        val read = HashMap<String, ContactCard>()
         try {
             val o = JSONObject(raw)
             for (uid in o.keys()) {
                 val d = o.getJSONObject(uid)
-                cards[uid] = ContactCard(d.optString("f"), d.optString("l"), d.optString("n"))
+                read[uid] = ContactCard(d.optString("f"), d.optString("l"), d.optString("n"))
             }
         } catch (_: Exception) {}
+        // One write into the state map, so a screen redraws once when the names arrive.
+        if (read.isNotEmpty()) cards.putAll(read)
     }
 
-    fun name(uid: String): String? = cards[uid]?.displayName
-    fun note(uid: String): String? = cards[uid]?.note?.trim()?.takeIf { it.isNotEmpty() }
-    fun card(uid: String): ContactCard = cards[uid] ?: ContactCard()
+    /** Cheap, at app start: only remembers the context. The file is read by [preload] or first use. */
+    fun init(c: Context) {
+        if (app != null) return
+        app = c.applicationContext
+    }
+
+    /** Parses the saved cards now (a start-up thread). */
+    fun preload() = disk.ensure()
+
+    fun name(uid: String): String? { disk.ensure(); return cards[uid]?.displayName }
+    fun note(uid: String): String? { disk.ensure(); return cards[uid]?.note?.trim()?.takeIf { it.isNotEmpty() } }
+    fun card(uid: String): ContactCard { disk.ensure(); return cards[uid] ?: ContactCard() }
 
     fun setCard(uid: String, card: ContactCard) {
+        disk.ensure()
         val c = card.copy(first = card.first.take(NAME_LIMIT), last = card.last.take(NAME_LIMIT), note = card.note.take(NOTE_LIMIT))
         if (c.isEmpty) cards.remove(uid) else cards[uid] = c
         persist()
     }
 
-    fun remove(uid: String) { cards.remove(uid); persist() }
+    fun remove(uid: String) { disk.ensure(); cards.remove(uid); persist() }
 
     /** Sign-out: they were this account's names. */
-    fun clear() { cards.clear(); persist() }
+    fun clear() { disk.ensure(); cards.clear(); persist() }
 
     private fun persist() {
         val c = app ?: return

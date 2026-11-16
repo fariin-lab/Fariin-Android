@@ -241,10 +241,11 @@ object ChatLookStore {
         prefs(c).getString(LIBRARY, null).orEmpty().split("\n").filter { it.isNotEmpty() }
 
     // Battery/lag audit 2026-11-05: the pictures were kept at full size (up to 2560 px, ~14 MB each)
-    // in a map with no limit. Now decoded no bigger than the screen needs, and at most ~24 MB kept.
-    private val images = object : android.util.LruCache<String, Bitmap>(24 * 1024 * 1024) {
+    // in a map with no limit. Now decoded no bigger than the screen needs, and at most ~24 MB kept
+    // (on a 256 MB heap; a smaller phone keeps its share), emptied when the app leaves the screen.
+    private val images = object : android.util.LruCache<String, Bitmap>(com.fariin.app.MemoryTrim.scaled(24 * 1024 * 1024)) {
         override fun sizeOf(key: String, value: Bitmap) = value.allocationByteCount
-    }
+    }.also { c -> com.fariin.app.MemoryTrim.register("chat-look-images") { synchronized(c) { c.evictAll() } } }
 
     /** Only what is already in memory: safe to call while drawing. */
     fun cachedImage(id: String): Bitmap? = synchronized(images) { images.get(id) }
