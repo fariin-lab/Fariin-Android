@@ -479,8 +479,15 @@ object WallpaperArt {
 private fun rememberWallpaperPhoto(ctx: android.content.Context, id: String?): androidx.compose.ui.graphics.ImageBitmap? {
     if (id == null) return null
     val app = ctx.applicationContext
-    return androidx.compose.runtime.produceState(ChatLookStore.cachedImage(id)?.asImageBitmap(), id, ChatLookStore.version.intValue) {
-        if (value == null) value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ChatLookStore.libraryImage(app, id) }?.asImageBitmap()
+    // The copy that just covers the screen (WallpaperFit), not the library's 2560 one; a LOW phone
+    // also drops the sides the fill cuts off. A turn of the screen makes a new one.
+    val crop = com.fariin.app.perf.PowerSaving.state.value.deviceClass == com.fariin.app.perf.PerfClass.LOW
+    val turn = androidx.compose.ui.platform.LocalConfiguration.current.orientation
+    return androidx.compose.runtime.produceState(ChatLookStore.cachedScreenImage(app, id, crop)?.asImageBitmap(), id, ChatLookStore.version.intValue, turn) {
+        val b = ChatLookStore.cachedScreenImage(app, id, crop)
+            ?: kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ChatLookStore.screenImage(app, id, crop) }
+        // The same picture keeps its wrapper (the header's brightness is remembered per wrapper).
+        if (value?.asAndroidBitmap() !== b) value = b?.asImageBitmap()
     }.value
 }
 

@@ -28,7 +28,15 @@ object GifLoader {
      *  the animated decode, so a grid shown again draws at once. */
     fun still(c: Context, url: String): coil3.request.ImageRequest =
         coil3.request.ImageRequest.Builder(c.applicationContext).data(url)
-            .size(STILL_PX).memoryCacheKey("still:$url").build()
+            .size(STILL_PX).memoryCacheKey("still:$url").apply {
+                // coil-gif adds its animated decoders to every loader by itself, so this "still" moved
+                // too: on the low-end emulator (GIF autoplay off) four GIF bubbles each decoded a frame
+                // on the main thread and sent it to the GPU every frame (2026-11-15). See
+                // LowPhoneMedia.gifStillOnly; other phones with autoplay on keep what they had.
+                val power = com.fariin.app.perf.PowerSaving.state.value
+                if (com.fariin.app.perf.LowPhoneMedia.gifStillOnly(power.deviceClass, power.autoplayGifs))
+                    decoderFactory(coil3.decode.BitmapFactoryDecoder.Factory())
+            }.build()
 
     /** The first frames of the GIF panel's last trending list, made ahead (a chat opened). */
     fun warmStills(c: Context) {

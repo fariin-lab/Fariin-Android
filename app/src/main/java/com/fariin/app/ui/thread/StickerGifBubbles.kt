@@ -86,6 +86,7 @@ import com.fariin.app.data.StickerPackInfo
 import com.fariin.app.data.StickerRef
 import com.fariin.app.media.AutoDownload
 import com.fariin.app.perf.PowerSaving
+import kotlinx.coroutines.flow.first
 import com.fariin.app.ui.components.floating
 import com.fariin.app.ui.theme.Fariin
 import androidx.compose.ui.semantics.contentDescription
@@ -124,6 +125,9 @@ private fun animatedRequest(model: Any?, play: Boolean, plays: Int = 0): ImageRe
     return remember(model, play, plays) {
         ImageRequest.Builder(ctx).data(model).apply {
             if (play) decoderFactory(if (Build.VERSION.SDK_INT >= 28) coil3.gif.AnimatedImageDecoder.Factory() else coil3.gif.GifDecoder.Factory())
+            // Not playing = one frame: coil-gif's decoders join every loader by themselves, so
+            // leaving the decoder unset still animated it (Autoplay GIFs off, 2026-11-15).
+            else decoderFactory(coil3.decode.BitmapFactoryDecoder.Factory())
             // [plays] > 0: that many plays, then the last frame (stickers); 0 = loops (GIFs).
             if (play && plays > 0) repeatCount(plays - 1)
         }.build()
@@ -257,7 +261,11 @@ internal fun GifRow(m: Message, shape: Shape, fill: Color, hasHeader: Boolean, h
             // in; the GIF plays once the page has landed. Read through derivedStateOf so the slide's
             // frames do not recompose every bubble.
             val landed by remember { androidx.compose.runtime.derivedStateOf { !com.fariin.app.ui.components.PageMotion.moving } }
-            GifMp4(m.imageUrl, autoplay() && landed, Modifier.fillMaxSize()) {
+            // A LOW phone also pauses it (keeps its player) while the list scrolls.
+            val scrollHeld by remember { androidx.compose.runtime.derivedStateOf {
+                com.fariin.app.perf.LowPhoneMedia.held(PowerSaving.state.value.deviceClass, false, com.fariin.app.ui.components.WallpaperHold.scrolling)
+            } }
+            GifMp4(m.imageUrl, autoplay() && landed, Modifier.fillMaxSize(), paused = scrollHeld) {
                 if (hasMp4) AsyncImage(com.fariin.app.media.GifLoader.still(LocalContext.current, m.imageUrl ?: ""), contentDescription = "GIF",
                     imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current), contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 else AsyncImage(animatedRequest(m.imageUrl, autoplay()), contentDescription = "GIF", imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current),
@@ -836,24 +844,42 @@ private fun StickerFrames(c: com.airbnb.lottie.LottieComposition, plays: Int, fp
         val w = constraints.maxWidth.coerceIn(1, 1024)
         val h = constraints.maxHeight.coerceIn(1, 1024)
         LaunchedEffect(c, w, h) {
-            // Three in turn: the one shown, the one the screen may still be drawing, and the one painted.
-            val bufs = Array(3) { android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888) }
-            val d = com.airbnb.lottie.LottieDrawable().apply { composition = c }
-            // Fit inside the box, centred, as the vector drawing did.
-            val b = c.bounds
-            val scale = minOf(w / b.width().toFloat(), h / b.height().toFloat())
-            val dx = (w - b.width() * scale) / 2f; val dy = (h - b.height() * scale) / 2f
-            val frames = c.durationFrames.coerceAtLeast(1f)
-            val per = (c.frameRate / fps).coerceAtLeast(1f)
-            val stepMs = (1000f * per / c.frameRate).toLong().coerceAtLeast(16L)
-            var n = 0
+            // LOW phones (LowPhoneMedia): hold the frame while the chat slides or the list scrolls, and
+            // play only when one of the few slots is free. Other phones never wait here.
+            val cls = PowerSaving.state.value.deviceClass
+            val slots = com.fariin.app.perf.LowPhoneMedia.stickerSlots(cls)
+            var slot = false
+            suspend fun waitTurn() {
+                if (slots == null) return
+                androidx.compose.runtime.snapshotFlow {
+                    com.fariin.app.perf.LowPhoneMedia.held(cls, com.fariin.app.ui.components.PageMotion.moving,
+                        com.fariin.app.ui.components.WallpaperHold.scrolling)
+                }.first { !it }
+                if (!slot) {
+                    androidx.compose.runtime.snapshotFlow { StickerPlaySlots.freed }.first { StickerPlaySlots.take(slots) }
+                    slot = true
+                }
+            }
             try {
+                waitTurn()
+                // Three in turn: the one shown, the one the screen may still be drawing, and the one painted.
+                val bufs = Array(3) { android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888) }
+                val d = com.airbnb.lottie.LottieDrawable().apply { composition = c }
+                // Fit inside the box, centred, as the vector drawing did.
+                val b = c.bounds
+                val scale = minOf(w / b.width().toFloat(), h / b.height().toFloat())
+                val dx = (w - b.width() * scale) / 2f; val dy = (h - b.height() * scale) / 2f
+                val frames = c.durationFrames.coerceAtLeast(1f)
+                val per = (c.frameRate / fps).coerceAtLeast(1f)
+                val stepMs = (1000f * per / c.frameRate).toLong().coerceAtLeast(16L)
+                var n = 0
                 for (play in 0 until plays) {
                     var f = 0f
                     // Up to the last frame, not its end: the end is the first pose again, so painting
                     // it showed the same pose twice at every loop seam (a hitch).
                     val last = if (play == plays - 1) frames else frames - per
                     while (f <= last) {
+                        waitTurn()
                         val started = android.os.SystemClock.uptimeMillis()
                         val target = bufs[n % 3]
                         val p = (f / frames).coerceIn(0f, 1f)
@@ -872,11 +898,31 @@ private fun StickerFrames(c: com.airbnb.lottie.LottieComposition, plays: Int, fp
                 }
             } finally {
                 // The bitmaps go with the effect; the last one shown stays until the composable leaves.
+                if (slot) StickerPlaySlots.give()
             }
         }
         val img = shown
         if (img == null) onWaiting()
         else Image(img, contentDescription = null, modifier = Modifier.fillMaxSize())
+    }
+}
+
+/** LOW phones: the few stickers allowed to paint at once (main thread only). */
+private object StickerPlaySlots {
+    private var busy = 0
+    /** Bumped when a slot comes free, so a waiting sticker asks again. */
+    var freed by androidx.compose.runtime.mutableIntStateOf(0)
+        private set
+
+    fun take(limit: Int): Boolean {
+        if (busy >= limit) return false
+        busy++
+        return true
+    }
+
+    fun give() {
+        busy = (busy - 1).coerceAtLeast(0)
+        freed++
     }
 }
 

@@ -96,7 +96,7 @@ internal object GifVideo {
  * under it until the first frame is on screen, and stays when no player is free or there is no MP4.
  */
 @Composable
-internal fun GifMp4(gifUrl: String?, play: Boolean, modifier: Modifier, still: @Composable () -> Unit) {
+internal fun GifMp4(gifUrl: String?, play: Boolean, modifier: Modifier, paused: Boolean = false, still: @Composable () -> Unit) {
     val ctx = LocalContext.current
     val mp4 = remember(gifUrl) { GifVideo.mp4Of(gifUrl) }
     var shown by remember(mp4) { mutableStateOf(false) }
@@ -128,7 +128,8 @@ internal fun GifMp4(gifUrl: String?, play: Boolean, modifier: Modifier, still: @
             val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
             val alive = owner.lifecycle.currentStateFlow.collectAsState().value
                 .isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
-            androidx.compose.runtime.LaunchedEffect(player, alive) { player?.playWhenReady = alive }
+            // [paused]: held on its frame (a LOW phone's scroll), the player kept.
+            androidx.compose.runtime.LaunchedEffect(player, alive, paused) { player?.playWhenReady = alive && !paused }
             val p = player
             val vs = video
             if (p != null) AndroidView({ c -> TextureView(c).apply {

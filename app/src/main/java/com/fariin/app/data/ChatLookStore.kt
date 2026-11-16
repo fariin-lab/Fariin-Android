@@ -253,6 +253,37 @@ object ChatLookStore {
         images.get(id) ?: libraryFile(c, id).takeIf { it.exists() }?.let { decodeForScreen(c, it) }?.also { images.put(id, it) }
     }
 
+    private fun screenKey(c: Context, id: String, cropSides: Boolean): String {
+        val dm = c.resources.displayMetrics
+        return "screen:$id:${dm.widthPixels}x${dm.heightPixels}:$cropSides"
+    }
+
+    /** The chat's copy ([screenImage]) if it is already in memory: safe to call while drawing. */
+    fun cachedScreenImage(c: Context, id: String, cropSides: Boolean): Bitmap? =
+        synchronized(images) { images.get(screenKey(c, id, cropSides)) }
+
+    /**
+     * The picture as a chat draws it: just big enough to cover this screen (see [WallpaperFit]), and
+     * with [cropSides] (LOW phones) without the sides the fill cuts off. Off the main thread.
+     */
+    fun screenImage(c: Context, id: String, cropSides: Boolean): Bitmap? {
+        val key = screenKey(c, id, cropSides)
+        synchronized(images) { images.get(key) }?.let { return it }
+        val f = libraryFile(c, id).takeIf { it.exists() } ?: return null
+        val dm = c.resources.displayMetrics
+        val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(f.path, o)
+        val first = WallpaperFit.plan(o.outWidth, o.outHeight, dm.widthPixels, dm.heightPixels, cropSides) ?: return null
+        val decoded = runCatching { BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inSampleSize = first.sample }) }.getOrNull() ?: return null
+        val p = WallpaperFit.plan(decoded.width, decoded.height, dm.widthPixels, dm.heightPixels, cropSides) ?: return decoded
+        val out = runCatching {
+            val scaled = if (p.w == decoded.width && p.h == decoded.height) decoded else Bitmap.createScaledBitmap(decoded, p.w, p.h, true)
+            if (p.cropW < p.w) Bitmap.createBitmap(scaled, (p.w - p.cropW) / 2, 0, p.cropW, p.h) else scaled
+        }.getOrNull() ?: decoded
+        synchronized(images) { images.put(key, out) }
+        return out
+    }
+
     private fun decodeForScreen(c: Context, f: File): Bitmap? {
         val dm = c.resources.displayMetrics
         val want = maxOf(dm.widthPixels, dm.heightPixels).coerceAtLeast(720)
@@ -286,7 +317,10 @@ object ChatLookStore {
     /** Long-press Delete: the file goes; a chat that used it falls back to the plain background. */
     fun deleteFromLibrary(c: Context, id: String) {
         libraryFile(c, id).delete()
-        synchronized(images) { images.remove(id) }
+        synchronized(images) {
+            images.remove(id)
+            images.snapshot().keys.filter { it.startsWith("screen:$id:") }.forEach { images.remove(it) }
+        }
         val p = prefs(c)
         val hashes = p.getString(HASHES, null).orEmpty().split("\n").filter { '=' in it && it.substringBefore('=') != id }
         p.edit().putString(LIBRARY, libraryIds(c).filter { it != id }.joinToString("\n"))
