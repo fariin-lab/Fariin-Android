@@ -469,12 +469,14 @@ private fun TabItem(t: TabSpec, selected: Boolean, badge: Int, photo: String?, a
     // The open tab in the text colour, the others a darker grey than before so the bar does not read
     // as washed out (owner 2026-11-03: no blue pill, "all looks light").
     val tint by animateColorAsState(if (selected) c.label else c.label.copy(alpha = 0.62f), spec, label = "tabTint")
+    // A LOW phone: a shorter pill fade and no icon bounce (the spring ran past 0.5 s of frames).
+    val lite = com.fariin.app.ui.components.reducedMotion()
     val on by animateFloatAsState(if (selected) 1f else 0f,
-        if (animate) tween(320, easing = LinearOutSlowInEasing) else snap(), label = "tabPill")
+        if (animate) tween(com.fariin.app.ui.components.Motion.ms(320), easing = LinearOutSlowInEasing) else snap(), label = "tabPill")
     val pillColor = if (c.dark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.08f)
     val pop = remember { Animatable(1f) }
     LaunchedEffect(selected) {
-        if (selected && animate) { pop.snapTo(0.86f); pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 500f)) }
+        if (selected && animate && !lite) { pop.snapTo(0.86f); pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 500f)) }
     }
     val desc = if (badge > 0) "${t.label}, $badge ${if (t.id == TAB_CALLS) "missed" else "unread"}" else t.label
     Box(

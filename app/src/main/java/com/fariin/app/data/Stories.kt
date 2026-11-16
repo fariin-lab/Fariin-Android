@@ -7,6 +7,7 @@ import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.security.MessageDigest
@@ -250,16 +251,19 @@ class StoriesRepository(
 
             val stories = db.collection("stories")
             val regs = mutableListOf<ListenerRegistration>()
+            // The answers are parsed and the rings built on the listen thread, not the main one. The
+            // whole flow runs there too (flowOn below), so every var above is touched by one thread.
+            val bg = com.fariin.app.perf.ListenThread.exec
             // Each story query counts as heard on its first answer or its first error, so one
             // refused query (the legacy one, say) cannot keep the list blank.
             regs += stories.whereArrayContains("recipientUids", StoryAudienceToken.token(me))
-                .addSnapshotListener { s, _ -> if (s != null) byToken = parse(s.documents); heard = heard or 1; rebuild() }
+                .addSnapshotListener(bg) { s, _ -> if (s != null) byToken = parse(s.documents); heard = heard or 1; rebuild() }
             regs += stories.whereArrayContains("recipientUids", me)
-                .addSnapshotListener { s, _ -> if (s != null) byLegacy = parse(s.documents); heard = heard or 2; rebuild() }
+                .addSnapshotListener(bg) { s, _ -> if (s != null) byLegacy = parse(s.documents); heard = heard or 2; rebuild() }
             regs += stories.whereEqualTo("authorUid", me)
-                .addSnapshotListener { s, _ -> if (s != null) mine = parse(s.documents); heard = heard or 4; rebuild() }
+                .addSnapshotListener(bg) { s, _ -> if (s != null) mine = parse(s.documents); heard = heard or 4; rebuild() }
             regs += db.collection("users").document(me).collection("storyContexts")
-                .addSnapshotListener { s, _ ->
+                .addSnapshotListener(bg) { s, _ ->
                     s?.documents?.forEach { d ->
                         val ts = (d.get("lastViewedAt") as? Timestamp)?.toDate()?.time ?: return@forEach
                         val cur = watermarks[d.id] ?: Long.MIN_VALUE
@@ -274,7 +278,7 @@ class StoriesRepository(
             launch { BlockList.state.collect { rebuild() } }
             launch { StoryOneTimeUsed.ids.collect { rebuild() } }
             awaitClose { regs.forEach { it.remove() } }
-        }
+        }.flowOn(com.fariin.app.perf.ListenThread.dispatcher)
 }
 
 /** The app's one stories feed (MainShell), for screens outside the tabs. */

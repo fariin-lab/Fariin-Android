@@ -23,6 +23,22 @@ object ChannelFollows {
 
     const val MAX_ENTRIES = 1000L
     const val MAX_LIVE = 300
+    /** A LOW phone keeps a live document for this many channels only (each one is a listener whose
+     *  every answer re-saves the follow list); the rest keep their last saved document. */
+    const val MAX_LIVE_LOW = 50
+    /** Channel document answers are gathered this long before the list is published and saved. */
+    const val PUBLISH_MS = 250L
+
+    fun liveCap(cls: com.fariin.app.perf.PerfClass) = if (cls == com.fariin.app.perf.PerfClass.LOW) MAX_LIVE_LOW else MAX_LIVE
+
+    /**
+     * Which channels get a live document: the pinned first, then the most recently active (the later
+     * of when I followed it and its last post), up to [cap]. Pure, unit tested.
+     */
+    fun pickLive(entries: Map<String, Entry>, lastActive: Map<String, Double>, cap: Int): Set<String> =
+        entries.entries.sortedWith(compareByDescending<Map.Entry<String, Entry>> { it.value.pinned }
+            .thenByDescending { maxOf(it.value.at, lastActive[it.key] ?: 0.0) })
+            .take(cap).map { it.key }.toSet()
 
     private val _entries = MutableStateFlow<Map<String, Entry>>(emptyMap())
     val entries: StateFlow<Map<String, Entry>> = _entries
@@ -43,13 +59,24 @@ object ChannelFollows {
     private val _bias = MutableStateFlow<Map<String, Int>>(emptyMap())
     val biasFlow: StateFlow<Map<String, Int>> = _bias
 
-    private var uid: String? = null
+    @Volatile private var uid: String? = null
     private var listReg: ListenerRegistration? = null
     private var adminRxReg: ListenerRegistration? = null
     private val docRegs = HashMap<String, ListenerRegistration>()
     private var followRx: Map<String, Map<String, String>> = emptyMap()
     private var adminRx: Map<String, Map<String, String>> = emptyMap()
-    private val storedAtBias = HashMap<String, Int>()
+    // Read and written by the channel document answers on the listen thread too.
+    private val storedAtBias = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    /** The channels with a live document now; an answer for any other is dropped. */
+    @Volatile private var live: Set<String> = emptySet()
+    /** Bumped by stop(), so an answer for the account before is never kept. */
+    @Volatile private var gen = 0
+    // Listen thread only: answers waiting for the next publish.
+    private val inbox = HashMap<String, Map<String, Any?>>()
+    private var inboxFromServer = false
+    private val throttle = com.fariin.app.perf.Throttle(PUBLISH_MS)
+    /** Followed channels past the live cap that already had their one plain read. */
+    private val fetchedOnce = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<String, Boolean>())
     /** Which answer each `_served` entry is, so an older timer never drops a newer answer. */
     private val servedToken = HashMap<String, Long>()
     private var servedClock = 0L
@@ -129,6 +156,10 @@ object ChannelFollows {
         listReg?.remove(); listReg = null
         adminRxReg?.remove(); adminRxReg = null
         docRegs.values.forEach { it.remove() }; docRegs.clear()
+        gen++
+        live = emptySet()
+        fetchedOnce.clear()
+        com.fariin.app.perf.ListenThread.exec.execute { inbox.clear(); inboxFromServer = false; throttle.reset() }
         _entries.value = emptyMap(); _docs.value = emptyMap(); _rx.value = emptyMap(); _pending.value = emptyMap()
         // The next account never sees this one's served counts or follower-count guesses.
         _served.value = emptyMap(); _bias.value = emptyMap()
@@ -144,26 +175,65 @@ object ChannelFollows {
         _rx.value = out
     }
 
-    /** The pinned first, then the most recently followed, up to MAX_LIVE get a live document. */
+    /**
+     * The chosen channels ([pickLive]) get a live document. Their answers run on the listen thread
+     * and are gathered for [PUBLISH_MS] before the list is published and saved once: with 300
+     * listeners each answer used to copy the whole map and re-save every document on the main thread.
+     */
     private fun attachDocs(entries: Map<String, Entry>) {
-        val want = entries.entries.sortedWith(compareByDescending<Map.Entry<String, Entry>> { it.value.pinned }.thenByDescending { it.value.at })
-            .take(MAX_LIVE).map { it.key }.toSet()
-        for (gone in docRegs.keys - want) { docRegs.remove(gone)?.remove(); _docs.update { it - gone } }
-        val db = FirebaseFirestore.getInstance()
-        for (cid in want - docRegs.keys) {
-            docRegs[cid] = db.collection("conversations").document(cid).addSnapshotListener { s, _ ->
-                val d = s?.data ?: return@addSnapshotListener
-                if (d["channel"] != true) return@addSnapshotListener
-                (d["followerCount"] as? Number)?.toInt()?.let { stored ->
-                    if (storedAtBias[cid] != null && storedAtBias[cid] != stored) { storedAtBias.remove(cid); _bias.update { it - cid } }
-                }
-                _docs.update { it + (cid to d) }
-                if (s?.metadata?.isFromCache == false) saveToDisk()
-                // iOS attachDocListener: the channel's shared wallpaper lands now, not when the chat opens.
-                runCatching { com.google.firebase.FirebaseApp.getInstance().applicationContext }.getOrNull()
-                    ?.let { com.fariin.app.data.ChatLookStore.syncGroupWallpaper(it, cid, d["wallpaper"] as? String) }
-            }
+        val ctx = runCatching { com.google.firebase.FirebaseApp.getInstance().applicationContext }.getOrNull()
+        val cls = ctx?.let { com.fariin.app.perf.DeviceClass.get(it) } ?: com.fariin.app.perf.PerfClass.AVERAGE
+        val docsNow = _docs.value
+        val active = docsNow.mapValues { (_, d) -> Conversation.millis(d["updatedAt"]) }
+        val want = pickLive(entries, active, liveCap(cls))
+        live = want
+        for (gone in docRegs.keys - want) {
+            docRegs.remove(gone)?.remove()
+            // Still followed, only past the cap (a LOW phone): its last document stays so the row stays.
+            if (gone !in entries) _docs.update { it - gone }
         }
+        val db = FirebaseFirestore.getInstance()
+        val g = gen
+        for (cid in want - docRegs.keys) {
+            docRegs[cid] = db.collection("conversations").document(cid)
+                .addSnapshotListener(com.fariin.app.perf.ListenThread.exec) { s, _ -> onDoc(g, cid, s?.data, s?.metadata?.isFromCache == false) }
+        }
+        // Past the cap with nothing saved: one plain read, so the row still shows.
+        for (cid in entries.keys) {
+            if (cid in want || docsNow.containsKey(cid) || !fetchedOnce.add(cid)) continue
+            db.collection("conversations").document(cid).get()
+                .addOnSuccessListener(com.fariin.app.perf.ListenThread.exec) { s -> onDoc(g, cid, s.data, !s.metadata.isFromCache) }
+        }
+    }
+
+    /** Listen thread. */
+    private fun onDoc(g: Int, cid: String, d: Map<String, Any?>?, fromServer: Boolean) {
+        if (d == null || g != gen) return
+        if (d["channel"] != true) return
+        if (cid !in live && cid !in fetchedOnce) return
+        (d["followerCount"] as? Number)?.toInt()?.let { stored ->
+            val at = storedAtBias[cid]
+            if (at != null && at != stored) { storedAtBias.remove(cid); _bias.update { it - cid } }
+        }
+        inbox[cid] = d
+        if (fromServer) inboxFromServer = true
+        val wait = throttle.offer(android.os.SystemClock.uptimeMillis())
+        if (wait == 0L) publish(g) else if (wait > 0) com.fariin.app.perf.ListenThread.later(wait) { publish(g) }
+        // iOS attachDocListener: the channel's shared wallpaper lands now, not when the chat opens.
+        runCatching { com.google.firebase.FirebaseApp.getInstance().applicationContext }.getOrNull()
+            ?.let { com.fariin.app.data.ChatLookStore.syncGroupWallpaper(it, cid, d["wallpaper"] as? String) }
+    }
+
+    /** Listen thread: one publish and at most one save for every answer gathered. */
+    private fun publish(g: Int) {
+        throttle.ran(android.os.SystemClock.uptimeMillis())
+        if (inbox.isEmpty()) return
+        val batch = HashMap(inbox); inbox.clear()
+        val save = inboxFromServer; inboxFromServer = false
+        if (g != gen || uid == null) return
+        val keep = live
+        _docs.update { it + batch.filterKeys { cid -> cid in keep || cid in fetchedOnce } }
+        if (save) saveToDisk()
     }
 
     /** Each followed channel as a conversation for the chat list. */

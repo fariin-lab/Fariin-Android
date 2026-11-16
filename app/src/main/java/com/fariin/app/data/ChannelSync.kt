@@ -44,23 +44,28 @@ class ChannelSync(
     private val onChange: (loaded: Boolean?) -> Unit,
     /** loadingOlder / canLoadOlder for the view (null = leave). */
     private val setOlder: (loading: Boolean?, can: Boolean?) -> Unit,
+    /** Where the listeners' answers run: ThreadRepository's listen thread, so applying a page of
+     *  posts never runs on the main thread. Listener swaps take [regLock], as they now come from
+     *  that thread and from the screen's. */
+    private val listenOn: java.util.concurrent.Executor,
 ) {
+    private val regLock = Any()
     private enum class Mode { PROBING, SYNCED, OFF }
 
     @Volatile private var mode = Mode.PROBING
-    private var history: ChannelHistory<DocumentSnapshot>? = null
+    @Volatile private var history: ChannelHistory<DocumentSnapshot>? = null
     private var headReg: ListenerRegistration? = null
     private var chgReg: ListenerRegistration? = null
     private var goneReg: ListenerRegistration? = null
-    private var chgToken = 0
-    private var goneToken = 0
-    private var firstServer = false
-    private var attachedAt = 0L
-    private var tooLongRunning = false
+    @Volatile private var chgToken = 0
+    @Volatile private var goneToken = 0
+    @Volatile private var firstServer = false
+    @Volatile private var attachedAt = 0L
+    @Volatile private var tooLongRunning = false
     @Volatile private var loading = false
-    private var fillPages = 0
-    private var olderNeedsRetry = false
-    private var stopped = false
+    @Volatile private var fillPages = 0
+    @Volatile private var olderNeedsRetry = false
+    @Volatile private var stopped = false
 
     /** The rows ThreadRepository draws instead of its window, or null while it should use its own. */
     fun docsOrNull(): List<DocumentSnapshot>? {
@@ -86,11 +91,13 @@ class ChannelSync(
     }
 
     fun stop() {
-        stopped = true
-        headReg?.remove(); headReg = null
-        chgReg?.remove(); chgReg = null
-        goneReg?.remove(); goneReg = null
-        chgToken++; goneToken++
+        synchronized(regLock) {
+            stopped = true
+            headReg?.remove(); headReg = null
+            chgReg?.remove(); chgReg = null
+            goneReg?.remove(); goneReg = null
+            chgToken++; goneToken++
+        }
         // The bound the disk would keep (iOS 300 visible): reopening finds the same rows and holes.
         history?.let { h -> synchronized(h) { if (h.size > BOUND_AT) h.bound(DISK_KEEP, ::visible) } }
     }
@@ -105,11 +112,12 @@ class ChannelSync(
     // ---- Probe and listeners ----------------------------------------------------------------
 
     /** The newest window: the probe's answer, then applied as changes (never a delete pass). */
-    private fun attachHead() {
+    private fun attachHead(): Unit = synchronized(regLock) {
+        if (stopped) return
         headReg = convRef.collection("messages")
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .limit(pageSize)   // the same query as ThreadRepository's window: one listen on the wire
-            .addSnapshotListener(MetadataChanges.INCLUDE) { snap, _ ->
+            .addSnapshotListener(listenOn, MetadataChanges.INCLUDE) { snap, _ ->
                 if (snap == null || stopped) return@addSnapshotListener
                 when (mode) {
                     Mode.OFF -> return@addSnapshotListener
@@ -132,7 +140,7 @@ class ChannelSync(
         if (top == null) {
             // No `chg` yet (server not stamped this channel): today's window path for this visit.
             mode = Mode.OFF
-            headReg?.remove(); headReg = null
+            synchronized(regLock) { headReg?.remove(); headReg = null }
             return
         }
         val now = System.currentTimeMillis()
@@ -158,7 +166,8 @@ class ChannelSync(
     }
 
     /** `fresh`: a new attach, whose first full answer means "too long". Otherwise a re-base. */
-    private fun attachChg(fresh: Boolean = false) {
+    private fun attachChg(fresh: Boolean = false): Unit = synchronized(regLock) {
+        if (stopped) return
         val h = history ?: return
         val from = synchronized(h) { h.lastChg } ?: return
         val token = ++chgToken
@@ -168,7 +177,7 @@ class ChannelSync(
             .whereGreaterThan("chg", from)
             .orderBy("chg")
             .limit(CH_LIMIT)
-            .addSnapshotListener { snap, err ->
+            .addSnapshotListener(listenOn) { snap, err ->
                 if (token != chgToken || stopped) return@addSnapshotListener
                 if (snap == null) {
                     val code = (err as? FirebaseFirestoreException)?.code
@@ -195,7 +204,8 @@ class ChannelSync(
     }
 
     /** Every change record in `chg` order: hard deletes `{mid, gone: true}`, clears `{clear: true, before}`. */
-    private fun attachGone() {
+    private fun attachGone(): Unit = synchronized(regLock) {
+        if (stopped) return
         val h = history ?: return
         val from = synchronized(h) { h.lastGoneChg ?: h.lastChg } ?: return
         val token = ++goneToken
@@ -204,7 +214,7 @@ class ChannelSync(
             .whereGreaterThan("chg", from)
             .orderBy("chg")
             .limit(CH_LIMIT)
-            .addSnapshotListener { snap, _ ->
+            .addSnapshotListener(listenOn) { snap, _ ->
                 // Not readable (rules not there yet): deletes for everyone still arrive as edits.
                 if (snap == null || token != goneToken || stopped) return@addSnapshotListener
                 val now = System.currentTimeMillis()
@@ -233,9 +243,11 @@ class ChannelSync(
 
     private fun refuse() {
         mode = Mode.OFF
-        headReg?.remove(); headReg = null
-        chgReg?.remove(); chgReg = null
-        goneReg?.remove(); goneReg = null
+        synchronized(regLock) {
+            headReg?.remove(); headReg = null
+            chgReg?.remove(); chgReg = null
+            goneReg?.remove(); goneReg = null
+        }
         Registry.forget(me, cid)
         history = null
         // The window path draws again; its own listener's rows are what shows now.

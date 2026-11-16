@@ -50,7 +50,8 @@ import com.fariin.app.ui.theme.Fariin
 private fun shimmerPhase(): androidx.compose.runtime.State<Float> {
     // A State read only while drawing (battery/lag audit 2026-11-05): the band moves every frame,
     // but the rows are no longer rebuilt every frame, only redrawn.
-    if (!animationsOn()) return androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(-2f) }
+    // A LOW phone gets still blocks too: the band redrew every block on every frame while loading.
+    if (!animationsOn() || reducedMotion()) return androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(-2f) }
     val t = rememberInfiniteTransition(label = "skeleton")
     return t.animateFloat(-1f, 1f, infiniteRepeatable(tween(1250, easing = LinearEasing), RepeatMode.Restart), label = "sweep")
 }

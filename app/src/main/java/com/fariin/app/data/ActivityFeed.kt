@@ -208,11 +208,19 @@ object ActivityFeed {
     fun startItems() {
         if (owner.isEmpty() || itemsReg != null) return
         _itemsFresh.value = false
+        val who = owner
+        // Up to 100 rows parsed on the listen thread; set on the main thread, so an answer that
+        // lands after the page closed or the account changed is dropped.
         itemsReg = user(owner).collection("activity").orderBy("at", Query.Direction.DESCENDING).limit(100)
-            .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { snap, _ ->
+            .addSnapshotListener(com.fariin.app.perf.ListenThread.exec, com.google.firebase.firestore.MetadataChanges.INCLUDE) { snap, _ ->
                 if (snap == null) return@addSnapshotListener
-                _items.value = snap.documents.mapNotNull { ActivityItem.parse(it.id, it.data ?: return@mapNotNull null) }
-                if (!snap.metadata.isFromCache) _itemsFresh.value = true
+                val rows = snap.documents.mapNotNull { ActivityItem.parse(it.id, it.data ?: return@mapNotNull null) }
+                val fresh = !snap.metadata.isFromCache
+                com.fariin.app.perf.ListenThread.toMain {
+                    if (owner != who || itemsReg == null) return@toMain
+                    _items.value = rows
+                    if (fresh) _itemsFresh.value = true
+                }
             }
     }
 

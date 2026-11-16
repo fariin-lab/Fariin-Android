@@ -2348,6 +2348,7 @@ class ThreadRepository(
             held = { synchronized(docsLock) { (olderDocs.values + liveDocs.values).toList() } },
             onChange = { loaded -> rebuild(loaded) },
             setOlder = { loading, can -> _state.update { it.copy(loadingOlder = loading ?: it.loadingOlder, canLoadOlder = can ?: it.canLoadOlder) } },
+            listenOn = listenExec,
         )
         // Assigned BEFORE start(): start() paints at once from the store, and rebuild() must already
         // see it (else the first paint takes the window path and can show "loaded" with no rows).

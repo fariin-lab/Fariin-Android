@@ -163,7 +163,7 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                     rows.isEmpty() && shown.isEmpty() -> Note("No public channels yet. Only public channels show here: to list yours, open it, tap its name, then Channel Settings > Channel Type > Public.")
                     shown.isEmpty() -> Note("No channels match “${query.trim()}”.")
                     else -> LazyColumn(Modifier.fillMaxSize().navigationBarsPadding()) {
-                        items(shown, key = { it.cid }) { r ->
+                        items(shown, key = { it.cid }, contentType = { "channel" }) { r ->
                             @Suppress("UNUSED_VARIABLE") val b = bias.size
                             // Followed, just followed, or one I run (owner/admin: in its `users`, no follow entry).
                             val mine = r.cid !in leaving && (entries.containsKey(r.cid) || justFollowed.contains(r.cid) ||
@@ -201,7 +201,7 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                     groupRows.isEmpty() && shown.isEmpty() -> Note("No public groups yet.")
                     shown.isEmpty() -> Note("No groups match “${query.trim()}”.")
                     else -> LazyColumn(Modifier.fillMaxSize().navigationBarsPadding()) {
-                        items(shown, key = { it.cid }) { r ->
+                        items(shown, key = { it.cid }, contentType = { "channel" }) { r ->
                             val mine = r.cid !in leaving && (justJoined.contains(r.cid) ||
                                 com.fariin.app.data.CryptoHub.listedConversation(r.cid)?.users?.contains(me) == true)
                             val pill = when {

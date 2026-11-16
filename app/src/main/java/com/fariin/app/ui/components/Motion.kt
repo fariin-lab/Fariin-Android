@@ -115,10 +115,21 @@ object Motion {
     fun fabOut(): ExitTransition = if (!on) ExitTransition.None
         else scaleOut(tween(120, easing = Accelerate)) + fadeOut(tween(120))
 
-    /** A row placed or moved in a list (Modifier.animateItem), or none when animations are off. */
-    fun <T> item(): FiniteAnimationSpec<T>? = if (on) spring(stiffness = Spring.StiffnessMediumLow) else null
-    val itemOffset: FiniteAnimationSpec<IntOffset>? get() = if (on) spring(stiffness = Spring.StiffnessMediumLow, visibilityThreshold = IntOffset(1, 1)) else null
+    /** A LOW phone's lighter motion ([com.fariin.app.perf.PowerState.reducedMotion]); outside composition. */
+    val reduced: Boolean get() = PowerSaving.state.value.reducedMotion
+    /** [ms] as this phone plays it: shorter on a LOW phone, the same everywhere else. */
+    fun ms(ms: Int): Int = com.fariin.app.perf.PowerRules.motionMs(ms, PowerSaving.state.value.deviceClass)
+
+    /** A row placed or moved in a list (Modifier.animateItem), or none when animations are off or
+     *  the phone is LOW (each moving row is redrawn every frame of the glide). */
+    fun <T> item(): FiniteAnimationSpec<T>? = if (on && !reduced) spring(stiffness = Spring.StiffnessMediumLow) else null
+    val itemOffset: FiniteAnimationSpec<IntOffset>? get() =
+        if (on && !reduced) spring(stiffness = Spring.StiffnessMediumLow, visibilityThreshold = IntOffset(1, 1)) else null
 }
+
+/** Whether this phone gets the lighter motion (LOW only); recomposes when the class is read. */
+@Composable
+fun reducedMotion(): Boolean = rememberPowerState().reducedMotion
 
 /** Whether animations are allowed right now; recomposes when the switch or Battery Saver changes. */
 @Composable
@@ -379,7 +390,7 @@ private fun androidx.compose.ui.Modifier.drawWithContentCompat(
             val mine = ++inner.run
             inner.p = 0f
             scope.launch {
-                val ms = if (inner.forward) Motion.PAGE_MS else Motion.PAGE_BACK_MS
+                val ms = Motion.ms(if (inner.forward) Motion.PAGE_MS else Motion.PAGE_BACK_MS)
                 val ease = if (inner.forward) Motion.PageEase else Motion.BackEase
                 try {
                     var last = androidx.compose.runtime.withFrameNanos { it }

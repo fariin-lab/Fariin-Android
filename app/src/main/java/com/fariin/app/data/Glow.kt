@@ -178,17 +178,26 @@ object Glow {
         prefs = c.applicationContext.getSharedPreferences("glow", Context.MODE_PRIVATE)
         _seenUpTo.value = prefs?.getLong(seenKey(newUid), 0L) ?: 0L
         // Two listeners, not one or-query: the rules can only prove a list pinned on one field.
-        glowersReg = db.collection("glows").whereEqualTo("to", newUid).addSnapshotListener { snap, _ ->
-            if (uid != newUid) return@addSnapshotListener
-            if (snap == null) { glowersFailed = true; publish(); return@addSnapshotListener }
-            glowersLoaded = true; glowersFailed = false
-            publish(glowers = snap.documents.mapNotNull { it.getString("from") }.toSet())
+        // The sets are read on the listen thread (a big glow list is many docs); the state is still
+        // only ever written on the main thread, in the order the answers came.
+        val bg = com.fariin.app.perf.ListenThread
+        glowersReg = db.collection("glows").whereEqualTo("to", newUid).addSnapshotListener(bg.exec) { snap, _ ->
+            val set = snap?.documents?.mapNotNull { it.getString("from") }?.toSet()
+            bg.toMain {
+                if (uid != newUid) return@toMain
+                if (set == null) { glowersFailed = true; publish(); return@toMain }
+                glowersLoaded = true; glowersFailed = false
+                publish(glowers = set)
+            }
         }
-        glowingReg = db.collection("glows").whereEqualTo("from", newUid).addSnapshotListener { snap, _ ->
-            if (uid != newUid) return@addSnapshotListener
-            if (snap == null) { glowingFailed = true; publish(); return@addSnapshotListener }
-            glowingLoaded = true; glowingFailed = false
-            publish(glowing = snap.documents.mapNotNull { it.getString("to") }.toSet())
+        glowingReg = db.collection("glows").whereEqualTo("from", newUid).addSnapshotListener(bg.exec) { snap, _ ->
+            val set = snap?.documents?.mapNotNull { it.getString("to") }?.toSet()
+            bg.toMain {
+                if (uid != newUid) return@toMain
+                if (set == null) { glowingFailed = true; publish(); return@toMain }
+                glowingLoaded = true; glowingFailed = false
+                publish(glowing = set)
+            }
         }
     }
 
