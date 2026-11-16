@@ -2049,7 +2049,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             Modifier.bubbleDecor(bubbleDecorFor(m, styled, isMe, c.dark, g.first, g.last, failed, showSender))
                 .widthIn(max = maxW)
                 // A picture style: its own 9-slice picture on every message, unclipped, no run shape (bubbles/BubbleArtDraw.kt).
-                .then(if (art != null) Modifier.artBubble(art, c.dark, centre = m.linkPreview == null) else Modifier.clip(shape)
+                .then(if (art != null) Modifier.artBubble(art, c.dark, centre = m.linkPreview == null) else Modifier.bubbleClip(shape)
                 .then(if (styled != null) Modifier.styledFill(styled, shape, c.dark) else Modifier.background(if (isMe) myFill() else receivedFill()).then(receivedRim(isMe, shape)))
                 .padding(horizontal = if (kind == Message.MediaKind.VOICE) 13.dp else 14.dp, vertical = 5.dp)),
         ) {
@@ -2233,7 +2233,7 @@ private fun MediaRow(
         // up to the GPU on every frame of the chat's slide-in (Pixel trace 2026-11-15, 6 ms a frame).
         modifier = Modifier.widthIn(max = maxW)
             .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
-            .clip(shape).background(if (lifted) Color.Transparent else if (isMe) myFill() else receivedFill())
+            .bubbleClip(shape).background(if (lifted) Color.Transparent else if (isMe) myFill() else receivedFill())
             .then(if (lifted) Modifier else receivedRim(isMe, shape)),
         content = {
         if (header) {

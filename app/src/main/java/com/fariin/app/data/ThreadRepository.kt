@@ -313,7 +313,10 @@ class ThreadRepository(
 
     private fun redrawFromListener() {
         msgGate.ran(System.currentTimeMillis())
-        if (closed || _state.value.former) return
+        // A group that ended (or that I left) before its first page was drawn still draws that page
+        // once: the chat doc's answer can come first and make it former, and the page then stayed
+        // on grey placeholder bubbles for good.
+        if (closed || (_state.value.former && _state.value.loaded)) return
         if (docsSeq != builtSeq || !_state.value.loaded) rebuild(loaded = true)
         if (owedSynced) {
             owedSynced = false
@@ -410,6 +413,12 @@ class ThreadRepository(
         convReg?.remove(); convReg = null
         stopOlder()
         _state.update { it.copy(conv = stripped, former = true) }
+        // Nothing drawn yet (the chat doc answered before the messages): what is here is drawn (the
+        // window if it came, else the phone's saved rows), never the placeholder bubbles for good.
+        if (!_state.value.loaded) {
+            if (synchronized(docsLock) { liveDocs.isNotEmpty() }) rebuild(loaded = true)
+            else _state.update { it.copy(loaded = true, synced = true) }
+        }
         watchBack()
     }
 

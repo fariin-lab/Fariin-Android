@@ -214,7 +214,7 @@ internal fun StickerRow(m: Message, isMe: Boolean, shape: Shape, fill: Color, he
             holdStill = m.sendState != null)
     }
     if (m.replyTo != null) {
-        Column(Modifier.clip(shape).background(fill).padding(horizontal = 10.dp, vertical = 6.dp),
+        Column(Modifier.bubbleClip(shape).background(fill).padding(horizontal = 10.dp, vertical = 6.dp),
             horizontalAlignment = if (isMe) Alignment.End else Alignment.Start) {
             Box(Modifier.widthIn(min = w.dp)) { header() }
             art()
@@ -245,7 +245,7 @@ internal fun GifRow(m: Message, shape: Shape, fill: Color, hasHeader: Boolean, h
     // (owner 2026-11-13); the plain black page only where there is no viewer to hand it to.
     var open by remember { mutableStateOf(false) }
     if (open) GifFullScreen(m.imageUrl) { open = false }
-    Column(Modifier.width(w.dp).clip(shape).background(fill)) {
+    Column(Modifier.width(w.dp).bubbleClip(shape).background(fill)) {
         if (hasHeader) Box(Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 4.dp)) { header() }
         Box(Modifier.size(w.dp, h.dp).background(Fariin.colors.secondary.copy(alpha = 0.18f))
             .clickable(enabled = m.sendState == null && !m.imageUrl.isNullOrEmpty(), onClickLabel = "Open GIF") { if (onOpen != null) onOpen() else open = true }) {
