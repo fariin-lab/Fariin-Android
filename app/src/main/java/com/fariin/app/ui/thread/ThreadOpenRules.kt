@@ -10,4 +10,10 @@ internal object ThreadOpenRules {
      */
     fun restoresPlace(unreadAtOpen: Int, hasDivider: Boolean, pushedMid: String?, userDragged: Boolean): Boolean =
         unreadAtOpen <= 0 && !hasDivider && pushedMid == null && !userDragged
+
+    /** How long after the server's first answer rows start to glide and fade (the open has settled). */
+    const val SETTLE_MS = 700L
+
+    /** Whether the open has settled: [syncedAtMs] is when the server first answered (0 = not yet). */
+    fun placeSettled(syncedAtMs: Long, nowMs: Long): Boolean = syncedAtMs > 0L && nowMs - syncedAtMs >= SETTLE_MS
 }

@@ -112,12 +112,28 @@ class ChatsViewModel(
         // A chat with only a draft (or a call going on) stays listed (iOS visible).
         .combine(com.fariin.app.local.Drafts.map.map { it.keys }.distinctUntilChanged()
             .combine(LiveCallRow.live) { d, call -> LiveCallRow.cid(me, call)?.let { d + it } ?: d }) { s, k -> s to k }
-        .map { (s, keep) -> uiOf(s, keep) }
+        .map { (s, keep) -> sameRows(uiOf(s, keep)) }
         // The first value is the phone's saved list when it is already in memory (read on its own
         // thread at app start), so the very first frame draws the chats: the list used to wait for
         // the whole screen to be built before it even asked (Pixel 2026-11-11, ~150 ms of a 0.54 s
         // cold start). The live flow takes over at once with the same rows.
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), seeded())
+
+    /** The last state handed out: its unchanged chats stay the same objects (SameRows), so a
+     *  change to one chat rebuilds that row only. */
+    private var lastUi: ChatsUiState? = null
+
+    private fun sameRows(next: ChatsUiState): ChatsUiState {
+        val prev = lastUi
+        val out = if (prev == null) next else next.copy(
+            chats = com.fariin.app.data.SameRows.keep(prev.chats, next.chats) { it.id },
+            requests = com.fariin.app.data.SameRows.keep(prev.requests, next.requests) { it.id },
+            archived = com.fariin.app.data.SameRows.keep(prev.archived, next.archived) { it.id },
+            all = com.fariin.app.data.SameRows.keep(prev.all, next.all) { it.id },
+        )
+        lastUi = out
+        return out
+    }
 
     private fun uiOf(s: ConversationsRepository.State, keep: Set<String>): ChatsUiState = when (s) {
         ConversationsRepository.State.Loading -> ChatsUiState(loading = true)

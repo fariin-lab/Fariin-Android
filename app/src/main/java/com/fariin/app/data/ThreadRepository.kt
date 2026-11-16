@@ -2214,12 +2214,26 @@ class ThreadRepository(
         } catch (_: Exception) { false }
     }
 
+    /** An "on" was written this visit (typing or recording), so the next "off" must go out. */
+    @Volatile private var typingSent = false
+
+    /** Whether a typing/recording write is needed (QuietWrites.typingWrite); notes an "on". The
+     *  composer says "off" when it opens and when it closes: with nothing on, those were two
+     *  writes per visit, each a chat-list update (Pixel 5 trace 2026-11-15). */
+    private fun quietTyping(on: Boolean): Boolean {
+        val doc = (_state.value.conv["typing"] as? Map<*, *>)?.get(me)
+        if (!QuietWrites.typingWrite(on, typingSent, doc)) return false
+        typingSent = on
+        return true
+    }
+
     /** ChatService.setTyping: `typing.<me>` = "text-<seconds>" while typing, false after. */
     fun setTyping(on: Boolean) {
         // Privacy > Messages > Typing Indicators off: I send none (an "off" still goes out).
         if (on && !PrivacySettings.typingIndicators()) return
         // Only a group's members may write its doc (a channel visitor never does).
         if (Wire.isGroupCid(cid) && me !in ((_state.value.conv["users"] as? List<*>) ?: emptyList<Any>())) return
+        if (!quietTyping(on)) return
         scope.launch {
             try {
                 val v = MessageRules.typingValue(on, System.currentTimeMillis())
@@ -2236,6 +2250,7 @@ class ThreadRepository(
     fun setRecording(on: Boolean) {
         if (on && !PrivacySettings.typingIndicators()) return
         if (Wire.isGroupCid(cid) && me !in ((_state.value.conv["users"] as? List<*>) ?: emptyList<Any>())) return
+        if (!quietTyping(on)) return
         scope.launch {
             try {
                 val v = MessageRules.recordingValue(on, System.currentTimeMillis())
@@ -2256,7 +2271,7 @@ class ThreadRepository(
      */
     fun markRead(readReceipts: Boolean = PrivacySettings.readReceipts()) {
         if (readMutex.isLocked) { readOwed = true; return }
-        scope.launch { markReadNow(readReceipts) }
+        scope.launch { markReadNow(readReceipts, skipIfRead = true) }
     }
 
     /** While a chat is open: the read mark at most once per 2.5 s (BusyChatRules, same rule on
@@ -2283,15 +2298,30 @@ class ThreadRepository(
     /** [markRead] on a scope that outlives the chat screen (a flush on leaving must still land). */
     private fun markReadOn(on: CoroutineScope) {
         if (readMutex.isLocked) { readOwed = true; return }
-        on.launch { markReadNow() }
+        on.launch { markReadNow(skipIfRead = true) }
     }
 
-    /** [markRead] awaited (the notification's Mark as read, with no chat screen). */
-    suspend fun markReadNow(readReceipts: Boolean = PrivacySettings.readReceipts()) {
+    /**
+     * [markRead] awaited (the notification's Mark as read, with no chat screen). [skipIfRead]: the
+     * open chat's own marks write nothing when nothing is unread (QuietWrites.readMarkNeeded). Each
+     * open used to write my badge 0 and a fresh lastRead even then: four chat-list updates per open
+     * and close (the local write and the server's answer for each), every one a slow frame on the
+     * Pixel 5 (trace 2026-11-15). What the other side sees is the same.
+     */
+    suspend fun markReadNow(readReceipts: Boolean = PrivacySettings.readReceipts(), skipIfRead: Boolean = false) {
         readMutex.withLock {
             do {
                 readOwed = false
                 val local = CryptoHub.listedConversation(cid)
+                if (skipIfRead) {
+                    val st = _state.value
+                    val doc = st.conv
+                    val unread = ((doc["unreadCount"] as? Map<*, *>)?.get(me) as? Number)?.toInt() ?: (local?.unreadCount?.get(me) ?: 0)
+                    val markedUnread = (doc["markedUnread"] as? Map<*, *>)?.get(me) == true || local?.markedUnread?.get(me) == true
+                    val lastRead = ((doc["lastRead"] as? Map<*, *>)?.get(me) as? com.google.firebase.Timestamp)?.toDate()?.time
+                    val newestTheirs = st.messages.lastOrNull { it.authorId != me }?.createdAtMillis?.toLong()
+                    if (!QuietWrites.readMarkNeeded(unread, markedUnread, lastRead, newestTheirs)) continue
+                }
                 val update = hashMapOf<String, Any>("unreadCount.$me" to 0)
                 if (local?.markedUnread?.get(me) == true) update["markedUnread.$me"] = FieldValue.delete()
                 try { convRef.update(update).await() } catch (_: Exception) {}
