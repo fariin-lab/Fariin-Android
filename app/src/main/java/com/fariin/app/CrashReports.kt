@@ -23,11 +23,14 @@ object CrashReports {
         val send = !debuggable && !FariinApp.usingLocalBackend
         crash.setCrashlyticsCollectionEnabled(send)
         if (!send) return
-        val info = try { c.packageManager.getPackageInfo(c.packageName, 0) } catch (_: Exception) { null }
-        crash.setCustomKey("build", "${info?.versionName ?: "?"} (${info?.let { androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(it) } ?: 0})")
         crash.setCustomKey("android", "${Build.VERSION.RELEASE} (${Build.VERSION.SDK_INT})")
         crash.setCustomKey("model", Build.MODEL ?: "")
-        crash.setCustomKey("install", installId(c))
+        // A package manager call and a prefs file: off the main thread at app start.
+        Thread({
+            val info = try { c.packageManager.getPackageInfo(c.packageName, 0) } catch (_: Exception) { null }
+            crash.setCustomKey("build", "${info?.versionName ?: "?"} (${info?.let { androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(it) } ?: 0})")
+            runCatching { crash.setCustomKey("install", installId(c)) }
+        }, "crash-keys").apply { isDaemon = true }.start()
         FirebaseAuth.getInstance().addAuthStateListener { a -> crash.setUserId(hashUid(a.currentUser?.uid ?: "")) }
     }
 

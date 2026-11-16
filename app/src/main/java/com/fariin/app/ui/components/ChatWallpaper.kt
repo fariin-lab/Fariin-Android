@@ -429,6 +429,10 @@ object WallpaperArt {
     @Volatile private var sheet: ImageBitmap? = null
     private val meshes = HashMap<String, ImageBitmap>()
 
+    // The meshes are small and quick to make again; emptied when the app leaves the screen. The
+    // doodle sheet stays: the next chat would decode it again on the main thread.
+    init { com.fariin.app.MemoryTrim.register("wallpaper-meshes") { synchronized(meshes) { meshes.clear() } } }
+
     fun pattern(c: Context): ImageBitmap? = sheet ?: synchronized(this) {
         sheet ?: runCatching {
             // The sheet is an alpha mask (white ink on clear); half size is plenty for hairlines.

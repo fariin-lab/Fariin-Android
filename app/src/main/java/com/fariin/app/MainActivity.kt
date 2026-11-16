@@ -204,42 +204,57 @@ class MainActivity : ComponentActivity() {
         // store) the keypair, then publish it if the server copy differs. A key store that cannot be
         // read is never taken as "no key", so a readable key is never replaced.
         // Channels I follow (their own list: followers are not in a channel's `users`).
+        // Cheap phones (2 cores): only what the first screen needs starts with it. The chat list's
+        // followed channels and the Activity pin are first-screen rows; everything else starts after
+        // the first frame plus [LATER_MS] (as FariinWidget does), so it does not compete with it.
         androidx.compose.runtime.DisposableEffect(me) {
             com.fariin.app.channel.ChannelFollows.start(me)
-            com.fariin.app.data.ActivityFeed.start(me)
             com.fariin.app.data.ActivityFeed.loadPin(applicationContext, me)
-            onDispose { com.fariin.app.channel.ChannelFollows.stop(); com.fariin.app.data.ActivityFeed.stop(); com.fariin.app.channel.ChannelViewQueue.reset(); com.fariin.app.data.ChannelSync.Registry.removeAll() }
+            val later = AfterFirstFrame(LATER_MS) { com.fariin.app.data.ActivityFeed.start(me) }
+            onDispose { later.cancel(); com.fariin.app.channel.ChannelFollows.stop(); com.fariin.app.data.ActivityFeed.stop(); com.fariin.app.channel.ChannelViewQueue.reset(); com.fariin.app.data.ChannelSync.Registry.removeAll() }
         }
-        // Feature switches (config/features) and the glow relationship (iOS RootView).
+        // Feature switches (config/features) and the glow relationship (iOS RootView). Until they
+        // start, every switch and limit reads this account's saved copy from the last open.
         androidx.compose.runtime.DisposableEffect(me) {
-            com.fariin.app.data.AppFeatures.start()
-            com.fariin.app.data.AppConfig.start(me)   // getAppConfig: this account's settings and limits
-            com.fariin.app.data.MsgPolicy.start(me)
-            com.fariin.app.data.Glow.start(applicationContext, me)
-            onDispose { com.fariin.app.data.Glow.stop(); com.fariin.app.data.AppFeatures.stop(); com.fariin.app.data.AppConfig.stop(); com.fariin.app.data.MsgPolicy.stop() }
+            val later = AfterFirstFrame(LATER_MS) {
+                com.fariin.app.data.AppFeatures.start()
+                com.fariin.app.data.AppConfig.start(me)   // getAppConfig: this account's settings and limits
+                com.fariin.app.data.MsgPolicy.start(me)
+                com.fariin.app.data.Glow.start(applicationContext, me)
+            }
+            onDispose {
+                later.cancel()
+                if (later.started) { com.fariin.app.data.Glow.stop(); com.fariin.app.data.AppFeatures.stop(); com.fariin.app.data.AppConfig.stop(); com.fariin.app.data.MsgPolicy.stop() }
+            }
         }
         // The official Fariin chat (announcements and my read state).
         androidx.compose.runtime.DisposableEffect(me) {
-            val build = try {
-                val p = packageManager.getPackageInfo(packageName, 0)
-                if (android.os.Build.VERSION.SDK_INT >= 28) p.longVersionCode.toInt() else @Suppress("DEPRECATION") p.versionCode
-            } catch (_: Exception) { 0 }
-            com.fariin.app.data.OfficialChannel.start(applicationContext, me, build)
-            onDispose { com.fariin.app.data.OfficialChannel.stop() }
+            val later = AfterFirstFrame(LATER_MS) {
+                val build = try {
+                    val p = packageManager.getPackageInfo(packageName, 0)
+                    if (android.os.Build.VERSION.SDK_INT >= 28) p.longVersionCode.toInt() else @Suppress("DEPRECATION") p.versionCode
+                } catch (_: Exception) { 0 }
+                com.fariin.app.data.OfficialChannel.start(applicationContext, me, build)
+            }
+            onDispose { later.cancel(); if (later.started) com.fariin.app.data.OfficialChannel.stop() }
         }
         // Favorites, the stickers I made and saved (iOS StickerStore + StickerBackup).
-        LaunchedEffect(me) { com.fariin.app.data.StickerFavorites.start(applicationContext, me) }
+        LaunchedEffect(me) { afterFirstFrame(); com.fariin.app.data.StickerFavorites.start(applicationContext, me) }
         LaunchedEffect(me) {
             try { crypto.ensureReady() } catch (_: Exception) {}
-            crypto.publishPublicKey()
-            CryptoHub.bumpKeys()
-            // iOS RootView order: push token, then this phone's device record (and its watcher).
-            Push.register(applicationContext)
-            DeviceRegistry.start(applicationContext)   // its first beat starts the heartbeat
-            // Calls ringing me while the app is alive (iOS observeIncoming), and a warm relay list.
+            CryptoHub.bumpKeys()   // the first rows' previews can be read
+            // Calls ringing me while the app is alive (iOS observeIncoming), and a warm relay list:
+            // as soon as the keys are in, a call never waits for the deferred work below.
             com.fariin.app.call.IncomingCallWatcher.start(applicationContext, me)
             // Presence "online" and the texts still owed from before (send queue).
             AppLifecycle.signedIn()
+            afterFirstFrame()
+            crypto.publishPublicKey()
+            CryptoHub.bumpKeys()
+            // iOS RootView order: push token, then this phone's device record (and its watcher).
+            // The token is unchanged on a normal open, so pushes keep arriving meanwhile.
+            Push.register(applicationContext)
+            DeviceRegistry.start(applicationContext)   // its first beat starts the heartbeat
         }
         // The first-run notifications ask, a sheet over the chat list once it is up (below).
         val ctx = LocalContext.current
@@ -256,9 +271,11 @@ class MainActivity : ComponentActivity() {
         LaunchedEffect(me) {
             com.fariin.app.local.LocalDb.purgeExpired(me)
             com.fariin.app.local.LocalDb.warmSummaries(me)
-            // Phase 4's one-time copy of every private chat (off until config/features.historyPull).
-            com.fariin.app.local.HistoryPull.kick(ctx, me)
             com.fariin.app.local.InboxSync.kick(ctx, me)
+            // Phase 4's one-time copy of every private chat (off until config/features.historyPull):
+            // a long background job, started after the first screen is up.
+            afterFirstFrame()
+            com.fariin.app.local.HistoryPull.kick(ctx, me)
         }
         restoreOffer?.let { st ->
             com.fariin.app.ui.settings.KeyRestoreScreen(st, onRestored = {
@@ -784,4 +801,32 @@ private class ShellBack(private val activity: androidx.activity.ComponentActivit
     override val lifecycle get() = activity.lifecycle
     fun setOnTop(top: Boolean) { onTop = top; update() }
     private fun update() { forward.isEnabled = onTop && wanted }
+}
+
+/** How long after the first frame the start-up work the first screen does not need begins. */
+internal const val LATER_MS = 1_500L
+
+/** In an effect: waits for the next frame, then [LATER_MS]. */
+internal suspend fun afterFirstFrame() {
+    androidx.compose.runtime.withFrameNanos { }
+    kotlinx.coroutines.delay(LATER_MS)
+}
+
+/**
+ * Runs [start] on the main thread after the next frame plus [delayMs], unless [cancel] comes first.
+ * Made for a DisposableEffect, whose onDispose must still stop things at once (sign-out);
+ * [started] says whether there is anything to stop. Main thread only.
+ */
+internal class AfterFirstFrame(delayMs: Long, start: () -> Unit) {
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private var cancelled = false
+    var started = false
+        private set
+    private val run = Runnable { if (!cancelled) { started = true; start() } }
+
+    init {
+        android.view.Choreographer.getInstance().postFrameCallback { if (!cancelled) main.postDelayed(run, delayMs) }
+    }
+
+    fun cancel() { cancelled = true; main.removeCallbacks(run) }
 }

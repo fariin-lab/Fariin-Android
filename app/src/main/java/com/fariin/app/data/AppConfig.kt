@@ -125,6 +125,7 @@ object AppConfig {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private fun raw(key: String): Any? {
+        launchCache.ensure()
         if (key in nextLaunchKeys) { launchRead = true; return launch[key] }
         return live[key]
     }
@@ -163,13 +164,21 @@ object AppConfig {
     /** At app start, before any screen: the launch snapshot for the account signed in now. */
     fun init(c: Context) {
         appCtx = c.applicationContext
-        val u = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
-        val cached = readCache(u) ?: return
+        launchUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        // The cache (a prefs file and a JSON parse) is read on the first value asked for, not here.
+        prefs()
+    }
+
+    @Volatile private var launchUid: String? = null
+    private val launchCache = com.fariin.app.local.LoadOnce {
+        val u = launchUid ?: return@LoadOnce
+        val cached = readCache(u) ?: return@LoadOnce
         synchronized(lock) { launch = cached.values; live = cached.values }
     }
 
     /** With the account's other listeners: that account's cache goes live, one ask, the epoch listener. */
     fun start(me: String) {
+        launchCache.ensure()
         if (me.isEmpty()) return
         if (uid != me) {
             val c = readCache(me)
@@ -188,6 +197,7 @@ object AppConfig {
 
     /** Sign-out: the next account never runs on this one's values. The cache stays, per account. */
     fun stop() {
+        launchCache.ensure()
         epochReg?.remove(); epochReg = null
         fetchJob?.cancel(); fetchJob = null
         seq++

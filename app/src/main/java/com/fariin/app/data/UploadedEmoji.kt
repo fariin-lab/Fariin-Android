@@ -41,7 +41,7 @@ object UploadedEmoji {
     private val _known = MutableStateFlow(false)
     val known: StateFlow<Boolean> = _known
 
-    private var prefs: android.content.SharedPreferences? = null
+    @Volatile private var prefs: android.content.SharedPreferences? = null
     private var dir: File? = null
     private val inFlight = HashSet<String>()
     /** Ids whose file was refused this launch (too big, not gzip): not asked for again until the next open. */
@@ -55,7 +55,7 @@ object UploadedEmoji {
      * A "cu_" key whose id the panel no longer lists (iOS isRetired): not drawn, not counted, not
      * offered. A key still on the list, a "ce_" key or a plain emoji is never retired.
      */
-    fun isRetired(key: String?): Boolean = _known.value && retired(key, _items.value)
+    fun isRetired(key: String?): Boolean = saved.ensure().let { _known.value } && retired(key, _items.value)
 
     fun retired(key: String?, list: List<Item>): Boolean =
         isKey(key) && list.none { it.id == key!!.drop(3) }
@@ -91,6 +91,7 @@ object UploadedEmoji {
 
     /** From the config/features listener. */
     fun updateHidden(raw: Any?) {
+        saved.ensure()
         val set = parseHidden(raw)
         if (set == _hidden.value) return
         _hidden.value = set
@@ -102,9 +103,14 @@ object UploadedEmoji {
         bytes.size in 21..MAX_BYTES && bytes[0] == 0x1f.toByte() && bytes[1] == 0x8b.toByte()
 
     fun init(c: Context) {
-        val p = c.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
-        prefs = p
+        prefs = c.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
         dir = File(c.applicationContext.cacheDir, "custom_emoji")
+        // The saved list is parsed off the main thread; a reader that comes first waits for it.
+        saved.start("uploaded-emoji")
+    }
+
+    private val saved = com.fariin.app.local.LoadOnce {
+        val p = prefs ?: return@LoadOnce
         _known.value = p.contains(KEY)
         _hidden.value = p.getStringSet(HIDDEN_KEY, null)?.toSet() ?: emptySet()
         _items.value = runCatching {
@@ -115,6 +121,7 @@ object UploadedEmoji {
 
     /** From the config/features listener. */
     fun update(raw: Any?) {
+        saved.ensure()
         val list = parse(raw)
         val first = !_known.value
         _known.value = true
@@ -145,6 +152,7 @@ object UploadedEmoji {
     /** The Lottie JSON for a "cu_" key, or null while it is not here yet (a download is started). */
     fun json(key: String): String? {
         if (!isKey(key)) return null
+        saved.ensure()
         val id = key.drop(3)
         val f = dir?.let { File(it, "$id.tgs") } ?: return null
         if (f.exists()) {

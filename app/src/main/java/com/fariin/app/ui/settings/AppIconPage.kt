@@ -94,7 +94,8 @@ internal object AppIcons {
         val extra = runCatching { all.count { it.alias != keep && enabled(app, it.alias) } }.getOrDefault(0)
         if (extra == 0 || !enabled(app, keep)) return
         chosen = keep
-        watch(app)
+        // heal runs on a start-up thread; the lifecycle observer must be added on the main thread.
+        android.os.Handler(android.os.Looper.getMainLooper()).post { watch(app) }
     }
 
     @Volatile private var chosen: String? = null

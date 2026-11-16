@@ -16,6 +16,11 @@ object LowEnd {
     /** Share of the app's memory class the picture cache may hold. */
     fun memoryCachePercent(lowRam: Boolean): Double = if (lowRam) 0.15 else 0.25
 
+    /** The picture cache in bytes: [memoryCachePercent] of the normal heap ([memoryClassMb], never
+     *  the large heap). A 128 MB phone keeps about 19 MB, a 256 MB one 64 MB. */
+    fun memoryCacheBytes(memoryClassMb: Int, lowRam: Boolean): Long =
+        (memoryClassMb.coerceAtLeast(16) * 1024L * 1024 * memoryCachePercent(lowRam)).toLong()
+
     /** Largest side a full-screen photo is decoded at: the screen's long side, at most 2048 (1440 on low RAM). */
     fun viewerSide(screenLongPx: Int, lowRam: Boolean): Int = minOf(screenLongPx.coerceAtLeast(480), if (lowRam) 1440 else 2048)
 }

@@ -95,11 +95,16 @@ object PrivacySettings {
     private var reg: ListenerRegistration? = null
     private var uid: String? = null
     private val _map = MutableStateFlow<Map<String, String>>(emptyMap())
-    val map: StateFlow<Map<String, String>> = _map.asStateFlow()
+    private val mapView: StateFlow<Map<String, String>> = _map.asStateFlow()
+    /** My choices as of the last open, read on first use rather than at app start. Every read and
+     *  write waits for it, so a "who can see" answer is never the empty default by accident. */
+    private val saved = com.fariin.app.local.LoadOnce { if (app != null) _map.value = decode(prefs()?.getString(MAP, null)) }
+    val map: StateFlow<Map<String, String>> get() { saved.ensure(); return mapView }
 
     fun init(context: Context) {
         app = context.applicationContext
-        _map.value = decode(prefs()?.getString(MAP, null))
+        // Opening the handle starts the platform's own read of the file on its thread.
+        prefs()
     }
 
     private fun prefs() = app?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -117,6 +122,7 @@ object PrivacySettings {
     }
 
     private fun publish(m: Map<String, String>) {
+        saved.ensure()
         _map.value = m
         Presence.noteMyPrivacy(m)
         prefs()?.edit()?.putString(MAP, encode(m))
@@ -124,8 +130,8 @@ object PrivacySettings {
             ?.putBoolean("shareLastSeen", PrivacyRules.flag(m, "shareLastSeen"))?.apply()
     }
 
-    fun audience(key: String): Audience = PrivacyRules.audience(_map.value, key)
-    fun flag(key: String): Boolean = PrivacyRules.flag(_map.value, key)
+    fun audience(key: String): Audience = PrivacyRules.audience(map.value, key)
+    fun flag(key: String): Boolean = PrivacyRules.flag(map.value, key)
 
     /** Am I sending read receipts? (Privacy > Messages > Read Receipts; off = no lastRead stamp.) */
     fun readReceipts(): Boolean = flag("readReceipts")
@@ -138,7 +144,7 @@ object PrivacySettings {
      */
     suspend fun set(key: String, value: String): String? {
         val me = FirebaseAuth.getInstance().currentUser?.uid ?: return "You are logged out."
-        val before = _map.value
+        val before = map.value
         publish(before + (key to value))
         return try {
             FirebaseFirestore.getInstance().collection("users").document(me)

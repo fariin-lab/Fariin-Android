@@ -365,6 +365,9 @@ internal object AnimatedShaders {
 internal object AnimatedStill {
     private val cache = HashMap<String, ImageBitmap>()
 
+    // A screen already drawing a still keeps its own reference; only the map lets go.
+    init { com.fariin.app.MemoryTrim.register("animated-stills") { synchronized(cache) { cache.clear() } } }
+
     fun bitmap(a: AnimatedWallpaper, aspect: Float, dark: Boolean, intensity: Int): ImageBitmap {
         val sharp = a.look == AnimatedLook.STARS || a.look == AnimatedLook.PARTICLES
         val h = if (sharp) 240 else 96

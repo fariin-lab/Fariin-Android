@@ -18,9 +18,14 @@ import kotlinx.coroutines.flow.StateFlow
  */
 object AppFeatures {
     private const val FILE = "remote_features"
-    private var snapshot: Map<String, Boolean> = emptyMap()
-    private var prefs: android.content.SharedPreferences? = null
+    @Volatile private var snapshotValue: Map<String, Boolean> = emptyMap()
+    @Volatile private var prefs: android.content.SharedPreferences? = null
     private var reg: ListenerRegistration? = null
+    /** The last open's switches, read on the first switch asked for instead of at app start. */
+    private val saved = com.fariin.app.local.LoadOnce {
+        prefs?.let { p -> snapshotValue = p.all.mapNotNull { (k, v) -> (v as? Boolean)?.let { k to it } }.toMap() }
+    }
+    private val snapshot: Map<String, Boolean> get() { saved.ensure(); return snapshotValue }
 
     /** Glow: the Glowing grid on Stories, the Glow button and "Glow Story" on a profile, the
      *  Glowers · Glowing card on My Profile. Off by default (owner 2026-10-10, hidden). */
@@ -60,9 +65,9 @@ object AppFeatures {
 
     /** Once per launch, before anything reads a switch. */
     fun init(c: Context) {
-        val p = c.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
-        prefs = p
-        snapshot = p.all.mapNotNull { (k, v) -> (v as? Boolean)?.let { k to it } }.toMap()
+        // Only the handle (the platform starts reading the file on its own thread); the snapshot is
+        // taken on first use, before the listener below may overwrite the file.
+        prefs = c.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
         UploadedEmoji.init(c)
         HiddenLooks.init(c)
     }
@@ -84,6 +89,7 @@ object AppFeatures {
                 UploadedEmoji.updateHidden(snap.get("customEmojiHidden"))
                 // Built-in wallpapers and bubble styles the panel hid leave the pickers, live.
                 HiddenLooks.update(snap.get("wallpapersHidden"), snap.get("bubblesHidden"))
+                saved.ensure()   // this launch's snapshot is taken before the file changes
                 val e = prefs?.edit() ?: return@addSnapshotListener
                 e.clear()
                 snap.data.orEmpty().forEach { (k, v) -> if (v is Boolean) e.putBoolean(k, v) }
@@ -126,7 +132,7 @@ object HiddenLooks {
     private const val FILE = "hidden_looks"
     private const val WALLS = "walls.v1"
     private const val BUBBLES = "bubbles.v1"
-    private var prefs: android.content.SharedPreferences? = null
+    @Volatile private var prefs: android.content.SharedPreferences? = null
     private val _wallpapers = MutableStateFlow<Set<String>>(emptySet())
     private val _bubbles = MutableStateFlow<Set<String>>(emptySet())
     val wallpapers: StateFlow<Set<String>> = _wallpapers
@@ -142,14 +148,20 @@ object HiddenLooks {
         if (hidden.isEmpty()) all else all.filter { id(it) !in hidden }
 
     fun init(c: Context) {
-        val p = c.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
-        prefs = p
+        prefs = c.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+        // The pickers that read these open long after start; read off the main thread.
+        saved.start("hidden-looks")
+    }
+
+    private val saved = com.fariin.app.local.LoadOnce {
+        val p = prefs ?: return@LoadOnce
         _wallpapers.value = p.getStringSet(WALLS, null)?.toSet() ?: emptySet()
         _bubbles.value = p.getStringSet(BUBBLES, null)?.toSet() ?: emptySet()
     }
 
     /** From the config/features listener. A missing field means nothing is hidden. */
     fun update(rawWalls: Any?, rawBubbles: Any?) {
+        saved.ensure()   // the saved copy never lands on top of this newer one
         val w = parse(rawWalls)
         val b = parse(rawBubbles)
         if (w == _wallpapers.value && b == _bubbles.value) return
