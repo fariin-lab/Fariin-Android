@@ -29,4 +29,11 @@ class GroupWelcomeTest {
         // An admin granted rights without Add members.
         assertFalse(GroupWelcome.canAdd("a", doc + ("adminRights" to mapOf("a" to listOf("changeInfo")))))
     }
+
+    @Test fun endedOrDisabledGroupOffersNoButtons() {
+        assertTrue(GroupWelcome.live(doc + ("type" to "group")))
+        assertFalse(GroupWelcome.live(doc + ("type" to "group") + ("endedAt" to 1_000.0)))
+        assertFalse(GroupWelcome.live(doc + ("mod" to mapOf("state" to "disabled"))))
+        assertTrue(GroupWelcome.live(doc + ("mod" to mapOf("state" to "suspended"))))
+    }
 }

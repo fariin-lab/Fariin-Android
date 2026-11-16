@@ -28,6 +28,9 @@ object GroupWelcome {
         GroupAdmins.Team.from(doc).can(me, GroupAdmins.Right.INVITE_USERS) ||
             (doc["membersCanAdd"] == true && !restricted(me, doc, "addMembers", nowMs))
 
+    /** False once the owner ended the group or it was disabled: the card then offers no buttons. */
+    fun live(doc: Map<String, Any?>): Boolean = GroupMod.state(doc) !in setOf("ended", "disabled")
+
     /** The link is the admin's own right. */
     fun canLink(me: String, doc: Map<String, Any?>): Boolean = GroupAdmins.Team.from(doc).can(me, GroupAdmins.Right.INVITE_USERS)
 }

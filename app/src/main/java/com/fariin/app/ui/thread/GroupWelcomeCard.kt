@@ -44,9 +44,11 @@ import com.fariin.app.R
 internal fun GroupWelcomeCard(ui: ThreadUi, onStep: (String) -> Unit, modifier: Modifier = Modifier) {
     val c = Fariin.colors
     val doc = ui.groupDoc
-    val canEdit = GroupRules.canEditInfo(ui.me, doc)
-    val canAdd = GroupWelcome.canAdd(ui.me, doc)
-    val canLink = GroupWelcome.canLink(ui.me, doc)
+    // An ended or disabled group takes no new members, link or edits: the card shows no buttons.
+    val live = GroupWelcome.live(doc)
+    val canEdit = live && GroupRules.canEditInfo(ui.me, doc)
+    val canAdd = live && GroupWelcome.canAdd(ui.me, doc)
+    val canLink = live && GroupWelcome.canLink(ui.me, doc)
     val photo = (doc["avatarUrl"] as? String)?.ifEmpty { null } ?: ui.photoUrl
     val title = doc["title"] as? String ?: ui.title
     // The same frame as the channel's card (owner 2026-11-06, "not same as apple"): across the screen,
