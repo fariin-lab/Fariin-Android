@@ -10,7 +10,54 @@ class DeviceClassTest {
     private val gb = 1024L * 1024 * 1024
     private fun specs(
         ram: Long = 8 * gb, cores: Int = 8, freq: Int? = 2800, heap: Int = 256, sdk: Int = 34, lowRam: Boolean = false,
-    ) = DeviceSpecs(ram, cores, freq, heap, sdk, lowRam)
+        soc: List<String> = emptyList(),
+    ) = DeviceSpecs(ram, cores, freq, heap, sdk, lowRam, soc)
+
+    // A chip's real numbers plus its names, the way read() would fill them in.
+    private fun phone(cores: Int, freq: Int, ram: Long, vararg soc: String) =
+        DeviceClass.classify(specs(ram = ram, cores = cores, freq = freq, soc = soc.toList()))
+
+    @Test fun nubiaV80DesignUnisocT7280IsLow() {
+        // 2x A75 2.2 GHz + 6x A55 1.8 GHz averages about 1900 MHz, so the numbers alone said AVERAGE.
+        assertEquals(PerfClass.AVERAGE, DeviceClass.classify(specs(cores = 8, freq = 1900)))
+        assertEquals(PerfClass.LOW, phone(8, 1900, 8 * gb, "Unisoc T7280"))
+        assertEquals(PerfClass.LOW, DeviceClass.forSoc("Spreadtrum", "T620"))
+        assertEquals(PerfClass.LOW, DeviceClass.forSoc("Unisoc", "ums9230"))
+    }
+
+    @Test fun galaxyA05AndA05sAreLow() {
+        assertEquals(PerfClass.LOW, phone(8, 1900, 4 * gb, "Mediatek MT6769Z"))   // A05, Helio G85
+        assertEquals(PerfClass.LOW, DeviceClass.forSoc("Mediatek", "MT6769V/CZ"))
+        assertEquals(PerfClass.LOW, phone(8, 2100, 4 * gb, "QTI SM6225"))         // A05s, Snapdragon 680
+    }
+
+    @Test fun galaxyA10Exynos7884IsLowFromCpuinfo() {
+        // Android 11 at most, so no SOC_MODEL: the name comes from cpuinfo and the board.
+        val hw = DeviceClass.cpuinfoHardware("processor\t: 7\nHardware\t: Samsung EXYNOS7884B\n")
+        assertEquals("Samsung EXYNOS7884B", hw)
+        assertEquals(PerfClass.LOW, phone(8, 1450, 2 * gb, hw!!, "universal7884B"))
+    }
+
+    @Test fun pixel5Sm7250StaysAverage() {
+        // Snapdragon 765G: must keep its glass and the full chat slide.
+        assertNull(DeviceClass.forSoc("QTI", "SM7250"))
+        assertEquals(PerfClass.AVERAGE, phone(8, 2000, 8 * gb, "QTI SM7250", "lito", "redfin"))
+        assertTrue(PowerRules.glass(34, PerfClass.AVERAGE, true))
+    }
+
+    @Test fun snapdragon8Gen2IsHigh() {
+        assertNull(DeviceClass.forSoc("QTI", "SM8550"))
+        assertEquals(PerfClass.HIGH, phone(8, 2700, 12 * gb, "QTI SM8550", "kalama"))
+    }
+
+    @Test fun socMatchNeedsDigitBoundaries() {
+        assertNull(DeviceClass.forSoc("QTI", "SM62250"))
+        assertNull(DeviceClass.forSoc("Mediatek", "MT67691"))
+        assertNull(DeviceClass.forSoc(null, null))
+        assertNull(DeviceClass.forSoc("", ""))
+        assertNull(DeviceClass.cpuinfoHardware("processor : 0\nBogoMIPS : 52.00\n"))
+        assertEquals(PerfClass.LOW, DeviceClass.forSoc(null, "Qualcomm Technologies, Inc SDM450"))
+    }
 
     @Test fun flagshipIsHigh() = assertEquals(PerfClass.HIGH, DeviceClass.classify(specs()))
 
