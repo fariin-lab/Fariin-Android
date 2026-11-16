@@ -1,7 +1,7 @@
 package com.fariin.app.ui.settings
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -87,9 +87,9 @@ internal fun StoryAudienceRows(push: (String) -> Unit) {
         val myPhoto = remember(me) { com.fariin.app.data.MyProfileRepository().listen(me) }.collectAsState(initial = null).value?.photoUrl
         AudienceBadgeRow({
             if (!myPhoto.isNullOrEmpty()) com.fariin.app.ui.components.Avatar(myPhoto, 40.dp)
-            else AudienceCircle(Fariin.colors.blue, ImageVector.vectorResource(R.drawable.ic_sf_globe))
+            else AudienceCircle(Fariin.colors.blue, ImageVector.cachedVector(R.drawable.ic_sf_globe))
         }, "Everyone", StoryPrivacyRules.everyoneSubtitle(), last = false) { push(PAGE_STORY_EVERYONE) }
-        AudienceBadgeRow({ AudienceCircle(androidx.compose.ui.graphics.Color(0xFFFF9500), ImageVector.vectorResource(R.drawable.ic_sf_person2_fill)) },
+        AudienceBadgeRow({ AudienceCircle(androidx.compose.ui.graphics.Color(0xFFFF9500), ImageVector.cachedVector(R.drawable.ic_sf_person2_fill)) },
             "My Chats", StoryPrivacyRules.myChatsSubtitle(myFriends), last = custom.isEmpty()) { push(PAGE_STORY_MYCHATS) }
         for ((i, l) in custom.withIndex()) {
             Row(
@@ -103,7 +103,7 @@ internal fun StoryAudienceRows(push: (String) -> Unit) {
                     Text(StoryPrivacyRules.customSubtitle(l), style = MaterialTheme.typography.bodyMedium, color = Fariin.colors.secondary, maxLines = 1)
                 }
                 // The arrow every row that opens a page has (iOS StorySettingsView, owner 2026-11-08).
-                androidx.compose.material3.Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null,
+                androidx.compose.material3.Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_right), null,
                     tint = Fariin.colors.tertiary, modifier = Modifier.size(14.dp))
             }
             if (i != custom.lastIndex) HorizontalDivider(thickness = 0.5.dp, color = Fariin.colors.separator, modifier = Modifier.padding(start = 64.dp))
@@ -133,7 +133,7 @@ private fun AudienceBadgeRow(badge: @Composable () -> Unit, title: String, sub: 
             Text(sub, style = MaterialTheme.typography.bodyMedium, color = Fariin.colors.secondary, maxLines = 1)
         }
             // The arrow every row that opens a page has (iOS StorySettingsView, owner 2026-11-08).
-            androidx.compose.material3.Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null,
+            androidx.compose.material3.Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_right), null,
                 tint = Fariin.colors.tertiary, modifier = Modifier.size(14.dp))
     }
     if (!last && SHOW_ROW_LINES) HorizontalDivider(thickness = 0.5.dp, color = Fariin.colors.separator, modifier = Modifier.padding(start = 68.dp))
@@ -187,7 +187,7 @@ internal fun StoryEveryonePage(pop: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(Modifier.size(36.dp).clip(CircleShape).background(Fariin.colors.fieldFill), contentAlignment = Alignment.Center) {
-                    Icon(ImageVector.vectorResource(R.drawable.ic_plus_ios), contentDescription = null, tint = Fariin.colors.label, modifier = Modifier.size(20.dp))
+                    Icon(ImageVector.cachedVector(R.drawable.ic_plus_ios), contentDescription = null, tint = Fariin.colors.label, modifier = Modifier.size(20.dp))
                 }
                 Spacer(Modifier.width(12.dp))
                 Text("Add People", fontSize = 17.sp, color = Fariin.colors.label)
@@ -196,7 +196,7 @@ internal fun StoryEveryonePage(pop: () -> Unit) {
             for ((i, p) in list.withIndex()) {
                 PersonRow(p.name.ifEmpty { "Fariin user" }, p.photo, last = i == list.lastIndex, trailing = {
                     IconButton(onClick = { StoryPrivacyStore.setHidden(setOf(p.uid), false) }) {
-                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Remove ${p.name}", tint = Fariin.colors.secondary)
+                        Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Remove ${p.name}", tint = Fariin.colors.secondary)
                     }
                 }, onClick = null)
             }

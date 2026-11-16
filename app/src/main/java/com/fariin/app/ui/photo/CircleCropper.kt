@@ -1,7 +1,7 @@
 package com.fariin.app.ui.photo
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 import android.graphics.Bitmap
 import android.net.Uri
@@ -142,14 +142,14 @@ fun CircleCropper(uri: Uri, title: String, subtitle: String, onDone: (ByteArray)
             Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            RoundButton(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Cancel", onClick = onCancel)
+            RoundButton(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Cancel", onClick = onCancel)
             Column(Modifier.weight(1f).padding(horizontal = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White, textAlign = TextAlign.Center)
                 Text(subtitle, fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f), textAlign = TextAlign.Center)
             }
             if (cutting) Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
                 com.fariin.app.ui.components.ButtonSpinner(Color.White)
-            } else RoundButton(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), "Done") {
+            } else RoundButton(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), "Done") {
                 val b = source ?: return@RoundButton
                 val r = CropMath.cropRect(b.width, b.height, window, scale, offX, offY)
                 if (r[2] <= 0) return@RoundButton

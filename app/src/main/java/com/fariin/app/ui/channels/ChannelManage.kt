@@ -7,7 +7,7 @@ import com.fariin.app.ui.components.underBar
 
 import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.foundation.layout.Arrangement
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -155,7 +155,7 @@ private fun ChannelManageList(info: ChannelInfo, team: Team, me: String, shownCo
             value = if (info.isPublic) "Public" else "Private", last = !invite, badge = NewBadgeSpots.GROUP_SETTINGS_TYPE) { nav.type(info.cid) }
         if (invite) {
             val reqs = com.fariin.app.ui.people.rememberJoinRequests(info.cid, allowed = true)
-            SettingsRow("Invite Link", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)),
+            SettingsRow("Invite Link", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_link_copy)),
                 value = if (inviteOn) "On" else "Off", badge = NewBadgeSpots.GROUP_SETTINGS_INVITE_LINK) { nav.links(info.cid) }
             SettingsRow("Follow Requests", icon = painterResource(R.drawable.ic_gs_join_requests),
                 value = com.fariin.app.data.JoinRequests.rowValue(reqs.size), last = true,
@@ -177,7 +177,7 @@ private fun ChannelManageList(info: ChannelInfo, team: Team, me: String, shownCo
     }
     Card {
         com.fariin.app.ui.people.DisappearingRow(timer, short = false, badge = NewBadgeSpots.GROUP_SETTINGS_DISAPPEARING, onClick = onTimer)
-        SettingsRow("Recent Actions", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_clock_arrow)), last = true,
+        SettingsRow("Recent Actions", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_sf_clock_arrow)), last = true,
             badge = NewBadgeSpots.GROUP_SETTINGS_RECENT_ACTIONS, onClick = onRecent)
     }
     // LAST (owner's mockup 2026-11-07): Reactions (the picks themselves, else Any / Off), Replies,
@@ -395,10 +395,10 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: (
         }, modifier = Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
                 if (mayInvite) SettingsSection {
-                    SettingsRow(if (adding) "Adding…" else "Add Followers", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_person_plus)),
+                    SettingsRow(if (adding) "Adding…" else "Add Followers", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_person_plus)),
                         trailing = Trailing.NONE,
                         accessory = if (adding) ({ com.fariin.app.ui.components.FariinSpinner(size = 20.dp) }) else null) { if (!adding) picking = true }
-                    SettingsRow("Invite via Link", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_link)),
+                    SettingsRow("Invite via Link", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_link)),
                         trailing = Trailing.NONE, last = true) { shareLink() }
                 }
                 SettingsSection(header = ChannelRules.followersLine(shown), footer = ChannelAdmins.FOLLOWERS_FOOTER) {
@@ -469,7 +469,7 @@ fun ChannelAdminsScreen(cid: String, me: String, onBack: () -> Unit, onOpen: (St
         Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).navigationBarsPadding()) {
             SettingsSection(footer = ChannelAdmins.ADMINS_FOOTER) {
                 if (team.can(me, Right.ADD_ADMINS)) {
-                    SettingsRow("Add Admin", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_add_member)),
+                    SettingsRow("Add Admin", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_add_member)),
                         titleColor = c.accent, trailing = Trailing.NONE) { picking = true }
                 }
                 team.sorted().forEach { uid ->
@@ -643,7 +643,7 @@ fun ChannelAdminScreen(cid: String, me: String, uid: String, onBack: () -> Unit)
                         last = true) { if (!saving) transferring = true }
                 }
                 if (team.canDismiss(me, uid)) SettingsSection {
-                    SettingsRow("Dismiss Admin", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_person_minus)),
+                    SettingsRow("Dismiss Admin", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_sf_person_minus)),
                         titleColor = c.red, trailing = Trailing.NONE, last = true) { if (!saving) confirmDismiss = true }
                 }
             }
@@ -682,7 +682,7 @@ private fun RowMenu(items: List<Pair<String, () -> Unit>>) {
     val c = Fariin.colors
     var open by remember { mutableStateOf(false) }
     Box {
-        IconButton({ open = true }) { Icon(ImageVector.vectorResource(R.drawable.ic_more_ios), "More", tint = c.secondary) }
+        IconButton({ open = true }) { Icon(ImageVector.cachedVector(R.drawable.ic_more_ios), "More", tint = c.secondary) }
         GlassDropdown(open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
             items.forEach { (label, act) ->
                 DropdownMenuItem(text = { Text(label, color = if (label == "Ban") banOrange() else c.red) }, onClick = { open = false; act() })

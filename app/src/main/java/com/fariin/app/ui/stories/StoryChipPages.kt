@@ -49,7 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -134,7 +134,7 @@ private fun TrayPushHeader(title: String, onBack: () -> Unit) {
     Box(Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 16.dp)) {
         Box(Modifier.align(Alignment.CenterStart).size(36.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f))
             .clickable(onClick = onBack), contentAlignment = Alignment.Center) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_back_arrow), contentDescription = "Back", tint = Color.White, modifier = Modifier.size(18.dp))
+            Icon(ImageVector.cachedVector(R.drawable.ic_back_arrow), contentDescription = "Back", tint = Color.White, modifier = Modifier.size(18.dp))
         }
         Text(title, Modifier.align(Alignment.Center), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
     }

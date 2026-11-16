@@ -41,7 +41,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -162,7 +162,7 @@ private fun OneTimeVoicePage(m: Message, cid: String, onClose: () -> Unit) {
                             contentAlignment = Alignment.Center,
                         ) {
                             if (!st.ready) CircularProgressIndicator(color = Color.Black, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
-                            else Icon(if (st.playing) ImageVector.vectorResource(R.drawable.ic_sf_pause_fill) else ImageVector.vectorResource(R.drawable.ic_sf_play_fill),
+                            else Icon(if (st.playing) ImageVector.cachedVector(R.drawable.ic_sf_pause_fill) else ImageVector.cachedVector(R.drawable.ic_sf_play_fill),
                                 if (st.playing) "Pause" else "Play", tint = Color.Black, modifier = Modifier.size(28.dp))
                         }
                         Spacer(Modifier.width(10.dp))
@@ -197,7 +197,7 @@ private fun OneTimeVoicePage(m: Message, cid: String, onClose: () -> Unit) {
                 Modifier.statusBarsPadding().padding(start = 16.dp, top = 8.dp).size(36.dp).clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.12f)).clickable(onClick = onClose),
                 contentAlignment = Alignment.Center,
-            ) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", tint = Color.White, modifier = Modifier.size(18.dp)) }
+            ) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Close", tint = Color.White, modifier = Modifier.size(18.dp)) }
         }
     }
 }

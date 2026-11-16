@@ -1,7 +1,7 @@
 package com.fariin.app.ui.thread
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.foundation.Image
@@ -203,7 +203,7 @@ private fun PagerBody(
             Modifier.statusBarsPadding().padding(start = 12.dp, top = 6.dp).size(44.dp).floating()
                 .clickable { onClose() },
             contentAlignment = Alignment.Center,
-        ) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = Color.White) }
+        ) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = Color.White) }
 
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().imePadding()
@@ -222,10 +222,10 @@ private fun PagerBody(
                     // Crop and pen only make sense on a photo page; HD is for the whole batch.
                     if (currentIsPhoto) {
                         ToolCircle(onClick = { current?.let { openCrop(it) } }) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_crop), contentDescription = "Crop", tint = Color.White, modifier = Modifier.size(20.dp))
+                            Icon(ImageVector.cachedVector(R.drawable.ic_sf_crop), contentDescription = "Crop", tint = Color.White, modifier = Modifier.size(20.dp))
                         }
                         ToolCircle(onClick = { penOn = current }) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_pencil), contentDescription = "Draw", tint = Color.White, modifier = Modifier.size(20.dp))
+                            Icon(ImageVector.cachedVector(R.drawable.ic_sf_pencil), contentDescription = "Draw", tint = Color.White, modifier = Modifier.size(20.dp))
                         }
                     }
                     ToolCircle(onClick = { hd = !hd }) {
@@ -249,7 +249,7 @@ private fun PagerBody(
                 }
                 Spacer(Modifier.width(10.dp))
                 Box(Modifier.size(40.dp).clip(CircleShape).background(EditorBlue).clickable { send() }, contentAlignment = Alignment.Center) {
-                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_up), contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
+                    Icon(ImageVector.cachedVector(R.drawable.ic_sf_arrow_up), contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
                 }
             }
         }
@@ -346,7 +346,7 @@ private fun RailTile(uri: Uri, isVideo: Boolean, current: Boolean, onTap: () -> 
         ) {
             val pic = thumb?.first
             if (pic != null) Image(pic, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-            else if (isVideo) Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video), null, tint = Color.White, modifier = Modifier.align(Alignment.Center).size(14.dp))
+            else if (isVideo) Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_call_video), null, tint = Color.White, modifier = Modifier.align(Alignment.Center).size(14.dp))
             // The ring is drawn over the picture, as iOS's overlay.
             if (current) Box(Modifier.fillMaxSize().border(2.5.dp, EditorBlue, tile))
             val ms = thumb?.second ?: 0L
@@ -361,6 +361,6 @@ private fun RailTile(uri: Uri, isVideo: Boolean, current: Boolean, onTap: () -> 
             Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-6).dp).size(16.dp).clip(CircleShape)
                 .background(Color.Black.copy(alpha = 0.7f)).border(1.dp, Color.White, CircleShape).clickable(onClick = onRemove),
             contentAlignment = Alignment.Center,
-        ) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Remove", tint = Color.White, modifier = Modifier.size(11.dp)) }
+        ) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Remove", tint = Color.White, modifier = Modifier.size(11.dp)) }
     }
 }

@@ -70,7 +70,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 
 /** The chat's file source (download + open + cache). Null: the demo, bundled files only. */
@@ -436,7 +436,7 @@ internal fun VoiceBody(m: Message, cid: String, isMe: Boolean, width: Dp, meta: 
                 if (loading || url == null || m.uploading && m.audioUrl == null && m.localPath == null) {
                     com.fariin.app.ui.components.FariinSpinner(size = 22.dp, color = tint)
                 } else {
-                    Icon(if (playing) ImageVector.vectorResource(R.drawable.ic_sf_pause_fill) else ImageVector.vectorResource(R.drawable.ic_sf_play_fill),
+                    Icon(if (playing) ImageVector.cachedVector(R.drawable.ic_sf_pause_fill) else ImageVector.cachedVector(R.drawable.ic_sf_play_fill),
                         if (playing) "Pause" else "Play", tint = glyph, modifier = Modifier.size(24.dp))
                 }
             }

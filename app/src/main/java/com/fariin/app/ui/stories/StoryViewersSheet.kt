@@ -3,7 +3,7 @@ package com.fariin.app.ui.stories
 import com.fariin.app.ui.components.GlassDropdown
 import com.fariin.app.R
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -388,11 +388,11 @@ private fun CardCount(summary: StoryViewSummary?, modifier: Modifier) {
     val views = summary?.count ?: 0
     val likes = summary?.reactionCount ?: 0
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-        Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views), contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+        Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_views), contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
         Text(compact(views), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         if (likes > 0) {
             Spacer(Modifier.width(4.dp))
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_heart_fill), contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_heart_fill), contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
             Text(compact(likes), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         }
     }
@@ -565,7 +565,7 @@ internal fun ViewersSheet(
                             .clip(RoundedCornerShape(19.dp)).background(SearchFill).padding(horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), contentDescription = null, tint = Placeholder, modifier = Modifier.size(20.dp))
+                        Icon(ImageVector.cachedVector(R.drawable.ic_search_ios), contentDescription = null, tint = Placeholder, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(6.dp))
                         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                             if (query.isEmpty()) Text("Search", color = Placeholder, fontSize = 17.sp, maxLines = 1)
@@ -662,7 +662,7 @@ private fun ViewerRow(
                         .background(Color(0xE63A3A3C)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (r == "❤️") Icon(ImageVector.vectorResource(R.drawable.ic_sf_heart_fill), contentDescription = "Liked", tint = HeartRed, modifier = Modifier.size(12.dp))
+                    if (r == "❤️") Icon(ImageVector.cachedVector(R.drawable.ic_sf_heart_fill), contentDescription = "Liked", tint = HeartRed, modifier = Modifier.size(12.dp))
                     else Text(r, fontSize = 11.sp)
                 }
             }
@@ -675,22 +675,22 @@ private fun ViewerRow(
         if (!readOnly) {
             Box {
                 Box(Modifier.size(38.dp).clickable { menu = true }, contentAlignment = Alignment.Center) {
-                    Icon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More", tint = Color.White.copy(alpha = 0.55f))
+                    Icon(ImageVector.cachedVector(R.drawable.ic_more_ios), contentDescription = "More", tint = Color.White.copy(alpha = 0.55f))
                 }
                 // Dark like the sheet it opens from (iOS draws the row's menu in the dark style).
                 androidx.compose.material3.MaterialTheme(colorScheme = androidx.compose.material3.darkColorScheme(
                     surfaceContainer = Color(0xFF2C2C2E), onSurface = Color.White, onSurfaceVariant = Color.White)) {
                 GlassDropdown(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(text = { Text("Send message") },
-                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_chat), contentDescription = null) },
+                        leadingIcon = { Icon(ImageVector.cachedVector(R.drawable.ic_chat), contentDescription = null) },
                         onClick = { menu = false; onSendMessage() })
                     DropdownMenuItem(
                         text = { Text(if (isHidden) "Don't hide my stories from ${v.name}" else "Hide my stories from ${v.name}") },
-                        leadingIcon = { Icon(if (isHidden) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views_off), contentDescription = null) },
+                        leadingIcon = { Icon(if (isHidden) ImageVector.cachedVector(com.fariin.app.R.drawable.ic_views) else ImageVector.cachedVector(com.fariin.app.R.drawable.ic_views_off), contentDescription = null) },
                         onClick = { menu = false; onToggleHidden() })
                     // Destructive and last.
                     DropdownMenuItem(text = { Text("Block ${v.name}", color = Fariin.colors.red) },
-                        leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_block), contentDescription = null, tint = Fariin.colors.red) },
+                        leadingIcon = { Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_block), contentDescription = null, tint = Fariin.colors.red) },
                         onClick = { menu = false; onBlock() })
                 }
                 }
@@ -788,10 +788,10 @@ private fun ReplyRow(
             surfaceContainer = Color(0xFF2C2C2E), onSurface = Color.White, onSurfaceVariant = Color.White)) {
             GlassDropdown(expanded = menu, onDismissRequest = { menu = false }) {
                 if (!r.isReaction) DropdownMenuItem(text = { Text("Copy") },
-                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_doc_on_doc), contentDescription = null) },
+                    leadingIcon = { Icon(ImageVector.cachedVector(R.drawable.ic_sf_doc_on_doc), contentDescription = null) },
                     onClick = { menu = false; clipboard.setText(androidx.compose.ui.text.AnnotatedString(r.text)) })
                 if (canDelete) DropdownMenuItem(text = { Text("Delete", color = Fariin.colors.red) },
-                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), contentDescription = null, tint = Fariin.colors.red) },
+                    leadingIcon = { Icon(ImageVector.cachedVector(R.drawable.ic_sf_trash), contentDescription = null, tint = Fariin.colors.red) },
                     onClick = { menu = false; onDelete() })
             }
         }

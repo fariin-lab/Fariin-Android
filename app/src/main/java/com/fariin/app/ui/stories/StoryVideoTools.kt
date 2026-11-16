@@ -1,7 +1,7 @@
 package com.fariin.app.ui.stories
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 import android.media.MediaMetadataRetriever
 import android.net.Uri
@@ -144,12 +144,12 @@ fun StoryTrimBar(
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(44.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.15f)).clickable(onClick = onCancel),
-                contentAlignment = Alignment.Center) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Cancel", tint = Color.White) }
+                contentAlignment = Alignment.Center) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Cancel", tint = Color.White) }
             Spacer(Modifier.weight(1f))
             Text("Trim", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.weight(1f))
             Box(Modifier.size(44.dp).clip(CircleShape).background(Color.White).clickable { onDone(range.start, range.endInclusive) },
-                contentAlignment = Alignment.Center) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = "Done", tint = Color.Black) }
+                contentAlignment = Alignment.Center) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), contentDescription = "Done", tint = Color.Black) }
         }
     }
 }

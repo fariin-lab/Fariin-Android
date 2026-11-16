@@ -61,7 +61,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 
 /**
@@ -266,8 +266,8 @@ internal fun VideoPage(p: ViewerRules.Page, current: Boolean, ctl: VideoCtl, chr
             .height(32.dp).floating(CircleShape).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("2x", fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = Fariin.colors.label)
             Spacer(Modifier.width(4.dp))
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), null, tint = Fariin.colors.label, modifier = Modifier.size(12.dp))
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), null, tint = Fariin.colors.label, modifier = Modifier.size(12.dp).offset(x = (-4).dp))
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_play_fill), null, tint = Fariin.colors.label, modifier = Modifier.size(12.dp))
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_play_fill), null, tint = Fariin.colors.label, modifier = Modifier.size(12.dp).offset(x = (-4).dp))
         }
     }
 }
@@ -295,7 +295,7 @@ internal fun VideoPanel(ctl: VideoCtl, canShare: Boolean, onShare: () -> Unit, o
                     listOf(0.5f to "0.5x", 1f to "Normal", 1.5f to "1.5x", 2f to "2x").forEach { (s, label) ->
                         androidx.compose.material3.DropdownMenuItem(
                             text = { Text(label) },
-                            trailingIcon = if (ctl.speed == s) ({ Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, Modifier.size(18.dp)) }) else null,
+                            trailingIcon = if (ctl.speed == s) ({ Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), null, Modifier.size(18.dp)) }) else null,
                             onClick = { menu = false; ctl.chooseSpeed(s) })
                     }
                 }
@@ -309,9 +309,9 @@ internal fun VideoPanel(ctl: VideoCtl, canShare: Boolean, onShare: () -> Unit, o
             if (ctl.durationMs >= 20_000) {
                 Row(Modifier.height(44.dp).floating(CircleShape).padding(horizontal = 14.dp),
                     horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                    PanelGlyph(ImageVector.vectorResource(R.drawable.ic_sf_gobackward_10), "Back 10 seconds", 36) { ctl.skip(-10) }
+                    PanelGlyph(ImageVector.cachedVector(R.drawable.ic_sf_gobackward_10), "Back 10 seconds", 36) { ctl.skip(-10) }
                     PlayGlyph(ctl)
-                    PanelGlyph(ImageVector.vectorResource(R.drawable.ic_sf_goforward_10), "Forward 10 seconds", 36) { ctl.skip(10) }
+                    PanelGlyph(ImageVector.cachedVector(R.drawable.ic_sf_goforward_10), "Forward 10 seconds", 36) { ctl.skip(10) }
                 }
             } else Box(Modifier.floating(CircleShape)) { PlayGlyph(ctl) }
             Spacer(Modifier.weight(1f))
@@ -360,7 +360,7 @@ internal fun VideoFullScreen(ctl: VideoCtl) {
 
 @Composable
 private fun PlayGlyph(ctl: VideoCtl) =
-    PanelGlyph(if (ctl.playing) ImageVector.vectorResource(R.drawable.ic_sf_pause_fill) else ImageVector.vectorResource(R.drawable.ic_sf_play_fill), if (ctl.playing) "Pause" else "Play", 44) { ctl.togglePlay() }
+    PanelGlyph(if (ctl.playing) ImageVector.cachedVector(R.drawable.ic_sf_pause_fill) else ImageVector.cachedVector(R.drawable.ic_sf_play_fill), if (ctl.playing) "Pause" else "Play", 44) { ctl.togglePlay() }
 
 @Composable
 private fun PanelGlyph(icon: ImageVector, label: String, width: Int, onClick: () -> Unit) {

@@ -48,7 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -225,7 +225,7 @@ private fun Step(state: StepState, title: String, detail: String?) {
         Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
             when (state) {
                 StepState.DONE -> Box(Modifier.size(24.dp).clip(CircleShape).background(c.accent), contentAlignment = Alignment.Center) {
-                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = c.onAccent, modifier = Modifier.size(14.dp))
+                    Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), null, tint = c.onAccent, modifier = Modifier.size(14.dp))
                 }
                 StepState.NOW -> com.fariin.app.ui.components.FariinSpinner(size = 20.dp)
                 StepState.LATER -> Box(Modifier.size(12.dp).clip(CircleShape).background(c.fieldFill))

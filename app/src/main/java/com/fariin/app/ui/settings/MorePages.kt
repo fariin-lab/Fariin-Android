@@ -1,7 +1,7 @@
 package com.fariin.app.ui.settings
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 import com.fariin.app.data.NewBadgeSpots
 import android.content.Context
@@ -258,7 +258,7 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically) {
                     Text("Sign out after", fontSize = 17.sp, color = Fariin.colors.label, modifier = Modifier.weight(1f))
                     Text(auto?.let { SettingsRules.autoSignOutLabel(it) } ?: "", fontSize = 17.sp, color = Fariin.colors.label)
-                    androidx.compose.material3.Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_up_down), null,
+                    androidx.compose.material3.Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_up_down), null,
                         tint = Fariin.colors.label, modifier = Modifier.padding(start = 4.dp).size(20.dp))
                 }
                 // Anchored at the right under the value (a modifier on the menu itself does not move it).
@@ -266,7 +266,7 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
                 com.fariin.app.ui.components.GlassDropdown(menu, onDismissRequest = { menu = false }, containerColor = Fariin.colors.card) {
                     for (d in SettingsRules.autoSignOut) androidx.compose.material3.DropdownMenuItem(
                         text = { Text(SettingsRules.autoSignOutLabel(d), color = Fariin.colors.label) },
-                        trailingIcon = { if (auto == d) androidx.compose.material3.Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = Fariin.colors.accent) },
+                        trailingIcon = { if (auto == d) androidx.compose.material3.Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), null, tint = Fariin.colors.accent) },
                         onClick = {
                             menu = false; val was = auto; auto = d
                             scope.launch {
@@ -308,7 +308,7 @@ private fun DeviceInfoSheet(d: DeviceRow, thisDevice: Boolean, now: Long, onDism
     com.fariin.app.ui.components.FariinSheetDialog(motion, fill = c.bgSecondary) { _ ->
         AccountSheetFrame(motion, closeEnabled = true, onClose = { motion.close() }) {
             Box(Modifier.size(72.dp).clip(CircleShape).background(c.blue), contentAlignment = Alignment.Center) {
-                androidx.compose.material3.Icon(ImageVector.vectorResource(R.drawable.ic_sf_iphone), null,
+                androidx.compose.material3.Icon(ImageVector.cachedVector(R.drawable.ic_sf_iphone), null,
                     tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(38.dp))
             }
             Text(d.model, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = c.label,
@@ -347,7 +347,7 @@ private fun DeviceLine(d: DeviceRow, thisDevice: Boolean, now: Long, last: Boole
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         // iOS: the device in a blue circle.
         Box(Modifier.size(46.dp).clip(CircleShape).background(c.blue), contentAlignment = Alignment.Center) {
-            androidx.compose.material3.Icon(ImageVector.vectorResource(R.drawable.ic_sf_iphone), null,
+            androidx.compose.material3.Icon(ImageVector.cachedVector(R.drawable.ic_sf_iphone), null,
                 tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.width(14.dp))
@@ -739,7 +739,7 @@ private fun PickRow(title: String, value: com.fariin.app.ui.thread.SwipeActions.
             offset = androidx.compose.ui.unit.DpOffset(200.dp, 0.dp)) {
             com.fariin.app.ui.thread.SwipeActions.Pick.entries.forEach { p ->
                 androidx.compose.material3.DropdownMenuItem(text = { Text(p.label) }, onClick = { open = false; onPick(p) },
-                    trailingIcon = if (p == value) ({ androidx.compose.material3.Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_checkmark), null) }) else null)
+                    trailingIcon = if (p == value) ({ androidx.compose.material3.Icon(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_checkmark), null) }) else null)
             }
         }
     }

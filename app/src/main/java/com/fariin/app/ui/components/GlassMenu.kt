@@ -1,6 +1,6 @@
 package com.fariin.app.ui.components
 
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
@@ -247,7 +247,7 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
                         Row(Modifier.fillMaxWidth().height(52.dp).onGloballyPositioned { if (i == 0) rowH = it.size.height }
                             .padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
                             val tick = androidx.compose.ui.graphics.vector.rememberVectorPainter(
-                                androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_checkmark))
+                                androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_checkmark))
                             if (it.icon != null) Icon(it.icon, null, tint = if (it.danger) c.red else c.label, modifier = Modifier.size(22.dp))
                             else Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) {
                                 if (it.checked) Icon(tick, "Selected", tint = c.label, modifier = Modifier.size(18.dp)) }
@@ -255,10 +255,10 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
                             Text(it.title, fontSize = 17.sp, fontWeight = if (it.header) FontWeight.SemiBold else null,
                                 color = if (it.danger) c.red else c.label, maxLines = 2, modifier = Modifier.weight(1f))
                             if (it.header || it.submenu != null) Icon(androidx.compose.ui.graphics.vector.rememberVectorPainter(
-                                androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_chevron_down)),
+                                androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_chevron_down)),
                                 null, tint = c.label, modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = if (it.header) 0f else -90f })
                             if (it.checked && it.icon != null) Icon(androidx.compose.ui.graphics.vector.rememberVectorPainter(
-                                androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_checkmark)),
+                                androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_checkmark)),
                                 "Selected", tint = c.label, modifier = Modifier.size(18.dp))
                         }
                     }

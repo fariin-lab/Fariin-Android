@@ -29,7 +29,7 @@ import com.fariin.app.data.ChatsNow
 import com.fariin.app.media.VoicePlayer
 import com.fariin.app.ui.theme.Fariin
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 
 /**
@@ -54,7 +54,7 @@ fun VoiceNoteBar(here: String?, me: String, modifier: Modifier = Modifier, onOpe
         .background(c.card).clickable { onOpen(cid) }) {
         Row(Modifier.fillMaxWidth().fillMaxHeight().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(36.dp).clip(RoundedCornerShape(18.dp)).clickable { VoicePlayer.playPause() }, contentAlignment = Alignment.Center) {
-                Icon(if (s.playing) ImageVector.vectorResource(R.drawable.ic_sf_pause_fill) else ImageVector.vectorResource(R.drawable.ic_sf_play_fill), if (s.playing) "Pause" else "Play",
+                Icon(if (s.playing) ImageVector.cachedVector(R.drawable.ic_sf_pause_fill) else ImageVector.cachedVector(R.drawable.ic_sf_play_fill), if (s.playing) "Pause" else "Play",
                     tint = c.accent, modifier = Modifier.size(22.dp))
             }
             Spacer(Modifier.width(6.dp))
@@ -65,7 +65,7 @@ fun VoiceNoteBar(here: String?, me: String, modifier: Modifier = Modifier, onOpe
             Text(com.fariin.app.media.MediaRules.rateLabel(rate), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.secondary,
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { VoicePlayer.cycleRate(cid) }.padding(horizontal = 8.dp, vertical = 6.dp))
             Box(Modifier.size(36.dp).clip(RoundedCornerShape(18.dp)).clickable { VoicePlayer.stop() }, contentAlignment = Alignment.Center) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", tint = c.secondary, modifier = Modifier.size(18.dp))
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Close", tint = c.secondary, modifier = Modifier.size(18.dp))
             }
         }
         val f = if (s.durationMs > 0) (s.positionMs.toFloat() / s.durationMs).coerceIn(0f, 1f) else 0f

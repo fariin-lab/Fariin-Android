@@ -1,7 +1,7 @@
 package com.fariin.app.ui.settings
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.ui.components.frostedTopBar
 import com.fariin.app.ui.photo.profilePhotoSource
 import androidx.compose.ui.draw.drawBehind
@@ -293,7 +293,7 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
                 Text(com.fariin.app.ui.chats.rememberConnectionTitle("Settings"), fontSize = 18.sp,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = c.label,
                     modifier = Modifier.align(Alignment.Center))
-                com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_search_ios), "Search settings",
+                com.fariin.app.ui.components.FloatingIcon(ImageVector.cachedVector(R.drawable.ic_search_ios), "Search settings",
                     onClick = { openSettingsSearch(push) }, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp))
             }
         }
@@ -385,13 +385,13 @@ private fun AccountPage(
     BarPage("Account", onBack = pop, under = underBar(barScroll), action = if (demo) null else ({
         Box {
             IconButton(onClick = { more = true }, modifier = com.fariin.app.ui.components.barGlass()) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More", tint = c.label)
+                Icon(ImageVector.cachedVector(R.drawable.ic_more_ios), contentDescription = "More", tint = c.label)
             }
             com.fariin.app.ui.components.GlassDropdown(expanded = more, onDismissRequest = { more = false },
                 shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border,
                 containerColor = com.fariin.app.ui.components.FariinMenu.container) {
                 androidx.compose.material3.DropdownMenuItem(text = { Text("Delete Account", color = c.red) },
-                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), null, tint = c.red) },
+                    leadingIcon = { Icon(ImageVector.cachedVector(R.drawable.ic_sf_trash), null, tint = c.red) },
                     onClick = { more = false; deleting = true })
             }
         }

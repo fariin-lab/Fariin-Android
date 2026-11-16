@@ -41,7 +41,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -218,10 +218,10 @@ internal fun LiveMapPage(ui: ThreadUi, onSend: (String) -> Unit, onDismiss: () -
             val start = CameraPosition.fromLatLngZoom(if (first != null) LatLng(first.lat, first.lon) else LatLng(0.0, 0.0), if (first != null) 16f else 1f)
             FariinMap(Modifier.fillMaxSize(), c.dark, start) { m -> map = m }
             Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = SheetHandleStrip), verticalAlignment = Alignment.CenterVertically) {
-                FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", { motion.close() }, circle = true)
+                FloatingIcon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Close", { motion.close() }, circle = true)
                 Spacer(Modifier.weight(1f))
                 Box {
-                    FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), "Map type", { menu = true }, circle = true)
+                    FloatingIcon(ImageVector.cachedVector(R.drawable.ic_more_ios), "Map type", { menu = true }, circle = true)
                     com.fariin.app.ui.components.GlassDropdown(menu, onDismissRequest = { menu = false }, containerColor = c.card) {
                         DropdownMenuItem(text = { Text("Map", color = c.label) }, onClick = { menu = false; map?.mapType = GoogleMap.MAP_TYPE_NORMAL })
                         DropdownMenuItem(text = { Text("Satellite", color = c.label) }, onClick = { menu = false; map?.mapType = GoogleMap.MAP_TYPE_HYBRID })
@@ -236,7 +236,7 @@ internal fun LiveMapPage(ui: ThreadUi, onSend: (String) -> Unit, onDismiss: () -
                     Row(Modifier.fillMaxWidth().clickable {
                         if (iShare) LiveShareService.stop(ctx, ui.cid) else share = true
                     }.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(ImageVector.vectorResource(R.drawable.ic_location), null, tint = if (iShare) c.red else c.accent, modifier = Modifier.size(22.dp))
+                        Icon(ImageVector.cachedVector(R.drawable.ic_location), null, tint = if (iShare) c.red else c.accent, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(12.dp))
                         Text(if (iShare) "Stop sharing mine" else "Share mine live too", fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold, color = if (iShare) c.red else c.accent)
@@ -292,7 +292,7 @@ internal fun LiveSharePage(ui: ThreadUi, onDismiss: () -> Unit, onSend: (String)
                         Avatar(ui.photos[ui.me], 50.dp)
                     }
                 }
-                FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", { motion.close() },
+                FloatingIcon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Close", { motion.close() },
                     Modifier.padding(start = 12.dp, top = SheetHandleStrip), circle = true)
             }
             Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp)) {

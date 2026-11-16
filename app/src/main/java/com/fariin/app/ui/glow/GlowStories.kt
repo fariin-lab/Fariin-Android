@@ -2,7 +2,7 @@ package com.fariin.app.ui.glow
 
 import com.fariin.app.ui.components.GlassDropdown
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -180,7 +180,7 @@ fun GlowingHeading(onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Text("Glowing", style = MaterialTheme.typography.titleSmall, color = c.accent)
-        Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), contentDescription = null, tint = c.accent, modifier = Modifier.size(18.dp))
+        Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_right), contentDescription = null, tint = c.accent, modifier = Modifier.size(18.dp))
     }
 }
 

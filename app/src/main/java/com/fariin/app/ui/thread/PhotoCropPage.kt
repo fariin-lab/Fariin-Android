@@ -65,7 +65,7 @@ import com.fariin.app.data.CropMath.Box as CBox
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 
 private val CropBlue = Color(0xFF3DA1FD)
@@ -252,22 +252,22 @@ internal fun PhotoCropPage(source: Bitmap, onCancel: () -> Unit, onDone: (Bitmap
             StraightenWheel(angle) { angle = it; edited = true; clampPan() }
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(44.dp).clip(CircleShape).background(Glass).clickable { if (!leaving) { leaving = true; onCancel() } },
-                    contentAlignment = Alignment.Center) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Cancel", tint = Color.White) }
+                    contentAlignment = Alignment.Center) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Cancel", tint = Color.White) }
                 Spacer(Modifier.weight(1f))
                 Row(Modifier.height(46.dp).clip(RoundedCornerShape(23.dp)).background(Glass).padding(horizontal = 20.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(22.dp)) {
-                    CropTool(ImageVector.vectorResource(R.drawable.ic_sf_rotate_left), "Rotate", Color.White) { rotate() }
-                    CropTool(ImageVector.vectorResource(R.drawable.ic_sf_flip_horizontal), "Flip", Color.White) { flip() }
+                    CropTool(ImageVector.cachedVector(R.drawable.ic_sf_rotate_left), "Rotate", Color.White) { rotate() }
+                    CropTool(ImageVector.cachedVector(R.drawable.ic_sf_flip_horizontal), "Flip", Color.White) { flip() }
                     Box {
                         var menu by remember { mutableStateOf(false) }
-                        CropTool(ImageVector.vectorResource(R.drawable.ic_sf_aspectratio), "Aspect ratio", if (aspect == null) Color.White else CropBlue) { menu = true }
+                        CropTool(ImageVector.cachedVector(R.drawable.ic_sf_aspectratio), "Aspect ratio", if (aspect == null) Color.White else CropBlue) { menu = true }
                         GlassDropdown(menu, onDismissRequest = { menu = false }) {
                             val original = img.width / img.height.toFloat()
                             listOf("Original" to original, "Free" to null, "Square" to 1f, "4:5" to 4f / 5f,
                                 "3:4" to 3f / 4f, "16:9" to 16f / 9f, "9:16" to 9f / 16f).forEach { (label, r) ->
                                 DropdownMenuItem(
                                     text = { Text(label) },
-                                    leadingIcon = { Box(Modifier.size(24.dp)) { if (aspect == r) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = null) } },
+                                    leadingIcon = { Box(Modifier.size(24.dp)) { if (aspect == r) Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), contentDescription = null) } },
                                     onClick = { menu = false; setAspect(r) },
                                 )
                             }
@@ -276,7 +276,7 @@ internal fun PhotoCropPage(source: Bitmap, onCancel: () -> Unit, onDone: (Bitmap
                 }
                 Spacer(Modifier.weight(1f))
                 Box(Modifier.size(44.dp).clip(CircleShape).background(Color.White).clickable { apply() },
-                    contentAlignment = Alignment.Center) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = "Done", tint = Color.Black) }
+                    contentAlignment = Alignment.Center) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), contentDescription = "Done", tint = Color.Black) }
             }
         }
     }

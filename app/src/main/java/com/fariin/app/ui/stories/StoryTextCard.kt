@@ -2,7 +2,7 @@ package com.fariin.app.ui.stories
 
 import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 import androidx.compose.foundation.layout.height
 import androidx.compose.ui.graphics.nativeCanvas
@@ -490,7 +490,7 @@ internal fun StoryTextCard(
         }
 
         GlassCircle(ink, "Close", Modifier.statusBarsPadding().padding(14.dp), onClick = { close() }) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = null, tint = ink)
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = null, tint = ink)
         }
 
         Row(
@@ -509,7 +509,7 @@ internal fun StoryTextCard(
             Spacer(Modifier.weight(1f))
             AnimatedVisibility(focused, enter = fadeIn(), exit = fadeOut()) {
                 GlassCircle(ink, "Done", onClick = { setFocus(false) }) {
-                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = null, tint = ink)
+                    Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), contentDescription = null, tint = ink)
                 }
             }
         }

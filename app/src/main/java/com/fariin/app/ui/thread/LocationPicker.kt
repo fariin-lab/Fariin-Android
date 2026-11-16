@@ -60,7 +60,7 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -362,7 +362,7 @@ private fun PickerPage(onDismiss: () -> Unit, onShareLive: (() -> Unit)?, onSend
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         if (!mapsOk) Box(Modifier.weight(1f).fillMaxWidth()) {
             // No map on this phone: my own fix only, sent from the panel below.
-            FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", onDismiss,
+            FloatingIcon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Close", onDismiss,
                 Modifier.padding(start = 16.dp, top = SheetHandleStrip), circle = true)
             MapsMissingNote(Modifier.align(Alignment.Center))
         } else Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -390,7 +390,7 @@ private fun PickerPage(onDismiss: () -> Unit, onShareLive: (() -> Unit)?, onSend
             // Below the sheet's grabber strip, which drags the sheet.
             Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = SheetHandleStrip, bottom = 8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", onDismiss, circle = true)
+                    FloatingIcon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Close", onDismiss, circle = true)
                     Text("Location", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
                         style = TextStyle(shadow = Shadow(c.bg, blurRadius = 8f)),
                         modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
@@ -401,7 +401,7 @@ private fun PickerPage(onDismiss: () -> Unit, onShareLive: (() -> Unit)?, onSend
                         .padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
                         Text("Cancel", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.label)
                     }
-                    else FloatingIcon(ImageVector.vectorResource(R.drawable.ic_search_ios), "Search", { searching = true }, circle = true)
+                    else FloatingIcon(ImageVector.cachedVector(R.drawable.ic_search_ios), "Search", { searching = true }, circle = true)
                 }
                 Spacer(Modifier.height(10.dp))
                 if (searching) {
@@ -422,11 +422,11 @@ private fun PickerPage(onDismiss: () -> Unit, onShareLive: (() -> Unit)?, onSend
             }
             // Map or satellite (owner 2026-11-13): a globe above "my location"; on, it turns blue.
             var satellite by remember { mutableStateOf(false) }
-            FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_globe), if (satellite) "Map view" else "Satellite view", {
+            FloatingIcon(ImageVector.cachedVector(R.drawable.ic_sf_globe), if (satellite) "Map view" else "Satellite view", {
                 satellite = !satellite
                 map?.mapType = if (satellite) GoogleMap.MAP_TYPE_HYBRID else GoogleMap.MAP_TYPE_NORMAL
             }, Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 68.dp), tint = if (satellite) c.blue else c.label, circle = true)
-            FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_location_fill), "My location", ::locateMe,
+            FloatingIcon(ImageVector.cachedVector(R.drawable.ic_sf_location_fill), "My location", ::locateMe,
                 Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 12.dp),
                 tint = if (source == Source.MY_FIX && fix != null) c.blue else c.label, circle = true)
         }
@@ -468,7 +468,7 @@ private fun CentrePin(dragging: Boolean) {
         Box(Modifier.size(7.dp).clip(CircleShape).background(c.blue))
         Box(Modifier.offset(y = (-34).dp + lift).size(58.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(c.blue),
             contentAlignment = Alignment.Center) {
-            Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_location), null, tint = Color.White, modifier = Modifier.size(28.dp))
+            Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_location), null, tint = Color.White, modifier = Modifier.size(28.dp))
         }
     }
 }
@@ -487,7 +487,7 @@ private fun ResultsList(loading: Boolean, results: List<PhotonPlaces.Place>, not
                 Row(Modifier.fillMaxWidth().clickable { onPick(p) }.padding(horizontal = 14.dp, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(34.dp).clip(CircleShape).background(c.blue), contentAlignment = Alignment.Center) {
-                        Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_location), null, tint = Color.White, modifier = Modifier.size(19.dp))
+                        Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_location), null, tint = Color.White, modifier = Modifier.size(19.dp))
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
@@ -528,7 +528,7 @@ private fun BottomPanel(
             Row(Modifier.fillMaxWidth().padding(bottom = 10.dp).clip(RoundedCornerShape(22.dp)).background(c.card)
                 .clickable(onClick = onShareLive).padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(36.dp).clip(CircleShape).background(c.accent), contentAlignment = Alignment.Center) {
-                    Icon(ImageVector.vectorResource(R.drawable.ic_location), null, tint = c.onAccent, modifier = Modifier.size(20.dp))
+                    Icon(ImageVector.cachedVector(R.drawable.ic_location), null, tint = c.onAccent, modifier = Modifier.size(20.dp))
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {

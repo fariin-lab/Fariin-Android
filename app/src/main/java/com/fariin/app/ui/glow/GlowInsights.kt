@@ -3,7 +3,7 @@ package com.fariin.app.ui.glow
 import com.fariin.app.ui.components.GlassDropdown
 import com.fariin.app.R
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.activity.compose.BackHandler
@@ -147,7 +147,7 @@ fun GlowInsightsPage(me: String, handle: String, live: List<PostedStory>, onPeop
         if (!unlocked) {
             Column(Modifier.fillMaxSize().padding(horizontal = 40.dp), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_lock_fill), null, tint = c.secondary, modifier = Modifier.size(44.dp))
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_lock_fill), null, tint = c.secondary, modifier = Modifier.size(44.dp))
                 Spacer(Modifier.height(12.dp))
                 Text("Insights", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.label)
                 Spacer(Modifier.height(6.dp))
@@ -253,7 +253,7 @@ fun GlowInsightsPage(me: String, handle: String, live: List<PostedStory>, onPeop
                             Row(Modifier.fillMaxWidth().clickable { onPeople(true) }, verticalAlignment = Alignment.CenterVertically) {
                                 Text("Glowing", fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
                                 Text(GlowRules.countShort(glow.glowing.size), fontSize = 17.sp, color = c.secondary)
-                                Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null, tint = c.secondary, modifier = Modifier.size(20.dp))
+                                Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_right), null, tint = c.secondary, modifier = Modifier.size(20.dp))
                             }
                         }
                     }
@@ -287,7 +287,7 @@ private fun PeriodHeader(report: InsightsReport, period: InsightsPeriod, onPick:
                     verticalAlignment = Alignment.CenterVertically) {
                     Text(period.title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label)
                     Spacer(Modifier.width(6.dp))
-                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_down), null, tint = c.label, modifier = Modifier.size(16.dp))
+                    Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_down), null, tint = c.label, modifier = Modifier.size(16.dp))
                 }
                 GlassDropdown(open, onDismissRequest = { open = false }, shape = FariinMenu.shape, border = FariinMenu.border, containerColor = c.card) {
                     for (p in InsightsPeriod.entries) DropdownMenuItem(text = { Text(p.title, color = c.label) },
@@ -457,9 +457,9 @@ private fun StoryRow(thumb: Thumb, isVideo: Boolean, detail: String, views: Int?
                         runCatching { Base64.decode(thumb.base64, Base64.DEFAULT).let { BitmapFactory.decodeByteArray(it, 0, it.size) } }.getOrNull()
                     }
                     if (bmp != null) Image(bmp.asImageBitmap(), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                    else Icon(if (isVideo) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video) else ImageVector.vectorResource(R.drawable.ic_sf_photo), null, tint = c.secondary, modifier = Modifier.size(14.dp))
+                    else Icon(if (isVideo) ImageVector.cachedVector(com.fariin.app.R.drawable.ic_call_video) else ImageVector.cachedVector(R.drawable.ic_sf_photo), null, tint = c.secondary, modifier = Modifier.size(14.dp))
                 }
-                Thumb.Missing -> Icon(if (isVideo) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video) else ImageVector.vectorResource(R.drawable.ic_sf_photo), null, tint = c.secondary, modifier = Modifier.size(14.dp))
+                Thumb.Missing -> Icon(if (isVideo) ImageVector.cachedVector(com.fariin.app.R.drawable.ic_call_video) else ImageVector.cachedVector(R.drawable.ic_sf_photo), null, tint = c.secondary, modifier = Modifier.size(14.dp))
             }
         }
         Spacer(Modifier.width(12.dp))
@@ -470,11 +470,11 @@ private fun StoryRow(thumb: Thumb, isVideo: Boolean, detail: String, views: Int?
         Spacer(Modifier.width(8.dp))
         Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views), null, tint = c.label, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(4.dp))
+                Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_views), null, tint = c.label, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(4.dp))
                 Text(views?.let(GlowRules::countShort) ?: "–", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_heart_fill), null, tint = c.secondary, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(4.dp))
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_heart_fill), null, tint = c.secondary, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(4.dp))
                 Text(reactions?.let(GlowRules::countShort) ?: "–", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.secondary)
             }
         }

@@ -58,7 +58,7 @@ import com.fariin.app.data.Message
 import com.fariin.app.data.PinRules
 import com.fariin.app.data.SelectRules
 import com.fariin.app.ui.theme.Fariin
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 
 /**
  * Edit History (iOS EditHistorySheet): the current text with "Current", then the earlier versions
@@ -190,7 +190,7 @@ internal fun PinnedBar(
                     )
                     DropdownMenuItem(
                         text = { Text("See All") },
-                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_list_bullet), null, Modifier.size(22.dp)) },
+                        leadingIcon = { Icon(ImageVector.cachedVector(R.drawable.ic_sf_list_bullet), null, Modifier.size(22.dp)) },
                         onClick = { menu = false; onSeeAll() },
                     )
                 }
@@ -262,7 +262,7 @@ internal fun PinnedMessagesSheet(
                                         ))
                                     }
                                     IconButton(onClick = { onJump(m.id) }) {
-                                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_right), "Go to Message", tint = c.secondary)
+                                        Icon(ImageVector.cachedVector(R.drawable.ic_sf_arrow_right), "Go to Message", tint = c.secondary)
                                     }
                                 }
                                 GlassDropdown(expanded = rowMenu == m.id, onDismissRequest = { rowMenu = null }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
@@ -305,7 +305,7 @@ internal fun SelectTopBar(count: Int, onClose: () -> Unit) {
             Modifier.fillMaxWidth()
                 .windowInsetsPadding(WindowInsets.statusBars).height(64.dp).padding(horizontal = 12.dp),
         ) {
-            com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Cancel", onClick = onClose, circle = true,
+            com.fariin.app.ui.components.FloatingIcon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Cancel", onClick = onClose, circle = true,
                 modifier = Modifier.align(Alignment.CenterStart))
             Box(Modifier.align(Alignment.Center).height(44.dp).floating(androidx.compose.foundation.shape.CircleShape).padding(horizontal = 20.dp),
                 contentAlignment = Alignment.Center) {

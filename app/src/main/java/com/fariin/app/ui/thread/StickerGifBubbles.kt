@@ -101,7 +101,7 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
 import java.util.zip.GZIPInputStream
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 
 // ⛔ STICKERS AND GIFS, after iOS RowStickerView / AnimatedGifView / StickerKeyboardView /
@@ -339,7 +339,7 @@ internal fun StickerPanel(me: String, onSticker: (StickerRef) -> Unit, onGif: (S
             }
             if (gifs) Box(Modifier.align(Alignment.CenterEnd).size(38.dp).floating(CircleShape)
                 .clickable(enabled = hide < 0.5f) { searchOpen = true }, contentAlignment = Alignment.Center) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), contentDescription = "Search GIFs", tint = c.label, modifier = Modifier.size(18.dp))
+                Icon(ImageVector.cachedVector(R.drawable.ic_search_ios), contentDescription = "Search GIFs", tint = c.label, modifier = Modifier.size(18.dp))
             }
         }
     }
@@ -402,7 +402,7 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit, hide: Float 
                         pick.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
                     }.semanticsLabel("Create Sticker"), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_plus_ios), contentDescription = null, tint = c.secondary, modifier = Modifier.size(26.dp))
+                            Icon(ImageVector.cachedVector(R.drawable.ic_plus_ios), contentDescription = null, tint = c.secondary, modifier = Modifier.size(26.dp))
                             Text("Create", fontSize = 11.sp, color = c.secondary)
                         }
                     }
@@ -441,8 +441,8 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit, hide: Float 
                 val shelf = shelves[i]
                 Box(Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)).clickable { scope.launch { grid.animateScrollToItem(starts[i]) } },
                     contentAlignment = Alignment.Center) {
-                    if (shelf.id == "recent") Icon(ImageVector.vectorResource(R.drawable.ic_sf_clock), contentDescription = "Recently Used", tint = c.secondary, modifier = Modifier.size(20.dp))
-                    else if (shelf.id == "favorites") Icon(ImageVector.vectorResource(R.drawable.ic_sf_star_fill), contentDescription = "Favorites", tint = c.secondary, modifier = Modifier.size(20.dp))
+                    if (shelf.id == "recent") Icon(ImageVector.cachedVector(R.drawable.ic_sf_clock), contentDescription = "Recently Used", tint = c.secondary, modifier = Modifier.size(20.dp))
+                    else if (shelf.id == "favorites") Icon(ImageVector.cachedVector(R.drawable.ic_sf_star_fill), contentDescription = "Favorites", tint = c.secondary, modifier = Modifier.size(20.dp))
                     else shelf.stickers.firstOrNull()?.let { s -> StickerArt(s.packId, s.stickerId, null, null, Modifier.size(24.dp), still = true) }
                 }
             }
@@ -462,14 +462,14 @@ private enum class GifCategory(val term: String, val label: String) {
     val local: Boolean get() = this == FAVORITES || this == RECENT
 
     val icon: androidx.compose.ui.graphics.vector.ImageVector @Composable get() = when (this) {
-        FAVORITES -> ImageVector.vectorResource(R.drawable.ic_star_outline)
-        RECENT -> ImageVector.vectorResource(R.drawable.ic_sf_clock)
-        TRENDING -> ImageVector.vectorResource(R.drawable.ic_sf_flame)
-        HAPPY -> ImageVector.vectorResource(R.drawable.ic_sf_face_smiling)
-        LOVE -> ImageVector.vectorResource(R.drawable.ic_sf_heart)
-        SAD -> ImageVector.vectorResource(R.drawable.ic_sf_cloud_rain)
-        PARTY -> ImageVector.vectorResource(R.drawable.ic_sf_party_popper)
-        THUMBS_UP -> ImageVector.vectorResource(R.drawable.ic_sf_hand_thumbsup)
+        FAVORITES -> ImageVector.cachedVector(R.drawable.ic_star_outline)
+        RECENT -> ImageVector.cachedVector(R.drawable.ic_sf_clock)
+        TRENDING -> ImageVector.cachedVector(R.drawable.ic_sf_flame)
+        HAPPY -> ImageVector.cachedVector(R.drawable.ic_sf_face_smiling)
+        LOVE -> ImageVector.cachedVector(R.drawable.ic_sf_heart)
+        SAD -> ImageVector.cachedVector(R.drawable.ic_sf_cloud_rain)
+        PARTY -> ImageVector.cachedVector(R.drawable.ic_sf_party_popper)
+        THUMBS_UP -> ImageVector.cachedVector(R.drawable.ic_sf_hand_thumbsup)
     }
 }
 
@@ -607,14 +607,14 @@ private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, qu
                     val favourite = remember(changes, g.url) { GifFavorites.contains(ctx, me, g.url) }
                     androidx.compose.material3.DropdownMenuItem(
                         text = { Text(if (favourite) "Remove from Favourites" else "Add to Favourites") },
-                        leadingIcon = { Icon(if (favourite) ImageVector.vectorResource(R.drawable.ic_sf_star_fill) else ImageVector.vectorResource(R.drawable.ic_star_outline), null) },
+                        leadingIcon = { Icon(if (favourite) ImageVector.cachedVector(R.drawable.ic_sf_star_fill) else ImageVector.cachedVector(R.drawable.ic_star_outline), null) },
                         onClick = {
                             menu = false
                             if (favourite) GifFavorites.remove(ctx, me, g.url) else GifFavorites.add(ctx, me, g)
                         })
                     if (onRecentTab) androidx.compose.material3.DropdownMenuItem(
                         text = { Text("Remove from Recent", color = c.red) },
-                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_clock), null, tint = c.red) },
+                        leadingIcon = { Icon(ImageVector.cachedVector(R.drawable.ic_sf_clock), null, tint = c.red) },
                         onClick = { menu = false; GifRecents.forget(ctx, me, g.url) })
                 }
             }
@@ -693,7 +693,7 @@ internal fun GifSearchSheet(me: String, onDismiss: () -> Unit, onPick: (StickerG
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).height(40.dp).clip(RoundedCornerShape(12.dp))
                     .background(c.secondary.copy(alpha = 0.14f)).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), null, tint = c.secondary, modifier = Modifier.size(18.dp))
+                    Icon(ImageVector.cachedVector(R.drawable.ic_search_ios), null, tint = c.secondary, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Box(Modifier.weight(1f)) {
                         if (query.isEmpty()) Text("Search GIFs", fontSize = 17.sp, color = c.secondary)
@@ -802,7 +802,7 @@ internal fun StickerPackSheet(pack: StickerPackInfo, me: String, onSend: (Sticke
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(44.dp).clip(CircleShape).background(c.label.copy(alpha = 0.08f)).clickable(onClick = onDismiss),
                     contentAlignment = Alignment.Center) {
-                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = c.label, modifier = Modifier.size(20.dp))
+                    Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = c.label, modifier = Modifier.size(20.dp))
                 }
                 Text(pack.title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1,
                     modifier = Modifier.weight(1f).padding(horizontal = 12.dp))

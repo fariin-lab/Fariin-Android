@@ -2,7 +2,7 @@ package com.fariin.app.ui.people
 
 import com.fariin.app.ui.components.GlassDropdown
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 import com.fariin.app.ui.settings.BarPage
 import androidx.compose.foundation.layout.height
@@ -195,14 +195,14 @@ internal fun ChatStoragePage(cid: String, me: String, title: String, pop: () -> 
                         Box {
                             Row(Modifier.clip(CircleShape).background(c.card).clickable(enabled = !list.isNullOrEmpty()) { sortOpen = true }
                                 .padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_up_arrow_down), null, tint = c.label, modifier = Modifier.size(16.dp))
+                                Icon(ImageVector.cachedVector(R.drawable.ic_sf_arrow_up_arrow_down), null, tint = c.label, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(5.dp))
                                 Text(sort.label, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.label)
                             }
                             GlassDropdown(sortOpen, onDismissRequest = { sortOpen = false }, containerColor = c.card) {
                                 ChatStorageRules.Sort.entries.forEach { s ->
                                     DropdownMenuItem(text = { Text(s.label, color = c.label) }, onClick = { sort = s; sortOpen = false },
-                                        trailingIcon = if (s == sort) ({ Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = c.accent) }) else null)
+                                        trailingIcon = if (s == sort) ({ Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), null, tint = c.accent) }) else null)
                                 }
                             }
                         }
@@ -213,7 +213,7 @@ internal fun ChatStoragePage(cid: String, me: String, title: String, pop: () -> 
                     list == null -> Unit
                     list.isEmpty() -> item(span = { GridItemSpan(3) }) {
                         Column(Modifier.fillMaxWidth().padding(top = 80.dp, start = 32.dp, end = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_set_storage), null, tint = c.secondary, modifier = Modifier.size(38.dp))
+                            Icon(ImageVector.cachedVector(R.drawable.ic_set_storage), null, tint = c.secondary, modifier = Modifier.size(38.dp))
                             Spacer(Modifier.size(10.dp))
                             Text("Nothing from this chat is stored on this phone.", fontSize = 15.sp, color = c.secondary)
                         }
@@ -227,20 +227,20 @@ internal fun ChatStoragePage(cid: String, me: String, title: String, pop: () -> 
                             val bmp = rememberBitmap(item.picture, 360)
                             if (bmp != null) Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                             else Box(Modifier.fillMaxSize().background(c.accent.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
-                                if (item.kind == ChatStorageRules.Kind.VOICE) Icon(ImageVector.vectorResource(R.drawable.ic_mic), null, tint = c.accent, modifier = Modifier.size(34.dp))
+                                if (item.kind == ChatStorageRules.Kind.VOICE) Icon(ImageVector.cachedVector(R.drawable.ic_mic), null, tint = c.accent, modifier = Modifier.size(34.dp))
                                 else Text(item.m.fileName?.substringAfterLast('.', "")?.uppercase()?.take(4)?.ifEmpty { null } ?: "FILE",
                                     fontWeight = FontWeight.Bold, color = c.accent, fontSize = 16.sp)
                             }
                             Text(SettingsRules.bytes(item.bytes), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.align(Alignment.TopEnd).padding(5.dp).clip(CircleShape)
                                     .background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 6.dp, vertical = 3.dp))
-                            if (item.kind == ChatStorageRules.Kind.VIDEO) Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), null, tint = Color.White,
+                            if (item.kind == ChatStorageRules.Kind.VIDEO) Icon(ImageVector.cachedVector(R.drawable.ic_sf_play_fill), null, tint = Color.White,
                                 modifier = Modifier.align(Alignment.BottomStart).padding(6.dp).size(20.dp))
                             if (selecting && on) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
                             if (selecting) Box(Modifier.align(Alignment.BottomEnd).padding(6.dp).size(22.dp).clip(CircleShape)
                                 .background(if (on) c.blue else Color.Black.copy(alpha = 0.25f)).border(1.5.dp, Color.White, CircleShape),
                                 contentAlignment = Alignment.Center) {
-                                if (on) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), "Selected", tint = Color.White, modifier = Modifier.size(14.dp))
+                                if (on) Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), "Selected", tint = Color.White, modifier = Modifier.size(14.dp))
                             }
                         }
                     }

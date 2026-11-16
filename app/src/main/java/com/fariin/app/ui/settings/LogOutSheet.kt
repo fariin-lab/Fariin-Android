@@ -1,6 +1,6 @@
 package com.fariin.app.ui.settings
 
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
@@ -81,7 +81,7 @@ internal fun LogOutSheet(profile: MyProfile?, onDismiss: () -> Unit, onSignOut: 
                     .background(if (wipeHistory) c.red else androidx.compose.ui.graphics.Color.Transparent)
                     .border(1.5.dp, if (wipeHistory) c.red else c.secondary.copy(alpha = 0.6f), androidx.compose.foundation.shape.CircleShape),
                     contentAlignment = androidx.compose.ui.Alignment.Center) {
-                    if (wipeHistory) androidx.compose.material3.Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_checkmark),
+                    if (wipeHistory) androidx.compose.material3.Icon(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_checkmark),
                         null, tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(16.dp))
                 }
                 Text("Delete messages from this phone", fontSize = 16.sp, color = c.label, modifier = Modifier.padding(start = 12.dp))

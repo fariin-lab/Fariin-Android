@@ -16,7 +16,7 @@ import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -188,7 +188,7 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
         Box(Modifier.fillMaxWidth().then(if (sheet != null) Modifier.sheetDrag(sheet) else Modifier)
             .then(if (inSheet) Modifier.padding(top = 8.dp) else Modifier.statusBarsPadding()).height(64.dp).padding(horizontal = 12.dp)) {
             Box(Modifier.align(Alignment.CenterStart).size(44.dp).floating(CircleShape).clickable(onClickLabel = "Close") { close() },
-                contentAlignment = Alignment.Center) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), null, tint = c.label) }
+                contentAlignment = Alignment.Center) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), null, tint = c.label) }
             Text("Edit Profile", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
             Box(Modifier.align(Alignment.CenterEnd)) {
             TextAction("Save", enabled = changed && name.isNotBlank() && !busy, busy = saving) {
@@ -359,7 +359,7 @@ fun UsernameScreen(api: PeopleApi, current: String, onBack: () -> Unit) {
                 Row(Modifier.fillMaxWidth().clickable { takingBack = n; draft = n }.padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Text("@$n", fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
-                    if (takingBack == n) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = "Chosen",
+                    if (takingBack == n) Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), contentDescription = "Chosen",
                         tint = c.blue, modifier = Modifier.size(16.dp))
                 }
             }
@@ -467,7 +467,7 @@ private fun PickPeople(people: List<Person>, picked: Set<String>, onToggle: (Str
             val bottom = if (i == shown.lastIndex) 20.dp else 0.dp
             Box(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(top, top, bottom, bottom)).background(c.card)) {
                 PersonRow(p.photoUrl, p.shownName, "", onClick = { onToggle(p.uid) }) {
-                    Icon(if (p.uid in picked) ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle_fill) else ImageVector.vectorResource(R.drawable.ic_sf_circle), null,
+                    Icon(if (p.uid in picked) ImageVector.cachedVector(R.drawable.ic_sf_checkmark_circle_fill) else ImageVector.cachedVector(R.drawable.ic_sf_circle), null,
                         tint = if (p.uid in picked) c.blue else c.tertiary)
                 }
             }
@@ -534,7 +534,7 @@ private fun NewGroupPicker(api: PeopleApi, people: List<Person>, chosen: List<Pe
                             Avatar(p.photoUrl, 52.dp, Modifier.align(Alignment.Center))
                             Box(Modifier.align(Alignment.TopEnd).size(20.dp).clip(CircleShape).background(c.card).padding(2.dp)
                                 .clip(CircleShape).background(c.tertiary), contentAlignment = Alignment.Center) {
-                                Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), null, tint = Color.White, modifier = Modifier.size(9.dp))
+                                Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), null, tint = Color.White, modifier = Modifier.size(9.dp))
                             }
                         }
                         Text(p.shownName, fontSize = 13.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -551,7 +551,7 @@ private fun NewGroupPicker(api: PeopleApi, people: List<Person>, chosen: List<Pe
         val bottom = if (last) 20.dp else 0.dp
         Box(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(top, top, bottom, bottom)).background(c.card)) {
             PersonRow(p.photoUrl, p.shownName, "", onClick = { onToggle(p) }) {
-                Icon(if (p.uid in picked) ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle_fill) else ImageVector.vectorResource(R.drawable.ic_sf_circle), null,
+                Icon(if (p.uid in picked) ImageVector.cachedVector(R.drawable.ic_sf_checkmark_circle_fill) else ImageVector.cachedVector(R.drawable.ic_sf_circle), null,
                     tint = if (p.uid in picked) c.blue else c.tertiary)
             }
         }
@@ -691,11 +691,11 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
                     var slotMenu by remember { mutableStateOf(false) }
                     com.fariin.app.ui.components.GlassDropdown(expanded = slotMenu, onDismissRequest = { slotMenu = false }) {
                         androidx.compose.material3.DropdownMenuItem(text = { Text("Take Photo") },
-                            leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera), null) }, onClick = { slotMenu = false; picker.takePhoto() })
+                            leadingIcon = { Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_camera), null) }, onClick = { slotMenu = false; picker.takePhoto() })
                         androidx.compose.material3.DropdownMenuItem(text = { Text("Choose Photo") },
-                            leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), null) }, onClick = { slotMenu = false; pick() })
+                            leadingIcon = { Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_album), null) }, onClick = { slotMenu = false; pick() })
                         if (photo != null) androidx.compose.material3.DropdownMenuItem(text = { Text("Remove Photo", color = c.red) },
-                            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), null, tint = c.red) }, onClick = { slotMenu = false; photo = null })
+                            leadingIcon = { Icon(ImageVector.cachedVector(R.drawable.ic_sf_trash), null, tint = c.red) }, onClick = { slotMenu = false; photo = null })
                     }
                     Box(Modifier.size(64.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.12f)).clickable(onClickLabel = "Set Group Photo") { slotMenu = true }, contentAlignment = Alignment.Center) {
                         val p = photo
@@ -1087,7 +1087,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                     // The link opens Share with; the QR mark opens the code (iOS, owner 2026-11-10).
                     Row(Modifier.fillMaxWidth().clickable { publicShare = "https://fariin.com/$publicName" }.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically) {
-                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_link), null, tint = c.label, modifier = Modifier.size(24.dp))
+                        Icon(ImageVector.cachedVector(R.drawable.ic_sf_link), null, tint = c.label, modifier = Modifier.size(24.dp))
                         Spacer(Modifier.width(14.dp))
                         Column(Modifier.weight(1f)) {
                             Text("fariin.com/$publicName", fontSize = 17.sp, color = c.label)
@@ -1095,7 +1095,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                         }
                         Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = "QR code") { publicQr = "https://fariin.com/$publicName" },
                             contentAlignment = Alignment.Center) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_qr), "QR code", tint = c.secondary, modifier = Modifier.size(24.dp))
+                            Icon(ImageVector.cachedVector(R.drawable.ic_qr), "QR code", tint = c.secondary, modifier = Modifier.size(24.dp))
                         }
                     }
                 }
@@ -1147,7 +1147,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 verticalAlignment = Alignment.CenterVertically) {
                 Text("${users.size} Member${if (users.size == 1) "" else "s"}", fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
                     color = c.secondary)
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), "All members", tint = c.secondary, modifier = Modifier.size(26.dp))
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_right), "All members", tint = c.secondary, modifier = Modifier.size(26.dp))
                 Spacer(Modifier.weight(1f))
             }
             SettingsSection {
@@ -1156,7 +1156,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                     com.fariin.app.data.GroupWelcome.canAdd(me, conv)) Row(Modifier.fillMaxWidth().clickable { adding = true }
                     .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(44.dp).clip(CircleShape).background(c.fieldFill), contentAlignment = Alignment.Center) {
-                        Icon(ImageVector.vectorResource(R.drawable.ic_plus_ios), null, tint = c.label, modifier = Modifier.size(24.dp))
+                        Icon(ImageVector.cachedVector(R.drawable.ic_plus_ios), null, tint = c.label, modifier = Modifier.size(24.dp))
                     }
                     Spacer(Modifier.width(14.dp))
                     Text("Add Members", fontSize = 17.sp, color = c.label)
@@ -1170,7 +1170,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                         if (tag.isNotEmpty()) Text(tag, fontSize = 14.sp, color = c.secondary)
                     }
                 }
-                if (more) SettingsRow("See All", icon = rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_chevron_down)), trailing = Trailing.NONE,
+                if (more) SettingsRow("See All", icon = rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_sf_chevron_down)), trailing = Trailing.NONE,
                     last = true) { pages.add(GroupPage.Members) }
             }
             }
@@ -1179,7 +1179,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 // iOS exit card: Leave Group, and Report Group for a member who is not staff (unless the
                 // group turned reports off); the owner's End Group and Delete Group in their own card.
                 val canReport = !iAmAdmin && conv["noReport"] != true   // the server field (iOS Models groupNoReport = data["noReport"])
-                SettingsRow("Leave Group", icon = rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_leave)), titleColor = c.red, trailing = Trailing.NONE, last = !canReport) { askLeave = true }
+                SettingsRow("Leave Group", icon = rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_sf_leave)), titleColor = c.red, trailing = Trailing.NONE, last = !canReport) { askLeave = true }
                 if (canReport) SettingsRow("Report Group", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_report), titleColor = c.red, trailing = Trailing.NONE, last = true) {
                     com.fariin.app.data.ReportFlow.ask(com.fariin.app.data.ReportTarget(com.fariin.app.data.ReportKind.GROUP, name = groupName, cid = cid,
                         onLeave = {
@@ -1197,11 +1197,11 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             }
             if (iAmMember && owner == me) SettingsSection {
                 val ended = com.fariin.app.data.GroupMod.ended(conv)
-                if (!ended) SettingsRow("End Group", icon = rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_xmark_circle)), titleColor = c.red, trailing = Trailing.NONE) { askEnd = true }
+                if (!ended) SettingsRow("End Group", icon = rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_sf_xmark_circle)), titleColor = c.red, trailing = Trailing.NONE) { askEnd = true }
                 // iOS (owner 2026-11-08): the owner clears every message for everyone; the group stays.
-                SettingsRow(if (clearingAll) "Clearing…" else "Clear Messages", icon = rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_eraser)),
+                SettingsRow(if (clearingAll) "Clearing…" else "Clear Messages", icon = rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_sf_eraser)),
                     titleColor = c.red, trailing = Trailing.NONE) { if (!clearingAll) askClearAll = true }
-                SettingsRow("Delete Group", icon = rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_trash)), titleColor = c.red, trailing = Trailing.NONE, last = true) { askDelete = true }
+                SettingsRow("Delete Group", icon = rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_sf_trash)), titleColor = c.red, trailing = Trailing.NONE, last = true) { askDelete = true }
             }
             // iOS footer: who made the group and when.
             val createdMs = (conv["createdAt"] as? com.google.firebase.Timestamp)?.toDate()?.time?.toDouble()
@@ -1310,10 +1310,10 @@ private fun GroupCirclesRow(cid: String, me: String, conv: Map<String, Any?>, me
     // iOS actionsRow: equal shares of the row, inside the page's 16 dp margins.
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         val share = Modifier.weight(1f)
-        ActionTile("Voice", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_voice), share, dimmed = !ready) { call(video = false) }
-        ActionTile("Video", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video), share, dimmed = !ready) { call(video = true) }
+        ActionTile("Voice", ImageVector.cachedVector(com.fariin.app.R.drawable.ic_call_voice), share, dimmed = !ready) { call(video = false) }
+        ActionTile("Video", ImageVector.cachedVector(com.fariin.app.R.drawable.ic_call_video), share, dimmed = !ready) { call(video = true) }
         Box(share) {
-            ActionTile(if (muted) "Unmute" else "Mute", if (muted) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off),
+            ActionTile(if (muted) "Unmute" else "Mute", if (muted) ImageVector.cachedVector(com.fariin.app.R.drawable.ic_bell) else ImageVector.cachedVector(com.fariin.app.R.drawable.ic_bell_off),
                 Modifier.fillMaxWidth()) { muteOpen = true }
             com.fariin.app.ui.components.GlassDropdown(muteOpen, onDismissRequest = { muteOpen = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
                 border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
@@ -1327,9 +1327,9 @@ private fun GroupCirclesRow(cid: String, me: String, conv: Map<String, Any?>, me
                 }
             }
         }
-        ActionTile("Search", ImageVector.vectorResource(R.drawable.ic_search_ios), share, dimmed = onSearch == null) { onSearch?.invoke() }
+        ActionTile("Search", ImageVector.cachedVector(R.drawable.ic_search_ios), share, dimmed = onSearch == null) { onSearch?.invoke() }
         Box(share.then(if (moreAnchor != null) Modifier.glassMenuAnchor(moreAnchor) else Modifier)) {
-            ActionTile("More", ImageVector.vectorResource(R.drawable.ic_more_ios), Modifier.fillMaxWidth(), onClick = onMore)
+            ActionTile("More", ImageVector.cachedVector(R.drawable.ic_more_ios), Modifier.fillMaxWidth(), onClick = onMore)
         }
     }
 }
@@ -1434,7 +1434,7 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
                     Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-6).dp).size(30.dp)
                         .floating(CircleShape).clickable { confirmRemove = true },
                     contentAlignment = Alignment.Center,
-                ) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_minus), "Remove Photo", tint = c.label, modifier = Modifier.size(18.dp)) }
+                ) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_minus), "Remove Photo", tint = c.label, modifier = Modifier.size(18.dp)) }
             }
             Spacer(Modifier.height(12.dp))
             // iOS EditGroupView: "Set New Photo" opens the app's own photo library straight away
@@ -1455,7 +1455,7 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
         Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
             Box(Modifier.fillMaxWidth().sheetDrag(sheet).padding(top = 8.dp).height(64.dp).padding(horizontal = 12.dp)) {
                 Box(Modifier.align(Alignment.CenterStart).size(44.dp).floating(CircleShape).clickable(onClickLabel = "Cancel") { onClose() },
-                    contentAlignment = Alignment.Center) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), null, tint = c.label) }
+                    contentAlignment = Alignment.Center) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), null, tint = c.label) }
                 Text(if (channel) "Edit Channel" else "Edit Group", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.label,
                     modifier = Modifier.align(Alignment.Center))
                 Box(Modifier.align(Alignment.CenterEnd)) { saveAction() }
@@ -1482,7 +1482,7 @@ private fun DescriptionCard(desc: String) {
     Column(Modifier.fillMaxWidth().clickable(enabled = folds && !expanded) { expanded = true }
         .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_text_alignleft), null, tint = c.label, modifier = Modifier.size(20.dp))
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_text_alignleft), null, tint = c.label, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(10.dp))
             Text("Description", fontSize = 17.sp, color = c.label)
         }

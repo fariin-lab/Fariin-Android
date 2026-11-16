@@ -1,6 +1,6 @@
 package com.fariin.app.ui.settings
 
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.ui.components.underBar
 
 import android.content.Context
@@ -402,17 +402,17 @@ private fun androidx.compose.foundation.layout.ColumnScope.CheckupContent(profil
             fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center)
     }
     if (g.missing.isNotEmpty()) SettingsSection(footer = "Set these up to keep your account safe if your phone is lost or someone learns your password.") {
-        for (e in g.missing) CheckupRow(ImageVector.vectorResource(R.drawable.ic_sf_exclamation_circle), c.blue, e.missingTitle, e.why, e === g.missing.last()) { open(e.id) }
+        for (e in g.missing) CheckupRow(ImageVector.cachedVector(R.drawable.ic_sf_exclamation_circle), c.blue, e.missingTitle, e.why, e === g.missing.last()) { open(e.id) }
     }
     if (g.failed.isNotEmpty()) SettingsSection(header = "Couldn't check") {
-        for (e in g.failed) CheckupRow(ImageVector.vectorResource(R.drawable.ic_sf_exclamation_triangle), Orange, e.title, "Check your connection and try again.", e === g.failed.last()) {
+        for (e in g.failed) CheckupRow(ImageVector.cachedVector(R.drawable.ic_sf_exclamation_triangle), Orange, e.title, "Check your connection and try again.", e === g.failed.last()) {
             onRetry()
         }
     }
     if (g.rest.isNotEmpty()) SettingsSection(header = g.restHeader) {
         for (e in g.rest) {
             val s = e.status
-            if (s is SecurityCheckupRules.Status.Done) CheckupRow(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle), Green, e.title, s.line, e === g.rest.last()) { open(e.id) }
+            if (s is SecurityCheckupRules.Status.Done) CheckupRow(ImageVector.cachedVector(R.drawable.ic_sf_checkmark_circle), Green, e.title, s.line, e === g.rest.last()) { open(e.id) }
             else CheckupRow(null, c.secondary, e.title, "Checking…", e === g.rest.last(), null)
         }
     }
@@ -728,9 +728,9 @@ private fun ScanRow(e: SecurityCheckupRules.Entry, last: Boolean, moving: Boolea
                 }) { k ->
                     when (k) {
                         0 -> if (moving) com.fariin.app.ui.components.FariinSpinner(size = 18.dp) else Spacer(Modifier.size(18.dp))
-                        1 -> Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle), null, tint = Green, modifier = Modifier.size(24.dp))
-                        2 -> Icon(ImageVector.vectorResource(R.drawable.ic_sf_exclamation_circle), null, tint = c.blue, modifier = Modifier.size(24.dp))
-                        else -> Icon(ImageVector.vectorResource(R.drawable.ic_sf_exclamation_triangle), null, tint = Orange, modifier = Modifier.size(24.dp))
+                        1 -> Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark_circle), null, tint = Green, modifier = Modifier.size(24.dp))
+                        2 -> Icon(ImageVector.cachedVector(R.drawable.ic_sf_exclamation_circle), null, tint = c.blue, modifier = Modifier.size(24.dp))
+                        else -> Icon(ImageVector.cachedVector(R.drawable.ic_sf_exclamation_triangle), null, tint = Orange, modifier = Modifier.size(24.dp))
                     }
                 }
             }
@@ -738,7 +738,7 @@ private fun ScanRow(e: SecurityCheckupRules.Entry, last: Boolean, moving: Boolea
                 Text(title, fontSize = 17.sp, color = c.label)
                 androidx.compose.animation.Crossfade(sub, label = "sub") { Text(it, fontSize = 15.sp, color = c.secondary) }
             }
-            if (tap != null && kind != 3) Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null,
+            if (tap != null && kind != 3) Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_right), null,
                 tint = c.secondary.copy(alpha = 0.55f), modifier = Modifier.padding(start = 4.dp).size(20.dp))
         }
         if (!last) HorizontalDivider(Modifier.padding(start = 54.dp), thickness = 0.5.dp, color = c.separator)
@@ -769,7 +769,7 @@ private fun ScanAvatar(photo: String?, finished: Boolean, allSet: Boolean, movin
         }
         if (badge > 0.01f) Box(Modifier.align(Alignment.BottomEnd).graphicsLayer { val k = 0.6f + 0.4f * badge; scaleX = k; scaleY = k; alpha = badge.coerceIn(0f, 1f) }
             .size(28.dp).clip(CircleShape).background(c.bgSecondary).padding(2.dp).clip(CircleShape).background(c.accent), contentAlignment = Alignment.Center) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = c.onAccent, modifier = Modifier.size(14.dp))
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), null, tint = c.onAccent, modifier = Modifier.size(14.dp))
         }
     }
 }

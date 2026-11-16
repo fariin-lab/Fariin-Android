@@ -36,7 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -218,7 +218,7 @@ fun KeyRestoreScreen(status: KeyBackup.Status, onRestored: () -> Unit, onSkip: (
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Spacer(Modifier.height(72.dp))
             Box(Modifier.size(84.dp).clip(CircleShape).background(c.accent), contentAlignment = Alignment.Center) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_lock_fill), null, tint = c.onAccent, modifier = Modifier.size(38.dp))
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_lock_fill), null, tint = c.onAccent, modifier = Modifier.size(38.dp))
             }
             Text("Restore your messages", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)
             Text("Enter your Backup PIN to open the messages you had before on this account.",

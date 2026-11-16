@@ -33,7 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,10 +68,10 @@ internal fun EditPhotoSheet(
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.fillMaxWidth().sheetDrag(motion).padding(horizontal = 16.dp, vertical = 12.dp)) {
                 Box(Modifier.align(Alignment.CenterStart).size(44.dp).floating(CircleShape).clickable { motion.close() },
-                    contentAlignment = Alignment.Center) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Cancel", tint = c.label) }
+                    contentAlignment = Alignment.Center) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Cancel", tint = c.label) }
                 Text("Edit Photo", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
                 Box(Modifier.align(Alignment.CenterEnd).size(44.dp).floating(CircleShape).clickable { onDone(); motion.close() },
-                    contentAlignment = Alignment.Center) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), "Done", tint = c.label) }
+                    contentAlignment = Alignment.Center) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), "Done", tint = c.label) }
             }
             Spacer(Modifier.height(20.dp))
             Box {
@@ -82,7 +82,7 @@ internal fun EditPhotoSheet(
                 // The minus at the circle's top right takes the photo off (asked first).
                 if (hasPhoto) Box(Modifier.align(Alignment.TopEnd).offset(x = (-8).dp, y = 8.dp).size(44.dp).floating(CircleShape)
                     .clickable { askRemove = true }, contentAlignment = Alignment.Center) {
-                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_minus), "Remove photo", tint = c.label)
+                    Icon(ImageVector.cachedVector(R.drawable.ic_sf_minus), "Remove photo", tint = c.label)
                 }
             }
             Spacer(Modifier.height(28.dp))
@@ -97,10 +97,10 @@ internal fun EditPhotoSheet(
                     border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card,
                     offset = androidx.compose.ui.unit.DpOffset(0.dp, (-48).dp)) {
                     DropdownMenuItem(text = { Text("Camera", fontSize = 17.sp) },
-                        leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera), null, tint = c.label) },
+                        leadingIcon = { Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_camera), null, tint = c.label) },
                         onClick = { menu = false; onCamera() })
                     DropdownMenuItem(text = { Text("Photo Library", fontSize = 17.sp) },
-                        leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), null, tint = c.label) },
+                        leadingIcon = { Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_album), null, tint = c.label) },
                         onClick = { menu = false; onLibrary() })
                 }
             }

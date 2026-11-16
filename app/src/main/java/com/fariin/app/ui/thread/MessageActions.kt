@@ -2,7 +2,7 @@ package com.fariin.app.ui.thread
 
 import com.fariin.app.ui.components.GlassAlert
 import com.fariin.app.data.NewBadgeSpots
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -178,7 +178,7 @@ internal fun MessageMenu(
                 val age = (now - m.createdAtMillis) / 1000.0
                 val live = (m.callOutcome == "ringing" && age < 120) || (m.callOutcome == "ongoing" && age < 4 * 3600)
                 if (!live) add(MenuItem(if (m.callVideo) "Video Call" else "Voice Call",
-                    if (m.callVideo) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_voice)) { onCallBack(m) })
+                    if (m.callVideo) ImageVector.cachedVector(com.fariin.app.R.drawable.ic_call_video) else ImageVector.cachedVector(com.fariin.app.R.drawable.ic_call_voice)) { onCallBack(m) })
             }
             if (!restricted && MessageRules.canForward(m)) add(MenuItem("Forward", null, iconRes = com.fariin.app.R.drawable.ic_menu_forward, badge = NewBadgeSpots.CHAT_MENU_FORWARD) {
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onForward(m) })
@@ -563,7 +563,7 @@ internal fun SwipeRow(enabled: Boolean, onReply: () -> Unit,
         }
     }
     Box(Modifier.fillMaxWidth().then(gesture).then(if (slots != null) Modifier.zIndex(1f) else Modifier)) {
-        if (showArrow && slots == null) Icon(ImageVector.vectorResource(R.drawable.ic_menu_reply), null, tint = Fariin.colors.secondary,
+        if (showArrow && slots == null) Icon(ImageVector.cachedVector(R.drawable.ic_menu_reply), null, tint = Fariin.colors.secondary,
             modifier = Modifier.align(Alignment.CenterStart).padding(start = 16.dp).size(22.dp)
                 .graphicsLayer {
                     val p = SwipeReplyMath.progress(dx.floatValue, trigger)
@@ -593,7 +593,7 @@ private fun CapsuleSlot(icon: Int?, label: String, on: Boolean, usable: Boolean)
     val c = Fariin.colors
     Box(Modifier.size(36.dp).clip(CircleShape).background(if (on) c.secondary.copy(alpha = 0.3f) else Color.Transparent),
         contentAlignment = Alignment.Center) {
-        if (icon != null) Icon(ImageVector.vectorResource(icon), label, tint = c.label.copy(alpha = if (usable) 1f else 0.3f),
+        if (icon != null) Icon(ImageVector.cachedVector(icon), label, tint = c.label.copy(alpha = if (usable) 1f else 0.3f),
             modifier = Modifier.size(18.dp))
     }
 }
@@ -618,7 +618,7 @@ internal fun ComposerBar(title: String, text: String, thumb: (@Composable () -> 
             Text(title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1)
             Text(text, fontSize = 14.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        IconButton(onClick = onClose) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Cancel", tint = c.secondary) }
+        IconButton(onClick = onClose) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Cancel", tint = c.secondary) }
     }
 }
 
@@ -642,7 +642,7 @@ internal fun ComposerBanner(title: String, text: String, thumb: (@Composable () 
             Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = tone, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (icon != null) {
-                    Icon(ImageVector.vectorResource(icon), null, tint = c.secondary, modifier = Modifier.size(15.dp))
+                    Icon(ImageVector.cachedVector(icon), null, tint = c.secondary, modifier = Modifier.size(15.dp))
                     Spacer(Modifier.width(4.dp))
                 }
                 Text(text, fontSize = 14.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -651,7 +651,7 @@ internal fun ComposerBanner(title: String, text: String, thumb: (@Composable () 
         if (thumb != null) Box(Modifier.padding(start = 8.dp)) { thumb() }
         Box(Modifier.align(Alignment.Top).size(32.dp).clickable(onClickLabel = "Cancel", onClick = onClose),
             contentAlignment = Alignment.Center) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Cancel", tint = c.secondary, modifier = Modifier.size(14.dp))
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Cancel", tint = c.secondary, modifier = Modifier.size(14.dp))
         }
     }
 }
@@ -683,7 +683,7 @@ internal fun JumpArrow(count: Int, onClick: () -> Unit, modifier: Modifier = Mod
         Box(
             Modifier.size(40.dp).floating().clickable(onClick = onClick),
             contentAlignment = Alignment.Center,
-        ) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_down), "Jump to the newest message", tint = c.label, modifier = Modifier.size(28.dp)) }
+        ) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_down), "Jump to the newest message", tint = c.label, modifier = Modifier.size(28.dp)) }
         if (count > 0) Text(
             if (count > 99) "99+" else "$count", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White,
             modifier = Modifier.align(Alignment.TopCenter).offset(y = (-9).dp).clip(CircleShape).background(c.blue)

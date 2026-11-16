@@ -52,7 +52,7 @@ import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.theme.Fariin
 import com.fariin.app.ui.components.floating
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 
 /**
@@ -132,7 +132,7 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
                             Modifier.size(24.dp).clip(CircleShape).background(if (on) c.blue else Color.Transparent)
                                 .border(1.5.dp, if (on) c.blue else c.secondary.copy(alpha = 0.5f), CircleShape),
                             contentAlignment = Alignment.Center,
-                        ) { if (on) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = Color.White, modifier = Modifier.size(16.dp)) }
+                        ) { if (on) Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), null, tint = Color.White, modifier = Modifier.size(16.dp)) }
                     }
                 }
             }
@@ -208,7 +208,7 @@ private fun ForwardComposer(preview: List<com.fariin.app.data.Message>, picked: 
                 .clickable(enabled = ready) { onSend(note.trim()) }
                 .sendLabel(if (picked.size > 1) "Send to ${picked.size} chats" else "Send"),
                 contentAlignment = Alignment.Center) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_up), null, tint = Color.White, modifier = Modifier.size(22.dp))
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_arrow_up), null, tint = Color.White, modifier = Modifier.size(22.dp))
             }
         }
     }
@@ -242,11 +242,11 @@ private fun PreviewStack(msgs: List<com.fariin.app.data.Message>) {
 
 @Composable
 private fun forwardIcon(m: com.fariin.app.data.Message): ImageVector = when (m.mediaKind) {
-    com.fariin.app.data.Message.MediaKind.VOICE -> ImageVector.vectorResource(R.drawable.ic_mic)
-    com.fariin.app.data.Message.MediaKind.FILE -> ImageVector.vectorResource(R.drawable.ic_file)
-    com.fariin.app.data.Message.MediaKind.VIDEO -> ImageVector.vectorResource(R.drawable.ic_sf_play_fill)
-    com.fariin.app.data.Message.MediaKind.PHOTO, com.fariin.app.data.Message.MediaKind.ALBUM -> ImageVector.vectorResource(R.drawable.ic_sf_photo)
-    else -> ImageVector.vectorResource(R.drawable.ic_sf_text_alignleft)
+    com.fariin.app.data.Message.MediaKind.VOICE -> ImageVector.cachedVector(R.drawable.ic_mic)
+    com.fariin.app.data.Message.MediaKind.FILE -> ImageVector.cachedVector(R.drawable.ic_file)
+    com.fariin.app.data.Message.MediaKind.VIDEO -> ImageVector.cachedVector(R.drawable.ic_sf_play_fill)
+    com.fariin.app.data.Message.MediaKind.PHOTO, com.fariin.app.data.Message.MediaKind.ALBUM -> ImageVector.cachedVector(R.drawable.ic_sf_photo)
+    else -> ImageVector.cachedVector(R.drawable.ic_sf_text_alignleft)
 }
 
 /** One line for what is forwarded: the chat list's words for media, the text itself otherwise. */

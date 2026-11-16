@@ -1,6 +1,6 @@
 package com.fariin.app.ui.stories
 
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.border
@@ -208,7 +208,7 @@ fun StoryStickerTray(
             Row(Modifier.padding(horizontal = 16.dp).padding(bottom = 14.dp).fillMaxWidth().height(40.dp)
                 .clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.12f)).padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+                Icon(ImageVector.cachedVector(R.drawable.ic_search_ios), contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                     if (query.isEmpty()) Text("Search", color = Color.White.copy(alpha = 0.6f), fontSize = 16.sp)
@@ -216,7 +216,7 @@ fun StoryStickerTray(
                         textStyle = TextStyle(color = Color.White, fontSize = 16.sp), cursorBrush = SolidColor(Color.White),
                         modifier = Modifier.fillMaxWidth())
                 }
-                if (searching) Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark_circle_fill), contentDescription = "Clear", tint = Color.White.copy(alpha = 0.6f),
+                if (searching) Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark_circle_fill), contentDescription = "Clear", tint = Color.White.copy(alpha = 0.6f),
                     modifier = Modifier.size(18.dp).clickable { query = "" })
             }
             LazyVerticalGrid(GridCells.Fixed(4), Modifier.weight(1f).fillMaxWidth(),
@@ -259,11 +259,11 @@ fun StoryStickerTray(
                         .background(if (on) Color.White.copy(alpha = 0.18f) else Color.Transparent)
                         .clickable { query = ""; tab = t }, contentAlignment = Alignment.Center) {
                         when (t) {
-                            StickerTab.Recent -> Icon(ImageVector.vectorResource(R.drawable.ic_sf_clock_arrow), contentDescription = "Recent", tint = Color.White, modifier = Modifier.size(22.dp))
+                            StickerTab.Recent -> Icon(ImageVector.cachedVector(R.drawable.ic_sf_clock_arrow), contentDescription = "Recent", tint = Color.White, modifier = Modifier.size(22.dp))
                             // Our pack's tab is its first sticker, as iOS draws it.
                             StickerTab.BuiltIn -> AsyncImage(StoryStickers.builtIn.first().url, contentDescription = "Fariin stickers",
                                 contentScale = ContentScale.Fit, modifier = Modifier.size(27.dp))
-                            is StickerTab.Term -> Icon(ImageVector.vectorResource(t.icon), contentDescription = t.query.ifEmpty { "Trending" }, tint = Color.White, modifier = Modifier.size(22.dp))
+                            is StickerTab.Term -> Icon(ImageVector.cachedVector(t.icon), contentDescription = t.query.ifEmpty { "Trending" }, tint = Color.White, modifier = Modifier.size(22.dp))
                         }
                     }
                 }
@@ -281,7 +281,7 @@ private fun StickerPill(icon: Int, title: String, tint: Color, badge: String, on
         Row(Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.14f))
             .border(0.5.dp, Color.White.copy(alpha = 0.22f), CircleShape).clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(icon), contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
+            Icon(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(icon), contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(7.dp))
             Text(title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Medium)
         }

@@ -2,7 +2,7 @@ package com.fariin.app.ui.settings
 
 import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 import com.fariin.app.data.NewBadgeSpots
 import com.fariin.app.ui.components.listPress
@@ -337,7 +337,7 @@ internal fun PersonRow(name: String, photo: String?, sub: String? = null, last: 
                 Text(name, fontSize = 17.sp, color = c.label, maxLines = 1)
                 if (sub != null) Text(sub, fontSize = 13.sp, color = c.secondary, maxLines = 1)
             }
-            if (selected) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = "Selected", tint = c.accent, modifier = Modifier.size(22.dp))
+            if (selected) Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), contentDescription = "Selected", tint = c.accent, modifier = Modifier.size(22.dp))
             trailing?.invoke()
         }
         if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator)
@@ -683,7 +683,7 @@ private fun KeyPill(label: String, icon: Int, modifier: Modifier = Modifier, onC
     val c = Fariin.colors
     Row(modifier.height(40.dp).clip(androidx.compose.foundation.shape.CircleShape).background(c.fieldFill).clickable(onClick = onClick),
         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-        Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(icon), null, tint = c.label, modifier = Modifier.size(18.dp))
+        Icon(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(icon), null, tint = c.label, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(6.dp))
         Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label)
     }

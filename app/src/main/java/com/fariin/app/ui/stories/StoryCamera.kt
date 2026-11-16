@@ -2,7 +2,7 @@ package com.fariin.app.ui.stories
 
 import com.fariin.app.R
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
@@ -626,7 +626,7 @@ private fun StoryCamera(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera), contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(40.dp))
+                Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_camera), contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(40.dp))
                 Text("Camera access is off. Enable it in Settings", color = Color.White, fontSize = 15.sp, textAlign = TextAlign.Center)
                 Text(
                     "Open Settings", color = Color.Black, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
@@ -660,10 +660,10 @@ private fun StoryCamera(
         Box(Modifier.fillMaxSize().graphicsLayer { translationX = -textIn * size.width; alpha = 1f - textIn }) {
         // Top: close at the start, flash at the end (only on a lens that has one), the clock in the middle.
         Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            ChromeButton(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close") { recording?.stop(); onClose() }
+            ChromeButton(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Close") { recording?.stop(); onClose() }
             Spacer(Modifier.weight(1f))
             if (hasCamera && camera != null && StoryCameraRules.showsFlashButton(front, hasFlash)) {
-                ChromeButton(if (flashOn) ImageVector.vectorResource(R.drawable.ic_sf_bolt_fill) else ImageVector.vectorResource(R.drawable.ic_sf_bolt_slash_fill), if (flashOn) "Flash on" else "Flash off",
+                ChromeButton(if (flashOn) ImageVector.cachedVector(R.drawable.ic_sf_bolt_fill) else ImageVector.cachedVector(R.drawable.ic_sf_bolt_slash_fill), if (flashOn) "Flash on" else "Flash off",
                     tint = if (flashOn) Color(0xFFFFD60A) else Color.White) {
                     flashOn = !flashOn
                     if (recording != null && hasFlash) camera?.cameraControl?.enableTorch(flashOn)
@@ -743,7 +743,7 @@ private fun StoryCamera(
                             Modifier.size(46.dp).clip(CircleShape).border(1.5.dp, Color.White.copy(alpha = 0.35f), CircleShape)
                                 .clickable { flipCamera() }.semantics { contentDescription = "Flip camera" },
                             contentAlignment = Alignment.Center,
-                        ) { Icon(ImageVector.vectorResource(R.drawable.ic_flip_camera), contentDescription = null, tint = Color.White) }
+                        ) { Icon(ImageVector.cachedVector(R.drawable.ic_flip_camera), contentDescription = null, tint = Color.White) }
                     }
                 } else {
                     Spacer(Modifier.weight(1f))
@@ -769,7 +769,7 @@ private fun StoryCamera(
                         contentAlignment = Alignment.Center,
                     ) {
                         if (rendering) com.fariin.app.ui.components.ButtonSpinner(Color.Black, size = 20.dp)
-                        else Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_right), contentDescription = null,
+                        else Icon(ImageVector.cachedVector(R.drawable.ic_sf_arrow_right), contentDescription = null,
                             tint = if (has) Color.Black else Color.White, modifier = Modifier.size(20.dp))
                     }
                 }
@@ -907,7 +907,7 @@ private fun LockButton(locked: Boolean, progress: Float, onClick: () -> Unit) {
             .semantics { contentDescription = "Keep recording without holding" },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(if (locked) ImageVector.vectorResource(R.drawable.ic_sf_lock_fill) else ImageVector.vectorResource(R.drawable.ic_sf_lock), contentDescription = null,
+        Icon(if (locked) ImageVector.cachedVector(R.drawable.ic_sf_lock_fill) else ImageVector.cachedVector(R.drawable.ic_sf_lock), contentDescription = null,
             tint = if (locked) yellow else Color.White, modifier = Modifier.size(20.dp))
     }
 }

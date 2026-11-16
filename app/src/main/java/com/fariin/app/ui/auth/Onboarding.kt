@@ -1,7 +1,7 @@
 package com.fariin.app.ui.auth
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -186,7 +186,7 @@ fun OnboardingPage(
             else InitialAvatar(name.ifEmpty { "?" }, 96)
             Box(Modifier.align(Alignment.BottomEnd).offset(2.dp, 2.dp).size(30.dp).clip(CircleShape).background(c.bg).padding(2.5.dp)
                 .clip(CircleShape).background(c.accent), contentAlignment = Alignment.Center) {
-                Icon(if (photo == null) ImageVector.vectorResource(R.drawable.ic_camera) else ImageVector.vectorResource(R.drawable.ic_sf_pencil), if (photo == null) "Add a photo" else "Change photo",
+                Icon(if (photo == null) ImageVector.cachedVector(R.drawable.ic_camera) else ImageVector.cachedVector(R.drawable.ic_sf_pencil), if (photo == null) "Add a photo" else "Change photo",
                     tint = c.onAccent, modifier = Modifier.size(14.dp))
             }
         }
@@ -195,7 +195,7 @@ fun OnboardingPage(
         Text("Friends find you by your name and username. No phone number needed.", fontSize = 15.sp, color = c.secondary,
             textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp).padding(horizontal = 12.dp))
         Spacer(Modifier.height(26.dp))
-        AuthField(name, { name = it; schedulePrefill() }, "Your name", ImageVector.vectorResource(R.drawable.ic_sf_person),
+        AuthField(name, { name = it; schedulePrefill() }, "Your name", ImageVector.cachedVector(R.drawable.ic_sf_person),
             keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Next))
         Spacer(Modifier.height(14.dp))
         AuthField(handle, { v ->
@@ -204,7 +204,7 @@ fun OnboardingPage(
             if (clean != autoHandle) edited = clean.isNotEmpty()
             ideas = emptyList()
             scheduleCheck()
-        }, "username", ImageVector.vectorResource(R.drawable.ic_sf_at), invalid = state == HandleState.Taken,
+        }, "username", ImageVector.cachedVector(R.drawable.ic_sf_at), invalid = state == HandleState.Taken,
             keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Done),
             actions = KeyboardActions(onDone = { if (HandleRules.canContinue(name, state, saving)) save() }),
             accessory = { HandleMark(state) })
@@ -217,7 +217,7 @@ fun OnboardingPage(
                     Row(Modifier.fillMaxWidth().height(50.dp).clickable { edited = true; handle = idea; ideas = emptyList(); scheduleCheck() }
                         .padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("@$idea", fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
-                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle), null, tint = c.secondary, modifier = Modifier.size(18.dp))
+                        Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark_circle), null, tint = c.secondary, modifier = Modifier.size(18.dp))
                     }
                     if (i < ideas.size - 1) HorizontalDivider(Modifier.padding(start = 18.dp), color = c.separator)
                 }
@@ -243,6 +243,6 @@ private fun HandleMark(state: HandleState) {
         HandleState.Checking -> com.fariin.app.ui.components.HandleCheckRing(com.fariin.app.ui.components.CheckPhase.Checking)
         HandleState.Free -> com.fariin.app.ui.components.HandleCheckRing(com.fariin.app.ui.components.CheckPhase.Free)
         HandleState.Taken -> com.fariin.app.ui.components.HandleCheckRing(com.fariin.app.ui.components.CheckPhase.Taken)
-        HandleState.Unknown -> Icon(ImageVector.vectorResource(R.drawable.ic_sf_wifi_slash), "Couldn't check", tint = c.secondary, modifier = Modifier.size(16.dp))
+        HandleState.Unknown -> Icon(ImageVector.cachedVector(R.drawable.ic_sf_wifi_slash), "Couldn't check", tint = c.secondary, modifier = Modifier.size(16.dp))
     }
 }

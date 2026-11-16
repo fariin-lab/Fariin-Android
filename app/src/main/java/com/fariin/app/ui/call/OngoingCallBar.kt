@@ -1,6 +1,6 @@
 package com.fariin.app.ui.call
 
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import android.app.Activity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -131,12 +131,12 @@ fun OngoingCallBar() {
         Box(Modifier.size(30.dp).clip(CircleShape).background(Color(0xFF24262B)).clickable {
             if (m.isOne) CallManager.toggleMute() else GroupCall.toggleMic()
         }.semantics { contentDescription = if (m.muted) "Unmute" else "Mute" }, contentAlignment = Alignment.Center) {
-            Icon(if (m.muted) androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic_off) else androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic), null, tint = Color.White, modifier = Modifier.size(16.dp))
+            Icon(if (m.muted) androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_mic_off) else androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_mic), null, tint = Color.White, modifier = Modifier.size(16.dp))
         }
         Column(Modifier.weight(1f).padding(horizontal = 8.dp).clip(RoundedCornerShape(12.dp)).clickable { CallActivity.startRing(ctx) }
             .padding(vertical = 2.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                if (m.video) { Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video), null, tint = green, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(5.dp)) }
+                if (m.video) { Icon(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_call_video), null, tint = green, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(5.dp)) }
                 Text(m.title, color = green, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             m.line2?.let { Text(it, color = Color(0xFF9EA3AB), fontSize = 11.sp, lineHeight = 12.sp, maxLines = 1) }
@@ -144,7 +144,7 @@ fun OngoingCallBar() {
         Box(Modifier.size(30.dp).clip(CircleShape).background(Color(0xFFFF3B30)).clickable {
             if (m.isOne) CallManager.hangUp() else GroupCall.leave()
         }.semantics { contentDescription = "End call" }, contentAlignment = Alignment.Center) {
-            Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_phone_down), null, tint = Color.White, modifier = Modifier.size(17.dp))
+            Icon(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_phone_down), null, tint = Color.White, modifier = Modifier.size(17.dp))
         }
     }
 }

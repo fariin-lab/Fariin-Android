@@ -35,7 +35,7 @@ import com.fariin.app.ui.components.Snack
 import com.fariin.app.ui.theme.Fariin
 import com.google.firebase.auth.FirebaseAuth
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 
 /** True for the one account that may choose and add custom emoji (iOS CustomReaction.canChoose). */
@@ -70,7 +70,7 @@ fun CustomEmojiGrid(onPick: (String) -> Unit, modifier: Modifier = Modifier,
                     .semantics { contentDescription = "Add custom emoji from files" },
                     contentAlignment = Alignment.Center) {
                     if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = c.secondary, strokeWidth = 2.dp)
-                    else Icon(ImageVector.vectorResource(R.drawable.ic_plus_ios), contentDescription = null, tint = c.secondary, modifier = Modifier.size(20.dp))
+                    else Icon(ImageVector.cachedVector(R.drawable.ic_plus_ios), contentDescription = null, tint = c.secondary, modifier = Modifier.size(20.dp))
                 }
             }
         }
@@ -91,7 +91,7 @@ fun PickMark(on: Boolean) {
     Box(Modifier.size(48.dp)) {
         Box(Modifier.matchParentSize().clip(CircleShape).background(c.accent.copy(alpha = 0.18f)).border(2.dp, c.accent, CircleShape))
         Box(Modifier.align(Alignment.BottomEnd).size(16.dp).clip(CircleShape).background(c.accent), contentAlignment = Alignment.Center) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = "Chosen", tint = Color.White, modifier = Modifier.size(11.dp))
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), contentDescription = "Chosen", tint = Color.White, modifier = Modifier.size(11.dp))
         }
     }
 }

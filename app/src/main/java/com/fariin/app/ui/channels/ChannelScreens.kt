@@ -16,7 +16,7 @@ import androidx.compose.ui.draw.drawWithContent
 import com.fariin.app.R
 import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.graphics.asImageBitmap
@@ -698,7 +698,7 @@ private fun TypeRow(title: String, selected: Boolean, onClick: () -> Unit) {
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
-        if (selected) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = "Selected", tint = c.label, modifier = Modifier.size(18.dp))
+        if (selected) Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), contentDescription = "Selected", tint = c.label, modifier = Modifier.size(18.dp))
     }
 }
 

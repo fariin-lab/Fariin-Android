@@ -49,7 +49,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -248,7 +248,7 @@ internal fun LocationCardMap(loc: CardRules.Location, approx: Boolean, width: Dp
             )
             Box(Modifier.fillMaxSize().pointerInput(Unit) {})
         } else {
-            Icon(ImageVector.vectorResource(R.drawable.ic_location), "Map preview", tint = c.red, modifier = Modifier.size(30.dp))
+            Icon(ImageVector.cachedVector(R.drawable.ic_location), "Map preview", tint = c.red, modifier = Modifier.size(30.dp))
         }
     }
 }
@@ -274,17 +274,17 @@ internal fun LocationMapPage(loc: CardRules.Location, approx: Boolean, onDismiss
                 map = m
                 m.markSpot(spot, approx, density)
             } else MapsMissingNote(Modifier.align(Alignment.Center))
-            FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", { motion.close() },
+            FloatingIcon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Close", { motion.close() },
                 Modifier.padding(start = 12.dp, top = SheetHandleStrip), circle = true)
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 12.dp)) {
-                if (ok) FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_location_fill), "Show the place", {
+                if (ok) FloatingIcon(ImageVector.cachedVector(R.drawable.ic_sf_location_fill), "Show the place", {
                     map?.animateCamera(CameraUpdateFactory.newLatLngZoom(spot, zoom), 400, null)
                 }, Modifier.align(Alignment.End).padding(bottom = 10.dp), circle = true)
                 Column(Modifier.fillMaxWidth().shadow(12.dp, RoundedCornerShape(22.dp)).clip(RoundedCornerShape(22.dp))
                     .background(c.card).padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(36.dp).clip(CircleShape).background(c.red), contentAlignment = Alignment.Center) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_location), null, tint = Color.White, modifier = Modifier.size(20.dp))
+                            Icon(ImageVector.cachedVector(R.drawable.ic_location), null, tint = Color.White, modifier = Modifier.size(20.dp))
                         }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
@@ -296,8 +296,8 @@ internal fun LocationMapPage(loc: CardRules.Location, approx: Boolean, onDismiss
                     }
                     Spacer(Modifier.height(14.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        PageButton("Directions", ImageVector.vectorResource(R.drawable.ic_sf_directions), filled = true, Modifier.weight(1f)) { openDirections(ctx, loc) }
-                        PageButton("Copy", ImageVector.vectorResource(R.drawable.ic_sf_doc_on_doc), filled = false, Modifier.weight(1f)) { copyCoordinates(ctx, loc) }
+                        PageButton("Directions", ImageVector.cachedVector(R.drawable.ic_sf_directions), filled = true, Modifier.weight(1f)) { openDirections(ctx, loc) }
+                        PageButton("Copy", ImageVector.cachedVector(R.drawable.ic_sf_doc_on_doc), filled = false, Modifier.weight(1f)) { copyCoordinates(ctx, loc) }
                     }
                 }
             }

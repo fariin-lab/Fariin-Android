@@ -6,7 +6,7 @@ import com.fariin.app.ui.settings.BarPage
 import com.fariin.app.ui.components.underBar
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -199,9 +199,9 @@ private fun StorySheet(
                 Box(Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp).size(40.dp, 5.dp).clip(CircleShape).background(c.secondary.copy(alpha = 0.35f)))
                 // iOS inline bar: the X in its round glass button at the start, the title in the middle.
                 Box(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 12.dp)) {
-                    if (onBackArrow != null) com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_back_arrow), "Back",
+                    if (onBackArrow != null) com.fariin.app.ui.components.FloatingIcon(ImageVector.cachedVector(R.drawable.ic_back_arrow), "Back",
                         onClick = onBackArrow, modifier = Modifier.align(Alignment.CenterStart), circle = true)
-                    else com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", onClick = { dismiss() },
+                    else com.fariin.app.ui.components.FloatingIcon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Close", onClick = { dismiss() },
                         modifier = Modifier.align(Alignment.CenterStart), circle = true)
                     Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
                 }
@@ -274,7 +274,7 @@ private fun EmojiSheet(onPick: (String) -> Unit, onDismiss: () -> Unit) {
 @Composable
 private fun Tick(on: Boolean) {
     val c = Fariin.colors
-    Icon(if (on) ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle_fill) else ImageVector.vectorResource(R.drawable.ic_sf_circle), contentDescription = if (on) "Selected" else null,
+    Icon(if (on) ImageVector.cachedVector(R.drawable.ic_sf_checkmark_circle_fill) else ImageVector.cachedVector(R.drawable.ic_sf_circle), contentDescription = if (on) "Selected" else null,
         tint = if (on) c.label else c.secondary)  // iOS: the chosen tick is black (white in dark mode)
 }
 
@@ -326,7 +326,7 @@ fun SelectViewersPage(
                         Spacer(Modifier.width(6.dp))
                         Text(p.name.ifEmpty { "Fariin user" }, color = c.label, fontSize = 14.sp, maxLines = 1)
                         Spacer(Modifier.width(4.dp))
-                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Remove", tint = c.secondary, modifier = Modifier.size(14.dp))
+                        Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Remove", tint = c.secondary, modifier = Modifier.size(14.dp))
                     }
                 }
             }
@@ -464,7 +464,7 @@ fun CustomStoryDetailPage(id: String, people: List<StoryPerson>, onBack: () -> U
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Box(Modifier.size(36.dp).clip(CircleShape).background(c.fieldFill), contentAlignment = Alignment.Center) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_plus_ios), contentDescription = null, tint = c.label, modifier = Modifier.size(20.dp))
+                            Icon(ImageVector.cachedVector(R.drawable.ic_plus_ios), contentDescription = null, tint = c.label, modifier = Modifier.size(20.dp))
                         }
                         Spacer(Modifier.width(12.dp))
                         Text("Add Viewers", fontSize = 17.sp, color = c.label)
@@ -473,7 +473,7 @@ fun CustomStoryDetailPage(id: String, people: List<StoryPerson>, onBack: () -> U
                     for ((i, p) in viewers.withIndex()) {
                         PersonRow(p.name.ifEmpty { "Fariin user" }, p.photo, last = i == viewers.lastIndex, trailing = {
                             IconButton(onClick = { StoryPrivacyStore.updateCustom(a.copy(members = a.members - p.uid)) }) {
-                                Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Remove ${p.name}", tint = c.secondary)
+                                Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Remove ${p.name}", tint = c.secondary)
                             }
                         }, onClick = null)
                     }
@@ -541,14 +541,14 @@ fun NewAudienceButton(canAddCustom: Boolean, onCustom: () -> Unit, onOneTime: ((
     Box {
         Row(Modifier.clip(CircleShape).background(c.card).clickable { open = true }.padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_plus_ios), contentDescription = null, tint = c.label, modifier = Modifier.size(14.dp))
+            Icon(ImageVector.cachedVector(R.drawable.ic_plus_ios), contentDescription = null, tint = c.label, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(4.dp))
             Text("New", color = c.label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         }
         GlassDropdown(expanded = open, onDismissRequest = { open = false }) {
             NewItem("New Custom Story", "Visible only to specific people.", painterResource(R.drawable.ic_story_folder), canAddCustom) { open = false; onCustom() }
-            NewItem("Groups & Channels", "Post to a group or channel you run.", rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members)), onGroup != null) { open = false; onGroup?.invoke() }
-            NewItem("One-Time Story", "Can only be viewed once by each recipient.", rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_flame)), onOneTime != null) { open = false; onOneTime?.invoke() }
+            NewItem("Groups & Channels", "Post to a group or channel you run.", rememberVectorPainter(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_gs_members)), onGroup != null) { open = false; onGroup?.invoke() }
+            NewItem("One-Time Story", "Can only be viewed once by each recipient.", rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_sf_flame)), onOneTime != null) { open = false; onOneTime?.invoke() }
         }
     }
 }
@@ -736,17 +736,17 @@ fun ShareStoryAudiencePage(
                     var n = 0
                     if (oneTimeActive) {
                         n++
-                        AudienceRow({ CircleBadge(Color(0xFFFF9500), rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_flame_fill))) }, "One-Time Story",
+                        AudienceRow({ CircleBadge(Color(0xFFFF9500), rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_sf_flame_fill))) }, "One-Time Story",
                             if (oneTime.size == 1) "1 person · viewed once" else "${oneTime.size} people · viewed once",
                             on = true, last = n == rows) { oneTimePicking = true }
                     }
                     n++
-                    AudienceRow({ if (myPhoto != null) Avatar(myPhoto, 40.dp) else CircleBadge(c.blue, rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_globe))) },
+                    AudienceRow({ if (myPhoto != null) Avatar(myPhoto, 40.dp) else CircleBadge(c.blue, rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_sf_globe))) },
                         "Everyone", StoryPrivacyRules.everyoneSubtitle(), on = choice == StoryAudienceChoice.EVERYONE, last = n == rows) {
                         tapBuiltIn(StoryAudienceChoice.EVERYONE)
                     }
                     n++
-                    AudienceRow({ CircleBadge(Color(0xFFFF9500), rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_person2_fill))) },
+                    AudienceRow({ CircleBadge(Color(0xFFFF9500), rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_sf_person2_fill))) },
                         "My Chats", StoryPrivacyRules.myChatsSubtitle(myFriends), on = choice == StoryAudienceChoice.MY_CHATS, last = n == rows) {
                         tapBuiltIn(StoryAudienceChoice.MY_CHATS)
                     }

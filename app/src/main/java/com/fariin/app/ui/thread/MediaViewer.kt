@@ -107,7 +107,7 @@ import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.min
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 
 /** What the full-screen viewer shows. */
@@ -474,7 +474,7 @@ private fun ViewerBody(
         if (page.isVideo && chromeHidden && !video.playing && video.player != null) {
             Box(Modifier.align(Alignment.Center).size(92.dp).floating(CircleShape).clickable { video.togglePlay() },
                 contentAlignment = Alignment.Center) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), "Play", tint = Fariin.colors.label, modifier = Modifier.size(40.dp))
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_play_fill), "Play", tint = Fariin.colors.label, modifier = Modifier.size(40.dp))
             }
         }
     }
@@ -587,7 +587,7 @@ private fun ViewerHeader(title: String, date: String, video: Boolean, onBack: ()
         // Nothing to offer, no ⋯ (an empty menu opened as a thin bar, owner 2026-11-13); the room is kept.
         if (!hasMenu) { Spacer(Modifier.size(44.dp)); return@Row }
         Box {
-            FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), "More", onClick = { open = true }, circle = true)
+            FloatingIcon(ImageVector.cachedVector(R.drawable.ic_more_ios), "More", onClick = { open = true }, circle = true)
             GlassDropdown(open, onDismissRequest = { open = false }, shape = FariinMenu.shape, border = FariinMenu.border,
                 containerColor = FariinMenu.container) { menu { open = false } }
         }

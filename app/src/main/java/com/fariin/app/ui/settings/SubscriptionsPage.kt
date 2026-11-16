@@ -38,7 +38,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -97,7 +97,7 @@ internal fun SubscriptionsPage(pop: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 // The star alone, in the iOS gradient.
                 val gradient = Brush.linearGradient(listOf(Color(0xFF7B61FF), Color(0xFF0A84FF), Color(0xFF2BD2C9)))
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_star_fill), contentDescription = null, tint = Color.White,
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_star_fill), contentDescription = null, tint = Color.White,
                     modifier = Modifier.size(72.dp).graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
                         .drawWithContent { drawContent(); drawRect(gradient, blendMode = BlendMode.SrcIn) })
                 Text("Fariin Plus", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = c.label)
@@ -146,7 +146,7 @@ private fun PlusFeatureSheet(f: PlusFeature, onDismiss: () -> Unit) {
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
                 .onSizeChanged { if (it.height > 0) contentH = it.height }.padding(horizontal = 28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(ImageVector.vectorResource(f.icon), contentDescription = null, tint = c.label,
+                Icon(ImageVector.cachedVector(f.icon), contentDescription = null, tint = c.label,
                     modifier = Modifier.padding(top = 64.dp).size(52.dp))
                 Text(f.title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label,
                     textAlign = TextAlign.Center, modifier = Modifier.padding(top = 16.dp))
@@ -156,7 +156,7 @@ private fun PlusFeatureSheet(f: PlusFeature, onDismiss: () -> Unit) {
                     modifier = Modifier.padding(top = 32.dp, bottom = 20.dp))
             }
             Box(Modifier.fillMaxWidth().height(28.dp).sheetDrag(motion))
-            FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", onClick = { motion.close() },
+            FloatingIcon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Close", onClick = { motion.close() },
                 modifier = Modifier.align(Alignment.TopEnd).padding(12.dp), circle = true)
         }
     }

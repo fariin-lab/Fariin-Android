@@ -3,7 +3,7 @@ package com.fariin.app.ui.glow
 import com.fariin.app.ui.components.GlassDropdown
 import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -143,7 +143,7 @@ fun GlowUnavailable(title: String, body: String, icon: (@Composable () -> Unit)?
 @Composable
 fun GlowCouldNotLoad(onRetry: () -> Unit) = GlowUnavailable(
     "Could not load", "Check your connection and try again.",
-    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_wifi_slash), contentDescription = null, tint = Fariin.colors.secondary, modifier = Modifier.size(44.dp)) },
+    icon = { Icon(ImageVector.cachedVector(R.drawable.ic_sf_wifi_slash), contentDescription = null, tint = Fariin.colors.secondary, modifier = Modifier.size(44.dp)) },
     action = "Try Again", onAction = onRetry,
 )
 
@@ -169,7 +169,7 @@ fun GlowIntroSheet(name: String, onGlow: () -> Unit, onDismiss: () -> Unit) {
                 Box(Modifier.align(Alignment.TopEnd).padding(16.dp).size(32.dp).clip(CircleShape)
                     .background(c.label.copy(alpha = 0.12f)).clickable { close(onDismiss) },
                     contentAlignment = Alignment.Center) {
-                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = c.label, modifier = Modifier.size(16.dp))
+                    Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = c.label, modifier = Modifier.size(16.dp))
                 }
             }
             Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 22.dp),

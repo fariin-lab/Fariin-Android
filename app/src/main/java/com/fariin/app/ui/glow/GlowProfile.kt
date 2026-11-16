@@ -4,7 +4,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.draw.blur
 import com.fariin.app.R
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
@@ -258,7 +258,7 @@ private fun StatsCard(glowers: Int, glowing: Int, faces: List<GlowPerson>, modif
             Text(GlowRules.byLine(faces.map { it.name }), fontSize = 15.sp, color = Secondary, maxLines = 1)
         }
         Spacer(Modifier.width(4.dp))
-        Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), contentDescription = null, tint = Secondary, modifier = Modifier.size(18.dp))
+        Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_right), contentDescription = null, tint = Secondary, modifier = Modifier.size(18.dp))
     }
 }
 
@@ -296,7 +296,7 @@ private fun PostedCard(state: GlowLoad<List<PostedStory>>, onSeeAll: () -> Unit,
             if (rows.isNotEmpty()) Row(Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onSeeAll).padding(4.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Text("See All", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Label)
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), contentDescription = null, tint = Label, modifier = Modifier.size(16.dp))
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_right), contentDescription = null, tint = Label, modifier = Modifier.size(16.dp))
             }
         }
         when {
@@ -324,13 +324,13 @@ fun PostedTile(s: PostedStory, onClick: () -> Unit) {
             Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(52.dp)
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.45f)))))
             Row(Modifier.align(Alignment.BottomStart).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views), contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_views), contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(4.dp))
                 Text(GlowRules.countShort(v), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
             }
         }
         if (s.isVideo) Box(Modifier.align(Alignment.TopEnd).padding(8.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)).padding(6.dp)) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_play_fill), contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
         }
     }
 }

@@ -20,7 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -47,12 +47,12 @@ fun SheetPage(
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         Box(Modifier.fillMaxWidth().sheetDrag(motion).padding(top = 8.dp).height(64.dp).padding(horizontal = 16.dp)) {
             Box(Modifier.align(Alignment.CenterStart).size(44.dp).floating(CircleShape).clickable(onClickLabel = "Close") { motion.close() },
-                contentAlignment = Alignment.Center) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", tint = c.label) }
+                contentAlignment = Alignment.Center) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Close", tint = c.label) }
             Text(title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.align(Alignment.Center).padding(horizontal = 56.dp))
             if (onDone != null) Box(Modifier.align(Alignment.CenterEnd).size(44.dp).floating(CircleShape)
                 .clickable(enabled = doneEnabled, onClickLabel = "Done") { onDone() }, contentAlignment = Alignment.Center) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), "Done",
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), "Done",
                     tint = if (doneEnabled) c.label else c.label.copy(alpha = 0.35f))
             }
         }

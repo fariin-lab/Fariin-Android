@@ -2,7 +2,7 @@ package com.fariin.app.ui.glow
 
 import com.fariin.app.ui.components.GlassDropdown
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -110,7 +110,7 @@ fun GlowOverflow(door: GlowDoor, more: @Composable (close: () -> Unit) -> Unit =
     var open by remember { mutableStateOf(false) }
     val glowing = s.known && s.glowing.contains(door.uid)
     Box {
-        FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More", onClick = { open = true })
+        FloatingIcon(ImageVector.cachedVector(R.drawable.ic_more_ios), contentDescription = "More", onClick = { open = true })
         GlassDropdown(open, onDismissRequest = { open = false }, shape = FariinMenu.shape, border = FariinMenu.border, containerColor = c.card) {
             if (glowing) DropdownMenuItem(text = { Text("Remove Glowing", color = c.red) },
                 onClick = { open = false; door.remove() }, leadingIcon = { GlowMark(20.dp, filled = true, tint = c.red) })

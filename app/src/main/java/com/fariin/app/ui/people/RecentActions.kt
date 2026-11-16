@@ -2,7 +2,7 @@ package com.fariin.app.ui.people
 
 import com.fariin.app.ui.settings.BarPage
 
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import android.text.format.DateFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -150,7 +150,7 @@ internal fun RecentActionsPage(cid: String, me: String, onBack: () -> Unit) {
     val shown = AdminLog.shown(events, kinds, actors)
 
     BarPage("Recent Actions", onBack, action = {
-            FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_line3_decrease), if (filtering) "Filter, on" else "Filter",
+            FloatingIcon(ImageVector.cachedVector(R.drawable.ic_sf_line3_decrease), if (filtering) "Filter, on" else "Filter",
                 onClick = { if (events.isNotEmpty()) showFilter = true },
                 tint = when { events.isEmpty() -> c.tertiary; filtering -> c.accent; else -> c.label },
                 modifier = Modifier.padding(end = 8.dp))
@@ -162,17 +162,17 @@ internal fun RecentActionsPage(cid: String, me: String, onBack: () -> Unit) {
                 when {
                     loading && events.isEmpty() -> item { RecentActionsSkeleton() }
                     failure != null && events.isEmpty() -> item {
-                        EmptyState(rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_arrow_clockwise)), "Couldn't Load", failure ?: "", "Try Again") {
+                        EmptyState(rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_sf_arrow_clockwise)), "Couldn't Load", failure ?: "", "Try Again") {
                             scope.launch { load(false) }
                         }
                     }
                     events.isEmpty() -> item {
-                        EmptyState(rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_clock_arrow)), "No Recent Actions",
+                        EmptyState(rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_sf_clock_arrow)), "No Recent Actions",
                             "What the owner and admins change in this group shows here.")
                     }
                     shown.isEmpty() -> {
                         item {
-                            EmptyState(rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_line3_decrease)), "No Matching Actions",
+                            EmptyState(rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_sf_line3_decrease)), "No Matching Actions",
                                 if (next == null) "Nothing here matches the filter." else "Nothing loaded so far matches the filter.",
                                 "Show All Actions") { kinds = null; actors = null }
                         }
@@ -279,25 +279,25 @@ private fun DetailBlock(d: AdminLog.Detail, groupPhoto: String?) {
 /** The kind of action in the face's small badge (iOS typeIcon). */
 @androidx.compose.runtime.Composable
 private fun typeIcon(e: AdminLog.Event): ImageVector = when (e.type) {
-    "member_added" -> ImageVector.vectorResource(R.drawable.ic_add_member)
-    "member_removed" -> ImageVector.vectorResource(R.drawable.ic_sf_person_minus)
-    "member_unbanned", "join_approved" -> ImageVector.vectorResource(R.drawable.ic_sf_person_checkmark)
-    "join_denied" -> ImageVector.vectorResource(R.drawable.ic_sf_person_slash)
-    "admin_added", "admin_rights" -> ImageVector.vectorResource(com.fariin.app.R.drawable.ic_star_outline)
-    "admin_removed" -> ImageVector.vectorResource(R.drawable.ic_sf_shield_slash)
-    "owner_changed" -> ImageVector.vectorResource(R.drawable.ic_crown)
-    "restricted" -> ImageVector.vectorResource(R.drawable.ic_sf_hand_raised)
-    "unrestricted" -> ImageVector.vectorResource(R.drawable.ic_sf_hand_raised)
-    "roles" -> ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sticker)
-    "info" -> if (e.fields == listOf("photo")) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera) else ImageVector.vectorResource(R.drawable.ic_sf_pencil)
-    "settings" -> ImageVector.vectorResource(R.drawable.ic_sf_gear)
-    "pinned", "unpinned" -> ImageVector.vectorResource(R.drawable.ic_pin_menu)
-    "link_created", "link_edited", "link_revoked", "link_deleted", "links_reset" -> ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)
-    "username_set" -> ImageVector.vectorResource(R.drawable.ic_sf_at)
-    "made_private" -> ImageVector.vectorResource(R.drawable.ic_sf_lock)
-    "group_ended" -> ImageVector.vectorResource(R.drawable.ic_sf_xmark)
-    "fariin_action" -> ImageVector.vectorResource(R.drawable.ic_sf_checkmark_shield)
-    else -> ImageVector.vectorResource(R.drawable.ic_sf_clock)
+    "member_added" -> ImageVector.cachedVector(R.drawable.ic_add_member)
+    "member_removed" -> ImageVector.cachedVector(R.drawable.ic_sf_person_minus)
+    "member_unbanned", "join_approved" -> ImageVector.cachedVector(R.drawable.ic_sf_person_checkmark)
+    "join_denied" -> ImageVector.cachedVector(R.drawable.ic_sf_person_slash)
+    "admin_added", "admin_rights" -> ImageVector.cachedVector(com.fariin.app.R.drawable.ic_star_outline)
+    "admin_removed" -> ImageVector.cachedVector(R.drawable.ic_sf_shield_slash)
+    "owner_changed" -> ImageVector.cachedVector(R.drawable.ic_crown)
+    "restricted" -> ImageVector.cachedVector(R.drawable.ic_sf_hand_raised)
+    "unrestricted" -> ImageVector.cachedVector(R.drawable.ic_sf_hand_raised)
+    "roles" -> ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sticker)
+    "info" -> if (e.fields == listOf("photo")) ImageVector.cachedVector(com.fariin.app.R.drawable.ic_camera) else ImageVector.cachedVector(R.drawable.ic_sf_pencil)
+    "settings" -> ImageVector.cachedVector(R.drawable.ic_sf_gear)
+    "pinned", "unpinned" -> ImageVector.cachedVector(R.drawable.ic_pin_menu)
+    "link_created", "link_edited", "link_revoked", "link_deleted", "links_reset" -> ImageVector.cachedVector(com.fariin.app.R.drawable.ic_link_copy)
+    "username_set" -> ImageVector.cachedVector(R.drawable.ic_sf_at)
+    "made_private" -> ImageVector.cachedVector(R.drawable.ic_sf_lock)
+    "group_ended" -> ImageVector.cachedVector(R.drawable.ic_sf_xmark)
+    "fariin_action" -> ImageVector.cachedVector(R.drawable.ic_sf_checkmark_shield)
+    else -> ImageVector.cachedVector(R.drawable.ic_sf_clock)
 }
 
 @Composable
@@ -376,7 +376,7 @@ private fun RecentActionsFilterSheet(people: List<String>, startKinds: Set<Admin
     val canApply = kinds.isNotEmpty() && (people.isEmpty() || actors.isNotEmpty())
     ModalBottomSheet(onDismissRequest = onClose, sheetState = sheet, containerColor = c.bgSecondary) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", onClick = onClose)
+            FloatingIcon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Close", onClick = onClose)
             Text("Filter", style = MaterialTheme.typography.titleLarge, color = c.label, textAlign = TextAlign.Center,
                 modifier = Modifier.weight(1f))
             com.fariin.app.ui.components.FloatingTextAction("Done", enabled = canApply) {
@@ -417,9 +417,9 @@ private fun kindIcon(k: AdminLog.Kind): Painter = when (k) {
     AdminLog.Kind.RESTRICTIONS -> painterResource(R.drawable.ic_gs_banned)
     AdminLog.Kind.ADMINS -> painterResource(R.drawable.ic_gs_admins)
     AdminLog.Kind.INFO -> painterResource(R.drawable.ic_gs_permissions)
-    AdminLog.Kind.LINKS -> rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy))
-    AdminLog.Kind.PINS -> rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_pin_menu))
-    AdminLog.Kind.FARIIN -> rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_shield))
+    AdminLog.Kind.LINKS -> rememberVectorPainter(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_link_copy))
+    AdminLog.Kind.PINS -> rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_pin_menu))
+    AdminLog.Kind.FARIIN -> rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_sf_checkmark_shield))
 }
 
 @Composable
@@ -440,7 +440,7 @@ private fun CheckRow(on: Boolean, last: Boolean, onClick: () -> Unit, label: @Co
         verticalAlignment = Alignment.CenterVertically) {
         label()
         Spacer(Modifier.width(8.dp))
-        Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), if (on) "Selected" else null, tint = if (on) c.blue else androidx.compose.ui.graphics.Color.Transparent,
+        Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), if (on) "Selected" else null, tint = if (on) c.blue else androidx.compose.ui.graphics.Color.Transparent,
             modifier = Modifier.size(20.dp))
     }
     if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))

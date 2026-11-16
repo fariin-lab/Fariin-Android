@@ -2,7 +2,7 @@ package com.fariin.app.ui.glow
 
 import com.fariin.app.ui.components.GlassDropdown
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -98,7 +98,7 @@ fun GlowPeopleListPage(title: String, startOnGlowing: Boolean = false, onOpenPer
                     when {
                         rows.isEmpty() && l.value.isNotEmpty() -> GlowUnavailable("No Results for \"${search.trim()}\"",
                             "Check the spelling or try a new search.",
-                            icon = { Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), null, tint = c.secondary, modifier = Modifier.size(44.dp)) })
+                            icon = { Icon(ImageVector.cachedVector(R.drawable.ic_search_ios), null, tint = c.secondary, modifier = Modifier.size(44.dp)) })
                         rows.isEmpty() -> GlowUnavailable(side,
                             if (tab == 0) "When somebody gives you a Glow, they appear here and in your Stories."
                             else "Open somebody's profile and choose Glow to follow their stories.",
@@ -146,7 +146,7 @@ private fun PersonRow(p: GlowPerson, glowersSide: Boolean, glowing: Boolean, onO
             var open by remember { mutableStateOf(false) }
             Box {
                 Box(Modifier.size(40.dp).clip(CircleShape).clickable { open = true }, contentAlignment = Alignment.Center) {
-                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Remove this Glower", tint = c.secondary, modifier = Modifier.size(18.dp))
+                    Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Remove this Glower", tint = c.secondary, modifier = Modifier.size(18.dp))
                 }
                 GlassDropdown(open, onDismissRequest = { open = false }, shape = FariinMenu.shape, border = FariinMenu.border, containerColor = c.card) {
                     DropdownMenuItem(text = { Text("Remove this Glower", color = c.red) }, onClick = { open = false; onRemoveGlower() })

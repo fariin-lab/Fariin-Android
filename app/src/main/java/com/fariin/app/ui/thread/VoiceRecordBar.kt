@@ -49,7 +49,7 @@ import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.floor
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 
 /**
@@ -65,9 +65,9 @@ internal fun LockTarget(progress: Float, modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        Icon(if (progress >= 1f) ImageVector.vectorResource(R.drawable.ic_sf_lock_fill) else ImageVector.vectorResource(R.drawable.ic_sf_lock_open_fill), contentDescription = "Slide up to lock",
+        Icon(if (progress >= 1f) ImageVector.cachedVector(R.drawable.ic_sf_lock_fill) else ImageVector.cachedVector(R.drawable.ic_sf_lock_open_fill), contentDescription = "Slide up to lock",
             tint = c.label, modifier = Modifier.size(20.dp))
-        Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_up), null, tint = c.secondary.copy(alpha = 1f - progress * 0.7f),
+        Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_up), null, tint = c.secondary.copy(alpha = 1f - progress * 0.7f),
             modifier = Modifier.size(20.dp))
     }
 }
@@ -99,12 +99,12 @@ internal fun LockedVoiceBar(
         verticalAlignment = Alignment.CenterVertically) {
         // The X takes the bar's left end, its touch reaching the edge (iOS: "the touch area is too small").
         Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onCancel), contentAlignment = Alignment.Center) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Delete recording", tint = c.label, modifier = Modifier.size(22.dp))
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Delete recording", tint = c.label, modifier = Modifier.size(22.dp))
         }
         if (reviewing) {
             Box(Modifier.size(36.dp).clip(CircleShape).clickable(enabled = preview.ready, onClick = onTogglePlay),
                 contentAlignment = Alignment.Center) {
-                Icon(if (preview.playing) ImageVector.vectorResource(R.drawable.ic_sf_pause_fill) else ImageVector.vectorResource(R.drawable.ic_sf_play_fill),
+                Icon(if (preview.playing) ImageVector.cachedVector(R.drawable.ic_sf_pause_fill) else ImageVector.cachedVector(R.drawable.ic_sf_play_fill),
                     contentDescription = if (preview.playing) "Pause preview" else "Play preview",
                     tint = c.label, modifier = Modifier.size(24.dp))
             }
@@ -131,7 +131,7 @@ internal fun LockedVoiceBar(
         // Pause while recording, the mic to keep recording while paused (iOS stripControl).
         Box(Modifier.size(34.dp).clip(CircleShape).background(if (reviewing) c.red else c.label.copy(alpha = 0.08f))
             .clickable(onClick = onPauseOrResume), contentAlignment = Alignment.Center) {
-            Icon(if (reviewing) ImageVector.vectorResource(R.drawable.ic_mic) else ImageVector.vectorResource(R.drawable.ic_sf_pause_fill),
+            Icon(if (reviewing) ImageVector.cachedVector(R.drawable.ic_mic) else ImageVector.cachedVector(R.drawable.ic_sf_pause_fill),
                 contentDescription = if (reviewing) "Keep recording" else "Pause and listen back",
                 tint = if (reviewing) Color.White else c.label, modifier = Modifier.size(20.dp))
         }

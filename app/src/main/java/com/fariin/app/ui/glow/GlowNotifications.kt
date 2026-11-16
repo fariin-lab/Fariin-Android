@@ -1,7 +1,7 @@
 package com.fariin.app.ui.glow
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -193,7 +193,7 @@ fun GlowNotificationsPage(
                                 Chip.ALL -> "Glows and reactions to your stories appear here."
                             },
                             icon = {
-                                if (chip == Chip.LOVES) Icon(ImageVector.vectorResource(R.drawable.ic_sf_heart), null, tint = c.label, modifier = Modifier.size(44.dp))
+                                if (chip == Chip.LOVES) Icon(ImageVector.cachedVector(R.drawable.ic_sf_heart), null, tint = c.label, modifier = Modifier.size(44.dp))
                                 else GlowMark(48.dp)
                             },
                         ) else PullToRefreshBox(refreshing, onRefresh = { refreshing = true; reload++ }, modifier = Modifier.fillMaxSize()) {

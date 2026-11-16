@@ -6,7 +6,7 @@ import com.fariin.app.ui.settings.BarPage
 import com.fariin.app.ui.components.underBar
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -82,11 +82,11 @@ fun RestrictedChatPage(cid: String, me: String, them: String, myName: () -> Stri
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text("If this is on, people:", fontSize = 15.sp, color = c.secondary)
                     listOf(
-                        ImageVector.vectorResource(R.drawable.ic_sf_camera_slash) to "Can't take screenshots or record the screen in this chat",
-                        ImageVector.vectorResource(R.drawable.ic_menu_forward) to "Can't forward messages to other chats",
-                        ImageVector.vectorResource(R.drawable.ic_sf_doc_on_doc) to "Can't copy text from this chat",
-                        ImageVector.vectorResource(R.drawable.ic_save_down) to "Can't save or share photos and videos from this chat",
-                        ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album) to "Can't save media from this chat to their gallery automatically",
+                        ImageVector.cachedVector(R.drawable.ic_sf_camera_slash) to "Can't take screenshots or record the screen in this chat",
+                        ImageVector.cachedVector(R.drawable.ic_menu_forward) to "Can't forward messages to other chats",
+                        ImageVector.cachedVector(R.drawable.ic_sf_doc_on_doc) to "Can't copy text from this chat",
+                        ImageVector.cachedVector(R.drawable.ic_save_down) to "Can't save or share photos and videos from this chat",
+                        ImageVector.cachedVector(com.fariin.app.R.drawable.ic_album) to "Can't save media from this chat to their gallery automatically",
                     ).forEach { (icon, text) ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(icon, null, tint = c.label, modifier = Modifier.size(22.dp))

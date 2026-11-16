@@ -1,7 +1,7 @@
 package com.fariin.app.ui.call
 
 import com.fariin.app.ui.components.GlassAlert
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.ui.graphics.vector.ImageVector
 import android.Manifest
 import android.content.Intent
@@ -116,7 +116,7 @@ fun IncomingGroupCallScreen(invite: GroupInvite, onIgnore: () -> Unit, onJoin: (
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(if (invite.video) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_voice), null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+                    Icon(if (invite.video) ImageVector.cachedVector(com.fariin.app.R.drawable.ic_call_video) else ImageVector.cachedVector(com.fariin.app.R.drawable.ic_call_voice), null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(if (invite.video) "Group video call" else "Group call", color = Color.White.copy(alpha = 0.6f), fontSize = 15.sp)
                 }
@@ -128,7 +128,7 @@ fun IncomingGroupCallScreen(invite: GroupInvite, onIgnore: () -> Unit, onJoin: (
                 .border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape).clickable { muted = !muted }
                 .semantics { contentDescription = if (muted) "Mute, on" else "Mute, off" }
                 .padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic_off), null, tint = if (muted) Color.Black else Color.White, modifier = Modifier.size(20.dp))
+                Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_mic_off), null, tint = if (muted) Color.Black else Color.White, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("Mute", color = if (muted) Color.Black else Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             }
@@ -264,7 +264,7 @@ fun CallLobbyScreen(keyText: String, videoFromPath: Boolean, g: GroupCallUi, onL
             Column(Modifier.fillMaxSize().navigationBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Spacer(Modifier.weight(1f))
                 Box(Modifier.size(76.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                    Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_link), null, tint = Color.White, modifier = Modifier.size(30.dp))
+                    Icon(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_link), null, tint = Color.White, modifier = Modifier.size(30.dp))
                 }
                 Spacer(Modifier.height(14.dp))
                 Text("This call link is no longer valid", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
@@ -281,7 +281,7 @@ fun CallLobbyScreen(keyText: String, videoFromPath: Boolean, g: GroupCallUi, onL
                 Text(title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(3.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_link), null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(16.dp))
+                    Icon(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_link), null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
                     Text("Call link", color = Color.White.copy(alpha = 0.9f), fontSize = 15.sp)
                 }
@@ -297,13 +297,13 @@ fun CallLobbyScreen(keyText: String, videoFromPath: Boolean, g: GroupCallUi, onL
                 Spacer(Modifier.height(16.dp))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                LobbyRound(if (showsCamera) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video_off), showsCamera,
+                LobbyRound(if (showsCamera) ImageVector.cachedVector(com.fariin.app.R.drawable.ic_call_video) else ImageVector.cachedVector(com.fariin.app.R.drawable.ic_call_video_off), showsCamera,
                     if (voiceOnly) "Camera unavailable on a voice call" else if (showsCamera) "Turn camera off" else "Turn camera on",
                     enabled = !voiceOnly && !locked, dim = voiceOnly) {
                     if (cameraDenied) ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null)))
                     else cameraOn = !cameraOn
                 }
-                LobbyRound(if (micOn) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic_off), micOn, if (micOn) "Mute" else "Unmute", enabled = !locked) {
+                LobbyRound(if (micOn) ImageVector.cachedVector(com.fariin.app.R.drawable.ic_mic) else ImageVector.cachedVector(com.fariin.app.R.drawable.ic_mic_off), micOn, if (micOn) "Mute" else "Unmute", enabled = !locked) {
                     if (micOn) micOn = false
                     else if (granted(ctx, Manifest.permission.RECORD_AUDIO)) micOn = true
                     else askMic.launch(Manifest.permission.RECORD_AUDIO)
@@ -405,7 +405,7 @@ private fun AnswerButtons(name: String, enabled: Boolean = true, onAnswer: (Bool
             Box(Modifier.size(44.dp).clickable(enabled = enabled) { tap(approve) }
                 .semantics { contentDescription = if (approve) "Let in $name" else "Deny $name" }, contentAlignment = Alignment.Center) {
                 Box(Modifier.size(36.dp).clip(CircleShape).background(tint), contentAlignment = Alignment.Center) {
-                    Icon(if (approve) androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_checkmark) else androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_xmark), null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Icon(if (approve) androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_checkmark) else androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_xmark), null, tint = Color.White, modifier = Modifier.size(18.dp))
                 }
             }
         }
@@ -465,7 +465,7 @@ private fun RequestCard(p: LinkRequest, more: Int, modifier: Modifier, enabled: 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(p.name, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false))
-                        Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_chevron_right), null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Icon(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_chevron_right), null, tint = Color.White, modifier = Modifier.size(16.dp))
                     }
                     Text("Would like to join", color = Color.White, fontSize = 15.sp, maxLines = 1)
                 }
@@ -500,7 +500,7 @@ fun CallLinkBulkRequestsSheet(requests: List<LinkRequest>, onClose: () -> Unit) 
                 Text("${requests.size} waiting", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.align(Alignment.Center))
                 Box(Modifier.align(Alignment.CenterEnd).size(36.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f))
                     .clickable(onClick = onClose).semantics { contentDescription = "Close" }, contentAlignment = Alignment.Center) {
-                    Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_xmark), null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Icon(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_xmark), null, tint = Color.White, modifier = Modifier.size(18.dp))
                 }
             }
             LazyColumn(Modifier.padding(16.dp).clip(RoundedCornerShape(26.dp)).background(Card)) {

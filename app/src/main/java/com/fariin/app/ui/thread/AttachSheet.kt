@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.fariin.app.ui.components.sheetDrag
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import android.net.Uri
 import android.util.Size
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -352,18 +352,18 @@ internal fun AttachSheet(
                 Row(Modifier.align(Alignment.BottomCenter).then(lift).then(barsPad).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(60.dp).sheetGlass(CircleShape, sourceGlass).clickable(onClick = albumButton), contentAlignment = Alignment.Center) {
-                        if (backShown) Icon(ImageVector.vectorResource(R.drawable.ic_back_arrow), "Back", tint = c.label, modifier = Modifier.size(26.dp))
-                        else Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), "Albums", tint = c.label, modifier = Modifier.size(29.dp))
+                        if (backShown) Icon(ImageVector.cachedVector(R.drawable.ic_back_arrow), "Back", tint = c.label, modifier = Modifier.size(26.dp))
+                        else Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_album), "Albums", tint = c.label, modifier = Modifier.size(29.dp))
                     }
                     Spacer(Modifier.weight(1f).widthIn(min = 12.dp))
                     Row(Modifier.height(60.dp).sheetGlass(RoundedCornerShape(30.dp), sourceGlass).padding(horizontal = 6.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                         val w = if (onPoll != null) 58.dp else 72.dp
-                        if (onGif != null) SheetButton("GIF", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gif_tile), w,
+                        if (onGif != null) SheetButton("GIF", ImageVector.cachedVector(com.fariin.app.R.drawable.ic_gif_tile), w,
                             selected = page == SheetPage.GIFS, badge = NewBadgeSpots.ATTACH_GIF) { page = SheetPage.GIFS }
-                        SheetButton("Files", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_file), w, badge = NewBadgeSpots.ATTACH_FILES) { page = SheetPage.FILES }
-                        if (onLocation != null) SheetButton("Location", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_location), w, badge = NewBadgeSpots.ATTACH_LOCATION) { onDismiss(); onLocation() }
-                        if (onPoll != null) SheetButton("Poll", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_poll_tile), w, badge = NewBadgeSpots.ATTACH_POLL) { onDismiss(); onPoll() }
+                        SheetButton("Files", ImageVector.cachedVector(com.fariin.app.R.drawable.ic_file), w, badge = NewBadgeSpots.ATTACH_FILES) { page = SheetPage.FILES }
+                        if (onLocation != null) SheetButton("Location", ImageVector.cachedVector(com.fariin.app.R.drawable.ic_location), w, badge = NewBadgeSpots.ATTACH_LOCATION) { onDismiss(); onLocation() }
+                        if (onPoll != null) SheetButton("Poll", ImageVector.cachedVector(com.fariin.app.R.drawable.ic_poll_tile), w, badge = NewBadgeSpots.ATTACH_POLL) { onDismiss(); onPoll() }
                     }
                 }
             } else {
@@ -396,7 +396,7 @@ internal fun AttachSheet(
                             .clickable { onSendMedia(picked.toList(), caption, viewOnce); motion.close() },
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_up), "Send", tint = Color.White, modifier = Modifier.size(22.dp))
+                        Icon(ImageVector.cachedVector(R.drawable.ic_sf_arrow_up), "Send", tint = Color.White, modifier = Modifier.size(22.dp))
                     }
                 }
             }
@@ -427,7 +427,7 @@ private fun AllowTile(short: Boolean = false, blocked: Boolean = false, onClick:
     val c = Fariin.colors
     Column(Modifier.aspectRatio(if (short) 1f else 2f).background(c.card).clickable(onClick = onClick).padding(10.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), null, tint = c.accent, modifier = Modifier.size(30.dp))
+        Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_album), null, tint = c.accent, modifier = Modifier.size(30.dp))
         Spacer(Modifier.height(6.dp))
         Text(if (short) "Choose more photos" else if (blocked) "Photo access is off. Tap to open Settings"
             else "Allow access to your photos to send them here",
@@ -563,7 +563,7 @@ private fun RecentTile(item: RecentMedia.Item, number: Int, onToggle: () -> Unit
             Row(Modifier.align(Alignment.BottomStart).padding(6.dp).clip(RoundedCornerShape(50))
                 .background(Color.Black.copy(alpha = 0.5f)).padding(horizontal = 6.dp, vertical = 1.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), null, tint = Color.White, modifier = Modifier.size(12.dp))
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_play_fill), null, tint = Color.White, modifier = Modifier.size(12.dp))
                 Text(MediaRules.durationLabel(item.durationMs / 1000.0), color = Color.White, fontSize = 11.sp)
             }
         }

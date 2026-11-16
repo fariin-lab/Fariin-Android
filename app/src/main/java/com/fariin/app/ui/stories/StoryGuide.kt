@@ -1,7 +1,7 @@
 package com.fariin.app.ui.stories
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 import android.content.Context
 import androidx.compose.animation.core.Animatable
@@ -100,7 +100,7 @@ internal fun StoryGuideOverlay(onGotIt: () -> Unit, onExit: () -> Unit) {
             Box(Modifier.fillMaxWidth().padding(top = 12.dp, end = 16.dp), contentAlignment = Alignment.CenterEnd) {
                 Box(Modifier.size(48.dp).clip(CircleShape).background(Color(0xFF1C1C1C)).clickable(onClick = onExit),
                     contentAlignment = Alignment.Center) {
-                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", tint = Color.White, modifier = Modifier.size(22.dp))
+                    Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Close", tint = Color.White, modifier = Modifier.size(22.dp))
                 }
             }
             Spacer(Modifier.weight(1f))
@@ -158,7 +158,7 @@ private fun GuideAnimation(motion: GuideMotion, token: Int) {
             }
             GuideMotion.SWIPE_DOWN -> {
                 PhoneOutline(8.dp)
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_down), null, tint = Color.White.copy(alpha = 0.4f + 0.6f * t.value),
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_arrow_down), null, tint = Color.White.copy(alpha = 0.4f + 0.6f * t.value),
                     modifier = Modifier.size(14.dp).offset(x = 8.dp, y = (-6 + 10 * t.value).dp))
                 HandIcon(Modifier.scale(0.78f).offset(x = (-12).dp, y = (-6 + 14 * t.value).dp))
             }
@@ -168,7 +168,7 @@ private fun GuideAnimation(motion: GuideMotion, token: Int) {
 
 @Composable
 private fun HandIcon(modifier: Modifier) =
-    Icon(ImageVector.vectorResource(R.drawable.ic_sf_hand_point), null, tint = Color.White, modifier = modifier.size(32.dp))
+    Icon(ImageVector.cachedVector(R.drawable.ic_sf_hand_point), null, tint = Color.White, modifier = modifier.size(32.dp))
 
 @Composable
 private fun PhoneOutline(x: androidx.compose.ui.unit.Dp) {

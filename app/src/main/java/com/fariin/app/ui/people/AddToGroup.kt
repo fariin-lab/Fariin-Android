@@ -2,7 +2,7 @@ package com.fariin.app.ui.people
 
 import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -79,7 +79,7 @@ internal fun AddToGroupSheet(api: PeopleApi, uid: String, name: String, onDismis
                 list == null -> com.fariin.app.ui.components.PageLoading(Modifier.fillMaxWidth().height(160.dp))
                 list.isEmpty() -> Column(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members), null, tint = c.secondary, modifier = Modifier.size(40.dp))
+                    Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_gs_members), null, tint = c.secondary, modifier = Modifier.size(40.dp))
                     Text("No Groups", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = c.label)
                     Text("You're not in any groups yet.", fontSize = 15.sp, color = c.secondary)
                 }

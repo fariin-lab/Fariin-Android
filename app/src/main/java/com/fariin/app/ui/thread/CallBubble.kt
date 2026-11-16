@@ -2,7 +2,7 @@ package com.fariin.app.ui.thread
 
 import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -68,10 +68,10 @@ internal fun CallBubble(
     val iconTint = if (look.missedIncoming) red else if (look.mine) Color.White else accent
     val disc = if (look.mine) Color.White.copy(alpha = 0.22f) else (if (look.missedIncoming) red else accent).copy(alpha = 0.14f)
     val icon = when (look.icon) {
-        CallIcon.VIDEO -> ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video)
-        CallIcon.VIDEO_MISSED -> ImageVector.vectorResource(R.drawable.ic_call_video_off)
-        CallIcon.PHONE_IN -> ImageVector.vectorResource(R.drawable.ic_sf_arrow_down_left)
-        CallIcon.PHONE_OUT -> ImageVector.vectorResource(R.drawable.ic_sf_arrow_up_right)
+        CallIcon.VIDEO -> ImageVector.cachedVector(com.fariin.app.R.drawable.ic_call_video)
+        CallIcon.VIDEO_MISSED -> ImageVector.cachedVector(R.drawable.ic_call_video_off)
+        CallIcon.PHONE_IN -> ImageVector.cachedVector(R.drawable.ic_sf_arrow_down_left)
+        CallIcon.PHONE_OUT -> ImageVector.cachedVector(R.drawable.ic_sf_arrow_up_right)
     }
     val maxW = (LocalConfiguration.current.screenWidthDp * 0.7f).dp
     val shape = RoundedCornerShape(16.dp)

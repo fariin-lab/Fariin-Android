@@ -1,7 +1,7 @@
 package com.fariin.app.ui.auth
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -187,7 +187,7 @@ fun RestoreAccountPage(handle: String, dueMs: Long, onRestored: () -> Unit) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(40.dp))
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_clock_arrow), null, tint = c.secondary, modifier = Modifier.size(44.dp))
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_clock_arrow), null, tint = c.secondary, modifier = Modifier.size(44.dp))
             Text("Scheduled for deletion on $dueText", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.secondary,
                 modifier = Modifier.padding(top = 16.dp))
             Text("Everything is still here", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center,

@@ -47,7 +47,7 @@ import com.fariin.app.media.UploadProgress
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 
 /** Whether rings may turn and fill with motion: Power Saving's switch and the system setting. */
@@ -122,7 +122,7 @@ internal fun UploadRing(key: String?, modifier: Modifier = Modifier, onCancel: (
                     style = Stroke(width = w, cap = StrokeCap.Round))
             }
         }
-        if (onCancel != null) Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Cancel upload", tint = Color.White, modifier = Modifier.size(side * 0.34f))
+        if (onCancel != null) Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Cancel upload", tint = Color.White, modifier = Modifier.size(side * 0.34f))
     }
 }
 
@@ -178,9 +178,9 @@ internal fun DownloadBadge(url: String?, state: Fetch, isVideo: Boolean, modifie
                             topLeft = tl, size = Size(r * 2, r * 2), style = Stroke(w, cap = StrokeCap.Round))
                     }
                 }
-                if (showCross) Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Cancel download", tint = Color.White, modifier = Modifier.size(18.dp))
+                if (showCross) Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Cancel download", tint = Color.White, modifier = Modifier.size(18.dp))
             } else {
-                Icon(if (state == Fetch.FAILED) ImageVector.vectorResource(R.drawable.ic_sf_arrow_clockwise) else ImageVector.vectorResource(R.drawable.ic_sf_arrow_down),
+                Icon(if (state == Fetch.FAILED) ImageVector.cachedVector(R.drawable.ic_sf_arrow_clockwise) else ImageVector.cachedVector(R.drawable.ic_sf_arrow_down),
                     if (state == Fetch.FAILED) "Try again" else "Download", tint = Color.White, modifier = Modifier.size(22.dp))
             }
         }

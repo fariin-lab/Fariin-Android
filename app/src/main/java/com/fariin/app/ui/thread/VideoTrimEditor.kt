@@ -89,7 +89,7 @@ import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 
 /**
@@ -244,7 +244,7 @@ internal fun TrimVideo(s: TrimState, active: Boolean, modifier: Modifier = Modif
         // The still waits under the player until its first frame, so the page never shows black.
         if (!(active && firstFrame)) s.poster?.let { Image(it, null, contentScale = ContentScale.Fit, modifier = fit) }
         if (!s.playing && s.scrub == null) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_circle_fill), null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(66.dp))
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_play_circle_fill), null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(66.dp))
         }
     }
 }
@@ -439,7 +439,7 @@ private fun VideoEditorBody(uri: Uri, caption: String, onCaption: (String) -> Un
             Modifier.statusBarsPadding().padding(start = 12.dp, top = 6.dp).size(44.dp).floating()
                 .clickable { onClose() },
             contentAlignment = Alignment.Center,
-        ) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = Color.White) }
+        ) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = Color.White) }
         if (s.trimmed) {
             Box(
                 Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(end = 12.dp, top = 12.dp).height(32.dp)
@@ -478,7 +478,7 @@ private fun VideoEditorBody(uri: Uri, caption: String, onCaption: (String) -> Un
                 }
                 Spacer(Modifier.width(10.dp))
                 Box(Modifier.size(40.dp).clip(CircleShape).background(EditorBlue).clickable { send() }, contentAlignment = Alignment.Center) {
-                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_up), contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
+                    Icon(ImageVector.cachedVector(R.drawable.ic_sf_arrow_up), contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
                 }
             }
         }

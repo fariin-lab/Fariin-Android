@@ -32,7 +32,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -79,7 +79,7 @@ internal fun RequestsIntroSheet(onDismiss: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.padding(top = 30.dp).size(72.dp).clip(CircleShape).background(accent.copy(alpha = 0.14f)),
                     contentAlignment = Alignment.Center) {
-                    Icon(ImageVector.vectorResource(R.drawable.ic_message_request), contentDescription = null,
+                    Icon(ImageVector.cachedVector(R.drawable.ic_message_request), contentDescription = null,
                         tint = accent, modifier = Modifier.size(34.dp))
                 }
                 Text("Message requests", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.label,
@@ -99,7 +99,7 @@ internal fun RequestsIntroSheet(onDismiss: () -> Unit) {
                 }
             }
             Box(Modifier.fillMaxWidth().height(28.dp).sheetDrag(motion))
-            FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", onClick = { motion.close() },
+            FloatingIcon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Close", onClick = { motion.close() },
                 modifier = Modifier.align(Alignment.TopStart).padding(12.dp), circle = true)
         }
     }

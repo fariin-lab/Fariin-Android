@@ -4,7 +4,7 @@ import kotlinx.coroutines.tasks.await
 import com.fariin.app.ui.components.GlassDropdown
 import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 import com.fariin.app.ui.components.isNew
 import com.fariin.app.ui.components.NewCornerPill
@@ -544,13 +544,13 @@ private fun StripThumb(item: StoryItemState, current: Boolean, onTap: () -> Unit
         Box(Modifier.size(44.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF2C2C2E)).clickable(onClick = onTap)
             .then(if (current) Modifier.border(2.dp, Color(0xFF0A84FF), RoundedCornerShape(8.dp)) else Modifier)) {
             pic?.let { Image(it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
-            if (item.isVideo) Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), contentDescription = "Video", tint = Color.White,
+            if (item.isVideo) Icon(ImageVector.cachedVector(R.drawable.ic_sf_play_fill), contentDescription = "Video", tint = Color.White,
                 modifier = Modifier.align(Alignment.BottomStart).padding(2.dp).size(13.dp))
         }
         if (current) Box(Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-6).dp).size(22.dp).clip(CircleShape)
             .clickable(onClickLabel = "Remove", onClick = onRemove), contentAlignment = Alignment.Center) {
             Box(Modifier.size(17.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)), contentAlignment = Alignment.Center) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Remove", tint = Color.White, modifier = Modifier.size(11.dp))
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Remove", tint = Color.White, modifier = Modifier.size(11.dp))
             }
         }
     }
@@ -914,12 +914,12 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
         // Close inside the frame's top corner (iOS).
         if (chrome) Box(Modifier.graphicsLayer { alpha = chromeIn.value }.statusBarsPadding().padding(12.dp).size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.35f))
             .clickable { close() }, contentAlignment = Alignment.Center) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = Color.White)
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = Color.White)
         }
         // A clip's sound, beside the X (iOS keeps it at the top: it only flips a state).
         if (chrome && isVideo && !audience) Box(Modifier.statusBarsPadding().padding(start = 64.dp, top = 12.dp).size(44.dp).clip(CircleShape)
             .background(Color.Black.copy(alpha = 0.35f)).clickable { cur.muted = !cur.muted }, contentAlignment = Alignment.Center) {
-            Icon(if (cur.muted) ImageVector.vectorResource(R.drawable.ic_speaker_off) else ImageVector.vectorResource(R.drawable.ic_speaker_on),
+            Icon(if (cur.muted) ImageVector.cachedVector(R.drawable.ic_speaker_off) else ImageVector.cachedVector(R.drawable.ic_speaker_on),
                 contentDescription = if (cur.muted) "Sound off" else "Sound on", tint = Color.White)
         }
         if (trimming) base.video?.let { v ->
@@ -1008,7 +1008,7 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
                         StoryRules.HOURS.forEach { h ->
                             DropdownMenuItem(
                                 text = { Text("$h Hours") },
-                                trailingIcon = { if (h == hours) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = null) },
+                                trailingIcon = { if (h == hours) Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), contentDescription = null) },
                                 onClick = { captionArmed = false; hours = h; hoursMenu = false; focus.clearFocus(force = true) },
                             )
                         }
@@ -1033,19 +1033,19 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
                     if (isVideo && media.repostOf == null) Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClickLabel = "Trim") {
                         focus.clearFocus(force = true); keyboard?.hide(); trimming = true
                     }, contentAlignment = Alignment.Center) {
-                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_scissors), contentDescription = "Trim",
+                        Icon(ImageVector.cachedVector(R.drawable.ic_sf_scissors), contentDescription = "Trim",
                             tint = if (StoryTrimRules.isTrimmed(cur.trimStart, cur.trimEnd, clipSeconds)) Color(0xFFFFD60A) else Color.White,
                             modifier = Modifier.size(24.dp))
                     }
                     Box(Modifier.size(48.dp).clip(CircleShape).clickable { stickerTray = true }, contentAlignment = Alignment.Center) {
                         Box {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_face_smiling), contentDescription = "Stickers", tint = Color.White, modifier = Modifier.size(24.dp))
+                            Icon(ImageVector.cachedVector(R.drawable.ic_sf_face_smiling), contentDescription = "Stickers", tint = Color.White, modifier = Modifier.size(24.dp))
                             NewCornerPill(isNew(NewBadgeSpots.STORY_EDITOR_STICKERS))
                         }
                     }
                     Box(Modifier.size(48.dp).clip(CircleShape).clickable { openPen() }, contentAlignment = Alignment.Center) {
                         Box {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_scribble), contentDescription = "Draw", tint = Color.White, modifier = Modifier.size(24.dp))
+                            Icon(ImageVector.cachedVector(R.drawable.ic_sf_scribble), contentDescription = "Draw", tint = Color.White, modifier = Modifier.size(24.dp))
                             NewCornerPill(isNew(NewBadgeSpots.STORY_EDITOR_DRAW))
                         }
                     }
@@ -1071,7 +1071,7 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("NEXT", color = Color.Black, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), contentDescription = null, tint = Color.Black, modifier = Modifier.size(22.dp))
+                    Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_right), contentDescription = null, tint = Color.Black, modifier = Modifier.size(22.dp))
                 }
             }
         }

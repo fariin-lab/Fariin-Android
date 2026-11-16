@@ -1,7 +1,7 @@
 package com.fariin.app.security
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 import android.app.KeyguardManager
 import android.hardware.biometrics.BiometricManager
@@ -55,7 +55,7 @@ class LockActivity : ComponentActivity() {
                 val c = Fariin.colors
                 Box(Modifier.fillMaxSize().background(c.bg), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_lock_fill), contentDescription = null, tint = c.label, modifier = Modifier.size(44.dp))
+                        Icon(ImageVector.cachedVector(R.drawable.ic_sf_lock_fill), contentDescription = null, tint = c.label, modifier = Modifier.size(44.dp))
                         Spacer(Modifier.height(16.dp))
                         Text("Fariin is locked", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label)
                         Spacer(Modifier.height(28.dp))

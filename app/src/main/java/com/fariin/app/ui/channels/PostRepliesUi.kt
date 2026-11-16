@@ -2,7 +2,7 @@ package com.fariin.app.ui.channels
 
 import com.fariin.app.ui.components.GlassDropdown
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -793,7 +793,7 @@ internal fun RepliesSheetTop(tab: Int, showReplies: Boolean, s: PostRepliesState
             RepliesAdminMenu(s)
             Spacer(Modifier.width(10.dp))
         }
-        RoundTopButton(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", onClose)
+        RoundTopButton(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Close", onClose)
     }
 }
 
@@ -832,7 +832,7 @@ private fun RepliesAdminMenu(s: PostRepliesState) {
     val c = Fariin.colors
     var open by remember { mutableStateOf(false) }
     Box {
-        RoundTopButton(ImageVector.vectorResource(R.drawable.ic_more_ios), "Reply settings") { open = true }
+        RoundTopButton(ImageVector.cachedVector(R.drawable.ic_more_ios), "Reply settings") { open = true }
         GlassDropdown(open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
             border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
             if (s.may.settings) {
@@ -991,7 +991,7 @@ internal fun RepliesList(s: PostRepliesState, modifier: Modifier) {
                             Modifier.fillMaxWidth().padding(start = 108.dp, bottom = 8.dp)) { s.showMoreAnswers(row.rid) }
                         ReplyItem.PinLabel -> Row(Modifier.padding(start = 16.dp + 40.dp + 24.dp, top = 8.dp),
                             verticalAlignment = Alignment.CenterVertically) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_pin_menu), null, tint = c.secondary, modifier = Modifier.size(12.dp))
+                            Icon(ImageVector.cachedVector(R.drawable.ic_pin_menu), null, tint = c.secondary, modifier = Modifier.size(12.dp))
                             Spacer(Modifier.width(4.dp))
                             Text("Pinned", fontSize = 12.sp, color = c.secondary)
                         }
@@ -1028,7 +1028,7 @@ internal fun RepliesList(s: PostRepliesState, modifier: Modifier) {
                     }
                 }
                 .padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_up), null, tint = c.label, modifier = Modifier.size(16.dp))
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_up), null, tint = c.label, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(4.dp))
                 Text(PostReplyRules.newPill(s.unseenNew), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.label)
             }
@@ -1364,7 +1364,7 @@ internal fun RepliesComposer(s: PostRepliesState) {
                     Text("Editing", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.accent, maxLines = 1,
                         modifier = Modifier.weight(1f))
                     IconButton({ s.cancelEdit() }, Modifier.size(28.dp)) {
-                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Stop editing", tint = c.secondary, modifier = Modifier.size(14.dp))
+                        Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Stop editing", tint = c.secondary, modifier = Modifier.size(14.dp))
                     }
                 }
             }
@@ -1441,7 +1441,7 @@ internal fun RepliesComposer(s: PostRepliesState) {
                             // The keyboard closes after Send (iOS 7c20b4077); the sheet shows the new reply.
                             sendKeyboard?.hide(); sendFocus.clearFocus()
                         }, contentAlignment = Alignment.Center) {
-                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_up), contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
+                        Icon(ImageVector.cachedVector(R.drawable.ic_sf_arrow_up), contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
                     }
                 }
             }

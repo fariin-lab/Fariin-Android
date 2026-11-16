@@ -1,6 +1,6 @@
 package com.fariin.app.ui.call
 
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -100,8 +100,8 @@ fun CallInfoScreen(run: CallRun, me: String, onBack: () -> Unit, onCall: (video:
             }
             Spacer(Modifier.height(20.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Tile(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_voice), "Voice", Modifier.weight(1f)) { onCall(false) }
-                Tile(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video), "Video", Modifier.weight(1f)) { onCall(true) }
+                Tile(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_call_voice), "Voice", Modifier.weight(1f)) { onCall(false) }
+                Tile(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_call_video), "Video", Modifier.weight(1f)) { onCall(true) }
             }
             Spacer(Modifier.height(16.dp))
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(c.fieldFill).padding(14.dp)) {
@@ -110,7 +110,7 @@ fun CallInfoScreen(run: CallRun, me: String, onBack: () -> Unit, onCall: (video:
                     Spacer(Modifier.height(10.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         val missed = e.missedIncoming(me, now)
-                        Icon(when { missed -> androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_arrow_down_left); e.mine(me) -> androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_arrow_up_right); else -> androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_arrow_down_left) },
+                        Icon(when { missed -> androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_arrow_down_left); e.mine(me) -> androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_arrow_up_right); else -> androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_arrow_down_left) },
                             null, tint = if (missed) c.red else c.secondary, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {

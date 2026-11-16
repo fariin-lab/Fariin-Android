@@ -1,6 +1,6 @@
 package com.fariin.app.ui.thread
 
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.clickable
@@ -65,7 +65,7 @@ internal fun GroupWelcomeCard(ui: ThreadUi, onStep: (String) -> Unit, modifier: 
                     kind = com.fariin.app.ui.components.AvatarKind.GROUP)
                 if (canEdit && photo.isNullOrEmpty()) Box(Modifier.align(Alignment.BottomEnd).size(32.dp).floating(CircleShape).clickable { onStep("edit") },
                     contentAlignment = Alignment.Center) {
-                    Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_group_camera), contentDescription = null, tint = c.label, modifier = Modifier.size(16.dp))
+                    Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_group_camera), contentDescription = null, tint = c.label, modifier = Modifier.size(16.dp))
                 }
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -75,9 +75,9 @@ internal fun GroupWelcomeCard(ui: ThreadUi, onStep: (String) -> Unit, modifier: 
             }
         }
         if (canEdit || canAdd) Row {
-            if (canAdd) WelcomeCircle(ImageVector.vectorResource(R.drawable.ic_add_member), "Add Members") { onStep("add") }
-            if (canLink) WelcomeCircle(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy), "Group Link") { onStep("link") }
-            if (canEdit) WelcomeCircle(ImageVector.vectorResource(R.drawable.ic_sf_pencil),
+            if (canAdd) WelcomeCircle(ImageVector.cachedVector(R.drawable.ic_add_member), "Add Members") { onStep("add") }
+            if (canLink) WelcomeCircle(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_link_copy), "Group Link") { onStep("link") }
+            if (canEdit) WelcomeCircle(ImageVector.cachedVector(R.drawable.ic_sf_pencil),
                 if (GroupRules.description(doc).isEmpty()) "Description" else "Edit") { onStep("edit") }
         }
     }

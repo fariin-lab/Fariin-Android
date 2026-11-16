@@ -1,7 +1,7 @@
 package com.fariin.app.ui.files
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 import android.content.Context
 import android.content.Intent
@@ -182,13 +182,13 @@ private fun PdfReader(file: File, name: String, motion: SheetMotion) {
         Row(Modifier.fillMaxWidth().background(c.bgSecondary.copy(alpha = 0.97f)).sheetDrag(motion)
             .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", onClick = { motion.close() })
+            FloatingIcon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Close", onClick = { motion.close() })
             Spacer(Modifier.width(10.dp))
             Text(name, fontSize = 16.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(c.card.copy(alpha = 0.92f))
                     .padding(horizontal = 14.dp, vertical = 8.dp), textAlign = TextAlign.Center)
             Spacer(Modifier.width(10.dp))
-            FloatingIcon(ImageVector.vectorResource(R.drawable.ic_link_share), "Share", onClick = {
+            FloatingIcon(ImageVector.cachedVector(R.drawable.ic_link_share), "Share", onClick = {
                 val i = FileOpener.intentFor(ctx, file, name) ?: return@FloatingIcon
                 val send = Intent(Intent.ACTION_SEND).setType(FileOpener.mimeOf(name))
                     .putExtra(Intent.EXTRA_STREAM, i.data).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)

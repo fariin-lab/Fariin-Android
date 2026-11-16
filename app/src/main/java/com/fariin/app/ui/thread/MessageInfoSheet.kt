@@ -34,7 +34,7 @@ import com.fariin.app.ui.components.SheetCard
 import com.fariin.app.ui.components.SheetShape
 import com.fariin.app.ui.components.sheetFill
 import com.fariin.app.ui.theme.Fariin
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 
 /**
@@ -75,10 +75,10 @@ internal fun MessageInfoSheet(m: Message, ui: ThreadUi, is24h: Boolean, onDismis
                     modifier = Modifier.fillMaxWidth().padding(24.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
             if (split.readBy.isNotEmpty()) item {
-                MemberSection("Read by ${split.readBy.size}", ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle_fill), split.readBy, ui, name)
+                MemberSection("Read by ${split.readBy.size}", ImageVector.cachedVector(R.drawable.ic_sf_checkmark_circle_fill), split.readBy, ui, name)
             }
             if (split.deliveredTo.isNotEmpty()) item {
-                MemberSection("Delivered to ${split.deliveredTo.size}", ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle), split.deliveredTo, ui, name)
+                MemberSection("Delivered to ${split.deliveredTo.size}", ImageVector.cachedVector(R.drawable.ic_sf_checkmark_circle), split.deliveredTo, ui, name)
             }
         }
     }

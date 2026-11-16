@@ -51,7 +51,7 @@ import com.fariin.app.ui.components.floating
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 
 /**
@@ -112,14 +112,14 @@ internal fun ShareWithSheet(me: String, onDismiss: () -> Unit, onSystemShare: ((
         Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(44.dp).floating(CircleShape).clickable { searching = !searching; if (!searching) query = "" },
-                    contentAlignment = Alignment.Center) { Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), "Search", tint = c.label) }
+                    contentAlignment = Alignment.Center) { Icon(ImageVector.cachedVector(R.drawable.ic_search_ios), "Search", tint = c.label) }
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Share with", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = c.label)
                     Text(if (chosen.isEmpty()) "Select chats" else "${chosen.size} selected", fontSize = 14.sp, color = c.secondary)
                 }
                 if (onSystemShare != null) Box(Modifier.size(44.dp).floating(CircleShape).clickable {
                     close { onSystemShare() }
-                }, contentAlignment = Alignment.Center) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_share), "More ways to share", tint = c.label) }
+                }, contentAlignment = Alignment.Center) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_share), "More ways to share", tint = c.label) }
                 else Spacer(Modifier.size(44.dp))
             }
             if (searching) Box(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp).heightIn(min = 44.dp)
@@ -147,7 +147,7 @@ internal fun ShareWithSheet(me: String, onDismiss: () -> Unit, onSystemShare: ((
                             // iOS: a black tick badge (white in dark mode).
                             if (on) Box(Modifier.align(Alignment.BottomEnd).size(24.dp).clip(CircleShape).background(c.label)
                                 .border(2.dp, com.fariin.app.ui.components.sheetFill, CircleShape), contentAlignment = Alignment.Center) {
-                                Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_bold), null, tint = c.bg, modifier = Modifier.size(16.dp))
+                                Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark_bold), null, tint = c.bg, modifier = Modifier.size(16.dp))
                             }
                         }
                         Spacer(Modifier.height(6.dp))

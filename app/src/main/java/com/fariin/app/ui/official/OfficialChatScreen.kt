@@ -3,7 +3,7 @@ package com.fariin.app.ui.official
 import kotlinx.coroutines.tasks.await
 import com.fariin.app.ui.components.floating
 import com.fariin.app.ui.components.GlassAlert
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import android.text.format.DateFormat
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -261,7 +261,7 @@ fun OfficialChatScreen(onBack: () -> Unit, onInfo: (() -> Unit)? = null) {
                             modifier = Modifier.fillMaxWidth().focusRequester(focus))
                     }
                     if (query.isNotEmpty()) androidx.compose.material3.IconButton({ query = "" }) {
-                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Clear", tint = c.label)
+                        Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Clear", tint = c.label)
                     }
                 }
             }
@@ -289,7 +289,7 @@ fun OfficialChatScreen(onBack: () -> Unit, onInfo: (() -> Unit)? = null) {
                     }
                 }
                 // Search and the bell in floating circles, as the chat header's buttons.
-                com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_search_ios), "Search",
+                com.fariin.app.ui.components.FloatingIcon(ImageVector.cachedVector(R.drawable.ic_search_ios), "Search",
                     onClick = { searching = true; query = ""; fromNewest = 0 }, modifier = Modifier.padding(end = 8.dp))
                 // The bell opens the chat's mute menu (iOS OfficialChatInfoView actionButtons, the
                 // profile's Mute): 1 hour to Always, or, muted, until when and Unmute.
@@ -347,22 +347,22 @@ fun OfficialChatScreen(onBack: () -> Unit, onInfo: (() -> Unit)? = null) {
         if (selecting) Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically) {
             androidx.compose.material3.IconButton({ pendingDelete = pickedNotes().map { it.id } }) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), contentDescription = "Delete", tint = c.red)
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_trash), contentDescription = "Delete", tint = c.red)
             }
             Text("${picked.size} Selected", style = MaterialTheme.typography.titleSmall, color = c.label,
                 textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
             androidx.compose.material3.IconButton({ forwardTexts = pickedNotes().map { it.plainText } }) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_menu_forward), contentDescription = "Forward", tint = c.accent)
+                Icon(ImageVector.cachedVector(R.drawable.ic_menu_forward), contentDescription = "Forward", tint = c.accent)
             }
         }
         // The normal chat's up/down and "n of N" (iOS searchNavBar); up is older.
         else if (searching) Row(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically) {
             androidx.compose.material3.IconButton({ fromNewest++ }, enabled = matches.isNotEmpty() && matchIndex > 0) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_up), contentDescription = "Previous")
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_up), contentDescription = "Previous")
             }
             androidx.compose.material3.IconButton({ fromNewest-- }, enabled = matches.isNotEmpty() && matchIndex < matches.size - 1) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_down), contentDescription = "Next")
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_down), contentDescription = "Next")
             }
             Spacer(Modifier.weight(1f))
             if (matches.isNotEmpty() || query.trim().length >= 2)
@@ -384,11 +384,11 @@ fun OfficialChatScreen(onBack: () -> Unit, onInfo: (() -> Unit)? = null) {
 
 @Composable
 private fun kindIcon(k: AnnouncementKind): ImageVector = when (k) {
-    AnnouncementKind.FEATURE -> ImageVector.vectorResource(R.drawable.ic_sf_sparkles)
-    AnnouncementKind.RELEASE -> ImageVector.vectorResource(R.drawable.ic_sf_shippingbox)
-    AnnouncementKind.MAINTENANCE -> ImageVector.vectorResource(R.drawable.ic_sf_wrench)
-    AnnouncementKind.SECURITY -> ImageVector.vectorResource(R.drawable.ic_sf_lock_shield)
-    AnnouncementKind.NEWS -> ImageVector.vectorResource(R.drawable.ic_channel_megaphone)
+    AnnouncementKind.FEATURE -> ImageVector.cachedVector(R.drawable.ic_sf_sparkles)
+    AnnouncementKind.RELEASE -> ImageVector.cachedVector(R.drawable.ic_sf_shippingbox)
+    AnnouncementKind.MAINTENANCE -> ImageVector.cachedVector(R.drawable.ic_sf_wrench)
+    AnnouncementKind.SECURITY -> ImageVector.cachedVector(R.drawable.ic_sf_lock_shield)
+    AnnouncementKind.NEWS -> ImageVector.cachedVector(R.drawable.ic_channel_megaphone)
 }
 
 @Composable
@@ -404,7 +404,7 @@ private fun AnnouncementCard(a: Announcement, time: String, buttons: List<Announ
     // While selecting (ticked not null) a tap or long press ticks the card and its buttons rest.
     Row(verticalAlignment = Alignment.CenterVertically) {
     if (ticked != null) {
-        Icon(if (ticked) ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle_fill) else ImageVector.vectorResource(R.drawable.ic_sf_circle),
+        Icon(if (ticked) ImageVector.cachedVector(R.drawable.ic_sf_checkmark_circle_fill) else ImageVector.cachedVector(R.drawable.ic_sf_circle),
             contentDescription = if (ticked) "Selected" else "Not selected",
             tint = if (ticked) c.blue else c.tertiary,
             modifier = Modifier.padding(end = 10.dp).size(24.dp).clickable(onClick = onToggle))
@@ -456,13 +456,13 @@ private fun AnnouncementCard(a: Announcement, time: String, buttons: List<Announ
         }
         HorizontalDivider(color = c.separator)
         androidx.compose.material3.DropdownMenuItem(text = { Text("Copy") }, onClick = { menu = false; onCopy() },
-            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_doc_on_doc), contentDescription = null) })
+            leadingIcon = { Icon(ImageVector.cachedVector(R.drawable.ic_sf_doc_on_doc), contentDescription = null) })
         androidx.compose.material3.DropdownMenuItem(text = { Text("Forward") }, onClick = { menu = false; onForward() },
-            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_menu_forward), contentDescription = null) })
+            leadingIcon = { Icon(ImageVector.cachedVector(R.drawable.ic_menu_forward), contentDescription = null) })
         androidx.compose.material3.DropdownMenuItem(text = { Text("Select") }, onClick = { menu = false; onSelect() },
-            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle), contentDescription = null) })
+            leadingIcon = { Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark_circle), contentDescription = null) })
         androidx.compose.material3.DropdownMenuItem(text = { Text("Delete", color = c.red) }, onClick = { menu = false; onDelete() },
-            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), contentDescription = null, tint = c.red) })
+            leadingIcon = { Icon(ImageVector.cachedVector(R.drawable.ic_sf_trash), contentDescription = null, tint = c.red) })
     }
     }
     // My reaction as a chip under the card; a tap takes it back.
@@ -512,7 +512,7 @@ fun OfficialRow(view: OfficialChannel.View, onOpen: () -> Unit) {
                     com.fariin.app.ui.components.VerifiedSeal(c.blue, Modifier.size(17.dp), "Official")
                     if (muted) {
                         Spacer(Modifier.width(6.dp))
-                        Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off), contentDescription = "Muted", tint = c.tertiary, modifier = Modifier.size(15.dp))
+                        Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_bell_off), contentDescription = "Muted", tint = c.tertiary, modifier = Modifier.size(15.dp))
                     }
                 }
                 Spacer(Modifier.width(8.dp))

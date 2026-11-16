@@ -81,7 +81,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 
 /**
@@ -530,7 +530,7 @@ private fun ReactionBar(sidePx: Float, heightPx: Float, mine: String?, delayMs: 
         Box(Modifier.size(side).graphicsLayer { alpha = v.value; translationY = rise * (1 - v.value) }.clickable(onClick = onMore),
             contentAlignment = Alignment.Center) {
             Box(Modifier.size(side * 0.84f).clip(CircleShape).background(c.label.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_plus_ios), contentDescription = "More reactions", tint = c.label, modifier = Modifier.size(20.dp))
+                Icon(ImageVector.cachedVector(R.drawable.ic_plus_ios), contentDescription = "More reactions", tint = c.label, modifier = Modifier.size(20.dp))
             }
         }
     }

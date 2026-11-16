@@ -1,7 +1,7 @@
 package com.fariin.app.ui.calls
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -187,7 +187,7 @@ fun NewCallScreen(me: String, chats: List<Conversation>, onBack: () -> Unit, onC
             }
         } else {
             com.fariin.app.ui.components.FloatingTopBar("New Call", onBack = onBack) {
-                com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_search_ios), "Search", onClick = { searching = true })
+                com.fariin.app.ui.components.FloatingIcon(ImageVector.cachedVector(R.drawable.ic_search_ios), "Search", onClick = { searching = true })
             }
         }
         AnimatedVisibility(chosen.isNotEmpty(), enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
@@ -205,7 +205,7 @@ fun NewCallScreen(me: String, chats: List<Conversation>, onBack: () -> Unit, onC
                         .clickable(onClick = onCreateLink).padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(46.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                            Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_link), null, tint = c.accent, modifier = Modifier.size(24.dp))
+                            Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_link), null, tint = c.accent, modifier = Modifier.size(24.dp))
                         }
                         Spacer(Modifier.width(14.dp))
                         Column {
@@ -298,7 +298,7 @@ private fun PickedStrip(chosen: List<CallTarget>, onUnpick: (CallTarget) -> Unit
                         Avatar(t.photo, 52.dp, Modifier.align(Alignment.Center))
                         Box(Modifier.align(Alignment.TopEnd).size(20.dp).clip(CircleShape).background(c.bg).padding(2.dp)
                             .clip(CircleShape).background(c.tertiary), contentAlignment = Alignment.Center) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), null, tint = c.bg, modifier = Modifier.size(11.dp))
+                            Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), null, tint = c.bg, modifier = Modifier.size(11.dp))
                         }
                     }
                     Text(t.name.substringBefore(' ').ifEmpty { t.name }, fontSize = 12.sp, color = c.label, maxLines = 1,
@@ -319,7 +319,7 @@ private fun StripCallButton(icon: Int, label: String, onClick: () -> Unit) {
     val c = Fariin.colors
     Box(Modifier.size(44.dp).clip(CircleShape).background(c.accent).clickable(onClick = onClick)
         .semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
-        Icon(ImageVector.vectorResource(icon), null, tint = c.onAccent, modifier = Modifier.size(22.dp))
+        Icon(ImageVector.cachedVector(icon), null, tint = c.onAccent, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -336,7 +336,7 @@ private fun PersonPickRow(t: CallTarget, on: Boolean, onToggle: () -> Unit) {
         Spacer(Modifier.width(12.dp))
         val ring = Modifier.size(24.dp).clip(CircleShape)
         if (on) Box(ring.background(c.accent), contentAlignment = Alignment.Center) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = c.onAccent, modifier = Modifier.size(16.dp))
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), null, tint = c.onAccent, modifier = Modifier.size(16.dp))
         } else Box(ring.border(1.5.dp, c.tertiary, CircleShape))
     }
 }
@@ -350,10 +350,10 @@ private fun TargetRow(t: CallTarget, onVoice: () -> Unit, onVideo: () -> Unit) {
         Spacer(Modifier.width(14.dp))
         Text(t.name, fontSize = 17.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         IconButton(onClick = onVoice) {
-            Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_voice), if (t.groupCid != null) "Group voice call" else "Voice call", tint = c.accent)
+            Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_call_voice), if (t.groupCid != null) "Group voice call" else "Voice call", tint = c.accent)
         }
         IconButton(onClick = onVideo) {
-            Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video), if (t.groupCid != null) "Group video call" else "Video call", tint = c.accent)
+            Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_call_video), if (t.groupCid != null) "Group video call" else "Video call", tint = c.accent)
         }
     }
 }

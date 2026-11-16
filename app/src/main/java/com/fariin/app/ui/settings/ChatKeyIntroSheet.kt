@@ -1,6 +1,6 @@
 package com.fariin.app.ui.settings
 
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -80,11 +80,11 @@ internal fun ChatKeyIntroSheet(onDismiss: () -> Unit, onContinue: () -> Unit) {
                 Text("What is a Chat Key?", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = c.label,
                     textAlign = TextAlign.Center, modifier = Modifier.padding(top = 18.dp))
                 Column(Modifier.fillMaxWidth().padding(top = 30.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                    Point(ImageVector.vectorResource(R.drawable.ic_sf_lock), accent, "Private and secure",
+                    Point(ImageVector.cachedVector(R.drawable.ic_sf_lock), accent, "Private and secure",
                         "Fariin makes a random 6-digit key that nobody else has. We keep only a scrambled copy that cannot be turned back into your key.")
-                    Point(ImageVector.vectorResource(R.drawable.ic_sf_person2), accent, "Direct communication",
+                    Point(ImageVector.cachedVector(R.drawable.ic_sf_person2), accent, "Direct communication",
                         "People with your Chat Key can message and call you straight away, whatever your Messages and Calls settings say.")
-                    Point(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_shield), accent, "You are in control",
+                    Point(ImageVector.cachedVector(R.drawable.ic_sf_checkmark_shield), accent, "You are in control",
                         "Share it only with people you want to hear from. Reset it for a new one, or remove it, whenever you like.")
                 }
                 Box(Modifier.padding(top = 32.dp, bottom = 16.dp).fillMaxWidth().height(52.dp).clip(CircleShape).background(accent)
@@ -95,7 +95,7 @@ internal fun ChatKeyIntroSheet(onDismiss: () -> Unit, onContinue: () -> Unit) {
             }
             // The top strip drags the sheet; the X sits in its corner, as on iOS.
             Box(Modifier.fillMaxWidth().height(28.dp).sheetDrag(motion))
-            FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", onClick = { motion.close() },
+            FloatingIcon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Close", onClick = { motion.close() },
                 modifier = Modifier.align(Alignment.TopStart).padding(12.dp), circle = true)
         }
     }

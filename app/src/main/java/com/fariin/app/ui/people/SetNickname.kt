@@ -1,7 +1,7 @@
 package com.fariin.app.ui.people
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 import com.fariin.app.ui.settings.BarPage
 import com.fariin.app.ui.components.underBar
@@ -134,7 +134,7 @@ fun NotesCard(note: String) {
     SettingsSection {
         Column(Modifier.fillMaxWidth().clickable { open = !open }.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_text_alignleft), contentDescription = null, tint = c.label, modifier = Modifier.size(22.dp))
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_text_alignleft), contentDescription = null, tint = c.label, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(14.dp))
                 Text("Notes", fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
                 Text("only visible to you", fontSize = 14.sp, color = c.secondary)

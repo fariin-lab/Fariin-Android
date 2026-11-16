@@ -1,7 +1,7 @@
 package com.fariin.app.ui.people
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 import android.Manifest
 import android.content.pm.PackageManager
@@ -107,7 +107,7 @@ internal fun VerifyEncryptionPage(cid: String, peerName: String, peerPhoto: Stri
     Column(Modifier.fillMaxSize().background(c.bg).then(if (sheet == null) Modifier.statusBarsPadding() else Modifier).navigationBarsPadding()) {
         Box(Modifier.fillMaxWidth().then(if (sheet != null) Modifier.sheetDrag(sheet).padding(top = 8.dp) else Modifier).height(64.dp).padding(horizontal = 16.dp)) {
             Box(Modifier.align(Alignment.CenterStart).size(44.dp).floating(CircleShape).clickable(onClickLabel = "Close", onClick = onClose),
-                contentAlignment = Alignment.Center) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), null, tint = c.label) }
+                contentAlignment = Alignment.Center) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), null, tint = c.label) }
             Text("Encryption", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
         }
         Column(Modifier.weight(1f).then(if (sheet != null) Modifier.sheetDrag(sheet, atTop = { scroll.value == 0 }) else Modifier)
@@ -121,7 +121,7 @@ internal fun VerifyEncryptionPage(cid: String, peerName: String, peerPhoto: Stri
                     Avatar(myPhoto, 52.dp, Modifier.border(3.dp, c.bg, CircleShape))
                 }
                 Box(Modifier.offset(y = 10.dp).size(26.dp).floating(CircleShape), contentAlignment = Alignment.Center) {
-                    Icon(if (verified) ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill) else ImageVector.vectorResource(R.drawable.ic_sf_lock_fill), null, tint = c.label, modifier = Modifier.size(13.dp))
+                    Icon(if (verified) ImageVector.cachedVector(R.drawable.ic_sf_checkmark_seal_fill) else ImageVector.cachedVector(R.drawable.ic_sf_lock_fill), null, tint = c.label, modifier = Modifier.size(13.dp))
                 }
             }
             Spacer(Modifier.height(22.dp))
@@ -168,7 +168,7 @@ internal fun VerifyEncryptionPage(cid: String, peerName: String, peerPhoto: Stri
         }
         if (number != null) Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp).fillMaxWidth().height(54.dp).floating(CircleShape)
             .clickable { scanning = true }, horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_qrcode_viewfinder), null, tint = c.label, modifier = Modifier.size(22.dp))
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_qrcode_viewfinder), null, tint = c.label, modifier = Modifier.size(22.dp))
             Spacer(Modifier.size(10.dp))
             Text(if (verified) "Scan again" else "Scan their code", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label)
         }
@@ -188,7 +188,7 @@ private fun VerifyScanner(onClose: () -> Unit, onCode: (String) -> Unit) {
         if (hasCamera) com.fariin.app.ui.settings.CameraFeed(owner, onCamera = {}) { code -> if (!done) { done = true; onCode(code) } }
         Box(Modifier.statusBarsPadding().padding(12.dp).size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f))
             .clickable(onClickLabel = "Close", onClick = onClose), contentAlignment = Alignment.Center) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), null, tint = Color.White)
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), null, tint = Color.White)
         }
         Text("Point at their Fariin verification code", fontSize = 15.sp, color = Color.White, textAlign = TextAlign.Center,
             modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(32.dp))

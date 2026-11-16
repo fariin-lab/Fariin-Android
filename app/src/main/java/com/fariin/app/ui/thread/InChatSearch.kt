@@ -56,7 +56,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 
 /**
@@ -154,7 +154,7 @@ internal fun SearchTopBar(s: InChatSearchState, focus: FocusRequester, onClose: 
     Row(Modifier.fillMaxWidth().statusBarsPadding().height(64.dp).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onClose, modifier = Modifier.padding(start = 4.dp, end = 8.dp).size(44.dp).floating()) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), contentDescription = "Close search", tint = c.label, modifier = Modifier.size(22.dp))
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_left), contentDescription = "Close search", tint = c.label, modifier = Modifier.size(22.dp))
         }
         com.fariin.app.ui.components.FloatingSearchField(s.query, { s.query = it }, "Search",
             Modifier.weight(1f).padding(end = 12.dp).focusRequester(focus), onSearch = onSubmit)
@@ -190,9 +190,9 @@ internal fun SearchNavBar(s: InChatSearchState, onStep: (Int) -> Unit, onList: (
             }
             if (!s.asList) {
                 Spacer(Modifier.width(8.dp))
-                StepButton(ImageVector.vectorResource(R.drawable.ic_sf_chevron_up), "Previous result", s.index > 0) { onStep(-1) }
+                StepButton(ImageVector.cachedVector(R.drawable.ic_sf_chevron_up), "Previous result", s.index > 0) { onStep(-1) }
                 Spacer(Modifier.width(8.dp))
-                StepButton(ImageVector.vectorResource(R.drawable.ic_sf_chevron_down), "Next result", s.index < s.matches.size - 1) { onStep(1) }
+                StepButton(ImageVector.cachedVector(R.drawable.ic_sf_chevron_down), "Next result", s.index < s.matches.size - 1) { onStep(1) }
             }
         }
     }

@@ -31,7 +31,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
@@ -121,24 +121,24 @@ private fun Seal(tint: Color, label: String) {
 
 @Composable
 private fun iconFor(icon: PreviewIcon): ImageVector = when (icon) {
-    PreviewIcon.PIN -> ImageVector.vectorResource(R.drawable.ic_sf_pin_fill)
-    PreviewIcon.CONTACT -> ImageVector.vectorResource(R.drawable.ic_account)
-    PreviewIcon.LOCATION -> ImageVector.vectorResource(R.drawable.ic_location)
-    PreviewIcon.POLL -> ImageVector.vectorResource(R.drawable.ic_sf_chart_bar_fill)
-    PreviewIcon.MIC -> ImageVector.vectorResource(R.drawable.ic_mic)
-    PreviewIcon.DELETED -> ImageVector.vectorResource(R.drawable.ic_block)
-    PreviewIcon.VIDEO, PreviewIcon.VIDEO_CALL, PreviewIcon.VIDEO_CALL_OUT, PreviewIcon.VIDEO_CALL_IN -> ImageVector.vectorResource(R.drawable.ic_video_fill)
-    PreviewIcon.PHOTO -> ImageVector.vectorResource(R.drawable.ic_sf_photo)
-    PreviewIcon.ALBUM -> ImageVector.vectorResource(R.drawable.ic_sf_photo_on_rectangle)
-    PreviewIcon.FILE, PreviewIcon.VIEW_ONCE -> ImageVector.vectorResource(R.drawable.ic_file)
-    PreviewIcon.FILE_ZIP -> ImageVector.vectorResource(R.drawable.ic_sf_doc_zipper)
-    PreviewIcon.FILE_DOC -> ImageVector.vectorResource(R.drawable.ic_sf_doc_text)
-    PreviewIcon.FILE_AUDIO -> ImageVector.vectorResource(R.drawable.ic_sf_music_note)
-    PreviewIcon.GIF -> ImageVector.vectorResource(R.drawable.ic_gif)
-    PreviewIcon.CALL, PreviewIcon.CALL_OUT, PreviewIcon.CALL_IN -> ImageVector.vectorResource(R.drawable.ic_tab_calls)
-    PreviewIcon.NEWER -> ImageVector.vectorResource(R.drawable.ic_sf_arrow_up_circle_fill)
-    PreviewIcon.HELLO -> ImageVector.vectorResource(R.drawable.ic_sf_hand_wave)
-    PreviewIcon.BLOCKED -> ImageVector.vectorResource(R.drawable.ic_sf_hand_raised_fill)
+    PreviewIcon.PIN -> ImageVector.cachedVector(R.drawable.ic_sf_pin_fill)
+    PreviewIcon.CONTACT -> ImageVector.cachedVector(R.drawable.ic_account)
+    PreviewIcon.LOCATION -> ImageVector.cachedVector(R.drawable.ic_location)
+    PreviewIcon.POLL -> ImageVector.cachedVector(R.drawable.ic_sf_chart_bar_fill)
+    PreviewIcon.MIC -> ImageVector.cachedVector(R.drawable.ic_mic)
+    PreviewIcon.DELETED -> ImageVector.cachedVector(R.drawable.ic_block)
+    PreviewIcon.VIDEO, PreviewIcon.VIDEO_CALL, PreviewIcon.VIDEO_CALL_OUT, PreviewIcon.VIDEO_CALL_IN -> ImageVector.cachedVector(R.drawable.ic_video_fill)
+    PreviewIcon.PHOTO -> ImageVector.cachedVector(R.drawable.ic_sf_photo)
+    PreviewIcon.ALBUM -> ImageVector.cachedVector(R.drawable.ic_sf_photo_on_rectangle)
+    PreviewIcon.FILE, PreviewIcon.VIEW_ONCE -> ImageVector.cachedVector(R.drawable.ic_file)
+    PreviewIcon.FILE_ZIP -> ImageVector.cachedVector(R.drawable.ic_sf_doc_zipper)
+    PreviewIcon.FILE_DOC -> ImageVector.cachedVector(R.drawable.ic_sf_doc_text)
+    PreviewIcon.FILE_AUDIO -> ImageVector.cachedVector(R.drawable.ic_sf_music_note)
+    PreviewIcon.GIF -> ImageVector.cachedVector(R.drawable.ic_gif)
+    PreviewIcon.CALL, PreviewIcon.CALL_OUT, PreviewIcon.CALL_IN -> ImageVector.cachedVector(R.drawable.ic_tab_calls)
+    PreviewIcon.NEWER -> ImageVector.cachedVector(R.drawable.ic_sf_arrow_up_circle_fill)
+    PreviewIcon.HELLO -> ImageVector.cachedVector(R.drawable.ic_sf_hand_wave)
+    PreviewIcon.BLOCKED -> ImageVector.cachedVector(R.drawable.ic_sf_hand_raised_fill)
 }
 
 /** One preview icon, as iOS previewRow draws it: a directional arrow on a call, the "1" circle on a view-once. */
@@ -153,7 +153,7 @@ private fun PreviewGlyph(icon: PreviewIcon, tint: Color) {
             val video = icon == PreviewIcon.VIDEO_CALL_OUT || icon == PreviewIcon.VIDEO_CALL_IN
             Icon(iconFor(icon), null, tint = tint,
                 modifier = Modifier.align(Alignment.BottomStart).size(if (video) 13.dp else 11.dp))
-            Icon(if (out) ImageVector.vectorResource(R.drawable.ic_sf_arrow_up_right) else ImageVector.vectorResource(R.drawable.ic_sf_arrow_down_left), null, tint = tint,
+            Icon(if (out) ImageVector.cachedVector(R.drawable.ic_sf_arrow_up_right) else ImageVector.cachedVector(R.drawable.ic_sf_arrow_down_left), null, tint = tint,
                 modifier = Modifier.align(Alignment.TopEnd).size(8.dp))
         }
         else -> Icon(iconFor(icon), null, tint = tint, modifier = Modifier.fillMaxSize())
@@ -207,7 +207,7 @@ internal fun ChatRowPreviewText(
     fun AnnotatedString.Builder.forwardArrow() {
         if (!preview.forwarded) return
         inline["fwd"] = InlineTextContent(Placeholder(sp(14.dp), sp(14.dp), PlaceholderVerticalAlign.TextCenter)) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_menu_forward), null, tint = c.secondary, modifier = Modifier.fillMaxSize())
+            Icon(ImageVector.cachedVector(R.drawable.ic_menu_forward), null, tint = c.secondary, modifier = Modifier.fillMaxSize())
         }
         appendInlineContent("fwd", "[forwarded]"); append(" ")
     }
@@ -216,7 +216,7 @@ internal fun ChatRowPreviewText(
             // owner 2026-10-27: the kind of call in bold green, then " · In call" in grey.
             val green = liveGreen(c.dark)
             inline["call"] = InlineTextContent(Placeholder(sp(14.dp), sp(14.dp), PlaceholderVerticalAlign.TextCenter)) {
-                Icon(if (live.video) ImageVector.vectorResource(R.drawable.ic_video_fill) else ImageVector.vectorResource(R.drawable.ic_tab_calls), null, tint = green, modifier = Modifier.fillMaxSize())
+                Icon(if (live.video) ImageVector.cachedVector(R.drawable.ic_video_fill) else ImageVector.cachedVector(R.drawable.ic_tab_calls), null, tint = green, modifier = Modifier.fillMaxSize())
             }
             appendInlineContent("call", "[call]"); append(" ")
             pushStyle(SpanStyle(color = green, fontWeight = FontWeight.SemiBold)); append(if (live.video) "Video call" else "Voice call"); pop()

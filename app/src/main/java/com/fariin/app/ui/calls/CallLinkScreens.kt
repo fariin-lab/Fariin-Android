@@ -2,7 +2,7 @@ package com.fariin.app.ui.calls
 
 import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -84,7 +84,7 @@ private val linkPalette = listOf(0xFF4F7DF3, 0xFF2FA37C, 0xFFE0794F, 0xFF8C6BDB,
 fun CallLinkAvatar(size: Dp, roomId: String = "") {
     val first = roomId.take(2).toIntOrNull(16) ?: 0
     Box(Modifier.size(size).clip(CircleShape).background(Color(linkPalette[first % linkPalette.size])), contentAlignment = Alignment.Center) {
-        Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_video_fill), null, tint = Color.White, modifier = Modifier.size(size * 0.42f))
+        Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_video_fill), null, tint = Color.White, modifier = Modifier.size(size * 0.42f))
     }
 }
 
@@ -214,9 +214,9 @@ private fun LinkBody(s: LinkState, onUsed: () -> Unit, onDeleted: (() -> Unit)?,
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             // iOS CallLinkShareRows "Send": the link into Fariin chats picked here.
-            RoundAction(ImageVector.vectorResource(R.drawable.ic_share_turn_right), "Send", Modifier.weight(1f)) { if (s.url != null) { onUsed(); sendingLink = true } }
-            RoundAction(ImageVector.vectorResource(R.drawable.ic_sf_doc_on_doc), "Copy link", Modifier.weight(1f)) { s.url?.let { onUsed(); copyLink(ctx, it) } }
-            RoundAction(ImageVector.vectorResource(R.drawable.ic_sf_share), "Share link", Modifier.weight(1f)) { s.url?.let { onUsed(); shareLink(ctx, it) } }
+            RoundAction(ImageVector.cachedVector(R.drawable.ic_share_turn_right), "Send", Modifier.weight(1f)) { if (s.url != null) { onUsed(); sendingLink = true } }
+            RoundAction(ImageVector.cachedVector(R.drawable.ic_sf_doc_on_doc), "Copy link", Modifier.weight(1f)) { s.url?.let { onUsed(); copyLink(ctx, it) } }
+            RoundAction(ImageVector.cachedVector(R.drawable.ic_sf_share), "Share link", Modifier.weight(1f)) { s.url?.let { onUsed(); shareLink(ctx, it) } }
         }
         Spacer(Modifier.height(16.dp))
         if (s.admin) {
@@ -248,7 +248,7 @@ private fun LinkBody(s: LinkState, onUsed: () -> Unit, onDeleted: (() -> Unit)?,
             Spacer(Modifier.height(8.dp))
             HorizontalDivider(thickness = 0.5.dp, color = c.separator)
             Row(Modifier.fillMaxWidth().clickable { askDelete = true }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), null, tint = c.red)
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_trash), null, tint = c.red)
                 Spacer(Modifier.width(16.dp))
                 Text("Delete Call Link", fontSize = 17.sp, color = c.red)
             }
@@ -355,7 +355,7 @@ fun CallLinkRow(link: SavedCallLink, timeLabel: String, onOpen: () -> Unit, onIn
                 Text(link.title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_link), null, tint = c.secondary, modifier = Modifier.size(13.dp))
+                    Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_link), null, tint = c.secondary, modifier = Modifier.size(13.dp))
                     Spacer(Modifier.width(4.dp))
                     Text("Call Link", fontSize = 14.sp, color = c.secondary, maxLines = 1)
                 }
@@ -363,7 +363,7 @@ fun CallLinkRow(link: SavedCallLink, timeLabel: String, onOpen: () -> Unit, onIn
             Spacer(Modifier.width(8.dp))
             Text(timeLabel, fontSize = 14.sp, color = c.secondary)
             IconButton(onClick = onInfo) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_info_circle), contentDescription = "Link details", tint = c.label, modifier = Modifier.size(22.dp))
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_info_circle), contentDescription = "Link details", tint = c.label, modifier = Modifier.size(22.dp))
             }
         }
     }

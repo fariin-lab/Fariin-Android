@@ -46,7 +46,7 @@ import com.fariin.app.ui.components.SkeletonBlock
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.delay
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 
 /**
@@ -129,7 +129,7 @@ private fun LinkDraftRow(d: LinkPreviews.Draft?, onClose: () -> Unit) {
             }
             Spacer(Modifier.width(8.dp))
             IconButton(onClick = onClose, modifier = Modifier.size(24.dp)) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark_circle_fill), contentDescription = "Dismiss", tint = c.secondary, modifier = Modifier.size(22.dp))
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark_circle_fill), contentDescription = "Dismiss", tint = c.secondary, modifier = Modifier.size(22.dp))
             }
         }
         Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).height(0.5.dp).background(c.separator))

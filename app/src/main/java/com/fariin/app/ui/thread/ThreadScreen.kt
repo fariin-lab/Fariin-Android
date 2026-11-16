@@ -5,7 +5,7 @@ import com.fariin.app.ui.thread.bubbles.artBubble
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.material3.DropdownMenuItem
 import kotlinx.coroutines.tasks.await
 import androidx.compose.ui.layout.layout
@@ -1820,7 +1820,7 @@ private fun HeaderMenu(ui: ThreadUi, onToggleMute: () -> Unit) {
                 onClick = { open = false; InChatSearchLink.request(ui.cid) })
             ui.muted?.let { muted ->
                 DropdownMenuItem(text = { Text(if (muted) "Unmute" else "Mute") },
-                    leadingIcon = { Icon(if (muted) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off), null) },
+                    leadingIcon = { Icon(if (muted) ImageVector.cachedVector(com.fariin.app.R.drawable.ic_bell) else ImageVector.cachedVector(com.fariin.app.R.drawable.ic_bell_off), null) },
                     onClick = { open = false; onToggleMute() })
             }
         }
@@ -2442,7 +2442,7 @@ private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
             val icon = original?.takeIf { !it.deleted && !it.viewOnce && !r.isStatus }?.let { replyIcon(it) }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (icon != null) {
-                    Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(icon), null, tint = sub, modifier = Modifier.size(13.dp))
+                    Icon(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(icon), null, tint = sub, modifier = Modifier.size(13.dp))
                     Spacer(Modifier.width(3.dp))
                 }
                 Text(when {

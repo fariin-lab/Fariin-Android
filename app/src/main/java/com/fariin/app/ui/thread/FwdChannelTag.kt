@@ -41,7 +41,7 @@ import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 
 private val ChannelBlue = Color(0xFF2392FE)
@@ -98,7 +98,7 @@ private fun ForwardedFrom(src: Message.ForwardSource, isMe: Boolean, openCid: St
             Spacer(Modifier.width(6.dp))
             Text(src.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = accent, maxLines = 1,
                 overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null, tint = accent.copy(alpha = 0.7f), modifier = Modifier.size(14.dp))
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_right), null, tint = accent.copy(alpha = 0.7f), modifier = Modifier.size(14.dp))
         }
     }
 }
@@ -139,7 +139,7 @@ internal fun ForwardedTag(m: Message, isMe: Boolean, inChannel: Boolean, openCid
                 .padding(horizontal = 6.dp, vertical = 1.dp))
         Spacer(Modifier.width(8.dp))
         if (following) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null, tint = ink.copy(alpha = 0.45f), modifier = Modifier.size(18.dp))
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_right), null, tint = ink.copy(alpha = 0.45f), modifier = Modifier.size(18.dp))
         } else {
             Box(Modifier.height(24.dp).clip(CircleShape).background(if (isMe) Color.White else ChannelBlue)
                 .clickable {

@@ -3,7 +3,7 @@ package com.fariin.app.ui.people
 import com.fariin.app.ui.components.GlassDropdown
 import com.fariin.app.R
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
@@ -154,7 +154,7 @@ internal fun SharedMediaCard(cid: String, state: SharedMediaState, inset: androi
                 Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("All Media", style = MaterialTheme.typography.titleMedium, color = c.label, modifier = Modifier.weight(1f))
                     Text("See All", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = c.accent)
-                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null, tint = c.secondary, modifier = Modifier.size(20.dp))
+                    Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_right), null, tint = c.secondary, modifier = Modifier.size(20.dp))
                 }
                 Spacer(Modifier.height(10.dp))
                 LazyRow(contentPadding = PaddingValues(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -206,7 +206,7 @@ private fun MediaTile(item: SharedMedia.Item, modifier: Modifier, cid: String = 
         if (item.isVideo) {
             Box(Modifier.align(Alignment.Center).size(32.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)),
                 contentAlignment = Alignment.Center) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), "Video", tint = Color.White, modifier = Modifier.size(22.dp))
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_play_fill), "Video", tint = Color.White, modifier = Modifier.size(22.dp))
             }
             item.duration?.let { d ->
                 Text(MediaRules.durationLabel(d), fontSize = 11.sp, color = Color.White,
@@ -251,13 +251,13 @@ internal fun SharedMediaScreen(cid: String, state: SharedMediaState, onBack: () 
                     Row(Modifier.align(Alignment.CenterEnd).padding(end = 12.dp)) {
                         // No menu on an empty tab (iOS showsMoreMenu): Show is the only thing in it here.
                         if (tab == SharedMedia.Tab.MEDIA && state.lists.media.isNotEmpty()) Box {
-                            IconButton({ menu = true }, modifier = com.fariin.app.ui.components.barGlass()) { Icon(ImageVector.vectorResource(R.drawable.ic_more_ios), "More", tint = c.label) }
+                            IconButton({ menu = true }, modifier = com.fariin.app.ui.components.barGlass()) { Icon(ImageVector.cachedVector(R.drawable.ic_more_ios), "More", tint = c.label) }
                             GlassDropdown(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
                                 Text("Show", style = MaterialTheme.typography.labelMedium, color = c.secondary,
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
                                 SharedMedia.Filter.entries.forEach { f ->
                                     DropdownMenuItem(text = { Text(f.label, color = c.label) }, onClick = { filter = f; menu = false },
-                                        trailingIcon = { if (f == filter) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = c.accent) })
+                                        trailingIcon = { if (f == filter) Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), null, tint = c.accent) })
                                 }
                             }
                         }
@@ -282,13 +282,13 @@ internal fun SharedMediaScreen(cid: String, state: SharedMediaState, onBack: () 
             HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
                 when (tabs[page]) {
                     SharedMedia.Tab.MEDIA -> MediaGrid(media, state.loaded, top, cid) { viewing = viewingOf(it, media) }
-                    SharedMedia.Tab.FILES -> Rows(top, state.loaded, state.lists.files.isEmpty(), SharedMedia.Tab.FILES, ImageVector.vectorResource(R.drawable.ic_file)) {
+                    SharedMedia.Tab.FILES -> Rows(top, state.loaded, state.lists.files.isEmpty(), SharedMedia.Tab.FILES, ImageVector.cachedVector(R.drawable.ic_file)) {
                         items(state.lists.files, key = { it.id }) { m -> FileRow(m) }
                     }
-                    SharedMedia.Tab.VOICE -> Rows(top, state.loaded, state.lists.voice.isEmpty(), SharedMedia.Tab.VOICE, ImageVector.vectorResource(R.drawable.ic_mic)) {
+                    SharedMedia.Tab.VOICE -> Rows(top, state.loaded, state.lists.voice.isEmpty(), SharedMedia.Tab.VOICE, ImageVector.cachedVector(R.drawable.ic_mic)) {
                         items(state.lists.voice, key = { it.id }) { m -> VoiceRow(cid, m) }
                     }
-                    SharedMedia.Tab.LINKS -> Rows(top, state.loaded, state.lists.links.isEmpty(), SharedMedia.Tab.LINKS, ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)) {
+                    SharedMedia.Tab.LINKS -> Rows(top, state.loaded, state.lists.links.isEmpty(), SharedMedia.Tab.LINKS, ImageVector.cachedVector(com.fariin.app.R.drawable.ic_link_copy)) {
                         items(state.lists.links, key = { it.first.id }) { (m, link) -> LinkRow(m, link) }
                     }
                 }
@@ -303,7 +303,7 @@ internal fun SharedMediaScreen(cid: String, state: SharedMediaState, onBack: () 
 private fun MediaGrid(media: List<SharedMedia.Item>, loaded: Boolean, top: androidx.compose.ui.unit.Dp, cid: String = "", onOpen: (SharedMedia.Item) -> Unit) {
     val c = Fariin.colors
     val sections = remember(media) { SharedMedia.sections(media, System.currentTimeMillis().toDouble()) }
-    if (loaded && media.isEmpty()) { Box(Modifier.padding(top = top)) { EmptyTab(SharedMedia.Tab.MEDIA, ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album)) }; return }
+    if (loaded && media.isEmpty()) { Box(Modifier.padding(top = top)) { EmptyTab(SharedMedia.Tab.MEDIA, ImageVector.cachedVector(com.fariin.app.R.drawable.ic_album)) }; return }
     LazyVerticalGrid(GridCells.Fixed(3), Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 2.dp, end = 2.dp, top = top + 2.dp, bottom = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         // While the first answer is on its way: grey tiles, not a spinner (iOS gridSkeleton).

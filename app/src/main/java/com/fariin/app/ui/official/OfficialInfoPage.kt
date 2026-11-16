@@ -38,7 +38,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -108,7 +108,7 @@ fun OfficialInfoPage(onBack: () -> Unit, onSearch: () -> Unit, onOpenImage: (Str
                     }
                 }
                 Spacer(Modifier.width(16.dp))
-                Circle(androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_search_ios)), "Search", onSearch)
+                Circle(androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_search_ios)), "Search", onSearch)
             }
             // About: one short text (owner 2026-09-29, word for word as iOS).
             Card {
@@ -133,10 +133,10 @@ fun OfficialInfoPage(onBack: () -> Unit, onSearch: () -> Unit, onOpenImage: (Str
                 Row(Modifier.fillMaxWidth().clickable {
                     runCatching { com.fariin.app.ui.browser.BrowserActivity.open(ctx, "https://fariin.com/help") }
                 }.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(ImageVector.vectorResource(R.drawable.ic_set_help), null, tint = c.label, modifier = Modifier.size(22.dp))
+                    Icon(ImageVector.cachedVector(R.drawable.ic_set_help), null, tint = c.label, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(12.dp))
                     Text("Help Center", fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
-                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null, tint = c.secondary, modifier = Modifier.size(14.dp))
+                    Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_right), null, tint = c.secondary, modifier = Modifier.size(14.dp))
                 }
             }
             Card {

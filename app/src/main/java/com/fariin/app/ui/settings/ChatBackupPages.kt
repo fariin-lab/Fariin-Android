@@ -4,7 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.height
@@ -400,7 +400,7 @@ private fun BackupBadge(busy: Boolean, hasBackup: Boolean, doneAt: Long) {
                 androidx.compose.animation.scaleIn(androidx.compose.animation.core.tween(220), initialScale = 0.6f)) togetherWith
                 androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120))
         }, label = "badge") { done ->
-            if (done) androidx.compose.material3.Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_checkmark),
+            if (done) androidx.compose.material3.Icon(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_checkmark),
                 "Backed up", tint = c.onAccent, modifier = Modifier.size(30.dp))
             else androidx.compose.foundation.Canvas(Modifier.size(36.dp)) {
                 val ink = if (filled) c.onAccent else c.secondary

@@ -12,7 +12,7 @@ import com.fariin.app.ui.components.glassMenuAnchor
 import com.fariin.app.ui.settings.BarPage
 
 import com.fariin.app.data.NewBadgeSpots
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import android.content.Intent
 import android.text.format.DateFormat
 import androidx.compose.animation.AnimatedVisibility
@@ -400,7 +400,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                 if (info.description.isNotEmpty() || info.username.isNotEmpty()) Card {
                     if (info.description.isNotEmpty()) Column(Modifier.fillMaxWidth().padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_text_alignleft), null, tint = c.label, modifier = Modifier.size(24.dp))
+                            Icon(ImageVector.cachedVector(R.drawable.ic_sf_text_alignleft), null, tint = c.label, modifier = Modifier.size(24.dp))
                             Spacer(Modifier.width(14.dp))
                             Text("Description", fontSize = 17.sp, color = c.label)
                         }
@@ -410,7 +410,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                     if (info.username.isNotEmpty()) {
                         if (info.description.isNotEmpty()) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
                         Row(Modifier.fillMaxWidth().clickable { share() }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_link), null, tint = c.label, modifier = Modifier.size(24.dp))   // the chain, as iOS
+                            Icon(ImageVector.cachedVector(R.drawable.ic_sf_link), null, tint = c.label, modifier = Modifier.size(24.dp))   // the chain, as iOS
                             Spacer(Modifier.width(14.dp))
                             Column(Modifier.weight(1f)) {
                                 Text("fariin.com/${info.username}", fontSize = 17.sp, color = c.label)
@@ -419,7 +419,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                             // The link opens Share with; the QR mark opens the code (iOS, owner 2026-11-10).
                             Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = "QR code") { showQr = true },
                                 contentAlignment = Alignment.Center) {
-                                Icon(ImageVector.vectorResource(R.drawable.ic_qr), "QR code", tint = c.secondary, modifier = Modifier.size(24.dp))
+                                Icon(ImageVector.cachedVector(R.drawable.ic_qr), "QR code", tint = c.secondary, modifier = Modifier.size(24.dp))
                             }
                         }
                     }
@@ -449,10 +449,10 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                 Spacer(Modifier.height(20.dp))
                 Card {
                     // Leave first, then Report (iOS order), with the Leave Group arrow.
-                    if (role == Role.FOLLOWER) FootRow("Leave Channel", ImageVector.vectorResource(R.drawable.ic_channel_leave), c.red) { confirmLeave = true }
+                    if (role == Role.FOLLOWER) FootRow("Leave Channel", ImageVector.cachedVector(R.drawable.ic_channel_leave), c.red) { confirmLeave = true }
                     if (role != Role.ADMIN) {
                         if (role == Role.FOLLOWER && com.fariin.app.ui.settings.SHOW_ROW_LINES) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 52.dp))
-                        FootRow(if (reported) "Reported" else "Report Channel", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_report),
+                        FootRow(if (reported) "Reported" else "Report Channel", ImageVector.cachedVector(com.fariin.app.R.drawable.ic_report),
                             if (reported) c.secondary else c.red) {
                             if (!reported) com.fariin.app.data.ReportFlow.ask(com.fariin.app.data.ReportTarget(com.fariin.app.data.ReportKind.CHANNEL,
                                 name = info.title, cid = info.cid, onSent = { reported = true },
@@ -460,8 +460,8 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                         }
                     }
                     if (role == Role.ADMIN && team?.isOwner(me) == true) {
-                        FootRow(if (clearing) "Clearing\u2026" else "Clear Messages", ImageVector.vectorResource(R.drawable.ic_sf_eraser), c.red) { if (!clearing) askClear = true }
-                        FootRow("Delete Channel", ImageVector.vectorResource(R.drawable.ic_sf_trash), c.red) { askDelete = true }
+                        FootRow(if (clearing) "Clearing\u2026" else "Clear Messages", ImageVector.cachedVector(R.drawable.ic_sf_eraser), c.red) { if (!clearing) askClear = true }
+                        FootRow("Delete Channel", ImageVector.cachedVector(R.drawable.ic_sf_trash), c.red) { askDelete = true }
                     }
                     else if (role == Role.ADMIN) Text("You run this channel. Only admins can post.", fontSize = 15.sp, color = c.secondary,
                         modifier = Modifier.padding(16.dp))
@@ -590,17 +590,17 @@ private fun ChannelMoreMenu(open: Boolean, onDismiss: () -> Unit, onWallpaper: (
     com.fariin.app.ui.components.GlassDropdown(open, onDismissRequest = onDismiss, shape = com.fariin.app.ui.components.FariinMenu.shape,
         border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
         if (onWallpaper != null) androidx.compose.material3.DropdownMenuItem(text = { Text("Change Wallpaper", color = c.label) },
-            leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_wallpaper), null, tint = c.label) },
+            leadingIcon = { Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_wallpaper), null, tint = c.label) },
             onClick = { onDismiss(); onWallpaper() })
         androidx.compose.material3.DropdownMenuItem(text = { Text("Share Channel", color = c.label) },
-            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_link_share), null, tint = c.label) },
+            leadingIcon = { Icon(ImageVector.cachedVector(R.drawable.ic_link_share), null, tint = c.label) },
             onClick = { onDismiss(); onShare() })
         if (onQr != null) androidx.compose.material3.DropdownMenuItem(text = { Text("QR Code", color = c.label) },
-            leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_qr), null, tint = c.label) },
+            leadingIcon = { Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_qr), null, tint = c.label) },
             onClick = { onDismiss(); onQr() })
         androidx.compose.material3.HorizontalDivider(color = c.separator)
         androidx.compose.material3.DropdownMenuItem(text = { Text("Save to Photos: " + (if (saveOn) "On" else "Off"), color = c.label) },
-            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_save_down), null, tint = c.label) },
+            leadingIcon = { Icon(ImageVector.cachedVector(R.drawable.ic_save_down), null, tint = c.label) },
             onClick = { saveOn = !saveOn; com.fariin.app.media.AutoSaveMedia.setChat(ctx, saveCid, saveOn); onDismiss() })
     }
 }

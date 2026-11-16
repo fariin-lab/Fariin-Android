@@ -1,6 +1,6 @@
 package com.fariin.app.ui.channels
 
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -112,7 +112,7 @@ private fun AdminPart(ch: ChannelThreadUi) {
         Text("Share your channel so people can follow it.", fontSize = 13.sp, color = c.secondary, textAlign = TextAlign.Center)
     }
     Row {
-        CardCircle(ImageVector.vectorResource(R.drawable.ic_share_box), "Share") {
+        CardCircle(ImageVector.cachedVector(R.drawable.ic_share_box), "Share") {
             scope.launch {
                 val link = ch.shareLink()
                 if (link == null) {
@@ -125,7 +125,7 @@ private fun AdminPart(ch: ChannelThreadUi) {
                 ctx.startActivity(android.content.Intent.createChooser(send, null))
             }
         }
-        if (ch.canEdit) CardCircle(ImageVector.vectorResource(R.drawable.ic_sf_pencil), if (info.description.isEmpty()) "Description" else "Edit") { nav.edit(info.cid) }
+        if (ch.canEdit) CardCircle(ImageVector.cachedVector(R.drawable.ic_sf_pencil), if (info.description.isEmpty()) "Description" else "Edit") { nav.edit(info.cid) }
     }
 }
 

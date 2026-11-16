@@ -64,7 +64,7 @@ import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -174,7 +174,7 @@ fun PostQuotesBar(m: Message, inBubble: Boolean = true, channelRepliesOff: Boole
             }
             // The label colour, not blue (owner 2026-11-06: "don't use blue"); 15 sp (2026-11-07).
             Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null, tint = c.tertiary, modifier = Modifier.size(18.dp))
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_right), null, tint = c.tertiary, modifier = Modifier.size(18.dp))
         },
         modifier = Modifier
             .padding(top = if (inBubble && edge == 0.dp) 6.dp else if (inBubble) 0.dp else 4.dp)
@@ -303,9 +303,9 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
         // A text post's words as its bubble shows them; a picture's or video's caption.
         text = PostQuoteRules.cardText(if (m.mediaKind == null) m.bodyText else m.text, m.type, album),
         kindIcon = when {
-            album -> ImageVector.vectorResource(R.drawable.ic_sf_photo_on_rectangle)
-            m.type == "image" -> ImageVector.vectorResource(R.drawable.ic_sf_photo)
-            m.type == "video" -> ImageVector.vectorResource(R.drawable.ic_call_video)
+            album -> ImageVector.cachedVector(R.drawable.ic_sf_photo_on_rectangle)
+            m.type == "image" -> ImageVector.cachedVector(R.drawable.ic_sf_photo)
+            m.type == "video" -> ImageVector.cachedVector(R.drawable.ic_call_video)
             else -> null
         },
         thumb = thumb,
@@ -433,7 +433,7 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
                     PostQuoteRules.hiddenLine(a.hidden)?.let { line ->
                         item {
                             Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(ImageVector.vectorResource(R.drawable.ic_sf_lock_fill), null, tint = c.secondary, modifier = Modifier.size(14.dp))
+                                Icon(ImageVector.cachedVector(R.drawable.ic_sf_lock_fill), null, tint = c.secondary, modifier = Modifier.size(14.dp))
                                 Spacer(Modifier.width(6.dp))
                                 Text(line, fontSize = 13.sp, color = c.secondary)
                             }
@@ -567,7 +567,7 @@ private fun QuoteRow(q: QuotedIn, card: SourceCard, onTap: () -> Unit) {
                 }
             }
             Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views), null, tint = c.secondary, modifier = Modifier.size(12.dp))
+                Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_views), null, tint = c.secondary, modifier = Modifier.size(12.dp))
                 Spacer(Modifier.width(4.dp))
                 Text(PostQuoteRules.viewsLine(q.views), fontSize = 11.sp, color = c.secondary)
             }

@@ -1,7 +1,7 @@
 package com.fariin.app.ui.chats
 
 import com.fariin.app.ui.components.GlassDropdown
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -131,7 +131,7 @@ fun GetStartedBanner(cards: List<GetStartedCard>, onTap: (GetStartedCard) -> Uni
                 Text("Things you can do", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.weight(1f))
                 Box(Modifier.size(28.dp).clip(CircleShape).background(c.label.copy(alpha = 0.08f)).clickable(onClick = onHideAll),
                     contentAlignment = Alignment.Center) {
-                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Hide", tint = c.secondary, modifier = Modifier.size(14.dp))
+                    Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Hide", tint = c.secondary, modifier = Modifier.size(14.dp))
                 }
             }
             Row(Modifier.fillMaxWidth()) {
@@ -155,11 +155,11 @@ fun GetStartedBanner(cards: List<GetStartedCard>, onTap: (GetStartedCard) -> Uni
                             }).padding(vertical = 4.dp),
                             horizontalAlignment = Alignment.CenterHorizontally) {
                             Box(Modifier.size(54.dp).floating(CircleShape), contentAlignment = Alignment.Center) {
-                                Icon(ImageVector.vectorResource(card.iconRes), null, tint = c.label, modifier = Modifier.size(26.dp))
+                                Icon(ImageVector.cachedVector(card.iconRes), null, tint = c.label, modifier = Modifier.size(26.dp))
                                 androidx.compose.animation.AnimatedVisibility(done, Modifier.align(Alignment.BottomEnd),
                                     enter = androidx.compose.animation.scaleIn() + androidx.compose.animation.fadeIn()) {
                                     Box(Modifier.size(20.dp).clip(CircleShape).background(Color(0xFF34C759)), contentAlignment = Alignment.Center) {
-                                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), "Done", tint = Color.White, modifier = Modifier.size(14.dp))
+                                        Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), "Done", tint = Color.White, modifier = Modifier.size(14.dp))
                                     }
                                 }
                             }

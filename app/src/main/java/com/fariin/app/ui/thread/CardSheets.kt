@@ -1,7 +1,7 @@
 package com.fariin.app.ui.thread
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -128,7 +128,7 @@ internal fun ContactPickSheet(me: String, cid: String, onDismiss: () -> Unit, on
                             Modifier.size(24.dp).clip(CircleShape).background(if (on) c.blue else Color.Transparent)
                                 .border(1.5.dp, if (on) c.blue else c.secondary.copy(alpha = 0.5f), CircleShape),
                             contentAlignment = Alignment.Center,
-                        ) { if (on) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = Color.White, modifier = Modifier.size(16.dp)) }
+                        ) { if (on) Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), null, tint = Color.White, modifier = Modifier.size(16.dp)) }
                     }
                 }
             }

@@ -79,7 +79,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.graphics.asImageBitmap
 import java.util.UUID
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 
 /** What a poll bubble needs from the chat (ThreadUi), kept small so the bubble stays reusable. */
@@ -252,7 +252,7 @@ private fun PollCardBody(m: Message, poll: PollCard, ctx: PollContext, isMe: Boo
                         Spacer(Modifier.width(10.dp))
                     }
                     if (marked) {
-                        Icon(ImageVector.vectorResource(if (state == 2) R.drawable.ic_sf_xmark else R.drawable.ic_sf_checkmark), null,
+                        Icon(ImageVector.cachedVector(if (state == 2) R.drawable.ic_sf_xmark else R.drawable.ic_sf_checkmark), null,
                             tint = if (state == 2) pal.wrong else pal.check, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(6.dp))
                     }
@@ -387,9 +387,9 @@ private fun Glyph(chosen: Boolean, multiple: Boolean, isMe: Boolean, mark: PollR
     val shape = if (multiple) RoundedCornerShape(5.dp) else CircleShape
     val green = Color(0xFF34C759)
     val (fill, icon) = when {
-        mark == PollRules.QuizMark.RIGHT -> green to ImageVector.vectorResource(R.drawable.ic_sf_checkmark)
-        mark == PollRules.QuizMark.WRONG -> c.red to ImageVector.vectorResource(R.drawable.ic_sf_xmark)
-        chosen -> (if (isMe) Color.White else c.blue) to ImageVector.vectorResource(R.drawable.ic_sf_checkmark)
+        mark == PollRules.QuizMark.RIGHT -> green to ImageVector.cachedVector(R.drawable.ic_sf_checkmark)
+        mark == PollRules.QuizMark.WRONG -> c.red to ImageVector.cachedVector(R.drawable.ic_sf_xmark)
+        chosen -> (if (isMe) Color.White else c.blue) to ImageVector.cachedVector(R.drawable.ic_sf_checkmark)
         else -> null to null
     }
     Box(
@@ -441,7 +441,7 @@ private fun PollResultsSheet(m: Message, poll: PollCard, ctx: PollContext, votes
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     // The right answer shows only after I voted or it ended.
                     if (i in poll.correct && (mine.isNotEmpty() || !isOpen)) {
-                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = Color(0xFF34C759), modifier = Modifier.size(18.dp))
+                        Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), null, tint = Color(0xFF34C759), modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                     }
                     poll.imageAt(i)?.let { img ->
@@ -634,7 +634,7 @@ internal fun PollComposer(onDismiss: () -> Unit, upload: (suspend (ByteArray) ->
         com.fariin.app.ui.components.AppPageDialogWindow()
         Column(Modifier.fillMaxSize().background(c.bgSecondary).statusBarsPadding().navigationBarsPadding().imePadding()) {
             Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = ::close, enabled = !sending) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", tint = c.label) }
+                IconButton(onClick = ::close, enabled = !sending) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Close", tint = c.label) }
                 Text("New Poll", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.weight(1f))
                 if (sending) Box(Modifier.size(64.dp, 40.dp), contentAlignment = Alignment.Center) {
                     androidx.compose.material3.CircularProgressIndicator(Modifier.size(20.dp), color = c.blue, strokeWidth = 2.dp)
@@ -666,7 +666,7 @@ internal fun PollComposer(onDismiss: () -> Unit, upload: (suspend (ByteArray) ->
                                                 // A quiz has one right answer.
                                                 for (k in opts.indices) opts[k] = opts[k].copy(right = if (opts[k].id == o.id) !opts[k].right else false)
                                             }, contentAlignment = Alignment.Center) {
-                                            if (o.right) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), "Right answer", tint = Color.White, modifier = Modifier.size(16.dp))
+                                            if (o.right) Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), "Right answer", tint = Color.White, modifier = Modifier.size(16.dp))
                                         }
                                         Spacer(Modifier.width(10.dp))
                                     }
@@ -694,7 +694,7 @@ internal fun PollComposer(onDismiss: () -> Unit, upload: (suspend (ByteArray) ->
                                                 }
                                             }
                                         } else if (upload != null) IconButton(onClick = { pickFor = o.id }, modifier = Modifier.size(36.dp)) {
-                                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_paperclip), "Add photo", tint = c.secondary, modifier = Modifier.size(22.dp))
+                                            Icon(ImageVector.cachedVector(R.drawable.ic_sf_paperclip), "Add photo", tint = c.secondary, modifier = Modifier.size(22.dp))
                                         }
                                     }
                                     // Remove only an option that has words, and never below two rows.
@@ -702,7 +702,7 @@ internal fun PollComposer(onDismiss: () -> Unit, upload: (suspend (ByteArray) ->
                                         IconButton(onClick = {
                                             setPic(o.id, null); opts.removeAll { it.id == o.id }; tidy()
                                         }, modifier = Modifier.size(36.dp)) {
-                                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_minus_circle_fill), "Remove option", tint = c.red, modifier = Modifier.size(22.dp))
+                                            Icon(ImageVector.cachedVector(R.drawable.ic_sf_minus_circle_fill), "Remove option", tint = c.red, modifier = Modifier.size(22.dp))
                                         }
                                     }
                                     // The handle: a filled row only; the empty row at the end never moves.
@@ -714,7 +714,7 @@ internal fun PollComposer(onDismiss: () -> Unit, upload: (suspend (ByteArray) ->
                                                 onDragCancel = { dragId = null; dragDy = 0f },
                                             ) { change, amount -> change.consume(); dragBy(amount.y) }
                                         }, contentAlignment = Alignment.Center) {
-                                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_line3), "Reorder", tint = c.secondary, modifier = Modifier.size(22.dp))
+                                            Icon(ImageVector.cachedVector(R.drawable.ic_sf_line3), "Reorder", tint = c.secondary, modifier = Modifier.size(22.dp))
                                         }
                                     }
                                 }
@@ -737,12 +737,12 @@ internal fun PollComposer(onDismiss: () -> Unit, upload: (suspend (ByteArray) ->
                     Box {
                         Row(Modifier.fillMaxWidth().clickable { endsMenu = true }.padding(vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_timer), null, tint = c.secondary, modifier = Modifier.size(22.dp))
+                            Icon(ImageVector.cachedVector(R.drawable.ic_sf_timer), null, tint = c.secondary, modifier = Modifier.size(22.dp))
                             Spacer(Modifier.width(14.dp))
                             Text("Ends", fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
                             Text(ends.label, fontSize = 17.sp, color = c.label)
                             Spacer(Modifier.width(4.dp))
-                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_up_down), null, tint = c.label, modifier = Modifier.size(14.dp))
+                            Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_up_down), null, tint = c.label, modifier = Modifier.size(14.dp))
                         }
                         GlassDropdown(expanded = endsMenu, onDismissRequest = { endsMenu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
                             PollRules.EndChoice.entries.forEach { e ->
@@ -810,7 +810,7 @@ private fun Setting(title: String, on: Boolean, enabled: Boolean = true, icon: I
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         // Each setting wears its iOS outline icon (owner 2026-11-14, iPhone screenshot).
         if (icon != null) {
-            Icon(ImageVector.vectorResource(icon), null, tint = c.secondary, modifier = Modifier.size(22.dp))
+            Icon(ImageVector.cachedVector(icon), null, tint = c.secondary, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(14.dp))
         }
         Text(title, fontSize = 17.sp, color = if (enabled) c.label else c.secondary, modifier = Modifier.weight(1f))

@@ -77,7 +77,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 
 /** The finished art, at most 512 x 512, transparent where there is no subject (iOS StickerArt). */
@@ -140,7 +140,7 @@ internal fun StickerCreatorPage(photo: Uri, onClose: () -> Unit, onSend: (Sticke
                 Box(Modifier.fillMaxWidth().height(60.dp)) {
                     Box(Modifier.padding(start = 12.dp).size(44.dp).align(Alignment.CenterStart).clip(CircleShape)
                         .background(Color.White.copy(alpha = 0.16f)).clickable(onClick = onClose), contentAlignment = Alignment.Center) {
-                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = Color.White, modifier = Modifier.size(22.dp))
+                        Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = Color.White, modifier = Modifier.size(22.dp))
                     }
                     Text("New Sticker", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.align(Alignment.Center))
                 }

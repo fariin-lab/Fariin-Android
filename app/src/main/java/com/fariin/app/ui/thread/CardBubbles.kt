@@ -1,7 +1,7 @@
 package com.fariin.app.ui.thread
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -61,7 +61,7 @@ internal fun LocationBody(loc: CardRules.Location, isMe: Boolean, width: Dp, met
             LocationCardMap(loc, approx, width, 140.dp)
             Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(24.dp).clip(CircleShape).background(if (isMe) Color.White else c.red), contentAlignment = Alignment.Center) {
-                    Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_location), null, tint = if (isMe) c.red else Color.White, modifier = Modifier.size(15.dp))
+                    Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_location), null, tint = if (isMe) c.red else Color.White, modifier = Modifier.size(15.dp))
                 }
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
@@ -69,7 +69,7 @@ internal fun LocationBody(loc: CardRules.Location, isMe: Boolean, width: Dp, met
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (approx) Text("Approximate area", fontSize = 13.sp, color = sub, maxLines = 1)
                 }
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null, tint = sub, modifier = Modifier.size(22.dp))
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_right), null, tint = sub, modifier = Modifier.size(22.dp))
             }
         }
         Box(Modifier.align(Alignment.End)) { meta() }
@@ -99,7 +99,7 @@ internal fun ContactBody(card: CardRules.Contact, isMe: Boolean, me: String, cid
             Spacer(Modifier.width(10.dp))
             Text(card.name, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = ink, maxLines = 1,
                 overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null, tint = sub, modifier = Modifier.size(22.dp))
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_right), null, tint = sub, modifier = Modifier.size(22.dp))
         }
         Box(Modifier.align(Alignment.End)) { meta() }
         if (CardRules.canMessage(card, me, cid)) {

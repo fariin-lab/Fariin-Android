@@ -19,7 +19,7 @@ import com.fariin.app.ui.components.underBar
 import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.data.isRestricted
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -204,7 +204,7 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
             // The close circle and the centred title (iOS sheet header).
             Box(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 12.dp)) {
                 Box(Modifier.align(Alignment.CenterStart).size(44.dp).floating(CircleShape).clickable(onClickLabel = "Close") { onBack() },
-                    contentAlignment = Alignment.Center) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), null, tint = c.label) }
+                    contentAlignment = Alignment.Center) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), null, tint = c.label) }
                 Text("New chat", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
             }
             // ⛔ SEARCH AT THE TOP ON ANDROID (owner 2026-11-10): where Android people look for it,
@@ -217,9 +217,9 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
                     item {
                         val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
                         val actions = listOf(
-                            Triple("New group", onNewGroup, ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members)),
-                            Triple("New channel", channelNav.create, ImageVector.vectorResource(R.drawable.ic_sf_megaphone)),
-                            Triple("Invite friends", { com.fariin.app.ui.settings.shareInvite(ctx, myHandle) }, ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_share)),
+                            Triple("New group", onNewGroup, ImageVector.cachedVector(com.fariin.app.R.drawable.ic_gs_members)),
+                            Triple("New channel", channelNav.create, ImageVector.cachedVector(R.drawable.ic_sf_megaphone)),
+                            Triple("Invite friends", { com.fariin.app.ui.settings.shareInvite(ctx, myHandle) }, ImageVector.cachedVector(com.fariin.app.R.drawable.ic_link_share)),
                         )
                         card {
                             actions.forEachIndexed { i, (label, open, icon) ->
@@ -294,7 +294,7 @@ fun ChatKeySheet(api: PeopleApi, p: Person, onDismiss: () -> Unit, onOpened: (St
         Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding().padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", tint = c.secondary, modifier = Modifier.size(28.dp).clickable(onClick = onDismiss))
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Close", tint = c.secondary, modifier = Modifier.size(28.dp).clickable(onClick = onDismiss))
             }
             Spacer(Modifier.height(12.dp))
             Text("Enter Chat Key", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = c.label)
@@ -327,7 +327,7 @@ fun ChatKeySheet(api: PeopleApi, p: Person, onDismiss: () -> Unit, onOpened: (St
                                 }
                             }, contentAlignment = Alignment.Center) {
                             when (k) {
-                                "del" -> Icon(ImageVector.vectorResource(R.drawable.ic_sf_delete_left), "Delete", tint = c.label)
+                                "del" -> Icon(ImageVector.cachedVector(R.drawable.ic_sf_delete_left), "Delete", tint = c.label)
                                 "Paste" -> Text("Paste", fontSize = 17.sp, color = c.accent)
                                 else -> Text(k, fontSize = 28.sp, color = c.label)
                             }
@@ -698,16 +698,16 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                 val share = Modifier.weight(1f)
                 // Message only when this page was not opened from the chat itself (iOS: source != .chat).
-                if (!fromChat && uid != me && !blocked) ActionTile("Message", ImageVector.vectorResource(R.drawable.ic_chat), share) { onOpenChat(cid) }
+                if (!fromChat && uid != me && !blocked) ActionTile("Message", ImageVector.cachedVector(R.drawable.ic_chat), share) { onOpenChat(cid) }
                 if (glowOn) com.fariin.app.ui.glow.GlowActionTile(glowDoor, share)
                 // iOS ContactInfoView: Voice and Video circles, never on my own page or a blocked person's.
                 if (uid != me && !blocked) {
                     val ctx = androidx.compose.ui.platform.LocalContext.current
                     val photo = person?.photoUrl ?: conv?.photos?.get(uid)
-                    ActionTile("Voice", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_voice), share) {
+                    ActionTile("Voice", ImageVector.cachedVector(com.fariin.app.R.drawable.ic_call_voice), share) {
                         com.fariin.app.ui.call.CallActivity.startDial(ctx, uid, name, photo, video = false)
                     }
-                    ActionTile("Video", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video), share) {
+                    ActionTile("Video", ImageVector.cachedVector(com.fariin.app.R.drawable.ic_call_video), share) {
                         com.fariin.app.ui.call.CallActivity.startDial(ctx, uid, name, photo, video = true)
                     }
                 }
@@ -715,17 +715,17 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                 // 2026-11-10); Unmute is one tap.
                 Box(share.glassMenuAnchor(personMuteAnchor)) {
                     ActionTile(if (muted) "Unmute" else "Mute",
-                        if (muted) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell)
-                        else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off), Modifier.fillMaxWidth()) {
+                        if (muted) ImageVector.cachedVector(com.fariin.app.R.drawable.ic_bell)
+                        else ImageVector.cachedVector(com.fariin.app.R.drawable.ic_bell_off), Modifier.fillMaxWidth()) {
                         if (muted) setMute(0.0) else personMuteMenu = true
                     }
                 }
-                if (fromChat && uid != me) ActionTile("Search", ImageVector.vectorResource(R.drawable.ic_search_ios), share) {
+                if (fromChat && uid != me) ActionTile("Search", ImageVector.cachedVector(R.drawable.ic_search_ios), share) {
                     com.fariin.app.ui.thread.InChatSearchLink.searchFromInfo(cid, onBack)
                 }
                 // The "…" menu as the row's last circle, as iOS (owner 2026-11-10).
                 if (uid != me && !glowOn && (fromChat || addToGroup != null)) Box(share.glassMenuAnchor(moreAnchor)) {
-                    ActionTile("More", ImageVector.vectorResource(R.drawable.ic_more_ios), Modifier.fillMaxWidth()) { moreOpen = true }
+                    ActionTile("More", ImageVector.cachedVector(R.drawable.ic_more_ios), Modifier.fillMaxWidth()) { moreOpen = true }
                 }
             }
             Spacer(Modifier.height(20.dp))
@@ -819,20 +819,20 @@ private fun GroupsInCommonSection(groups: List<Conversation>, me: String, onAdd:
         .let { if (any) it.clickable(onClickLabel = "See All") { onSeeAll() } else it }.padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Text(header, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.secondary)
-        if (any) Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null, tint = c.secondary, modifier = Modifier.size(26.dp))
+        if (any) Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_right), null, tint = c.secondary, modifier = Modifier.size(26.dp))
         Spacer(Modifier.weight(1f))
     }
     SettingsSection {
         Row(Modifier.fillMaxWidth().clickable { onAdd() }.padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(44.dp).clip(CircleShape).background(c.fieldFill), contentAlignment = Alignment.Center) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_plus_ios), null, tint = c.label, modifier = Modifier.size(24.dp))
+                Icon(ImageVector.cachedVector(R.drawable.ic_plus_ios), null, tint = c.label, modifier = Modifier.size(24.dp))
             }
             Spacer(Modifier.width(14.dp))
             Text("Add to a Group", fontSize = 17.sp, color = c.label)
         }
         shownGroups.forEach { g -> GroupInCommonRow(g, me, onOpenChat) }
-        if (more) SettingsRow("See All", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_chevron_down)),
+        if (more) SettingsRow("See All", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_sf_chevron_down)),
             trailing = Trailing.NONE, last = true) { onSeeAll() }
     }
 }
@@ -873,9 +873,9 @@ private fun CallLogCard(call: com.fariin.app.data.CallEntry, me: String) {
             Text(date, fontSize = 15.sp, color = c.secondary)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(when {
-                    missed -> ImageVector.vectorResource(R.drawable.ic_sf_arrow_down_left)
-                    call.mine(me) -> ImageVector.vectorResource(R.drawable.ic_sf_arrow_up_right)
-                    else -> ImageVector.vectorResource(R.drawable.ic_sf_arrow_down_left)
+                    missed -> ImageVector.cachedVector(R.drawable.ic_sf_arrow_down_left)
+                    call.mine(me) -> ImageVector.cachedVector(R.drawable.ic_sf_arrow_up_right)
+                    else -> ImageVector.cachedVector(R.drawable.ic_sf_arrow_down_left)
                 }, contentDescription = null, tint = if (missed) c.red else c.secondary, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(10.dp))
                 Text(com.fariin.app.data.CallInfoLink.line(call, me), fontSize = 15.sp, color = if (missed) c.red else c.label,
@@ -900,7 +900,7 @@ private fun ShareProfileItem(onClick: () -> Unit) {
 private fun ClearMineItem(onClick: () -> Unit) {
     val c = Fariin.colors
     androidx.compose.material3.DropdownMenuItem(text = { Text("Clear My Messages", color = c.red) },
-        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), null, tint = c.red) }, onClick = onClick)
+        leadingIcon = { Icon(ImageVector.cachedVector(R.drawable.ic_sf_trash), null, tint = c.red) }, onClick = onClick)
 }
 
 /** iOS ContactInfoView menu: "Export Chat" (ChatExportRun), above Clear My Messages as iOS orders it. */
@@ -908,7 +908,7 @@ private fun ClearMineItem(onClick: () -> Unit) {
 internal fun ExportChatItem(onClick: () -> Unit) {
     val c = Fariin.colors
     androidx.compose.material3.DropdownMenuItem(text = { Text("Export Chat", color = c.label) },
-        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_save_down), null, tint = c.label) }, onClick = onClick)
+        leadingIcon = { Icon(ImageVector.cachedVector(R.drawable.ic_save_down), null, tint = c.label) }, onClick = onClick)
 }
 
 /** iOS ContactInfoView menu: "Add to a Group" (AddToGroup.kt). */
@@ -916,14 +916,14 @@ internal fun ExportChatItem(onClick: () -> Unit) {
 private fun AddToGroupItem(onClick: () -> Unit) {
     val c = Fariin.colors
     androidx.compose.material3.DropdownMenuItem(text = { Text("Add to a Group", color = c.label) },
-        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_add_member), null, tint = c.label) }, onClick = onClick)
+        leadingIcon = { Icon(ImageVector.cachedVector(R.drawable.ic_add_member), null, tint = c.label) }, onClick = onClick)
 }
 
 @Composable
 private fun ChangeWallpaperItem(onClick: () -> Unit) {
     val c = Fariin.colors
     androidx.compose.material3.DropdownMenuItem(text = { Text("Change Wallpaper", color = c.label) },
-        leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_wallpaper), null, tint = c.label) }, onClick = onClick)
+        leadingIcon = { Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_wallpaper), null, tint = c.label) }, onClick = onClick)
 }
 
 @Composable
@@ -977,7 +977,7 @@ private fun NewContactPage(api: PeopleApi, onBack: () -> Unit, onOpenChat: (Stri
     com.fariin.app.ui.settings.BarPage("New Contact", onBack = onBack, modifier = Modifier.background(c.bgSecondary), action = {
             androidx.compose.material3.IconButton(onClick = { add() }, enabled = canSave, modifier = com.fariin.app.ui.components.barGlass()) {
                 if (working) androidx.compose.material3.CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                else Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), "Add contact", tint = if (canSave) c.accent else c.secondary)
+                else Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), "Add contact", tint = if (canSave) c.accent else c.secondary)
             }
         }) { top ->
         androidx.compose.foundation.layout.Spacer(Modifier.height(top))

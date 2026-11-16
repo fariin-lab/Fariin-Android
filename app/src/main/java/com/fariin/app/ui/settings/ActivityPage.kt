@@ -40,7 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -92,14 +92,14 @@ fun ActivityScreen(onBack: () -> Unit, onOpen: (ActivityItem) -> Unit) {
         var open by remember { mutableStateOf(false) }
         Box {
             IconButton(onClick = { open = true }, modifier = com.fariin.app.ui.components.barGlass()) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More", tint = c.label)
+                Icon(ImageVector.cachedVector(R.drawable.ic_more_ios), contentDescription = "More", tint = c.label)
             }
             com.fariin.app.ui.components.GlassDropdown(expanded = open, onDismissRequest = { open = false },
                 shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border,
                 containerColor = com.fariin.app.ui.components.FariinMenu.container) {
                 // The owner's icon: a chat bubble with a check (2026-11-10), as in the Chats menu.
                 DropdownMenuItem(text = { Text("Mark All as Read") },
-                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_mark_all_read), contentDescription = null, tint = c.label) },
+                    leadingIcon = { Icon(ImageVector.cachedVector(R.drawable.ic_mark_all_read), contentDescription = null, tint = c.label) },
                     onClick = { open = false; scope.launch { ActivityFeed.markRead() } })
             }
         }
@@ -153,7 +153,7 @@ private fun ActivityRow(i: ActivityItem, onTap: () -> Unit) {
             Avatar(i.fromPhoto.ifEmpty { null }, 56.dp, squircle = i.fromUid.isEmpty(), kind = if (i.fromUid.isEmpty()) AvatarKind.CHANNEL else AvatarKind.PERSON)
             Box(Modifier.align(Alignment.BottomEnd).offset(x = 3.dp, y = 3.dp).size(24.dp).clip(CircleShape).background(c.bgSecondary).padding(2.dp)) {
                 Box(Modifier.size(20.dp).clip(CircleShape).background(Color(0xFF8E8E93)), contentAlignment = Alignment.Center) {
-                    Icon(ImageVector.vectorResource(R.drawable.ic_quote), null, tint = Color.White, modifier = Modifier.size(11.dp))
+                    Icon(ImageVector.cachedVector(R.drawable.ic_quote), null, tint = Color.White, modifier = Modifier.size(11.dp))
                 }
             }
         } else Box(Modifier.size(56.dp)) {
@@ -245,7 +245,7 @@ private fun ActivityRow(i: ActivityItem, onTap: () -> Unit) {
             Spacer(Modifier.width(10.dp))
             Box(Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)).background(c.label.copy(alpha = 0.06f)), contentAlignment = Alignment.Center) {
                 AsyncImage(i.thumb, null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
-                if (i.thumbKind == "video") Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), null, tint = Color.White, modifier = Modifier.size(18.dp))
+                if (i.thumbKind == "video") Icon(ImageVector.cachedVector(R.drawable.ic_sf_play_fill), null, tint = Color.White, modifier = Modifier.size(18.dp))
             }
         }
     }

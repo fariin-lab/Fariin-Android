@@ -1,7 +1,7 @@
 package com.fariin.app.ui.settings
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
@@ -383,7 +383,7 @@ private fun QrPosterSheet(title: String, subtitle: String, link: String, photoUr
                 Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp)) {
                     Box(Modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.22f)).clickable { close() },
                         contentAlignment = Alignment.Center) {
-                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = Color.White, modifier = Modifier.size(20.dp))
+                        Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = Color.White, modifier = Modifier.size(20.dp))
                     }
                 }
                 Spacer(Modifier.weight(1f).heightIn(min = 10.dp))
@@ -413,15 +413,15 @@ private fun QrPosterSheet(title: String, subtitle: String, link: String, photoUr
                             .putExtra(Intent.EXTRA_TITLE, title)
                         runCatching { ctx.startActivity(Intent.createChooser(send, null)) }
                     }
-                    PosterAction(rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_save_down)), if (saving) "Saving…" else "Save", Modifier.weight(1f), enabled = !saving) {
+                    PosterAction(rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_save_down)), if (saving) "Saving…" else "Save", Modifier.weight(1f), enabled = !saving) {
                         if (com.fariin.app.media.GallerySaver.needsPermission(ctx)) askStorage.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE) else doSave()
                     }
-                    PosterAction(rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)), "Copy link", Modifier.weight(1f)) {
+                    PosterAction(rememberVectorPainter(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_link_copy)), "Copy link", Modifier.weight(1f)) {
                         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                         cm.setPrimaryClip(android.content.ClipData.newPlainText("Fariin link", link))
                         flash("Link copied")
                     }
-                    if (onScan != null) PosterAction(rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_qrcode_viewfinder)), "Scan", Modifier.weight(1f)) {
+                    if (onScan != null) PosterAction(rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_sf_qrcode_viewfinder)), "Scan", Modifier.weight(1f)) {
                         scope.launch { sheet.hide() }.invokeOnCompletion { onClose(); onScan() }
                     }
                 }
@@ -571,9 +571,9 @@ internal fun ScanQrPage(onMyCode: () -> Unit, onClose: () -> Unit, onDone: () ->
             if (denied && !hasCamera) CameraOffCard(ctx)
             Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(16.dp)) {
                 Row(Modifier.fillMaxWidth()) {
-                    GlassCircle(rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_xmark)), "Close", onClose)
+                    GlassCircle(rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_sf_xmark)), "Close", onClose)
                     Spacer(Modifier.weight(1f))
-                    if (hasTorch) GlassCircle(rememberVectorPainter(if (torch) ImageVector.vectorResource(R.drawable.ic_sf_bolt_fill) else ImageVector.vectorResource(R.drawable.ic_sf_bolt_slash_fill)),
+                    if (hasTorch) GlassCircle(rememberVectorPainter(if (torch) ImageVector.cachedVector(R.drawable.ic_sf_bolt_fill) else ImageVector.cachedVector(R.drawable.ic_sf_bolt_slash_fill)),
                         if (torch) "Turn off flash" else "Turn on flash") {
                         torch = !torch; camera?.cameraControl?.enableTorch(torch)
                     }
@@ -589,13 +589,13 @@ internal fun ScanQrPage(onMyCode: () -> Unit, onClose: () -> Unit, onDone: () ->
                     modifier = Modifier.align(Alignment.CenterHorizontally).floating(CircleShape).padding(horizontal = 16.dp, vertical = 10.dp))
                 Spacer(Modifier.height(40.dp))
                 Row(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                    GlassCircle(rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album)), "Choose a photo") {
+                    GlassCircle(rememberVectorPainter(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_album)), "Choose a photo") {
                         pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     }
                     Spacer(Modifier.weight(1f))
                     Row(Modifier.floating(CircleShape).clickable(onClick = onMyCode).padding(horizontal = 20.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_qr), contentDescription = null, tint = Fariin.colors.label, modifier = Modifier.size(20.dp))
+                        Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_qr), contentDescription = null, tint = Fariin.colors.label, modifier = Modifier.size(20.dp))
                         Text("My code", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Fariin.colors.label)
                     }
                     Spacer(Modifier.weight(1f))
@@ -618,7 +618,7 @@ private fun GlassCircle(painter: Painter, label: String, onClick: () -> Unit) {
 private fun CameraOffCard(ctx: Context) {
     Column(Modifier.fillMaxSize().background(Color.Black).padding(horizontal = 40.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically)) {
-        Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera), contentDescription = null, tint = Color.White, modifier = Modifier.size(40.dp))
+        Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_camera), contentDescription = null, tint = Color.White, modifier = Modifier.size(40.dp))
         Text("Camera access is off", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
         Text("Fariin needs the camera to scan a QR code. Turn it on in Settings, or pick a photo of a code with the button below.",
             fontSize = 15.sp, color = Color.White.copy(alpha = 0.75f), textAlign = TextAlign.Center)

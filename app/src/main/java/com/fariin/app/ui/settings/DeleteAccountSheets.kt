@@ -2,7 +2,7 @@ package com.fariin.app.ui.settings
 
 import com.fariin.app.ui.components.floating
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -303,7 +303,7 @@ internal fun AccountSheetFrame(motion: SheetMotion, closeEnabled: Boolean, onClo
             .clickable(enabled = closeEnabled, onClickLabel = "Close") { (onClose ?: { motion.close() })() }
             .graphicsLayer { alpha = if (closeEnabled) 1f else 0.4f },
             contentAlignment = Alignment.Center) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = Fariin.colors.label, modifier = Modifier.size(18.dp))
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = Fariin.colors.label, modifier = Modifier.size(18.dp))
         }
     }
 }

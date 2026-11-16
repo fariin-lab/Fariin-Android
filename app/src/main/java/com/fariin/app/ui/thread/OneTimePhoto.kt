@@ -51,7 +51,7 @@ import com.fariin.app.media.OnceBurn
 import com.fariin.app.media.ViewedOnce
 import java.io.File
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 
 /**
@@ -129,7 +129,7 @@ internal fun OneTimePhotoPage(m: Message, cid: String, onClose: () -> Unit) {
                 Box(
                     Modifier.size(36.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.14f)).clickable(onClick = onClose),
                     contentAlignment = Alignment.Center,
-                ) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", tint = Color.White, modifier = Modifier.size(18.dp)) }
+                ) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Close", tint = Color.White, modifier = Modifier.size(18.dp)) }
                 Spacer(Modifier.width(12.dp))
                 DashedOnceRing(Color.White.copy(alpha = 0.9f), showOne = true, side = 20.dp, digitSize = 10.sp)
                 Spacer(Modifier.width(6.dp))

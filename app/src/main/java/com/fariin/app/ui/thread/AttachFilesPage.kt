@@ -35,7 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.vectorResource
+import com.fariin.app.ui.components.cachedVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -150,19 +150,19 @@ internal fun AttachFilesPage(onBack: () -> Unit, onBrowse: () -> Unit, onGallery
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { if (searching) { searching = false; query = "" } else onBack() }) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_back_arrow), "Back", tint = c.label)
+                Icon(ImageVector.cachedVector(R.drawable.ic_back_arrow), "Back", tint = c.label)
             }
             if (searching) {
                 com.fariin.app.ui.components.FloatingSearchField(query, { query = it }, "Search files", Modifier.weight(1f).padding(end = 8.dp))
             } else {
                 Text("Files", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.weight(1f).padding(start = 4.dp))
-                IconButton(onClick = { searching = true }) { Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), "Search", tint = c.label) }
+                IconButton(onClick = { searching = true }) { Icon(ImageVector.cachedVector(R.drawable.ic_search_ios), "Search", tint = c.label) }
                 Box {
-                    IconButton(onClick = { sortMenu = true }) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_sort), "Sort", tint = c.label) }
+                    IconButton(onClick = { sortMenu = true }) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_sort), "Sort", tint = c.label) }
                     GlassDropdown(sortMenu, onDismissRequest = { sortMenu = false }, containerColor = c.card) {
                         listOf(FileSort.DATE to "Sort by date", FileSort.NAME to "Sort by name").forEach { (s, label) ->
                             DropdownMenuItem(text = { Text(label, color = c.label) }, onClick = { sort = s; sortMenu = false },
-                                trailingIcon = { if (sort == s) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = c.accent) })
+                                trailingIcon = { if (sort == s) Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), null, tint = c.accent) })
                         }
                     }
                 }
@@ -173,10 +173,10 @@ internal fun AttachFilesPage(onBack: () -> Unit, onBrowse: () -> Unit, onGallery
                 item {
                     // Three ways in, as one rounded card (owner 2026-11-04: rounded and polished, as iOS).
                     Column(Modifier.fillMaxWidth().padding(top = 4.dp).clip(RoundedCornerShape(22.dp)).background(c.card)) {
-                        SourceRow(ImageVector.vectorResource(R.drawable.ic_sf_photo_on_rectangle), "Photos", "Original quality, sent as files") { choosingPhotos = true }
-                        SourceRow(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_file), "Browse documents", "PDFs, documents and other files", onBrowse)
-                        SourceRow(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), "Choose from gallery", "Photos or videos in full quality", onGallery)
-                        SourceRow(ImageVector.vectorResource(R.drawable.ic_sf_headphones), "Browse audio", "Music and other sound files", onAudio)
+                        SourceRow(ImageVector.cachedVector(R.drawable.ic_sf_photo_on_rectangle), "Photos", "Original quality, sent as files") { choosingPhotos = true }
+                        SourceRow(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_file), "Browse documents", "PDFs, documents and other files", onBrowse)
+                        SourceRow(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_album), "Choose from gallery", "Photos or videos in full quality", onGallery)
+                        SourceRow(ImageVector.cachedVector(R.drawable.ic_sf_headphones), "Browse audio", "Music and other sound files", onAudio)
                     }
                 }
                 item { Text("Recent", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.secondary, modifier = Modifier.padding(start = 6.dp, top = 22.dp, bottom = 8.dp)) }
