@@ -299,12 +299,18 @@ class ThreadRepository(
         // thread: this rebuild used to run inside the opening frame, waiting on the listener's lock.
         scope.launch(Dispatchers.Default) { BlockList.state.drop(1).collect { if (msgReg != null) rebuild() } }
         // Keys in the background, then re-open what drew as "…" (iOS keyPreloadTask).
+        // Only when something new came: every open bumped the epoch, and every chat row under the
+        // sliding chat watches it, so the whole list rebuilt mid-slide (cheap phone trace 2026-11-16).
         scope.launch(Dispatchers.IO) {
+            val wasReady = crypto.isReady
             try { crypto.ensureReady() } catch (_: Exception) {}
-            val members = memberUids()
-            crypto.preloadKeys(members.filter { it != me })
-            CryptoHub.bumpKeys()
-            rebuild()
+            val others = memberUids().filter { it != me }
+            val missing = others.filterNot(crypto::hasKey)
+            crypto.preloadKeys(others)
+            if (!wasReady && crypto.isReady || missing.any(crypto::hasKey)) {
+                CryptoHub.bumpKeys()
+                rebuild()
+            }
         }
     }
 

@@ -292,6 +292,9 @@ class FariinCrypto(
 
     suspend fun publicKey(uid: String): ByteArray? = preloadKey(uid)
 
+    /** This person's key is already in memory (no read needed). */
+    fun hasKey(uid: String): Boolean = pubCache.containsKey(uid)
+
     /** Up to 8 reads in flight. */
     suspend fun preloadKeys(uids: Collection<String>): Map<String, ByteArray> = coroutineScope {
         val gate = Semaphore(8)

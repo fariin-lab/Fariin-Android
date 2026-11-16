@@ -296,6 +296,22 @@ private const val LITE_MS = 150
 private val LITE_SHIFT_DP = 48.dp
 
 /** A nav host page placed by [PageMotion]. */
+/**
+ * The flow's value, held while a page slides ([PageMotion]) and brought up to date the moment it
+ * lands, as the reference app postpones its updates during an open animation: a new value mid-slide
+ * rebuilt the whole page in a frame the slide needed. A value that is not [ready] yet (a chat with no
+ * messages read) is never held, so the first content always comes at once.
+ */
+@Composable
+fun <T> kotlinx.coroutines.flow.StateFlow<T>.collectSettled(ready: (T) -> Boolean = { true }): androidx.compose.runtime.State<T> {
+    val out = androidx.compose.runtime.remember(this) { androidx.compose.runtime.mutableStateOf(value) }
+    androidx.compose.runtime.LaunchedEffect(this) {
+        kotlinx.coroutines.flow.combine(this@collectSettled, androidx.compose.runtime.snapshotFlow { PageMotion.e >= 1f }) { v, landed -> v to landed }
+            .collect { (v, landed) -> if (landed || !ready(out.value)) out.value = v }
+    }
+    return out
+}
+
 @Composable
 fun PageFrame(id: String, content: @Composable () -> Unit) {
     val inner = androidx.compose.runtime.remember { InnerPages() }

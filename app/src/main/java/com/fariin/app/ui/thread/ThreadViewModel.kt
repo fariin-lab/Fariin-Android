@@ -10,6 +10,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.fariin.app.media.ChatMedia
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import com.fariin.app.ui.components.collectSettled
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -49,8 +50,10 @@ class ThreadViewModel(cid: String, me: String, crypto: FariinCrypto, context: Co
 fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Unit) {
     val app = LocalContext.current.applicationContext
     val vm: ThreadViewModel = viewModel(key = "thread-$cid") { ThreadViewModel(cid, me, crypto, app) }
-    val s by vm.repo.state.collectAsState()
-    val pinnedMsgs by vm.repo.pinned.collectAsState()
+    // Held while a page slides: each answer (server page, synced, pins) used to rebuild the whole
+    // chat mid-slide, 4 to 6 times in the first second on a cheap phone; they land together after.
+    val s by vm.repo.state.collectSettled { it.loaded }
+    val pinnedMsgs by vm.repo.pinned.collectSettled()
     val keys by CryptoHub.keysEpoch.collectAsState()
     val listed = remember(s.conv, keys) { CryptoHub.listedConversation(cid) }
     val conv = remember(s.conv, listed) {
