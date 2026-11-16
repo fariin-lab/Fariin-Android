@@ -154,9 +154,8 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     var dayLimit by remember { mutableStateOf(false) }
     val upload by StoryUploads.state.collectAsState()
     val pendingJpeg by StoryUploads.pending.collectAsState()
-    val pendingImage = remember(pendingJpeg) {
-        pendingJpeg?.let { b -> runCatching { android.graphics.BitmapFactory.decodeByteArray(b, 0, b.size)?.asImageBitmap() }.getOrNull() }
-    }
+    // The My Story card (66 x 94 dp), decoded off the main thread at that size.
+    val pendingImage = com.fariin.app.ui.components.rememberBytesImage(pendingJpeg, 94.dp)
     // The story's own library sheet (StoryLibrary.kt, iOS StoryLibraryPicker), never the system
     // picker. It stays open under the editor, so closing the editor comes back to it (iOS).
     var library by remember { mutableStateOf(false) }

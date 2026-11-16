@@ -61,8 +61,9 @@ internal fun EditPhotoSheet(
     motion.mid = windowH * 0.42f
     var menu by remember { mutableStateOf(false) }
     var askRemove by remember { mutableStateOf(false) }
-    val heldBmp = remember(held) { held?.let { j -> runCatching { android.graphics.BitmapFactory.decodeByteArray(j, 0, j.size)?.asImageBitmap() }.getOrNull() } }
-    val hasPhoto = heldBmp != null || (!removed && !current.isNullOrEmpty())
+    // Off the main thread, at the circle's size; the menu goes by the bytes so it never waits on it.
+    val heldBmp = com.fariin.app.ui.components.rememberBytesImage(held, 220.dp)
+    val hasPhoto = held != null || (!removed && !current.isNullOrEmpty())
     com.fariin.app.ui.components.FariinSheetDialog(motion, fill = c.card) { _ ->
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.fillMaxWidth().sheetDrag(motion).padding(horizontal = 16.dp, vertical = 12.dp)) {

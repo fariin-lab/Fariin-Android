@@ -1,6 +1,5 @@
 package com.fariin.app.ui.thread
 
-import android.graphics.BitmapFactory
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -35,7 +34,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -102,7 +100,7 @@ internal fun LinkDraftBar(cid: String, me: String, text: String, allowed: Boolea
 @Composable
 private fun LinkDraftRow(d: LinkPreviews.Draft?, onClose: () -> Unit) {
     val c = Fariin.colors
-    val thumb = remember(d) { d?.jpeg?.let { runCatching { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }.getOrNull() } }
+    val thumb = com.fariin.app.ui.components.rememberBytesImage(d?.jpeg, 44.dp)
     Column(Modifier.fillMaxWidth().background(c.bg)) {
         Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(start = 14.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically) {

@@ -16,7 +16,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
-import coil3.toBitmap
+import coil3.request.allowHardware
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -39,11 +39,15 @@ internal fun StoryPhoto(url: String?, modifier: Modifier = Modifier, onLoaded: (
         canvas?.let { (top, bottom) ->
             if (!fills) Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(top, bottom))))
         }
-        // Full size, under its own cache key: the plain url's cached copy is the small list / chat
-        // card (220x392 seen on the Pixel), which the viewer reused and stretched: the blur.
+        // Screen size, under its own cache key: the plain url's cached copy is the small list / chat
+        // card (220x392 seen on the Pixel), which the viewer reused and stretched: the blur. Never
+        // the original: a 4000 px camera photo is 48 MB decoded, enough to freeze a 2 GB phone.
         val ctx = androidx.compose.ui.platform.LocalContext.current
         val request = remember(url) {
-            coil3.request.ImageRequest.Builder(ctx).data(url).size(coil3.size.Size.ORIGINAL)
+            val dm = ctx.resources.displayMetrics
+            val side = com.fariin.app.media.LowEnd.viewerSide(maxOf(dm.widthPixels, dm.heightPixels),
+                com.fariin.app.media.LowEnd.isLowRam(ctx))
+            coil3.request.ImageRequest.Builder(ctx).data(url).size(side, side)
                 .memoryCacheKey(url?.let { "$it#full" }).build()
         }
         AsyncImage(request, contentDescription = null,
@@ -53,9 +57,16 @@ internal fun StoryPhoto(url: String?, modifier: Modifier = Modifier, onLoaded: (
                 val img = s.result.image
                 if (img.width > 0) aspect = img.height.toFloat() / img.width
                 if (canvas == null && url != null) scope.launch {
+                    // The edge colours come from their own tiny software copy (32 px, from the disk
+                    // cache), never by copying the screen-size hardware bitmap into memory.
                     val c = withContext(Dispatchers.Default) {
                         runCatching {
-                            val b = img.toBitmap().let { if (it.config == Bitmap.Config.HARDWARE) it.copy(Bitmap.Config.ARGB_8888, false) else it }
+                            val r = coil3.SingletonImageLoader.get(ctx).execute(
+                                coil3.request.ImageRequest.Builder(ctx).data(url).size(32, 32)
+                                    .allowHardware(false)
+                                    .memoryCachePolicy(coil3.request.CachePolicy.DISABLED).build())
+                            val b = ((r as? coil3.request.SuccessResult)?.image as? coil3.BitmapImage)?.bitmap
+                                ?.takeIf { it.config != Bitmap.Config.HARDWARE } ?: return@runCatching null
                             val (t, bt) = RepostCard.edgeColours(b)
                             Color(t) to Color(bt)
                         }.getOrNull()

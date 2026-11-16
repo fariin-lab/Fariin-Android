@@ -217,7 +217,7 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
             .verticalScroll(pageScroll), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(8.dp))
             // The circle shows what Save will keep: a held new photo, nothing if removal is held, else mine.
-            val heldBmp = remember(stagedJpeg) { stagedJpeg?.let { j -> runCatching { android.graphics.BitmapFactory.decodeByteArray(j, 0, j.size)?.asImageBitmap() }.getOrNull() } }
+            val heldBmp = com.fariin.app.ui.components.rememberBytesImage(stagedJpeg, 120.dp)
             Box(Modifier.size(120.dp).clip(CircleShape).clickable { sheetJpeg = stagedJpeg; sheetRemove = stagedRemove; photoSheet = true },
                 contentAlignment = Alignment.Center) {
                 if (heldBmp != null) androidx.compose.foundation.Image(heldBmp, null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
@@ -700,7 +700,7 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
                     Box(Modifier.size(64.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.12f)).clickable(onClickLabel = "Set Group Photo") { slotMenu = true }, contentAlignment = Alignment.Center) {
                         val p = photo
                         if (p != null) {
-                            val bmp = remember(p) { android.graphics.BitmapFactory.decodeByteArray(p, 0, p.size)?.asImageBitmap() }
+                            val bmp = com.fariin.app.ui.components.rememberBytesImage(p, 64.dp)
                             if (bmp != null) androidx.compose.foundation.Image(bmp, null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
                         } else Icon(painterResource(com.fariin.app.R.drawable.ic_group_camera), contentDescription = "Set Group Photo",
                             tint = c.accent, modifier = Modifier.size(28.dp))   // iOS: the owner's camera drawing (2026-10-18)

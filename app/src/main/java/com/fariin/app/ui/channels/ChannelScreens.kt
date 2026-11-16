@@ -455,7 +455,10 @@ private fun Intro(onBack: () -> Unit, onNext: () -> Unit) {
  */
 @Composable
 private fun ChannelIntroArt(modifier: Modifier = Modifier) {
-    val moving = com.fariin.app.ui.thread.systemAnimationsOn()
+    // A cheap phone gets the still drawing: a frame-by-frame skew that never ends is the kind of
+    // work that makes a weak GPU stutter.
+    val moving = com.fariin.app.ui.thread.systemAnimationsOn() &&
+        com.fariin.app.perf.PowerSaving.state.value.deviceClass != com.fariin.app.perf.PerfClass.LOW
     val phase = if (moving) {
         val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "sway")
         t.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(
