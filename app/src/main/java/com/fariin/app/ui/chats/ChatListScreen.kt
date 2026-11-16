@@ -239,8 +239,10 @@ fun ChatListScreen(
     BackHandler(enabled = active && !selecting && !searching && showArchive) { showArchive = false }
 
     val source = if (showArchive) state.archived else state.chats
-    val shown = source.asSequence()
-        .filter {
+    // Kept until the list, the filter or the page changes: these were rebuilt on every recomposition
+    // (each scroll-driven or badge change), a cost a 2-core phone felt on every tab.
+    val filtered = remember(source, filter, showArchive, me) {
+        if (filter == FILTER_ALL) source else source.filter {
             when (filter) {
                 FILTER_UNREAD -> !showArchive && it.hasUnreadMark(me)
                 FILTER_GROUPS -> !showArchive && it.isGroup && !it.isChannel
@@ -248,8 +250,10 @@ fun ChatListScreen(
                 else -> true
             }
         }
-        .filter { query.isBlank() || it.displayName(me).contains(query.trim(), ignoreCase = true) }
-        .toList()
+    }
+    // The name search is not kept: a name saved on this phone (ContactNames) can change under it.
+    val shown = if (query.isBlank()) filtered
+        else filtered.filter { it.displayName(me).contains(query.trim(), ignoreCase = true) }
     // The search reaches past the list (iOS lookUpPeople, owner 2026-11-03 "not global"): who owns
     // the username typed, asked 0.4 s after the last key, answers kept per query for the session.
     // Somebody already in a chat above is not offered again.
@@ -289,12 +293,14 @@ fun ChatListScreen(
             done = true
         } finally { if (done) groupsPending = false }
     }
-    val newPeople = run {
-        val known = shown.filter { !it.isGroup }.map { it.otherUid(me) }.toSet()
-        peopleHits.filter { it.uid != me && it.uid !in known }
+    val newPeople = remember(shown, peopleHits, me) {
+        if (peopleHits.isEmpty()) emptyList() else {
+            val known = shown.filter { !it.isGroup }.map { it.otherUid(me) }.toSet()
+            peopleHits.filter { it.uid != me && it.uid !in known }
+        }
     }
-    val pinned = if (showArchive) emptyList() else shown.filter { it.isPinned(me) }
-    val rest = shown.filter { showArchive || !it.isPinned(me) }
+    val pinned = remember(shown, showArchive, me) { if (showArchive) emptyList() else shown.filter { it.isPinned(me) } }
+    val rest = remember(shown, showArchive, me) { if (showArchive) shown else shown.filter { !it.isPinned(me) } }
     // The official Fariin chat: its own row, placed among the chats by its newest announcement.
     val official by com.fariin.app.data.OfficialChannel.view.collectAsState()
     // Archived, it lives in the Archived list; pinned, it heads the Pinned section.
@@ -315,7 +321,9 @@ fun ChatListScreen(
     // "Activity" is found by the chat search like a chat title.
     val activitySearchHit = query.isNotBlank() && activity?.let { it.at > 0 } == true && "Activity".contains(query.trim(), ignoreCase = true)
     val activityIndex = if (activityShown && !activityPinned) rest.indexOfFirst { it.displayUpdatedAt(me) < activity!!.at }.let { if (it < 0) rest.size else it } else rest.size
-    val selectedConvs = (state.chats + state.archived).filter { it.id in selected }
+    val selectedConvs = remember(state.chats, state.archived, selected) {
+        if (selected.isEmpty()) emptyList() else (state.chats + state.archived).filter { it.id in selected }
+    }
     val byId = remember(state.chats, state.archived) { (state.chats + state.archived).associateBy { it.id } }
     val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
     // Chats taken out of the search page's top row by a long press (per account, as iOS).

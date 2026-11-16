@@ -48,14 +48,16 @@ object PollVotes {
                     val at = snap?.getTimestamp("at")?.toDate()?.time?.toDouble() ?: 0.0
                     e.flow.value = Votes(if (mine.isEmpty()) emptyMap() else mapOf(me to mine), at)
                 }
-            } else votesRef(cid, mid).addSnapshotListener { snap, _ ->
+            } else votesRef(cid, mid).addSnapshotListener(com.fariin.app.perf.ListenThread.exec) { snap, _ ->
+                // A big group's votes are read on the listen thread; set on the main thread, where
+                // setVote changes the same value.
                 if (snap == null) return@addSnapshotListener
                 val out = HashMap<String, List<Int>>()
                 for (d in snap.documents) {
                     val o = PollRules.readOptions(d.get("options"))
                     if (o.isNotEmpty()) out[d.id] = o
                 }
-                e.flow.value = Votes(out, e.flow.value.mineAt)
+                main.post { e.flow.value = Votes(out, e.flow.value.mineAt) }
             }
         }
         return e.flow

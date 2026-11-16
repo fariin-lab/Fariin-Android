@@ -27,7 +27,7 @@ object ChannelStories {
     private var run: Job? = null
     private var owner: String? = null
 
-    fun start(me: String) {
+    @Synchronized fun start(me: String) {
         if (owner == me && loop != null) return
         stop()
         owner = me
@@ -41,7 +41,7 @@ object ChannelStories {
         }
     }
 
-    fun stop() { loop?.cancel(); loop = null; run?.cancel(); owner = null; _stories.value = emptyList() }
+    @Synchronized fun stop() { loop?.cancel(); loop = null; run?.cancel(); owner = null; _stories.value = emptyList() }
 
     /** A channel story of a channel I follow and did not post myself (the counts footer, not a reply field). */
     fun isFollowerStory(s: Story, me: String) =

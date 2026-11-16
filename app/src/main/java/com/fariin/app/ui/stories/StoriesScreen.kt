@@ -351,15 +351,15 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             // The field replaces the page rather than filtering it in place (iOS): one list of
             // matches in the list's own rows under "Friends", or "No Results".
             if (query.isNotEmpty()) {
-                if (matches.isEmpty()) item(key = "noResults") { NoResults(query) }
+                if (matches.isEmpty()) item(key = "noResults", contentType = "empty") { NoResults(query) }
                 else {
-                    item(key = "searchHeading") { Heading("Friends") }
-                    items(matches, key = { "s" + it.key }) { g ->
+                    item(key = "searchHeading", contentType = "heading") { Heading("Friends") }
+                    items(matches, key = { "s" + it.key }, contentType = { "friend" }) { g ->
                         FriendRow(g, now, friendMenu(g)) { viewing = matches to matches.indexOfFirst { it.key == g.key }.coerceAtLeast(0) }
                     }
                 }
             } else {
-            item {
+            item(key = "myHeading", contentType = "myHeading") {
                 Row(
                     Modifier.clickable { posted = true }.padding(start = 20.dp, end = 20.dp, top = 8.dp)
                         .semantics { contentDescription = "Posted Stories" },
@@ -371,7 +371,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                     Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), contentDescription = null, tint = c.secondary, modifier = Modifier.size(18.dp))
                 }
             }
-            item {
+            item(key = "myStory", contentType = "myStory") {
                 val mine = state.mine
                 val newest = mine?.stories?.lastOrNull()
                 // iOS uploadPhase: "Preparing…" for the phone's half, "Uploading…" once it is sending.
@@ -418,11 +418,11 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                 pickError?.let { Text(it, color = c.red, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 20.dp)) }
             }
             if (recent.isNotEmpty()) {
-                item { Heading("Recent Stories") }
-                items(recent, key = { "r" + it.key }) { g -> FriendRow(g, now, friendMenu(g)) { openRing(g) } }
+                item(key = "recentHeading", contentType = "heading") { Heading("Recent Stories") }
+                items(recent, key = { "r" + it.key }, contentType = { "friend" }) { g -> FriendRow(g, now, friendMenu(g)) { openRing(g) } }
             }
             if (viewed.isNotEmpty()) {
-                item {
+                item(key = "viewedHeading", contentType = "foldHeading") {
                     Row(
                         Modifier.fillMaxWidth().clickable { viewedCollapsed = !viewedCollapsed }
                             .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 4.dp),
@@ -440,11 +440,11 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                         )
                     }
                 }
-                if (!viewedCollapsed) items(viewed, key = { "v" + it.key }) { g -> FriendRow(g, now, friendMenu(g)) { openRing(g) } }
+                if (!viewedCollapsed) items(viewed, key = { "v" + it.key }, contentType = { "friend" }) { g -> FriendRow(g, now, friendMenu(g)) { openRing(g) } }
             }
             // iOS Hidden Stories: only while there is one, dimmed, folding like Viewed Stories.
             if (hidden.isNotEmpty()) {
-                item {
+                item(key = "hiddenHeading", contentType = "foldHeading") {
                     Row(
                         Modifier.fillMaxWidth().clickable { hiddenCollapsed = !hiddenCollapsed }
                             .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 4.dp),
@@ -462,24 +462,24 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                         )
                     }
                 }
-                if (!hiddenCollapsed) items(hidden, key = { "h" + it.key }) { g ->
+                if (!hiddenCollapsed) items(hidden, key = { "h" + it.key }, contentType = { "hiddenFriend" }) { g ->
                     Box(Modifier.alpha(0.45f)) { FriendRow(g, now, hiddenMenu(g)) { openHidden(g) } }
                 }
             }
             // Glowing (iOS glowSection): under Friends, never mixed into it; hidden with Glow.
             if (glowOn && com.fariin.app.ui.glow.hasGlowGrid(glowState.relationship, glowCards)) {
-                item(key = "glowHeading") { com.fariin.app.ui.glow.GlowingHeading { glowPage = true } }
+                item(key = "glowHeading", contentType = "glowHeading") { com.fariin.app.ui.glow.GlowingHeading { glowPage = true } }
                 val cards = glowCards.valueOrNull
-                if (cards == null) item(key = "glowLoading") {
+                if (cards == null) item(key = "glowLoading", contentType = "spinner") {
                     Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
                         com.fariin.app.ui.components.FariinSpinner(size = 22.dp)
                     }
-                } else items(cards.chunked(2), key = { "glow:" + it.first().person.id }) { pair ->
+                } else items(cards.chunked(2), key = { "glow:" + it.first().person.id }, contentType = { "glowPair" }) { pair ->
                     com.fariin.app.ui.glow.GlowCardRow(me, pair, glowSeen, glowOpener)
                 }
             }
             }
-            item { Spacer(Modifier.height(24.dp)) }
+            item(key = "bottomGap", contentType = "gap") { Spacer(Modifier.height(24.dp)) }
         }
         // The round camera at the bottom right (owner 2026-11-14: Android people look there, not at the
         // Add Story row): the page's main action, in the same place and style as New Chat on Chats.

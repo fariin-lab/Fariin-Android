@@ -106,7 +106,11 @@ fun CallsTab(me: String, conversations: List<Conversation>, demoCalls: List<Call
     var loaded by remember { mutableStateOf(demoCalls != null) }
     if (demoCalls == null) {
         // Re-read when a chat moves (a call ends with a new row in that chat).
-        val key = conversations.joinToString(",") { it.id + ":" + it.updatedAtMillis }
+        // A number, worked out only when the list changes (it was a string over every chat, built on
+        // every recomposition).
+        val key = remember(conversations) {
+            conversations.fold(17L) { h, c -> (h * 31 + c.id.hashCode()) * 31 + c.updatedAtMillis.hashCode() }
+        }
         LaunchedEffect(me, key) {
             calls = repo.load(me, conversations)
             loaded = true
@@ -182,9 +186,12 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
     }.collectAsState(initial = null)
     val liveSince = remember(liveCall?.uid) { System.currentTimeMillis() }
     val liveEntry = CallsLive.entry(liveCall, me, liveSince)?.takeIf { q.isEmpty() || it.name.lowercase().contains(q) }
-    val stored = CallsLive.withoutLive(calls.filter { it.id !in hidden }, liveEntry)
-    val shown = CallHistory.filter(stored, me, missedOnly, now).filter { q.isEmpty() || it.name.lowercase().contains(q) }
-    val runs = CallsLive.runs(CallHistory.runs(shown, me, now), liveEntry, missedOnly)
+    // Kept until one of its inputs changes (the minute clock, a new call, the filter or the search).
+    val runs = remember(calls, hidden, liveEntry, me, missedOnly, now, q) {
+        val stored = CallsLive.withoutLive(calls.filter { it.id !in hidden }, liveEntry)
+        val shown = CallHistory.filter(stored, me, missedOnly, now).filter { q.isEmpty() || it.name.lowercase().contains(q) }
+        CallsLive.runs(CallHistory.runs(shown, me, now), liveEntry, missedOnly)
+    }
     val nav = com.fariin.app.ui.people.LocalPeopleNav.current
     // The people in the list, read ahead: their page opens with the bio already there, and the
     // verified mark beside their name comes from the same read.
@@ -198,13 +205,17 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
     }
     LaunchedEffect(me) { if (me.isNotEmpty() && com.google.firebase.auth.FirebaseAuth.getInstance().currentUser != null) com.fariin.app.call.CallLinks.watch(me) }
     val allLinks by com.fariin.app.call.CallLinks.links.collectAsState()
-    val links = if (missedOnly) emptyList() else allLinks.filter { q.isEmpty() || it.title.lowercase().contains(q) }
-    val rows: List<Any> = (links.map { it.createdAtMs to (it as Any) } + runs.map {
-        // The live row is the newest thing on the page whatever the clock says.
-        (if (CallsLive.showsReturn(it)) Long.MAX_VALUE else it.latest.dateMs) to (it as Any)
-    }).sortedByDescending { it.first }.map { it.second }
+    val links = remember(allLinks, missedOnly, q) {
+        if (missedOnly) emptyList() else allLinks.filter { q.isEmpty() || it.title.lowercase().contains(q) }
+    }
+    val rows: List<Any> = remember(links, runs) {
+        (links.map { it.createdAtMs to (it as Any) } + runs.map {
+            // The live row is the newest thing on the page whatever the clock says.
+            (if (CallsLive.showsReturn(it)) Long.MAX_VALUE else it.latest.dateMs) to (it as Any)
+        }).sortedByDescending { it.first }.map { it.second }
+    }
     // iOS LiveGroupCalls: the calls going in my groups, above the history (not under Missed or a search).
-    val groupKey = groups.filter { it.isGroup }.joinToString(",") { it.id }
+    val groupKey = remember(groups) { groups.filter { it.isGroup }.joinToString(",") { it.id } }
     LaunchedEffect(groupKey, active) { if (active) com.fariin.app.ui.call.LiveGroupCalls.sync(groups) }
     // Up to 40 group-call listeners, only while this tab is shown (battery audit 2026-11-05): the
     // tab stays alive behind the others now, so they stop when it is hidden, not only when it goes.

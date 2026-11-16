@@ -46,6 +46,13 @@ data class PowerState(
      * change kept as a picture. Every other phone keeps the full look.
      */
     val cheapDrawing get() = deviceClass == PerfClass.LOW
+    /**
+     * A LOW phone (2 cores, 2 GB) keeps motion but less of it: rows land in their new place without
+     * gliding, loading blocks stay still (no sweeping band redrawn every frame), the tab icon has no
+     * bounce, the app does not shrink behind a posted story, and the tweens that stay are shorter.
+     * HIGH and AVERAGE (the Pixel) keep the full look.
+     */
+    val reducedMotion get() = PowerRules.reducedMotion(deviceClass)
 }
 
 /** Pure rules, unit tested. */
@@ -62,6 +69,9 @@ object PowerRules {
     // plain fill in the same shape, colour and rim instead. The Pixel 5 measures AVERAGE (its cores
     // average 1.93 GHz) and keeps its glass.
     fun glass(sdk: Int, cls: PerfClass, blurAllowed: Boolean) = sdk >= 31 && cls != PerfClass.LOW && blurAllowed
+    fun reducedMotion(cls: PerfClass) = cls == PerfClass.LOW
+    /** A tween's length: 60% of it on a LOW phone (never under 90 ms), unchanged on every other. */
+    fun motionMs(ms: Int, cls: PerfClass): Int = if (reducedMotion(cls)) maxOf(minOf(ms, 90), ms * 3 / 5) else ms
 }
 
 object PowerSaving {

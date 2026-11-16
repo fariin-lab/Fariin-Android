@@ -145,7 +145,8 @@ fun Modifier.storyAppShrink(): Modifier = composed {
     val tick = StoryAppShrink.tick.intValue
     val p = remember { Animatable(0f) }
     LaunchedEffect(tick) {
-        if (tick == 0 || !com.fariin.app.ui.components.Motion.on) return@LaunchedEffect
+        // Not on a LOW phone: scaling the whole app as one layer for 0.3 s dropped frames there.
+        if (tick == 0 || !com.fariin.app.ui.components.Motion.on || com.fariin.app.ui.components.Motion.reduced) return@LaunchedEffect
         p.snapTo(1f)
         p.animateTo(0f, tween(StoryAppShrink.MS, easing = StoryAppShrink.EASE_IN_OUT))
     }

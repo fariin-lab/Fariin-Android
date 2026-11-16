@@ -501,7 +501,8 @@ private fun SimilarChannelsStrip(cid: String) {
     val c = Fariin.colors
     val nav = LocalChannelNav.current
     val list by androidx.compose.runtime.produceState<List<com.fariin.app.channel.DiscoveredChannel>?>(null, cid) { value = SimilarChannelsStore.load(cid) }
-    val shown = list?.take(10).orEmpty()
+    // One card per channel: the row is keyed on the channel id.
+    val shown = list?.distinctBy { it.cid }?.take(10).orEmpty()
     if (shown.isEmpty()) return
     Column(Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(20.dp)).background(c.card).padding(vertical = 10.dp)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -512,7 +513,7 @@ private fun SimilarChannelsStrip(cid: String) {
         }
         androidx.compose.foundation.lazy.LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
-            items(shown.size) { i ->
+            items(shown.size, key = { shown[it].cid }, contentType = { "similar" }) { i ->
                 val ch = shown[i]
                 Column(Modifier.width(70.dp).clickable { nav.page(ch.cid) }, horizontalAlignment = Alignment.CenterHorizontally) {
                     com.fariin.app.ui.components.Avatar(ch.photoUrl, 54.dp, squircle = true, kind = com.fariin.app.ui.components.AvatarKind.CHANNEL)

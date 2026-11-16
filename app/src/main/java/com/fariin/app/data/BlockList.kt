@@ -35,7 +35,7 @@ object BlockList {
     val snapshot: Snapshot get() = _snap.value
 
     private var regs: List<ListenerRegistration> = emptyList()
-    private var uid: String? = null
+    @Volatile private var uid: String? = null
 
     fun contains(uid: String) = snapshot.contains(uid)
     fun hides(author: String, atMillis: Double) = snapshot.hides(author, atMillis)
@@ -48,16 +48,19 @@ object BlockList {
         if (newUid == null) return
         val me = FirebaseFirestore.getInstance().collection("users").document(newUid)
         regs = listOf(
-            me.collection("blocked").addSnapshotListener { snap, _ ->
+            // Read on the listen thread; the state is set on the main thread, as follow() sets it.
+            me.collection("blocked").addSnapshotListener(com.fariin.app.perf.ListenThread.exec) { snap, _ ->
                 snap ?: return@addSnapshotListener
                 if (uid != newUid) return@addSnapshotListener
                 val e = snap.documents.associate { d ->
                     // A just-made block has no server time yet: "from now".
                     d.id to ((d.get("at") as? Timestamp)?.toDate()?.time?.toDouble() ?: System.currentTimeMillis().toDouble())
                 }
-                _snap.value = _snap.value.copy(owner = newUid, entries = e)
+                com.fariin.app.perf.ListenThread.toMain {
+                    if (uid == newUid) _snap.value = _snap.value.copy(owner = newUid, entries = e)
+                }
             },
-            me.collection("blockHistory").addSnapshotListener { snap, _ ->
+            me.collection("blockHistory").addSnapshotListener(com.fariin.app.perf.ListenThread.exec) { snap, _ ->
                 snap ?: return@addSnapshotListener
                 if (uid != newUid) return@addSnapshotListener
                 val s = HashMap<String, MutableList<ClosedFloatingPointRange<Double>>>()
@@ -67,7 +70,9 @@ object BlockList {
                     val to = (d.get("to") as? Timestamp)?.toDate()?.time?.toDouble() ?: continue
                     if (to >= from) s.getOrPut(other) { mutableListOf() }.add(from..to)
                 }
-                _snap.value = _snap.value.copy(owner = newUid, spans = s)
+                com.fariin.app.perf.ListenThread.toMain {
+                    if (uid == newUid) _snap.value = _snap.value.copy(owner = newUid, spans = s)
+                }
             },
         )
     }
