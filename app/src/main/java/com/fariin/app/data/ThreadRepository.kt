@@ -30,6 +30,7 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -293,8 +294,10 @@ class ThreadRepository(
             onConv(null, err)
         }
         if (!Wire.isGroupCid(cid)) attachPresence(Wire.otherUid(cid, me))
-        // A block or unblock made while the chat is open re-filters what shows.
-        scope.launch { BlockList.state.collect { if (msgReg != null) rebuild() } }
+        // A block or unblock made while the chat is open re-filters what shows. The list as it is now
+        // is skipped (the listener's first answer applies it), and a later change rebuilds off the main
+        // thread: this rebuild used to run inside the opening frame, waiting on the listener's lock.
+        scope.launch(Dispatchers.Default) { BlockList.state.drop(1).collect { if (msgReg != null) rebuild() } }
         // Keys in the background, then re-open what drew as "…" (iOS keyPreloadTask).
         scope.launch(Dispatchers.IO) {
             try { crypto.ensureReady() } catch (_: Exception) {}
