@@ -484,8 +484,8 @@ class ThreadRepository(
     }
 
     private fun stopOlder() {
-        olderRegs.forEach { it.remove() }
-        olderRegs.clear(); olderPageIds.clear()
+        val regs = synchronized(docsLock) { olderRegs.toList().also { olderRegs.clear(); olderPageIds.clear() } }
+        regs.forEach { it.remove() }
     }
 
     /**
@@ -508,15 +508,19 @@ class ThreadRepository(
             rebuild()
         }
         _state.update { it.copy(loadingOlder = true) }
-        val page = olderPageIds.size
-        olderPageIds.add(emptySet())
+        val page = synchronized(docsLock) { olderPageIds.add(emptySet()); olderPageIds.size - 1 }
+        // Touched only on the listener thread (the answers and the 8 s give-up both run there).
         var first = true
+        // Answered on the listener thread like the newest page: this answer used to parse, open and
+        // rebuild the whole chat on the main thread, and wait there for the listener's lock while it
+        // opened messages; a short chat asks for it as it opens, so it landed mid-slide (cheap
+        // phone trace 2026-11-16: up to 16 ms a frame blocked on that lock alone).
         val reg = convRef.collection("messages")
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .startAt(oldest)
             .limit(PAGE_SIZE)
-            .addSnapshotListener { snap, _ ->
-                if (page >= olderPageIds.size) return@addSnapshotListener
+            .addSnapshotListener(listenExec) { snap, _ ->
+                if (synchronized(docsLock) { page >= olderPageIds.size }) return@addSnapshotListener
                 if (snap == null) {
                     if (first) { first = false; _state.update { it.copy(loadingOlder = false) } }
                     return@addSnapshotListener
@@ -542,8 +546,8 @@ class ThreadRepository(
                             if (!liveDocs.containsKey(d.id) && !olderDocs.containsKey(d.id)) added++
                             if (!liveDocs.containsKey(d.id)) olderDocs[d.id] = d
                         }
+                        if (page < olderPageIds.size) olderPageIds[page] = ids
                     }
-                    olderPageIds[page] = ids
                     // A short page from the server is the start of the chat; nothing new means the same.
                     val more = added > 0 && (snap.metadata.isFromCache || snap.size() >= PAGE_SIZE)
                     _state.update { it.copy(loadingOlder = false, canLoadOlder = more) }
@@ -552,30 +556,31 @@ class ThreadRepository(
                 }
                 // A later change on this page: edits, reactions, delete-for-everyone, or a message
                 // the server removed (gone from this page and from every other one).
-                synchronized(docsLock) {
+                val newest = synchronized(docsLock) {
+                    if (page >= olderPageIds.size) return@addSnapshotListener
                     for (d in snap.documents) if (!liveDocs.containsKey(d.id)) olderDocs[d.id] = d
                     for (id in olderPageIds[page]) {
                         if (id in ids || liveDocs.containsKey(id)) continue
                         if (olderPageIds.withIndex().none { (i, set) -> i != page && id in set }) olderDocs.remove(id)
                     }
+                    olderPageIds[page] = ids
+                    page == olderPageIds.size - 1
                 }
-                olderPageIds[page] = ids
-                if (page == olderPageIds.size - 1 && !snap.metadata.isFromCache && snap.size() < PAGE_SIZE)
+                if (newest && !snap.metadata.isFromCache && snap.size() < PAGE_SIZE)
                     _state.update { it.copy(canLoadOlder = false) }
                 rebuild()
             }
-        olderRegs.add(reg)
+        synchronized(docsLock) { olderRegs.add(reg) }
         // Offline with nothing saved for that page, no answer comes: after 8 s the spinner stops and
         // this page's listener goes, so the next scroll asks again instead of waiting forever.
-        scope.launch(kotlinx.coroutines.Dispatchers.Main) {
-            kotlinx.coroutines.delay(8_000)
-            if (first && page < olderPageIds.size) {
+        listenExec.schedule({
+            if (!closed && first && synchronized(docsLock) { page < olderPageIds.size }) {
                 first = false
-                reg.remove(); olderRegs.remove(reg)
+                reg.remove(); synchronized(docsLock) { olderRegs.remove(reg) }
                 _state.update { it.copy(loadingOlder = false) }
                 fromDb()   // no answer at all: the phone's own history
             }
-        }
+        }, 8, java.util.concurrent.TimeUnit.SECONDS)
     }
 
     /** A message this phone can never open (iOS, same rule): sent BEFORE this phone's keypair was
