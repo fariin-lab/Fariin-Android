@@ -68,6 +68,8 @@ import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.currentBackStackEntryAsState
+import kotlinx.coroutines.flow.first
+import androidx.navigation.compose.LocalOwnersProvider
 import com.fariin.app.device.DeviceRecord
 import com.fariin.app.device.DeviceRegistry
 import com.fariin.app.device.SessionEnd
@@ -367,7 +369,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         val entry by nav.currentBackStackEntryAsState()
-        val openCid = if (entry?.destination?.route == "thread/{cid}") entry?.arguments?.getString("cid") else null
+        val openCid = if (entry?.destination?.route == THREAD_ROUTE) entry?.arguments?.getString("cid") else null
         LaunchedEffect(openCid) {
             openChat = openCid
             PushRouter.activeChatId = if (started) openCid else null
@@ -451,6 +453,15 @@ class MainActivity : ComponentActivity() {
                 onDispose { shellBack.forward.remove() }
             }
             androidx.compose.runtime.SideEffect { shellBack.setOnTop(onTop) }
+            // Which chat the layer under the pages holds (KeptChatLayer): the newest chat in the back
+            // stack, and one closed with Back until its slide lands.
+            val keptChats = remember { KeptChats(this@MainActivity) }
+            val stack by nav.currentBackStack.collectAsState()
+            keptChats.sync(stack)
+            LaunchedEffect(top?.id) {
+                androidx.compose.runtime.snapshotFlow { pm.moving }.first { !it }
+                keptChats.purge(nav.currentBackStack.value)
+            }
             // During a call: the bar on top (it holds the status bar's strip) and the app under it as a
             // full-width card, its top corners rounded over the bar's dark colour (owner 2026-11-08: no side margins). The bar
             // slides in and out and the card's corners follow it over 300 ms, so the app
@@ -507,6 +518,11 @@ class MainActivity : ComponentActivity() {
                     awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } }
                 })
             }
+            // The open chat, kept under the pages pushed over it (its profile, group info, a member's
+            // page), as the list is kept above: the nav host took it apart once such a page landed and
+            // built it again from nothing on Back, the heaviest frame of that trip (480 ms on the cheap
+            // emulator, 2026-11-17). Its nav host page is a see-through stand-in meanwhile.
+            KeptChatLayer(keptChats, top?.id) { cid -> ThreadRoute(cid, me, crypto, onBack = { nav.popBackStack() }) }
             NavHost(nav, startDestination = "main",
                 enterTransition = com.fariin.app.ui.components.Motion.enter(), exitTransition = com.fariin.app.ui.components.Motion.exit(),
                 popEnterTransition = com.fariin.app.ui.components.Motion.popEnter(), popExitTransition = com.fariin.app.ui.components.Motion.popExit()) {
@@ -519,9 +535,14 @@ class MainActivity : ComponentActivity() {
                     Box(Modifier.fillMaxSize())
                     androidx.compose.runtime.SideEffect { pm.mainId = entry.id }
                 }
-                page("thread/{cid}") { entry ->
-                    val cid = entry.arguments?.getString("cid") ?: return@page
-                    ThreadRoute(cid, me, crypto, onBack = { nav.popBackStack() })
+                composable(THREAD_ROUTE) { entry ->
+                    // Held by KeptChatLayer: a plain see-through box, no page frame, so its touches
+                    // reach the chat under it (as the "main" stand-in lets them reach the list).
+                    if (keptChats.holds(entry.id)) Box(Modifier.fillMaxSize())
+                    else com.fariin.app.ui.components.PageFrame(entry.id) {
+                        val cid = entry.arguments?.getString("cid") ?: return@PageFrame
+                        ThreadRoute(cid, me, crypto, onBack = { nav.popBackStack() })
+                    }
                 }
             }
             com.fariin.app.ui.components.PageMotionBackGuard()
@@ -838,4 +859,102 @@ internal class AfterFirstFrame(delayMs: Long, start: () -> Unit) {
     }
 
     fun cancel() { cancelled = true; main.removeCallbacks(run) }
+}
+
+internal const val THREAD_ROUTE = "thread/{cid}"
+
+/**
+ * The chats [KeptChatLayer] holds: the newest chat in the back stack, and a chat closed with Back
+ * until its slide lands ([purge]). Each has its own back dispatcher, joined to the activity's only
+ * while that chat is the top page and no page change plays.
+ */
+private class KeptChats(private val activity: ComponentActivity) {
+    class Held(val entry: androidx.navigation.NavBackStackEntry, val back: PageBack)
+    val list = androidx.compose.runtime.mutableStateListOf<Held>()
+    /** Every chat ever held, so its saved state goes once it leaves the back stack. */
+    private val seen = HashSet<String>()
+    var dropSaved: (String) -> Unit = {}
+
+    /** Every chat the layer has held: the nav host never builds these itself, also not while it
+     *  keeps one a moment after it closed (its PageFrame would bring the chat back off screen). */
+    private val everHeld = HashSet<String>()
+    fun holds(id: String): Boolean = id in everHeld
+
+    /** In composition, before the layer and the nav host read [list]. Reads no page motion. */
+    fun sync(stack: List<androidx.navigation.NavBackStackEntry>) {
+        val newest = stack.lastOrNull { it.destination.route == THREAD_ROUTE }
+        val ids = stack.mapTo(HashSet()) { it.id }
+        // Kept: the newest chat, and chats no longer in the stack (closed, still sliding away).
+        val keep = list.filter { it.entry.id !in ids || it.entry.id == newest?.id }
+        val next = if (newest == null || keep.any { it.entry.id == newest.id }) keep
+            else keep + Held(newest, PageBack(activity)).also { seen += newest.id; everHeld += newest.id }
+        if (next.map { it.entry.id } != list.map { it.entry.id }) {
+            list.filter { h -> next.none { it.entry.id == h.entry.id } }.forEach { it.back.release() }
+            list.clear(); list.addAll(next)
+        }
+    }
+
+    /** After a page change lands: closed chats go, with their saved state. */
+    fun purge(stack: List<androidx.navigation.NavBackStackEntry>) {
+        val ids = stack.mapTo(HashSet()) { it.id }
+        val gone = list.filter { it.entry.id !in ids }
+        if (gone.isNotEmpty()) { gone.forEach { it.back.release() }; list.removeAll(gone) }
+        seen.filter { it !in ids }.forEach { dropSaved(it); seen -= it }
+    }
+}
+
+/** A page's own back dispatcher (as [ShellBack]), on the activity's only while it is the top page. */
+private class PageBack(private val activity: ComponentActivity) : OnBackPressedDispatcherOwner {
+    private var onTop = false
+    private var wanted = false
+    private var moving = false
+    private var added = false
+    val forward = object : androidx.activity.OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() { onBackPressedDispatcher.onBackPressed() }
+    }
+    override val onBackPressedDispatcher: OnBackPressedDispatcher =
+        OnBackPressedDispatcher(null) { has -> wanted = has; update() }
+    override val lifecycle get() = activity.lifecycle
+    fun setOnTop(top: Boolean) {
+        // Added again each time it comes on top: the newest callback is asked first, so the chat's own
+        // handlers (close the panel, end select) come before the nav host's pop, as they did inside it.
+        if (top && !onTop) { forward.remove(); activity.onBackPressedDispatcher.addCallback(activity, forward); added = true }
+        onTop = top; update()
+    }
+    fun setMoving(m: Boolean) { moving = m; update() }
+    fun release() { forward.remove(); added = false; onTop = false; update() }
+    // Never while a page change plays: PageMotionBackGuard keeps that press for when it lands.
+    private fun update() { forward.isEnabled = added && onTop && wanted && !moving }
+}
+
+@Composable
+private fun KeptChatLayer(kept: KeptChats, topId: String?, chat: @Composable (String) -> Unit) {
+    val saveable = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+    androidx.compose.runtime.SideEffect { kept.dropSaved = { saveable.removeState(it) } }
+    for (held in kept.list) androidx.compose.runtime.key(held.entry.id) {
+        KeptChat(held, topId, saveable, chat)
+    }
+}
+
+@Composable
+private fun KeptChat(held: KeptChats.Held, topId: String?, saveable: androidx.compose.runtime.saveable.SaveableStateHolder,
+                     chat: @Composable (String) -> Unit) {
+    val pm = com.fariin.app.ui.components.PageMotion
+    val id = held.entry.id
+    val cid = held.entry.arguments?.getString("cid") ?: return
+    val onTop = topId == id
+    androidx.compose.runtime.SideEffect { held.back.setOnTop(onTop) }
+    LaunchedEffect(held) { androidx.compose.runtime.snapshotFlow { pm.moving }.collect { held.back.setMoving(it) } }
+    // Covered and still (a page landed over it): not drawn at all.
+    Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (pm.top == null || pm.shows(id)) 1f else 0f }
+        .then(if (onTop) Modifier else Modifier.clearAndSetSemantics { })) {
+        held.entry.LocalOwnersProvider(saveable) {
+            CompositionLocalProvider(LocalOnBackPressedDispatcherOwner provides held.back) {
+                com.fariin.app.ui.components.PageFrame(id) { chat(cid) }
+            }
+        }
+        if (!onTop) Box(Modifier.fillMaxSize().pointerInput(Unit) {
+            awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } }
+        })
+    }
 }
