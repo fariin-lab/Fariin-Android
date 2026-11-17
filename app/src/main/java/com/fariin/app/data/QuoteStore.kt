@@ -51,18 +51,43 @@ object QuoteStore {
         val uid = uid() ?: return
         if (loadedFor == uid) return
         loadedFor = uid
-        val text = com.fariin.app.local.LocalCache.loadQuotes(uid) ?: return
-        val saved = runCatching {
+        merge(readSaved(uid))
+    }
+
+    /**
+     * The same read off the main thread, soon after launch (MainActivity): read on the first chat's
+     * opening frame it cost 7-16 ms of that frame on a Pixel 5 (2026-11-17). [warm] stays as the
+     * fallback for a chat opened before this lands. Main thread in and out (the scope is Main).
+     */
+    fun warmInBackground() {
+        val uid = uid() ?: return
+        if (loadedFor == uid || warming) return
+        warming = true
+        scope.launch {
+            val saved = kotlinx.coroutines.withContext(Dispatchers.IO) { readSaved(uid) }
+            warming = false
+            // A chat opened meanwhile read it itself; signed out or switched since: drop it.
+            if (loadedFor == uid || uid() != uid) return@launch
+            loadedFor = uid
+            merge(saved)
+        }
+    }
+    private var warming = false
+
+    private fun readSaved(uid: String): Map<String, QuoteCard> {
+        val text = com.fariin.app.local.LocalCache.loadQuotes(uid) ?: return emptyMap()
+        return runCatching {
             val o = org.json.JSONObject(text)
             o.keys().asSequence().mapNotNull { k ->
                 val d = o.optJSONObject(k) ?: return@mapNotNull null
                 val m = d.keys().asSequence().associateWith { d.opt(it) }
                 QuoteRules.parse(m)?.let { k to it }
             }.toMap()
-        }.getOrNull() ?: return
-        // A live answer already here wins over the saved one.
-        if (saved.isNotEmpty()) _cards.value = saved + _cards.value
+        }.getOrNull() ?: emptyMap()
     }
+
+    // A live answer already here wins over the saved one.
+    private fun merge(saved: Map<String, QuoteCard>) { if (saved.isNotEmpty()) _cards.value = saved + _cards.value }
 
     private fun save() {
         val uid = uid() ?: return
