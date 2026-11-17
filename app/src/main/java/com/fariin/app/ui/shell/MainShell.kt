@@ -476,14 +476,18 @@ private fun FloatingTabBar(
 @Composable
 private fun TabItem(t: TabSpec, selected: Boolean, badge: Int, photo: String?, animate: Boolean, onClick: () -> Unit, modifier: Modifier) {
     val c = Fariin.colors
-    val spec = if (animate) tween<Color>(180) else snap()
+    val spec = if (animate) tween<Float>(180) else snap()
     // iOS: the open tab's icon and label in the text colour, the others in grey. Its pill grows
     // in place from 60% while it fades in (decelerating, 320 ms) and the old tab's pill shrinks
     // away, so a tap never smears across the tabs in between. Drawn in drawBehind: the draw phase
     // alone reads the value. The icon gives a small pop when its tab opens.
     // The open tab in the text colour, the others a darker grey than before so the bar does not read
     // as washed out (owner 2026-11-03: no blue pill, "all looks light").
-    val tint by animateColorAsState(if (selected) c.label else c.label.copy(alpha = 0.62f), spec, label = "tabTint")
+    // The fade is the label colour's opacity, read only when drawing (graphicsLayer below): read in
+    // composition, it rebuilt both changing tabs on every frame of the fade (about 11 each per switch).
+    val tintAlpha by animateFloatAsState(if (selected) 1f else 0.62f, spec, label = "tabTint")
+    val tint = c.label
+    val tintLayer = Modifier.graphicsLayer { alpha = tintAlpha }
     // A LOW phone: a shorter pill fade and no icon bounce (the spring ran past 0.5 s of frames).
     val lite = com.fariin.app.ui.components.reducedMotion()
     val on by animateFloatAsState(if (selected) 1f else 0f,
@@ -532,7 +536,7 @@ private fun TabItem(t: TabSpec, selected: Boolean, badge: Int, photo: String?, a
                 }
             }) {
                 if (t.icon != null) {
-                    Icon(androidx.compose.ui.res.painterResource(t.icon), contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
+                    Icon(androidx.compose.ui.res.painterResource(t.icon), contentDescription = null, tint = tint, modifier = tintLayer.size(24.dp))
                 } else {
                     com.fariin.app.ui.components.Avatar(photo, 24.dp,
                         modifier = if (selected) Modifier.border(1.5.dp, c.label, androidx.compose.foundation.shape.CircleShape) else Modifier)
@@ -542,7 +546,7 @@ private fun TabItem(t: TabSpec, selected: Boolean, badge: Int, photo: String?, a
             // 130% "Settings" was cut to "Setting" on a small screen.
             val fs = androidx.compose.ui.platform.LocalDensity.current.fontScale
             Text(t.label, fontSize = (12f * kotlin.math.min(fs, 1.15f) / fs).sp, lineHeight = (14f * kotlin.math.min(fs, 1.15f) / fs).sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                color = tint, maxLines = 1, modifier = Modifier.padding(top = 2.dp))
+                color = tint, maxLines = 1, modifier = Modifier.padding(top = 2.dp).then(tintLayer))
         }
     }
 }
