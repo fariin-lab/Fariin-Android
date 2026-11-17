@@ -43,7 +43,8 @@ fun GlassDropdown(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     offset: DpOffset = DpOffset(0.dp, 0.dp),
-    scrollState: ScrollState = rememberScrollState(),
+    /** Null: its own, made only while the menu shows. */
+    scrollState: ScrollState? = null,
     properties: PopupProperties = PopupProperties(focusable = true),
     @Suppress("UNUSED_PARAMETER") shape: Shape? = null,
     containerColor: Color = Color.Unspecified,
@@ -64,6 +65,9 @@ fun GlassDropdown(
     val state = androidx.compose.runtime.remember { androidx.compose.animation.core.MutableTransitionState(false) }
     state.targetState = expanded
     if (!state.currentState && !state.targetState) return
+    // Made here, past the closed menu's early return: as a default argument every closed menu (one in
+    // each GIF tile, each list row with a menu) paid for a saved scroll state on every build.
+    val scroll = scrollState ?: rememberScrollState()
     val density = androidx.compose.ui.platform.LocalDensity.current
     val origin = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(androidx.compose.ui.graphics.TransformOrigin(1f, 0f)) }
     val provider = androidx.compose.runtime.remember(offset, density) { DropdownPlace(offset, density) { origin.value = it } }
@@ -95,7 +99,7 @@ fun GlassDropdown(
                 }
                 .width(androidx.compose.foundation.layout.IntrinsicSize.Max)
                 .widthIn(min = 112.dp, max = 280.dp)
-                .verticalScroll(scrollState)
+                .verticalScroll(scroll)
                 .padding(vertical = 8.dp),
             content = content,
         )

@@ -313,8 +313,12 @@ internal fun StickerPanel(me: String, onSticker: (StickerRef) -> Unit, onGif: (S
     // foot, 200 wide; on GIFs a round search as tall as the switch at the foot's right. Scrolling
     // into the grid sends the top row up and the switch down; scrolling back brings both.
     var barsHidden by remember { mutableStateOf(false) }
-    val hide by androidx.compose.animation.core.animateFloatAsState(if (barsHidden) 1f else 0f,
+    // Read only while drawing (and through barsUp for the taps): read here, every frame of the bars'
+    // slide rebuilt the whole tab and its grid.
+    val hideState = androidx.compose.animation.core.animateFloatAsState(if (barsHidden) 1f else 0f,
         androidx.compose.animation.core.tween(220), label = "bars")
+    val hide: () -> Float = remember(hideState) { { hideState.value } }
+    val barsUp by remember(hideState) { androidx.compose.runtime.derivedStateOf { hideState.value < 0.5f } }
     // Rounded all round like the iPhone keyboard (owner 2026-11-09): the top corners, and the bottom
     // ones following the phone's own screen corners, with a thin light rim.
     val panelShape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp, bottomStart = 40.dp, bottomEnd = 40.dp)
@@ -324,13 +328,13 @@ internal fun StickerPanel(me: String, onSticker: (StickerRef) -> Unit, onGif: (S
         if (gifs) GifTab(me, onGif, hide = hide, onScrolledIn = { barsHidden = it })
         else StickerTab(me, onSticker, hide = hide, onScrolledIn = { barsHidden = it })
         Box(Modifier.fillMaxWidth().align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 10.dp, end = 10.dp, bottom = 8.dp)
-            .graphicsLayer { translationY = hide * 60.dp.toPx(); alpha = 1f - hide }) {
+            .graphicsLayer { translationY = hide() * 60.dp.toPx(); alpha = 1f - hide() }) {
             Row(Modifier.align(Alignment.Center).width(200.dp).height(38.dp).floating(RoundedCornerShape(19.dp)).padding(3.dp)) {
                 for ((label, isGif) in listOf("GIFs" to true, "Stickers" to false)) {
                     val on = gifs == isGif
                     Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(16.dp))
                         .background(if (on) c.label.copy(alpha = 0.12f) else Color.Transparent)
-                        .clickable(enabled = hide < 0.5f) { gifs = isGif; barsHidden = false; StickerCatalog.setLastTabGifs(ctx, isGif) },
+                        .clickable(enabled = barsUp) { gifs = isGif; barsHidden = false; StickerCatalog.setLastTabGifs(ctx, isGif) },
                         contentAlignment = Alignment.Center) {
                         Text(label, fontSize = 14.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
                             color = if (on) c.label else c.secondary)
@@ -338,7 +342,7 @@ internal fun StickerPanel(me: String, onSticker: (StickerRef) -> Unit, onGif: (S
                 }
             }
             if (gifs) Box(Modifier.align(Alignment.CenterEnd).size(38.dp).floating(CircleShape)
-                .clickable(enabled = hide < 0.5f) { searchOpen = true }, contentAlignment = Alignment.Center) {
+                .clickable(enabled = barsUp) { searchOpen = true }, contentAlignment = Alignment.Center) {
                 Icon(ImageVector.cachedVector(R.drawable.ic_search_ios), contentDescription = "Search GIFs", tint = c.label, modifier = Modifier.size(18.dp))
             }
         }
@@ -349,7 +353,7 @@ internal fun StickerPanel(me: String, onSticker: (StickerRef) -> Unit, onGif: (S
 private const val TOP_BAND = 48
 
 @Composable
-private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit, hide: Float = 0f, onScrolledIn: (Boolean) -> Unit = {}) {
+private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit, hide: () -> Float = { 0f }, onScrolledIn: (Boolean) -> Unit = {}) {
     val ctx = LocalContext.current
     val c = Fariin.colors
     // The admin panel's order, on/off and server packs (iOS StickerStore), the shipped order meanwhile.
@@ -387,7 +391,7 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit, hide: Float 
     // The grid's columns, as GridCells.Adaptive(70) lays them out (10 each side, 12 apart).
     val cols = maxOf(1, ((androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp - 20 + 12) / (70 + 12)))
     Box(Modifier.fillMaxSize().scrollHide(onScrolledIn)) {
-        LazyVerticalGrid(GridCells.Adaptive(70.dp), state = grid, modifier = Modifier.fillMaxSize().gridTopClip { hide },
+        LazyVerticalGrid(GridCells.Adaptive(70.dp), state = grid, modifier = Modifier.fillMaxSize().gridTopClip(hide),
             contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = TOP_BAND.dp, bottom = 84.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             for (shelf in shelves) {
@@ -434,7 +438,7 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit, hide: Float 
         }
         // The pack row on top, centred, no glass behind it (iOS, owner 2026-10-31): 28 cells, 24 pictures, 8 apart.
         LazyRow(Modifier.align(Alignment.TopCenter).padding(top = 8.dp, start = 10.dp, end = 10.dp).height(34.dp)
-            .graphicsLayer { translationY = -hide * 48.dp.toPx(); alpha = 1f - hide },
+            .graphicsLayer { translationY = -hide() * 48.dp.toPx(); alpha = 1f - hide() },
             contentPadding = PaddingValues(horizontal = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically) {
             items(shelves.size) { i ->
@@ -477,9 +481,10 @@ private enum class GifCategory(val term: String, val label: String) {
 internal fun GifTab(
     me: String = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "",
     onGif: (StickerGifRules.Gif) -> Unit,
-    hide: Float = 0f,
+    hide: () -> Float = { 0f },
     onScrolledIn: (Boolean) -> Unit = {},
 ) {
+    val barsUp by remember(hide) { androidx.compose.runtime.derivedStateOf { hide() < 0.5f } }
     val ctx = LocalContext.current
     // Every GIF sent from here (the panel or the attach sheet) goes to the Recent tab first (iOS pick).
     val send: (StickerGifRules.Gif) -> Unit = { g -> GifRecents.note(ctx, me, g); onGif(g) }
@@ -509,7 +514,7 @@ internal fun GifTab(
         // The GIFs stop under the mood row (and a little under the panel's top edge once the row has
         // slid away): scrolled up, they ran under the half-hidden row and up into the rounded rim,
         // cut off against the message bar (owner 2026-11-10, "bug space").
-        Box(Modifier.fillMaxSize().gridTopClip { hide }) {
+        Box(Modifier.fillMaxSize().gridTopClip(hide)) {
         when (category) {
             GifCategory.FAVORITES -> GifGrid(local, pad, me = me, onRecentTab = false, onGif = send, state = grid,
                 emptyTitle = "No favourites yet", emptyText = "Hold a GIF and choose Add to Favourites.")
@@ -521,13 +526,13 @@ internal fun GifTab(
         // The mood row on top, centred, on the panel itself (iOS PanelGifGrid): 28 cells 8 apart, the
         // chosen one on a soft rounded square.
         Row(Modifier.align(Alignment.TopCenter).padding(top = 8.dp).height(34.dp)
-            .graphicsLayer { translationY = -hide * 48.dp.toPx(); alpha = 1f - hide },
+            .graphicsLayer { translationY = -hide() * 48.dp.toPx(); alpha = 1f - hide() },
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             for (cat in GifCategory.entries) {
                 val on = cat == category
                 Box(Modifier.size(34.dp).clip(RoundedCornerShape(9.dp))
                     .background(if (on) c.label.copy(alpha = 0.1f) else Color.Transparent)
-                    .clickable(enabled = hide < 0.5f) { category = cat }, contentAlignment = Alignment.Center) {
+                    .clickable(enabled = barsUp) { category = cat }, contentAlignment = Alignment.Center) {
                     Icon(cat.icon, contentDescription = cat.label, tint = if (on) c.label else c.secondary, modifier = Modifier.size(22.dp))
                 }
             }
