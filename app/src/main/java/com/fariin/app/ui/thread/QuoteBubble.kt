@@ -230,7 +230,7 @@ private class QuotedPollState(val votes: Map<String, List<Int>>, val mine: List<
 
 @Composable
 private fun rememberQuotedPoll(card: QuoteCard, poll: com.fariin.app.data.PollCard): QuotedPollState {
-    val me = remember { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
+    val me = remember { com.fariin.app.Fb.auth.currentUser?.uid.orEmpty() }
     var tally by remember(card.cid, card.mid) { mutableStateOf(com.fariin.app.data.PollVotes.Tally()) }
     DisposableEffect(card.cid, card.mid) {
         val reg = com.fariin.app.data.PollVotes.listenPost(card.cid, card.mid) { tally = it }

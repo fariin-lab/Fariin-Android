@@ -374,7 +374,7 @@ fun StoryViewer(
                     val known = com.fariin.app.data.ChatsNow.findAny(cid)?.isChannel == true ||
                         com.fariin.app.channel.ChannelFollows.entries.value.containsKey(cid)
                     val channel = known || runCatching {
-                        com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("conversations")
+                        com.fariin.app.Fb.db.collection("conversations")
                             .document(cid).get().await().getBoolean("channel") == true
                     }.getOrDefault(false)
                     if (!channel) return@launch
@@ -1903,7 +1903,7 @@ private fun ChannelStoryFooter(story: Story, service: StoryService, receipts: Bo
     var delta by remember(story.id) { mutableIntStateOf(0) }
     LaunchedEffect(story.id) { if (receipts) liked = !service.myReaction(story.id).isNullOrEmpty() }
     DisposableEffect(story.id) {
-        val reg = com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("stories").document(story.id)
+        val reg = com.fariin.app.Fb.db.collection("stories").document(story.id)
             .collection("meta").document("public").addSnapshotListener { snap, _ ->
                 val next = (snap?.get("likes") as? Number)?.toInt() ?: 0
                 if (next != likes) delta = 0

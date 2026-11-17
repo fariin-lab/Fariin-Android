@@ -117,7 +117,7 @@ suspend fun loadGlowEvents(me: String, mine: List<Story>, conversations: List<Co
         }
         // Accepted requests I started (not by a Chat Key), from the chats already on this phone.
         val snap = runCatching {
-            FirebaseFirestore.getInstance().collection("conversations").whereArrayContains("users", me).get(Source.CACHE).await()
+            com.fariin.app.Fb.db.collection("conversations").whereArrayContains("users", me).get(Source.CACHE).await()
         }.getOrNull()
         for (d in snap?.documents.orEmpty()) {
             if (d.getString("type") == "group" || d.getString("startedBy") != me || d.getBoolean("accepted") != true) continue

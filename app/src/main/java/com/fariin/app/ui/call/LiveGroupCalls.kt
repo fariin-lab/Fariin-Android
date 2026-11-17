@@ -74,11 +74,11 @@ object LiveGroupCalls {
     val calls: StateFlow<List<LiveCall>> = _calls
 
     fun sync(groups: List<Conversation>) {
-        if (FirebaseAuth.getInstance().currentUser == null) return
+        if (com.fariin.app.Fb.auth.currentUser == null) return
         val want = groups.filter { it.isGroup && !it.isChannel }.take(CAP).map { it.id }.toSet()
         regs.keys.filter { it !in want }.forEach { regs.remove(it)?.remove(); byCid.remove(it) }
         want.filter { it !in regs }.forEach { cid ->
-            regs[cid] = FirebaseFirestore.getInstance().collection("groupCalls").document(cid).addSnapshotListener { s, _ ->
+            regs[cid] = com.fariin.app.Fb.db.collection("groupCalls").document(cid).addSnapshotListener { s, _ ->
                 if (cid !in regs) return@addSnapshotListener
                 val d = s?.data
                 if (d?.get("active") == true) byCid[cid] = LiveCall(cid, d["video"] == true, (d["joined"] as? List<*>)?.filterIsInstance<String>().orEmpty())
@@ -180,10 +180,10 @@ private fun Faces(uids: List<String>, conv: Conversation?, size: Int, overlap: I
 fun ThreadLiveCallBar(cid: String, isGroup: Boolean, title: String, pin: @Composable () -> Unit) {
     var live by remember(cid) { mutableStateOf<LiveCall?>(null) }
     var conv by remember(cid) { mutableStateOf<Conversation?>(null) }
-    val signedIn = FirebaseAuth.getInstance().currentUser != null
+    val signedIn = com.fariin.app.Fb.auth.currentUser != null
     if (isGroup && signedIn && cid.isNotEmpty()) {
         DisposableEffect(cid) {
-            val reg = FirebaseFirestore.getInstance().collection("groupCalls").document(cid).addSnapshotListener { s, _ ->
+            val reg = com.fariin.app.Fb.db.collection("groupCalls").document(cid).addSnapshotListener { s, _ ->
                 val d = s?.data
                 live = if (d?.get("active") == true) LiveCall(cid, d["video"] == true, (d["joined"] as? List<*>)?.filterIsInstance<String>().orEmpty()) else null
             }
@@ -191,7 +191,7 @@ fun ThreadLiveCallBar(cid: String, isGroup: Boolean, title: String, pin: @Compos
         }
         LaunchedEffect(cid) {
             conv = try {
-                val d = FirebaseFirestore.getInstance().collection("conversations").document(cid).get().await().data
+                val d = com.fariin.app.Fb.db.collection("conversations").document(cid).get().await().data
                 d?.let { Conversation(id = cid, names = (it["names"] as? Map<*, *>).orEmpty().entries.associate { e -> e.key.toString() to e.value.toString() },
                     photos = (it["photos"] as? Map<*, *>).orEmpty().entries.associate { e -> e.key.toString() to e.value.toString() }) }
             } catch (_: Exception) { null }

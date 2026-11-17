@@ -147,8 +147,8 @@ fun OfficialChatScreen(onBack: () -> Unit, onInfo: (() -> Unit)? = null) {
 
     // My @username for the Invite Friends link (fariin.com/<me>), read once.
     val inviteHandle by androidx.compose.runtime.produceState<String?>(null) {
-        value = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
-            runCatching { com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(uid)
+        value = com.fariin.app.Fb.auth.currentUser?.uid?.let { uid ->
+            runCatching { com.fariin.app.Fb.db.collection("users").document(uid)
                 .get(com.google.firebase.firestore.Source.CACHE).await().getString("handle") }.getOrNull()
         }
     }
@@ -183,7 +183,7 @@ fun OfficialChatScreen(onBack: () -> Unit, onInfo: (() -> Unit)? = null) {
     }
     // Forward: the note goes as its words, marked forwarded, like a forwarded chat message (iOS forwardable).
     forwardTexts?.let { texts ->
-        val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        val me = com.fariin.app.Fb.auth.currentUser?.uid
         if (me == null) forwardTexts = null
         else com.fariin.app.ui.thread.ForwardSheet(me, onDismiss = { forwardTexts = null }) { targets ->
             forwardTexts = null

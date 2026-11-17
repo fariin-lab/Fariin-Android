@@ -63,7 +63,7 @@ object ChannelStories {
                 for (id in (idsAny as? List<*>).orEmpty().filterIsInstance<String>().take(50)) {
                     if (id.contains('/')) continue
                     val s = known[id] ?: runCatching {
-                        FirebaseFirestore.getInstance().collection("stories").document(id).get().await()
+                        com.fariin.app.Fb.db.collection("stories").document(id).get().await()
                     }.getOrNull()?.data?.let { StoryList.parse(id, it) } ?: continue
                     if (s.groupId != cid || s.expiresAtMs <= now) continue
                     // The ring's name and photo from the channel itself when the story did not carry them.

@@ -127,8 +127,8 @@ class FariinApp : Application() {
         StartClock.mark("firebase")
         if (!local) com.fariin.app.system.AppCheckSetup.install(debuggable || resources.getBoolean(R.bool.fariin_debug_appcheck))
         if (local) {
-            FirebaseAuth.getInstance().useEmulator(HOST, 9099)
-            FirebaseFirestore.getInstance().useEmulator(HOST, 8080)
+            com.fariin.app.Fb.auth.useEmulator(HOST, 9099)
+            com.fariin.app.Fb.db.useEmulator(HOST, 8080)
             FirebaseStorage.getInstance().useEmulator(HOST, 9199)
             // Cloud Functions are NOT emulated. Point every callable at a local port anyway, so a
             // test run can never reach the real project's functions (they simply fail here).
@@ -141,7 +141,7 @@ class FariinApp : Application() {
         // A call this phone was in when the app last died is ended for the other phone (CallManager).
         // Only when a call was really left open: touching CallManager loads the whole call stack,
         // ~46 ms of every cold start on the Pixel, almost always to find nothing.
-        if (FirebaseAuth.getInstance().currentUser != null &&
+        if (com.fariin.app.Fb.auth.currentUser != null &&
             getSharedPreferences("fariin_call_live", MODE_PRIVATE).contains("callId")) com.fariin.app.call.CallManager.endAfterCrash(this)
         // Slow networks: a photo download gives up after 2 minutes (default 10) so the bubble shows
         // its "Try again" disc instead of a ring that never ends; uploads keep the 10 minute window.
@@ -163,7 +163,7 @@ class FariinApp : Application() {
         // Drafts (Keystore + AES-GCM + JSON) and the names I gave people (JSON) are decoded on the
         // thread below, not here; a reader that comes first waits for the decode (local/LoadOnce).
         com.fariin.app.local.Drafts.init(this)
-        FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
+        com.fariin.app.Fb.auth.currentUser?.uid?.let { uid ->
             Thread({
                 runCatching { com.fariin.app.local.LocalCache.loadChats(uid) }
                 // The chat list's rows show "Draft:" and my names for people.
@@ -196,7 +196,7 @@ class FariinApp : Application() {
         StartClock.mark("lifecycle+conn")
         com.fariin.app.data.PrivacySettings.init(this)
         com.fariin.app.data.Disappearing.init(this)
-        FirebaseAuth.getInstance().addAuthStateListener { a ->
+        com.fariin.app.Fb.auth.addAuthStateListener { a ->
             val uid = a.currentUser?.uid
             // A Log Out kept its media and chats for its own return; a different account wipes them first.
             if (uid != null) com.fariin.app.device.SessionEnd.claimKept(this, uid)

@@ -26,7 +26,7 @@ object PollVotes {
         var idle = 0
     }
 
-    private val db get() = FirebaseFirestore.getInstance()
+    private val db get() = com.fariin.app.Fb.db
     private val entries = HashMap<String, Entry>()
     private val main = Handler(Looper.getMainLooper())
 

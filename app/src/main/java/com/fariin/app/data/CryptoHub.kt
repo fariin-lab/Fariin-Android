@@ -35,10 +35,10 @@ object CryptoHub {
     fun get(context: Context): FariinCrypto = instance ?: synchronized(this) {
         instance ?: FariinCrypto.android(
             context.applicationContext,
-            FirestoreKeyDirectory(FirebaseFirestore.getInstance(),
+            FirestoreKeyDirectory(com.fariin.app.Fb.db,
                 // A phone a newer sign-in replaced publishes nothing (Crypto.swift:320-331).
                 mayPublish = { uid -> com.fariin.app.device.DeviceRegistry.mayPublish(context.applicationContext, uid) }),
-            { FirebaseAuth.getInstance().currentUser?.uid },
+            { com.fariin.app.Fb.auth.currentUser?.uid },
             groupIsPlain = { cid -> isPlainGroup(cid) },
         ).also { instance = it }
     }

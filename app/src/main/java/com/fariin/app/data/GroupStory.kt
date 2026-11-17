@@ -78,7 +78,7 @@ object GroupStoryRights {
      */
     suspend fun buttonState(me: String, cid: String): ButtonState? {
         if (me.isEmpty() || cid.isEmpty()) return null
-        val db = FirebaseFirestore.getInstance()
+        val db = com.fariin.app.Fb.db
         val d = runCatching { db.collection("conversations").document(cid).get().await().data }.getOrNull() ?: return null
         if (d["type"] != "group") return null
         val team = GroupAdmins.Team.from(d)
@@ -111,7 +111,7 @@ object GroupStoryRights {
      */
     suspend fun eligible(me: String, convs: List<Conversation>): List<GroupStoryTarget> {
         if (me.isEmpty()) return emptyList()
-        val db = FirebaseFirestore.getInstance()
+        val db = com.fariin.app.Fb.db
         val mine = convs.filter { it.isGroup && GroupStoryRules.isStaff(it, me) }.distinctBy { it.id }
         if (mine.isEmpty()) return emptyList()
         val g = gate(db, me)
@@ -137,7 +137,7 @@ object GroupStoryRights {
      * minute ago is not in it, less me and anyone I blocked. Refused when I may no longer post there.
      */
     suspend fun audience(me: String, groupId: String): Set<String> {
-        val db = FirebaseFirestore.getInstance()
+        val db = com.fariin.app.Fb.db
         val d = db.collection("conversations").document(groupId).get(Source.SERVER).await().data
         val g = gate(db, me)
         if (d == null || !canPost(d, me, g.minMembers, g.appAdmin, g.open)) throw StoryService.PostRefused(NOT_ALLOWED)

@@ -66,7 +66,7 @@ object VerifiedPeople {
         load(c)
         if (System.currentTimeMillis() - (checkedAt[uid] ?: 0L) < FRESH_MS || !asking.add(uid)) return
         try {
-            val d = FirebaseFirestore.getInstance().collection("users").document(uid).get().await()
+            val d = com.fariin.app.Fb.db.collection("users").document(uid).get().await()
             if (!d.exists()) return
             note(uid, d.get("verification"))
         } catch (_: Exception) {

@@ -70,7 +70,7 @@ object GroupWallpaper {
     private suspend fun isChannel(cid: String): Boolean {
         if (ChatsNow.list.any { it.id == cid && it.isChannel }) return true
         return runCatching {
-            com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("conversations").document(cid)
+            com.fariin.app.Fb.db.collection("conversations").document(cid)
                 .get().await().getBoolean("channel") == true
         }.getOrDefault(false)
     }

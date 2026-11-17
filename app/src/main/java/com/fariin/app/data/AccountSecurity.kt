@@ -105,7 +105,7 @@ object AccountCall {
 
     /** After a call that revokes the refresh tokens: sign in with the session the server minted after it. */
     suspend fun adoptSession(reply: Map<*, *>) {
-        val auth = FirebaseAuth.getInstance()
+        val auth = com.fariin.app.Fb.auth
         (reply["customToken"] as? String)?.let { runCatching { auth.signInWithCustomToken(it).await() } }
         runCatching { auth.currentUser?.getIdToken(true)?.await() }
     }
@@ -117,20 +117,20 @@ object TwoStepGate {
 
     /** true: this sign-in must enter the password; false: through; null: the token did not come in time. */
     suspend fun needsPassword(timeoutMs: Long = 2000): Boolean? {
-        val user = FirebaseAuth.getInstance().currentUser ?: return false
+        val user = com.fariin.app.Fb.auth.currentUser ?: return false
         val r = withTimeoutOrNull(timeoutMs) { runCatching { user.getIdToken(false).await() }.getOrNull() } ?: return null
         return !passed(r)
     }
 
     /** The account has two-step on (claim required), read from the held token. */
     suspend fun accountHasTwoStep(): Boolean {
-        val r = runCatching { FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await() }.getOrNull() ?: return false
+        val r = runCatching { com.fariin.app.Fb.auth.currentUser?.getIdToken(false)?.await() }.getOrNull() ?: return false
         return TwoStepRules.isRequired(r.claims)
     }
 
     /** The token held just before a re-authentication (for [renewAfterReauth]). */
     suspend fun tokenBefore(): GetTokenResult? =
-        runCatching { FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await() }.getOrNull()
+        runCatching { com.fariin.app.Fb.auth.currentUser?.getIdToken(false)?.await() }.getOrNull()
 
     /**
      * Re-authenticating gives a new auth_time, which is not on the claim's list: without this the
@@ -141,14 +141,14 @@ object TwoStepGate {
         previous ?: return
         if (!TwoStepRules.isRequired(previous.claims) || !passed(previous)) return
         val token = previous.token ?: return
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         for (wait in listOf(0L, 2000L, 5000L, 15000L)) {
             if (wait > 0) delay(wait)
-            if (FirebaseAuth.getInstance().currentUser?.uid != uid) return
+            if (com.fariin.app.Fb.auth.currentUser?.uid != uid) return
             if (previous.expirationTimestamp * 1000 <= System.currentTimeMillis()) return
             val ok = runCatching {
                 AccountCall.run("renewTwoStepSession", mapOf("idToken" to token))
-                FirebaseAuth.getInstance().currentUser?.getIdToken(true)?.await()
+                com.fariin.app.Fb.auth.currentUser?.getIdToken(true)?.await()
             }.isSuccess
             if (ok) return
         }

@@ -298,10 +298,10 @@ object GroupCall {
 
     /** The live state of a group's call for its Join bar (read only). */
     fun watchActive(cid: String, onActive: (Boolean) -> Unit): ListenerRegistration =
-        FirebaseFirestore.getInstance().collection("groupCalls").document(cid)
+        com.fariin.app.Fb.db.collection("groupCalls").document(cid)
             .addSnapshotListener { snap, _ -> onActive(GroupCallWire.isActive(snap?.data)) }
 
-    private val db get() = FirebaseFirestore.getInstance()
+    private val db get() = com.fariin.app.Fb.db
     private val functions get() = FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION)
     private var recordId: String? = null
     private var startedHere = false
@@ -357,7 +357,7 @@ object GroupCall {
      */
     fun startAdhoc(context: Context, people: List<CallPerson>, video: Boolean, mic: Boolean = true) {
         if (busy()) return
-        val meUid = FirebaseAuth.getInstance().currentUser?.uid ?: run { _ui.value = GroupCallUi(notice = "Call failed"); return }
+        val meUid = com.fariin.app.Fb.auth.currentUser?.uid ?: run { _ui.value = GroupCallUi(notice = "Call failed"); return }
         val others = GroupCallWire.adhocOthers(meUid, people)
         if (others.isEmpty()) { _ui.value = GroupCallUi(notice = "Call failed"); return }
         val roomId = GroupCallWire.newAdhocId(UUID.randomUUID().toString())
@@ -374,7 +374,7 @@ object GroupCall {
         scope.launch {
             val mine = try { db.collection("users").document(meUid).get().await().data } catch (_: Exception) { null }
             val me = CallPerson(meUid, (mine?.get("name") as? String)?.takeIf { it.isNotBlank() }
-                ?: FirebaseAuth.getInstance().currentUser?.displayName?.takeIf { it.isNotBlank() } ?: "Member",
+                ?: com.fariin.app.Fb.auth.currentUser?.displayName?.takeIf { it.isNotBlank() } ?: "Member",
                 (mine?.get("photoUrl") as? String)?.takeIf { it.isNotEmpty() })
             if (_ui.value.cid != roomId) return@launch
             faces = faces + (meUid to (me.name to me.photo))
@@ -410,7 +410,7 @@ object GroupCall {
     /** In the room: me on `joined` (my other phones stop ringing), and the ring minute starts. */
     private fun adhocInRoom(roomId: String, r: Room) {
         startedHere = true
-        val me = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         db.collection("groupCalls").document(roomId).update("joined", FieldValue.arrayUnion(me))
         scope.launch {
             delay(GroupCallWire.RING_WINDOW_MS)
@@ -443,7 +443,7 @@ object GroupCall {
             val name = if (!enc.isNullOrEmpty()) key.decryptName(enc) else null
             if (!name.isNullOrEmpty() && _ui.value.cid == tag) _ui.value = _ui.value.copy(title = name)
             // iOS isLinkCreator: the link's maker answers the people at the door.
-            val me = FirebaseAuth.getInstance().currentUser?.uid
+            val me = com.fariin.app.Fb.auth.currentUser?.uid
             if (me != null && d?.get("creatorUid") == me && _ui.value.cid == tag) {
                 _ui.value = _ui.value.copy(linkCreator = true)
                 listenRequests(tag, roomId)
@@ -465,7 +465,7 @@ object GroupCall {
      * an approval link as a knock). `renew`: the pass in hand stays usable until the new one lands.
      */
     fun prefetchLinkPass(roomId: String, renew: Boolean = false) {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         heldPass?.let { if (!renew && it.roomId == roomId && it.uid == uid && System.currentTimeMillis() - it.at < PASS_LIFE_MS) return }
         passAsk?.let { if (it.roomId == roomId && it.uid == uid) return }
         val job = scope.async {
@@ -491,7 +491,7 @@ object GroupCall {
 
     /** The pass the lobby already holds or is fetching for this link, taken once; null = ask the server. */
     private suspend fun takeLinkPass(roomId: String): Any? {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return null
+        val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return null
         val held = heldPass?.takeIf { it.roomId == roomId && it.uid == uid && System.currentTimeMillis() - it.at < PASS_LIFE_MS }
         val ask = passAsk?.takeIf { it.roomId == roomId && it.uid == uid }
         heldPass = null; passAsk = null   // never kept past a join, used or not
@@ -514,7 +514,7 @@ object GroupCall {
     }
 
     private fun waitForYes(app: Context, tag: String, roomId: String, video: Boolean) {
-        val me = FirebaseAuth.getInstance().currentUser?.uid
+        val me = com.fariin.app.Fb.auth.currentUser?.uid
         if (me == null) { fail("Call failed"); return }
         _ui.value = _ui.value.copy(waiting = true)
         requestReg?.remove()
@@ -619,7 +619,7 @@ object GroupCall {
 
     /** I am alone in the room on a start: the call is mine to announce. */
     private suspend fun start(cid: String, title: String, video: Boolean, r: Room) {
-        val me = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         val id = GroupCallWire.newRecordId(UUID.randomUUID().toString().uppercase())
         val ref = db.collection("groupCalls").document(cid)
         val doc = GroupCallWire.startDoc(me, video, title, id, FieldValue.serverTimestamp())
@@ -1132,7 +1132,7 @@ object GroupCall {
         tracker.update(emptySet(), Long.MAX_VALUE / 2)
         if (link != null && _ui.value.waiting) {
             // Giving up while still waiting withdraws the request (the rules allow it only while pending).
-            FirebaseAuth.getInstance().currentUser?.uid?.let { me ->
+            com.fariin.app.Fb.auth.currentUser?.uid?.let { me ->
                 db.collection("callLinks").document(link).collection("requests").document(me).delete()
             }
         }
@@ -1502,7 +1502,7 @@ object GroupCall {
 
     /** Add People's list on a call link: my 1:1 chats, newest first, none blocked either way. */
     suspend fun linkCandidates(): List<CallPerson> {
-        val me = FirebaseAuth.getInstance().currentUser?.uid ?: return emptyList()
+        val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return emptyList()
         val docs = try {
             db.collection("conversations").whereArrayContains("users", me)
                 .orderBy("updatedAt", Query.Direction.DESCENDING).limit(200).get().await().documents

@@ -39,8 +39,8 @@ object Presence {
     fun myPrivacyNow(): Map<String, String>? = myPrivacy
 
     suspend fun set(online: Boolean, context: Context? = null) {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
-        val db = FirebaseFirestore.getInstance()
+        val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return
+        val db = com.fariin.app.Fb.db
         val user = db.collection("users").document(uid)
         // Read fresh each time (the setting can change on another phone); offline, the last copy.
         val privacy = try {

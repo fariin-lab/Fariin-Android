@@ -64,7 +64,7 @@ internal fun BlockedUsersPage(pop: () -> Unit) {
     var picking by remember { mutableStateOf(false) }
     var blockError by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(snap.entries.keys) {
-        val db = FirebaseFirestore.getInstance()
+        val db = com.fariin.app.Fb.db
         val out = HashMap(people)
         for (u in snap.entries.keys) if (u !in out) {
             val d = try { db.collection("users").document(u).get().await().data } catch (_: Exception) { null }
@@ -119,7 +119,7 @@ internal fun BlockedUsersPage(pop: () -> Unit) {
         com.fariin.app.ui.people.PersonConfirmSheet(p?.photo, name, if (name.isEmpty()) "Unblock?" else "Unblock $name?",
             "They will be able to message and call you again. Messages sent while blocked stay hidden.",
             listOf(com.fariin.app.ui.people.PersonAction("Unblock") {
-                val ok = FirestorePeople(FirebaseAuth.getInstance().currentUser!!.uid, CryptoHub.get(ctx)).setBlocked(u, false)
+                val ok = FirestorePeople(com.fariin.app.Fb.auth.currentUser!!.uid, CryptoHub.get(ctx)).setBlocked(u, false)
                 if (!ok) toast(ctx, "Check your connection and try again.")
                 ok
             }), onDismiss = { confirm = null })
@@ -136,7 +136,7 @@ private fun BlockPickerPage(onClose: () -> Unit, onFail: (String) -> Unit) {
     val ctx = LocalContext.current
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
-    val me = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+    val me = com.fariin.app.Fb.auth.currentUser?.uid ?: ""
     val snap by BlockList.state.collectAsState()
     var query by remember { mutableStateOf("") }
     var toBlock by remember { mutableStateOf<BlockPerson?>(null) }

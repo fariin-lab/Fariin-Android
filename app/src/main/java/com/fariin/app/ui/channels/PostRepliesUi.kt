@@ -144,7 +144,7 @@ internal fun rememberReplyQuickReaction(): String {
 private const val OFFLINE_WORDS = "Couldn't load replies. Check your connection."
 
 class PostRepliesState(val cid: String, private val mid: String, private val scope: CoroutineScope) {
-    private val cacheKey = (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "") + "/$cid/$mid"
+    private val cacheKey = (com.fariin.app.Fb.auth.currentUser?.uid ?: "") + "/$cid/$mid"
 
     /** Top (the default) or Newest: the order the server pages come in; switching reloads from page one. */
     var sort by mutableStateOf(PostReplyRules.Sort.TOP)
@@ -242,7 +242,7 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
         mentionJob?.cancel()
         val word = PostReplyRules.typingMention(draft)?.second
         if (word.isNullOrEmpty()) { mentionPicks = emptyList(); return }
-        val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         mentionJob = scope.launch {
             delay(250)
             val found = runCatching { com.fariin.app.data.FirestorePeople(me, com.fariin.app.data.CryptoHub.crypto).search(word) }
@@ -266,10 +266,10 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
         if (key == null) { toast = "No one uses @$handle."; return }
         scope.launch {
             val owner = runCatching {
-                val d = com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("usernames").document(key).get().await()
+                val d = com.fariin.app.Fb.db.collection("usernames").document(key).get().await()
                 d.getString("uid")?.takeIf { it.isNotEmpty() && d.get("releasedAt") == null }
             }.getOrNull()
-            val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+            val me = com.fariin.app.Fb.auth.currentUser?.uid
             when {
                 owner == null -> toast = "No one uses @$handle."
                 owner == me -> toast = "@$handle is your username."
@@ -311,7 +311,7 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
     fun start() {
         scope.launch { loadFirst() }
         if (listener != null) return
-        listener = FirebaseFirestore.getInstance().collection("conversations").document(cid)
+        listener = com.fariin.app.Fb.db.collection("conversations").document(cid)
             .collection("messages").document(mid).collection("rh").document("head")
             .addSnapshotListener { snap, _ ->
                 if (snap == null) return@addSnapshotListener

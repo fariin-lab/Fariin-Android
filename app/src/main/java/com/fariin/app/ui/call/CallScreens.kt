@@ -858,11 +858,11 @@ fun PipScreen(ui: CallUi) {
             else -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.padding(8.dp)) {
                 // BOTH OF US with no camera (owner 2026-11-08, the reference's call window): their photo,
                 // then mine under it, smaller, so the window reads as a call between two people.
-                val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                val me = com.fariin.app.Fb.auth.currentUser?.uid
                 val myPhoto by androidx.compose.runtime.produceState<String?>(null, me) {
-                    if (me != null) value = runCatching { com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users")
+                    if (me != null) value = runCatching { com.fariin.app.Fb.db.collection("users")
                         .document(me).get(com.google.firebase.firestore.Source.CACHE).await().getString("photoUrl") }.getOrNull()
-                        ?: runCatching { com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(me).get().await().getString("photoUrl") }.getOrNull()
+                        ?: runCatching { com.fariin.app.Fb.db.collection("users").document(me).get().await().getString("photoUrl") }.getOrNull()
                 }
                 Box {
                     Avatar(ui.peerPhoto, 66.dp, Modifier.semantics { contentDescription = ui.peerName })
@@ -1858,7 +1858,7 @@ private fun NotHereYet(g: GroupCallUi, meId: String?) {
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(1_000); now = System.currentTimeMillis() } }
     androidx.compose.runtime.DisposableEffect(room) {
-        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        val db = com.fariin.app.Fb.db
         val reg = db.collection("callLinks").document(room).collection("invites").addSnapshotListener { snap, _ ->
             snap ?: return@addSnapshotListener
             invites = snap.documents.mapNotNull { d ->
@@ -2025,10 +2025,10 @@ private class BoundTrack(val track: io.livekit.android.room.track.VideoTrack, va
 /** My own profile photo, from this phone's copy first, then the server (calls' own tiles). */
 @Composable
 internal fun rememberMyPhoto(): String? {
-    val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+    val me = com.fariin.app.Fb.auth.currentUser?.uid
     val photo by androidx.compose.runtime.produceState<String?>(null, me) {
         if (me == null) return@produceState
-        val ref = com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(me)
+        val ref = com.fariin.app.Fb.db.collection("users").document(me)
         value = runCatching { ref.get(com.google.firebase.firestore.Source.CACHE).await().getString("photoUrl") }.getOrNull()?.ifEmpty { null }
             ?: runCatching { ref.get().await().getString("photoUrl") }.getOrNull()?.ifEmpty { null }
     }

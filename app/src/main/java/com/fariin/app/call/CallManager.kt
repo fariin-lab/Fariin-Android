@@ -107,7 +107,7 @@ object CallManager {
     private val sealer: SignalSealer by lazy { CryptoSealer(crypto) }
     private var engine: RtcEngine? = null
 
-    private val me: String get() = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+    private val me: String get() = com.fariin.app.Fb.auth.currentUser?.uid ?: ""
     private var callId: String? = null
     private var peer = ""
     private val cid get() = CallWire.convId(me, peer)
@@ -405,7 +405,7 @@ object CallManager {
     /** This account's ring reaches this phone only: no iPhone (VoIP token) and one Android token. */
     private suspend fun ringsOnThisPhoneOnly(): Boolean = withTimeoutOrNull(1500) {
         try {
-            val d = com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(me)
+            val d = com.fariin.app.Fb.db.collection("users").document(me)
                 .collection("push").document("tokens").get().await().data ?: emptyMap()
             val voip = (d["voipTokens"] as? List<*>).orEmpty()
             val android = (d[com.fariin.app.push.Push.ANDROID_FIELD] as? List<*>).orEmpty()
@@ -1130,7 +1130,7 @@ object CallManager {
         val id = p.getString(LIVE_KEY, null) ?: return
         p.edit().remove(LIVE_KEY).apply()
         if (id == callId) return
-        val ref = com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("calls").document(id)
+        val ref = com.fariin.app.Fb.db.collection("calls").document(id)
         ref.get().addOnSuccessListener { d ->
             if (d.exists() && d.getString("status") != "ended" && id != callId) ref.update(CallWire.endFields(EndReason.FAILED))
         }
@@ -1191,7 +1191,7 @@ object CallManager {
     }
 
     private suspend fun myProfile(): Pair<String?, String?> = try {
-        val d = withTimeoutOrNull(2000) { FirebaseFirestore.getInstance().collection("users").document(me).get().await() }
+        val d = withTimeoutOrNull(2000) { com.fariin.app.Fb.db.collection("users").document(me).get().await() }
         d?.getString("name") to d?.getString("photoUrl")
     } catch (_: Exception) { null to null }
 

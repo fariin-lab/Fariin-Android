@@ -173,7 +173,7 @@ private data class DeviceRow(val id: String, val model: String, val os: String, 
 private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    val me = FirebaseAuth.getInstance().currentUser?.uid
+    val me = com.fariin.app.Fb.auth.currentUser?.uid
     val thisId = remember { DeviceRegistry.thisDeviceId(ctx) }
     var rows by remember { mutableStateOf<List<DeviceRow>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -182,7 +182,7 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
     var pending by remember { mutableStateOf<DeviceRow?>(null) }
     var info by remember { mutableStateOf<Pair<DeviceRow, Boolean>?>(null) }
     var all by remember { mutableStateOf(false) }
-    val db = FirebaseFirestore.getInstance()
+    val db = com.fariin.app.Fb.db
     if (me != null) DisposableEffect(me) {
         val reg = db.collection("users").document(me).collection("devices").addSnapshotListener { s, e ->
             if (s == null) { if (e != null) error = "Your devices could not be loaded. Check your connection and try again."; return@addSnapshotListener }
@@ -195,7 +195,7 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
         onDispose { reg.remove() }
     }
     LaunchedEffect(me) {
-        val auth = try { FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.authTimestamp } catch (_: Exception) { null }
+        val auth = try { com.fariin.app.Fb.auth.currentUser?.getIdToken(false)?.await()?.authTimestamp } catch (_: Exception) { null }
         if (auth != null) hoursLeft = SettingsRules.freshHoursLeft(auth * 1000, System.currentTimeMillis())
         auto = try { (db.collection("users").document(me!!).get().await().get("deviceAutoSignOutDays") as? Number)?.toInt() ?: 180 } catch (_: Exception) { 180 }
     }
@@ -390,10 +390,10 @@ private fun NotificationsPage(pop: () -> Unit) {
         onDispose { lifecycle.removeObserver(obs) }
     }
     var reset by remember { mutableStateOf(false) }
-    val me = FirebaseAuth.getInstance().currentUser?.uid
+    val me = com.fariin.app.Fb.auth.currentUser?.uid
     var resetting by remember { mutableStateOf(false) }
     suspend fun saveAccount(field: String, v: Boolean): Boolean = me != null &&
-        runCatching { FirebaseFirestore.getInstance().collection("users").document(me).set(mapOf(field to v), SetOptions.merge()).await() }.isSuccess
+        runCatching { com.fariin.app.Fb.db.collection("users").document(me).set(mapOf(field to v), SetOptions.merge()).await() }.isSuccess
     /** Saves the switch on the account; if that fails the switch goes back and the user is told. */
     fun account(field: String, v: Boolean, undo: () -> Unit) {
         me ?: return
@@ -452,7 +452,7 @@ private fun NotificationsPage(pop: () -> Unit) {
             resetting = true
             scope.launch {
                 val savedAccount = saveAccount("notifPush", true) and saveAccount("notifPreview", true)
-                val db = FirebaseFirestore.getInstance()
+                val db = com.fariin.app.Fb.db
                 var unmuteFailed = 0
                 for (c in com.fariin.app.data.CryptoHub.listedAll()) if ((c.mutedBy[me] ?: 0.0) > System.currentTimeMillis()) {
                     val ok = runCatching { db.collection("conversations").document(c.id).set(mapOf("mutedBy" to mapOf(me to 0.0)), SetOptions.merge()).await() }.isSuccess
@@ -516,7 +516,7 @@ private fun ChatsSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
         "Are you sure you want to permanently delete all chat history, including messages, photos, videos, documents, voice messages, and call history, from all of your devices? This action cannot be undone.",
         "Delete Everything", onYes = {
             confirmClear = false
-            val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return@YesNo
+            val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return@YesNo
             clearing = true
             clearScope.launch {
                 // Each chat as the per-chat Delete does it (clearedAt, written on the server so every
@@ -664,8 +664,8 @@ private fun StoriesSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
     val scope = rememberCoroutineScope()
     val p = remember { ctx.getSharedPreferences("fariin_stories", Context.MODE_PRIVATE) }
     var on by remember { mutableStateOf(p.getBoolean("storyViewReceipts", true)) }
-    val me = FirebaseAuth.getInstance().currentUser?.uid
-    val ref = me?.let { FirebaseFirestore.getInstance().collection("users").document(it).collection("private").document("storyPrefs") }
+    val me = com.fariin.app.Fb.auth.currentUser?.uid
+    val ref = me?.let { com.fariin.app.Fb.db.collection("users").document(it).collection("private").document("storyPrefs") }
     LaunchedEffect(me) { ref?.let { r -> runCatching { r.get().await().getBoolean("receipts") }.getOrNull()?.let { on = it; com.fariin.app.data.StoryReceiptPrefs.set(ctx, it) } } }
     ScrollPage("Stories", pop) {
         // iOS StorySettingsView: the audiences first, then View Receipts.
@@ -691,10 +691,10 @@ private fun StoriesSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
 @Composable
 private fun SecurityNotificationsPage(pop: () -> Unit) {
     val scope = rememberCoroutineScope()
-    val me = FirebaseAuth.getInstance().currentUser?.uid
+    val me = com.fariin.app.Fb.auth.currentUser?.uid
     var on by remember { mutableStateOf<Boolean?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    val ref = me?.let { FirebaseFirestore.getInstance().collection("users").document(it) }
+    val ref = me?.let { com.fariin.app.Fb.db.collection("users").document(it) }
     LaunchedEffect(me) { on = runCatching { ref?.get()?.await()?.getBoolean("securityAlerts") }.getOrNull() ?: false }
     ScrollPage("Security notifications", pop) {
         ErrorNote(error)
@@ -714,7 +714,7 @@ private fun SecurityNotificationsPage(pop: () -> Unit) {
 @Composable
 private fun SwipeActionsSection() {
     val ctx = LocalContext.current
-    val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
+    val me = com.fariin.app.Fb.auth.currentUser?.uid ?: ""
     val sa = com.fariin.app.ui.thread.SwipeActions
     if (!sa.allowed(me)) return
     var on by remember { mutableStateOf(sa.on(ctx, me)) }

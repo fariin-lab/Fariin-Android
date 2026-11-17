@@ -210,7 +210,7 @@ object NotificationPoster {
     fun showMyReply(c: Context, cid: String, text: String?) {
         val nmc = NotificationManagerCompat.from(c)
         val n = nmc.activeNotifications.firstOrNull { it.tag == cid && it.id == ID }?.notification ?: return
-        val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         val b = NotificationCompat.Builder(c, n.channelId)
             .setSmallIcon(R.drawable.ic_stat_fariin)
             .setColor(Color.rgb(0x1E, 0x88, 0xE5))
@@ -373,7 +373,7 @@ object NotificationPoster {
         val check = items.distinct().take(20)
         if (check.isEmpty()) return
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            val db = com.fariin.app.Fb.db
             val gone = HashSet<String>()
             for ((cid, mid) in check) {
                 if (cid in gone) continue

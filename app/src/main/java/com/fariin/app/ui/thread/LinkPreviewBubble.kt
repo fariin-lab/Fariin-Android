@@ -209,10 +209,10 @@ internal fun LiveGroupLinkCard(text: String, isMe: Boolean) {
 
 /** Whether `usernames/{h}` is mine (a released name is nobody's). False when it cannot be read. */
 private suspend fun usernameIsMine(h: String): Boolean {
-    val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return false
+    val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return false
     val key = com.fariin.app.data.Usernames.lookupKey(h) ?: return false
     return runCatching {
-        val d = com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("usernames").document(key).get().await()
+        val d = com.fariin.app.Fb.db.collection("usernames").document(key).get().await()
         d.getString("uid") == me && d.get("releasedAt") == null
     }.getOrDefault(false)
 }

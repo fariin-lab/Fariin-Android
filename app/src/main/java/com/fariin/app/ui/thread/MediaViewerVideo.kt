@@ -142,7 +142,7 @@ internal fun VideoPage(p: ViewerRules.Page, current: Boolean, ctl: VideoCtl, chr
     // Settings > Chats > Save to Photos: a received video goes to the gallery once it has come down
     // here (Android fetches a video when it is played). Never mine, never view-once. A streamed clip
     // is saved once all of it is in the stream cache (copied out, not fetched again).
-    val mine = p.authorId == null || p.authorId == com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+    val mine = p.authorId == null || p.authorId == com.fariin.app.Fb.auth.currentUser?.uid
     val autoSave = p.once == null && !mine && saveCid.isNotEmpty() && p.messageId != null
     LaunchedEffect(file) {
         val f = file ?: return@LaunchedEffect

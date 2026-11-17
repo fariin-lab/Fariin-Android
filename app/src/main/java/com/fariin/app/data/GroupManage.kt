@@ -23,9 +23,9 @@ import java.util.concurrent.TimeUnit
  *   checkGroupUsername {cid, username} -> {available, code, reason}; setGroupUsername {cid, username ("" = private)}
  */
 object GroupManage {
-    private val db get() = FirebaseFirestore.getInstance()
+    private val db get() = com.fariin.app.Fb.db
     private val fn get() = FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION)
-    private val me get() = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+    private val me get() = com.fariin.app.Fb.auth.currentUser?.uid ?: ""
     private fun conv(cid: String) = db.collection("conversations").document(cid)
 
     private suspend fun call(name: String, data: Map<String, Any?>, seconds: Long = 20): Map<*, *>? =

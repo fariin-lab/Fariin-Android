@@ -55,12 +55,12 @@ object ProfileWrites {
     }
 
     suspend fun saveAbout(me: String, about: String) {
-        FirebaseFirestore.getInstance().collection("users").document(me)
+        com.fariin.app.Fb.db.collection("users").document(me)
             .set(mapOf("about" to about.trim()), SetOptions.merge()).await()
     }
 
     suspend fun saveLinks(me: String, links: List<ProfileLink>) {
-        FirebaseFirestore.getInstance().collection("users").document(me)
+        com.fariin.app.Fb.db.collection("users").document(me)
             .set(mapOf("links" to ProfileLink.encode(links)), SetOptions.merge()).await()
     }
 }

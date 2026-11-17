@@ -56,8 +56,8 @@ object DeviceRegistry {
     private val pendingTokens = HashMap<String, Any>()
 
     private lateinit var app: Context
-    private val db: FirebaseFirestore get() = FirebaseFirestore.getInstance()
-    private val uid: String? get() = FirebaseAuth.getInstance().currentUser?.uid
+    private val db: FirebaseFirestore get() = com.fariin.app.Fb.db
+    private val uid: String? get() = com.fariin.app.Fb.auth.currentUser?.uid
 
     private const val PREFS = "fariin_device"
     private const val INSTALL_ID = "device.installId"
@@ -150,7 +150,7 @@ object DeviceRegistry {
             // the token's own auth_time (so it cannot be backdated).
             data["createdAt"] = FieldValue.serverTimestamp()
             try {
-                val t = FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()
+                val t = com.fariin.app.Fb.auth.currentUser?.getIdToken(false)?.await()
                 val at = t?.authTimestamp ?: 0L
                 if (at > 0) data["authTime"] = at
             } catch (_: Exception) {}

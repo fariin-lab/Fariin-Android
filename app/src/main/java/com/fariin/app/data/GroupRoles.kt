@@ -62,7 +62,7 @@ data class GroupRole(val text: String, val emoji: String? = null, val color: Str
                 emoji?.let { fit(it, MAX_EMOJI) }?.takeIf { it.isNotEmpty() }?.let { put("emoji", it) }
                 color?.takeIf { rgb(it) != null }?.let { put("color", it) }
             }
-            FirebaseFirestore.getInstance().collection("conversations").document(cid).update(mapOf(
+            com.fariin.app.Fb.db.collection("conversations").document(cid).update(mapOf(
                 "roles.$target" to (if (clean.isEmpty()) FieldValue.delete() else role),
                 "roleEdit" to mapOf("uid" to target, "by" to me),
             )).await()

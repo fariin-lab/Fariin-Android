@@ -62,8 +62,8 @@ object PlayedVoice {
 
     private fun flush(cid: String) {
         val ms = pending.remove(cid) ?: return
-        val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
-        com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("conversations").document(cid)
+        val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
+        com.fariin.app.Fb.db.collection("conversations").document(cid)
             .set(mapOf("lastPlayedVoice" to mapOf(me to ms)), com.google.firebase.firestore.SetOptions.merge())
     }
 

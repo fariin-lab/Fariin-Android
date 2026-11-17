@@ -31,7 +31,7 @@ object CrashReports {
             crash.setCustomKey("build", "${info?.versionName ?: "?"} (${info?.let { androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(it) } ?: 0})")
             runCatching { crash.setCustomKey("install", installId(c)) }
         }, "crash-keys").apply { isDaemon = true }.start()
-        FirebaseAuth.getInstance().addAuthStateListener { a -> crash.setUserId(hashUid(a.currentUser?.uid ?: "")) }
+        com.fariin.app.Fb.auth.addAuthStateListener { a -> crash.setUserId(hashUid(a.currentUser?.uid ?: "")) }
     }
 
     /** iOS Telemetry.hashUid: the first 10 bytes of sha256("kulan.telemetry.v1:" + uid), hex. */

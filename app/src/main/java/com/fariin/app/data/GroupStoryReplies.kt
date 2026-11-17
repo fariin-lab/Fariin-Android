@@ -19,7 +19,7 @@ data class GroupStoryReply(val id: String, val uid: String, val text: String, va
 
 object GroupStoryReplies {
     private fun col(storyId: String) =
-        FirebaseFirestore.getInstance().collection("stories").document(storyId).collection("replies")
+        com.fariin.app.Fb.db.collection("stories").document(storyId).collection("replies")
 
     /** iOS sendGroupReply: text up to 1000, an emoji up to 16; nothing when both are empty. */
     suspend fun send(me: String, storyId: String, text: String = "", emoji: String = "") {

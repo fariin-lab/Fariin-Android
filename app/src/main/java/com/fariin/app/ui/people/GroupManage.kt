@@ -662,7 +662,7 @@ private fun GroupMembersPage(cid: String, me: String, onBack: () -> Unit, push: 
     LaunchedEffect(searching) {
         if (!searching || handlesAsked) return@LaunchedEffect
         handlesAsked = true
-        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        val db = com.fariin.app.Fb.db
         // All at once, not one after another: in a big group the @names came in many seconds late.
         kotlinx.coroutines.coroutineScope {
             g.users.take(200).map { uid ->
@@ -848,7 +848,7 @@ private fun BannedUsersPage(cid: String, onBack: () -> Unit) {
     val team = Team.from(doc)
     val banned = (doc["bannedUids"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
     LaunchedEffect(banned) {
-        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        val db = com.fariin.app.Fb.db
         for (uid in banned) if (team.names[uid].isNullOrEmpty() && fetched[uid] == null) {
             runCatching { db.collection("users").document(uid).get().await() }.getOrNull()?.let { d ->
                 fetched[uid] = (d.getString("name") ?: "User") to d.getString("photoUrl")
@@ -1189,7 +1189,7 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
     LaunchedEffect(cid, doc.isNotEmpty()) { if (doc.isNotEmpty() && list == null) reload() }
     // iOS "Send in Fariin": the link goes into the chats I pick, as a plain text message.
     var sendingLink by remember { mutableStateOf<String?>(null) }
-    val myUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+    val myUid = com.fariin.app.Fb.auth.currentUser?.uid
     sendingLink?.let { url ->
         if (myUid != null) com.fariin.app.ui.thread.ForwardSheet(myUid, onDismiss = { sendingLink = null }, title = "Share with") { targets ->
             sendingLink = null

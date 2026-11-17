@@ -75,7 +75,7 @@ internal const val PAGE_TRANSFER = "chats:transfer"
 @Composable
 internal fun TransferChatsPage(pop: () -> Unit, startScanning: Boolean = false) {
     val ctx = LocalContext.current
-    val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+    val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return
     val scope = rememberCoroutineScope()
     val c = Fariin.colors
     // "" start, "send" old phone, "scan" camera, "receive" new phone working

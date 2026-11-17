@@ -39,8 +39,8 @@ object AppLimits {
         if (reg != null) return
         // No Firebase (a unit test) or nobody signed in: the fallbacks stand and the next read asks again.
         try {
-            if (FirebaseAuth.getInstance().currentUser == null) return
-            reg = FirebaseFirestore.getInstance().collection("config").document("limits")
+            if (com.fariin.app.Fb.auth.currentUser == null) return
+            reg = com.fariin.app.Fb.db.collection("config").document("limits")
                 .addSnapshotListener { snap, err ->
                     if (err != null || snap == null) { synchronized(this) { reg?.remove(); reg = null }; return@addSnapshotListener }
                     values = snap.data ?: emptyMap()

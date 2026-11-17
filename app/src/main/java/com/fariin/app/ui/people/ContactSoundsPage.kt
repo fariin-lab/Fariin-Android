@@ -45,7 +45,7 @@ internal fun contactNotifValue(untilMs: Double, nowMs: Double = System.currentTi
 
 /** iOS ChatService.setMute on a 1:1: `mutedBy.<me>` = the end in epoch ms (0 = unmute, far future = Always). */
 internal suspend fun writeContactMute(cid: String, me: String, untilMs: Double): Boolean = try {
-    FirebaseFirestore.getInstance().collection("conversations").document(cid)
+    com.fariin.app.Fb.db.collection("conversations").document(cid)
         .set(mapOf("mutedBy" to mapOf(me to untilMs)), SetOptions.merge()).await(); true
 } catch (_: Exception) { false }
 

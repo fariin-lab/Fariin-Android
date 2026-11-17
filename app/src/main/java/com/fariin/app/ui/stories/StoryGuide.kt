@@ -63,7 +63,7 @@ object StoryGuide {
 
     fun isOwed(c: Context): Boolean {
         if (c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY, false)) return false
-        val made = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.metadata?.creationTimestamp ?: return false
+        val made = com.fariin.app.Fb.auth.currentUser?.metadata?.creationTimestamp ?: return false
         return made >= NEW_SINCE_MS
     }
 

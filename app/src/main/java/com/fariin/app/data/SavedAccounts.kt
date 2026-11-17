@@ -70,7 +70,7 @@ object SavedAccounts {
      * an empty array (no photo on the profile) removes it.
      */
     fun remember(c: Context, profile: MyProfile, verified: Boolean = false, gold: Boolean = false, photoJpeg: ByteArray? = null) {
-        val user = FirebaseAuth.getInstance().currentUser ?: return
+        val user = com.fariin.app.Fb.auth.currentUser ?: return
         if (user.uid != profile.uid || profile.handle.isEmpty()) return
         val providers = user.providerData.map { it.providerId }.toSet()
         val door = SignInMethod.doorOf(providers, lastMethod(c)) ?: return
@@ -166,7 +166,7 @@ object DeviceSessionKeys {
 
     /** Signed in: make sure this phone holds a key for this account. Cheap when it already does. */
     suspend fun ensureIssued(c: Context) {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         if (key(c, uid) != null) return
         val deviceId = DeviceRegistry.thisDeviceId(c)
         val secret = try {
@@ -187,8 +187,8 @@ object DeviceSessionKeys {
                 .call(mapOf("uid" to uid, "deviceId" to deviceId, "secret" to secret)).await().getData() as? Map<*, *>
             val token = d?.get("token") as? String ?: return false
             (d["secret"] as? String)?.let { store(c, uid, it) }
-            FirebaseAuth.getInstance().signInWithCustomToken(token).await()
-            FirebaseAuth.getInstance().currentUser?.uid == uid
+            com.fariin.app.Fb.auth.signInWithCustomToken(token).await()
+            com.fariin.app.Fb.auth.currentUser?.uid == uid
         } catch (e: Exception) {
             if (e is FirebaseFunctionsException && e.code == FirebaseFunctionsException.Code.FAILED_PRECONDITION) forget(c, uid)
             false

@@ -16,18 +16,18 @@ object ChannelPosting {
     fun isSilent(cid: String): Boolean = silent[cid] ?: false
 
     fun load(cid: String) {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         if (!loaded.add(cid)) return
-        FirebaseFirestore.getInstance().collection("users").document(uid).collection("channelPrefs").document(cid)
+        com.fariin.app.Fb.db.collection("users").document(uid).collection("channelPrefs").document(cid)
             .get().addOnSuccessListener { snap -> (snap.get("silent") as? Boolean)?.let { silent[cid] = it } }
             .addOnFailureListener { loaded.remove(cid) }
     }
 
     /** Shown at once; put back (and [onFail] told) if the write is refused. */
     fun setSilent(cid: String, on: Boolean, onFail: () -> Unit) {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         silent[cid] = on
-        FirebaseFirestore.getInstance().collection("users").document(uid).collection("channelPrefs").document(cid)
+        com.fariin.app.Fb.db.collection("users").document(uid).collection("channelPrefs").document(cid)
             // Merge (server contract 2026-11-09): an overwrite wiped the reply-alert switch, and the new rules refuse it.
             .set(mapOf("silent" to on), com.google.firebase.firestore.SetOptions.merge())
             .addOnFailureListener { silent[cid] = !on; onFail() }

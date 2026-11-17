@@ -42,7 +42,7 @@ object MediaHold {
         if (w.isEmpty()) return false
         if (m.viewOnce) {
             // My own view-once: I can never open it on this phone, so there is nothing to wait for.
-            if (m.authorId == com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid) return false
+            if (m.authorId == com.fariin.app.Fb.auth.currentUser?.uid) return false
             return true   // unopened: waits for the tap
         }
         if (m.localPath != null && java.io.File(m.localPath).exists()) return false

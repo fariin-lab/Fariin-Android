@@ -95,13 +95,13 @@ object GetStartedStore {
     fun markSeen(c: Context, uid: String, card: GetStartedCard) { if (addTo(c, "$uid.seen", card)) version.intValue++ }
     /** From anywhere in the app: the signed-in account just did [card] (created a group, picked a colour...). */
     fun markDone(c: Context, card: GetStartedCard) {
-        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         if (addTo(c, "$uid.done", card)) version.intValue++
     }
 
     /** iOS accountIsNew: joined in the last 7 days, by the sign-in record's creation time. */
     fun accountIsNew(): Boolean {
-        val joined = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.metadata?.creationTimestamp ?: return false
+        val joined = com.fariin.app.Fb.auth.currentUser?.metadata?.creationTimestamp ?: return false
         return System.currentTimeMillis() - joined < 7L * 86_400_000
     }
 
@@ -118,7 +118,7 @@ object GetStartedStore {
 fun GetStartedBanner(cards: List<GetStartedCard>, onTap: (GetStartedCard) -> Unit, onRemove: (GetStartedCard) -> Unit, onHideAll: () -> Unit) {
     val c = Fariin.colors
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+    val uid = com.fariin.app.Fb.auth.currentUser?.uid.orEmpty()
     // Read on every redraw (the list redraws on each store bump).
     // Reading the store version makes this card redraw on every change, even when the list is equal.
     val storeVersion = GetStartedStore.version.intValue

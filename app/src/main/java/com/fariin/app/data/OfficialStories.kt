@@ -51,9 +51,9 @@ object OfficialStories {
     /** From the Stories list and on a return to the front; [force] after a change or an expiry. */
     fun refresh(c: Context, force: Boolean = false) {
         app = c.applicationContext
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         if (seededFor != uid) { seededFor = uid; publish(load(uid), save = false) }
-        if (stamp == null) stamp = FirebaseFirestore.getInstance().document("config/officialStoriesStamp")
+        if (stamp == null) stamp = com.fariin.app.Fb.db.document("config/officialStoriesStamp")
             .addSnapshotListener { snap, _ ->
                 val at = snap?.getTimestamp("at") ?: return@addSnapshotListener
                 val was = lastStamp
@@ -120,7 +120,7 @@ object OfficialStories {
 
     /** A watch: seen on this phone, and one view document (named only with read receipts on). */
     fun recordView(c: Context, s: Story, receipts: Boolean) {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         val raw = s.id.removePrefix(ID_PREFIX).takeIf { it.isNotEmpty() && s.id.startsWith(ID_PREFIX) } ?: return
         val p = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val seen = seenIds(c)
@@ -128,14 +128,14 @@ object OfficialStories {
         p.edit().putStringSet("seen.$uid", (seen + s.id).toSet()).apply()
         val viewId = if (receipts) uid else MessageDigest.getInstance("SHA-256").digest((VIEW_SALT + uid).toByteArray())
             .joinToString("") { "%02x".format(it) }
-        FirebaseFirestore.getInstance().collection("officialStories").document(raw).collection("views").document(viewId)
+        com.fariin.app.Fb.db.collection("officialStories").document(raw).collection("views").document(viewId)
             .set(mapOf("at" to FieldValue.serverTimestamp(), "named" to receipts))
             .addOnFailureListener { android.util.Log.w("OfficialStories", "view not written", it) }
         seenTick.value++   // the ring redraws as seen
     }
 
     private fun seenIds(c: Context): Set<String> {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return emptySet()
+        val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return emptySet()
         return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getStringSet("seen.$uid", emptySet()).orEmpty()
     }
 

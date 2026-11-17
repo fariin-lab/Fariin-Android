@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit
 class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
     override suspend fun doWork(): Result {
         val uid = inputData.getString("uid") ?: return Result.success()
-        if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid != uid) return Result.success()
+        if (com.fariin.app.Fb.auth.currentUser?.uid != uid) return Result.success()
         return when (ChatBackup.backUp(applicationContext, uid, automatic = true)) {
             is ChatBackup.Result.Failed -> Result.retry()
             else -> Result.success()

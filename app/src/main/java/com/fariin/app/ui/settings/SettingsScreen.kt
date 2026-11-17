@@ -373,7 +373,7 @@ private fun AccountPage(
     androidx.compose.runtime.SideEffect { SettingsIndex.hasTwoStep = hasTwoStep }
     // iOS shows Password only when the account has an address a person can type.
     val hasEmail = demo || runCatching {
-        !com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email.isNullOrEmpty()
+        !com.fariin.app.Fb.auth.currentUser?.email.isNullOrEmpty()
     }.getOrDefault(false)
     val barScroll = rememberScrollState()
     // Delete Account lives in the ••• menu at the top (iOS SettingsView toolbar Menu), not as a red row

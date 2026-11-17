@@ -51,13 +51,13 @@ object ChatExportRun {
 
     /** Reads, opens and writes on a background thread; throws a sentence to show. */
     suspend fun file(context: Context, job: Job): File = withContext(Dispatchers.IO) {
-        val me = FirebaseAuth.getInstance().currentUser?.uid ?: throw IllegalStateException("You are logged out.")
+        val me = com.fariin.app.Fb.auth.currentUser?.uid ?: throw IllegalStateException("You are logged out.")
         val group = Wire.isGroupCid(job.cid)
         val crypto = CryptoHub.get(context)
         try { crypto.ensureReady() } catch (_: Exception) {}
         val conv = CryptoHub.listedConversation(job.cid)
         val clearedMs = conv?.clearedAt?.get(me) ?: 0.0
-        val col = FirebaseFirestore.getInstance().collection("conversations").document(job.cid).collection("messages")
+        val col = com.fariin.app.Fb.db.collection("conversations").document(job.cid).collection("messages")
         // A failed read is an error, never a half-empty file that looks whole (iOS).
         val docs = try {
             if (group) col.orderBy("createdAt", Query.Direction.DESCENDING).limit(ChatExport.GROUP_CAP.toLong()).get().await().documents.reversed()

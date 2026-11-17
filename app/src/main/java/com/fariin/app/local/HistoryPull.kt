@@ -50,10 +50,10 @@ object HistoryPull {
     }
 
     private suspend fun pull(ctx: Context, me: String, cid: String, crypto: com.fariin.app.crypto.FariinCrypto) {
-        val msgs = FirebaseFirestore.getInstance().collection("conversations").document(cid).collection("messages")
+        val msgs = com.fariin.app.Fb.db.collection("conversations").document(cid).collection("messages")
         // When I joined (groups): only a message from before that may be "not for me" for good.
         val joinedAt = runCatching {
-            val conv = FirebaseFirestore.getInstance().collection("conversations").document(cid).get().await()
+            val conv = com.fariin.app.Fb.db.collection("conversations").document(cid).get().await()
             com.fariin.app.data.Conversation.millis((conv.get("memberSince") as? Map<*, *>)?.get(me))
         }.getOrDefault(0.0)
         val note = LocalDb.meta(me, "pull.$cid")?.split("|")

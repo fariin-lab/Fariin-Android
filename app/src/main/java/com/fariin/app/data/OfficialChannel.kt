@@ -325,7 +325,7 @@ object OfficialChannel {
         app = context.applicationContext
         uid = me
         build = appBuild
-        val db = FirebaseFirestore.getInstance()
+        val db = com.fariin.app.Fb.db
         val user = db.collection("users").document(me)
         // No `where` on publishAt: a query fixed at attach time misses the next send. `reaches` decides.
         regs = listOf(
@@ -368,7 +368,7 @@ object OfficialChannel {
     private fun recompute() {
         val me = uid ?: return
         val now = System.currentTimeMillis().toDouble()
-        val joined = FirebaseAuth.getInstance().currentUser?.metadata?.creationTimestamp?.toDouble()?.takeIf { it > 0 }
+        val joined = com.fariin.app.Fb.auth.currentUser?.metadata?.creationTimestamp?.toDouble()?.takeIf { it > 0 }
         val next = visible(broadcast, personal, state, me, build, java.util.Locale.getDefault().country.ifEmpty { null }, now, joined)
         // One timer for the next moment something falls due or expires.
         timer?.cancel()
@@ -390,7 +390,7 @@ object OfficialChannel {
     }
 
     private fun stateRef() = uid?.let {
-        FirebaseFirestore.getInstance().collection("users").document(it).collection("officialChannel").document("state")
+        com.fariin.app.Fb.db.collection("users").document(it).collection("officialChannel").document("state")
     }
 
     /** When a switch was chosen, written with it so the rules refuse an older choice that lands later. */
@@ -454,7 +454,7 @@ object OfficialChannel {
         recompute()
         syncTopics()   // at once, not only when the write comes back
         scheduleMuteEnd()
-        FirebaseFirestore.getInstance().collection("users").document(me)
+        com.fariin.app.Fb.db.collection("users").document(me)
             .collection("officialChannel").document("state")
             .set(mapOf("muted" to muted, "mutedUntil" to end, "mutedAt" to System.currentTimeMillis().toDouble()), SetOptions.merge())
     }
@@ -490,7 +490,7 @@ object OfficialChannel {
         if (ids.isEmpty()) return
         state = state.copy(hiddenIds = state.hiddenIds + ids)
         recompute()
-        FirebaseFirestore.getInstance().collection("users").document(me)
+        com.fariin.app.Fb.db.collection("users").document(me)
             .collection("officialChannel").document("state")
             .set(mapOf("hiddenIds" to com.google.firebase.firestore.FieldValue.arrayUnion(*ids.toTypedArray())), SetOptions.merge())
     }

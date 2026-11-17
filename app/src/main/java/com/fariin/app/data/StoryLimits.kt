@@ -80,7 +80,7 @@ object StoryLimits {
     suspend fun refresh(me: String) {
         if (me.isEmpty()) return
         runCatching {
-            val d = FirebaseFirestore.getInstance().collection("users").document(me)
+            val d = com.fariin.app.Fb.db.collection("users").document(me)
                 .collection("limits").document("storiesDaily").get().await()
             dailyWindowStartMs = d.getTimestamp("windowStart")?.toDate()?.time
             dailyUsed = (d.get("count") as? Number)?.toInt() ?: 0

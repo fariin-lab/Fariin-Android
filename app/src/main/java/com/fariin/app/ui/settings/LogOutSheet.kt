@@ -51,7 +51,7 @@ internal fun LogOutSheet(profile: MyProfile?, onDismiss: () -> Unit, onSignOut: 
     // The phone keeps this account's message history after Log Out (device-storage plan): a
     // choice here removes it too (2026-11-12, both apps).
     var wipeHistory by remember { mutableStateOf(false) }
-    val me = remember { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid }
+    val me = remember { com.fariin.app.Fb.auth.currentUser?.uid }
     val motion = rememberSheetMotion {
         if (wait[0]) com.fariin.app.AppLifecycle.reconnect()
         onDismiss()

@@ -12,7 +12,7 @@ object DeliveryReceipts {
     private val written = HashMap<String, Double>()
 
     @Synchronized
-    fun mark(convs: List<Conversation>, me: String, db: FirebaseFirestore = FirebaseFirestore.getInstance()) {
+    fun mark(convs: List<Conversation>, me: String, db: FirebaseFirestore = com.fariin.app.Fb.db) {
         if (me.isEmpty()) return
         // My private block list too (iOS BlockList.shared.contains): the blocked sender keeps one tick.
         val snap = BlockList.snapshot

@@ -31,7 +31,7 @@ object StoryReceiptPrefs {
         uid = me
         val p = ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         _on.value = if (p.contains(KEY)) p.getBoolean(KEY, false) else null
-        reg = FirebaseFirestore.getInstance().collection("users").document(me).collection("private").document("storyPrefs")
+        reg = com.fariin.app.Fb.db.collection("users").document(me).collection("private").document("storyPrefs")
             // Metadata changes too: "no doc in the cache" then "no doc on the server" is the same data, and
             // only the second may count as "never switched off".
             .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { snap, err ->

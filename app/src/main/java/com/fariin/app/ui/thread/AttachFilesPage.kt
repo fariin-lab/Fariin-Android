@@ -64,7 +64,7 @@ object RecentFiles {
     }.getOrNull()
 
     private const val MAX = 60
-    private fun key(): String = "recentFiles." + (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "none")
+    private fun key(): String = "recentFiles." + (com.fariin.app.Fb.auth.currentUser?.uid ?: "none")
     private fun prefs(c: Context) = c.applicationContext.getSharedPreferences("fariin_recent_files", Context.MODE_PRIVATE)
 
     fun list(c: Context): List<Entry> = runCatching {

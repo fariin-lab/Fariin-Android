@@ -18,7 +18,7 @@ object Cursors {
     private val waiting = ConcurrentHashMap<String, Long>()
 
     fun advance(cid: String, upToMs: Long) {
-        val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         if (upToMs - 1 <= (sent[cid] ?: 0L)) return
         val now = System.currentTimeMillis()
         val since = now - (lastAt[cid] ?: 0L)
@@ -41,7 +41,7 @@ object Cursors {
         // (the server also deletes strictly below the line). Same as iOS.
         val value = minOf(upToMs - 1, now)
         sent[cid] = value; lastAt[cid] = now
-        FirebaseFirestore.getInstance().collection("conversations").document(cid).collection("cursors").document(me)
+        com.fariin.app.Fb.db.collection("conversations").document(cid).collection("cursors").document(me)
             .set(mapOf("deliveredUpTo" to value, "at" to FieldValue.serverTimestamp()))
             .addOnFailureListener { if (sent[cid] == value) sent.remove(cid) }
     }

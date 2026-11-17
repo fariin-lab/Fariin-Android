@@ -135,7 +135,7 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
     // the default set, saved, so what the owner sees is what followers get (iOS 2dc585e8). Owner only.
     LaunchedEffect(loaded) {
         if (!loaded || mode != "all") return@LaunchedEffect
-        val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        val me = com.fariin.app.Fb.auth.currentUser?.uid
         if (me == null || doc["createdBy"] as? String != me) return@LaunchedEffect
         mode = "some"
         if (list.isEmpty()) list = ChannelReactions.defaultSet

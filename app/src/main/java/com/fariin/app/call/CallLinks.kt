@@ -280,9 +280,9 @@ object CallLinks {
     private var loadedFor: String? = null
     private var reg: com.google.firebase.firestore.ListenerRegistration? = null
 
-    private val db get() = FirebaseFirestore.getInstance()
+    private val db get() = com.fariin.app.Fb.db
     private val fn get() = FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION)
-    private val me get() = FirebaseAuth.getInstance().currentUser?.uid
+    private val me get() = com.fariin.app.Fb.auth.currentUser?.uid
 
     private fun list(uid: String) = db.collection("users").document(uid).collection("callLinks")
 

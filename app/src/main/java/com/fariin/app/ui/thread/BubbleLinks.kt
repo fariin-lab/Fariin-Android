@@ -167,7 +167,7 @@ internal fun rememberBubbleLinkTap(ui: ThreadUi, onNotice: (String) -> Unit): (T
 private suspend fun handleOwner(h: String): String? {
     val key = com.fariin.app.data.Usernames.lookupKey(h) ?: return null
     return runCatching {
-        val d = com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("usernames").document(key).get().await()
+        val d = com.fariin.app.Fb.db.collection("usernames").document(key).get().await()
         d.getString("uid")?.takeIf { it.isNotEmpty() && d.get("releasedAt") == null }
     }.getOrNull()
 }
@@ -207,7 +207,7 @@ internal object StoryLinks {
 
     /** The story as a one-story ring, when it is live and mine to see: the story itself, else its public copy. */
     suspend fun open(handle: String?, id: String): com.fariin.app.data.StoryGroup? {
-        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        val db = com.fariin.app.Fb.db
         val direct = runCatching { db.collection("stories").document(id).get().await() }.getOrNull()
             ?.data?.let { com.fariin.app.data.StoryList.parse(id, it) }
         val story = direct ?: handle?.let { h -> handleOwner(h) }?.let { owner ->

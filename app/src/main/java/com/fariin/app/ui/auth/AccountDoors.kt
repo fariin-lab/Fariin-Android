@@ -117,7 +117,7 @@ fun TwoStepSignInPage(onPassed: () -> Unit) {
             try {
                 AccountCall.run("verifyAdditionalPassword", mapOf("password" to password))
                 // The claim lands on the next refresh; the rules read the token, so fetch it first.
-                runCatching { FirebaseAuth.getInstance().currentUser?.getIdToken(true)?.await() }
+                runCatching { com.fariin.app.Fb.auth.currentUser?.getIdToken(true)?.await() }
                 onPassed()
             } catch (e: AccountCallError) { error = e.message }
             finally { busy = false }
@@ -197,8 +197,8 @@ fun RestoreAccountPage(handle: String, dueMs: Long, onRestored: () -> Unit) {
             Box(Modifier.fillMaxWidth().height(52.dp).clip(CircleShape).background(c.accent)
                 .clickable(enabled = !working) {
                     act {
-                        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: error("You are logged out.")
-                        FirebaseFirestore.getInstance().collection("users").document(uid)
+                        val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: error("You are logged out.")
+                        com.fariin.app.Fb.db.collection("users").document(uid)
                             .set(mapOf("deletionScheduledFor" to FieldValue.delete(), "isHidden" to FieldValue.delete()), SetOptions.merge()).await()
                         onRestored()
                     }
@@ -217,7 +217,7 @@ fun RestoreAccountPage(handle: String, dueMs: Long, onRestored: () -> Unit) {
     if (confirmDelete) YesNo("Delete now?", RestoreRules.deleteNowText(dueText), "Delete", onNo = { confirmDelete = false }, onYes = {
         confirmDelete = false
         act {
-            val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return@act
+            val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return@act
             com.fariin.app.device.DeviceRegistry.stopWatching()
             try {
                 FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION).getHttpsCallable("purgeAccountNow").call(emptyMap<String, Any>()).await()

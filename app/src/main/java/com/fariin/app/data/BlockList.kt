@@ -46,7 +46,7 @@ object BlockList {
         uid = newUid
         _snap.value = Snapshot(owner = newUid)
         if (newUid == null) return
-        val me = FirebaseFirestore.getInstance().collection("users").document(newUid)
+        val me = com.fariin.app.Fb.db.collection("users").document(newUid)
         regs = listOf(
             // Read on the listen thread; the state is set on the main thread, as follow() sets it.
             me.collection("blocked").addSnapshotListener(com.fariin.app.perf.ListenThread.exec) { snap, _ ->

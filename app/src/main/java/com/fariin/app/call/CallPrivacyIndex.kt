@@ -46,7 +46,7 @@ object CallPrivacyIndex {
 
     /** iOS iAmContactOf: our 1:1 exists and is accepted (a request) or carries a message. */
     private fun iAmContactOf(uid: String): Boolean {
-        val me = FirebaseAuth.getInstance().currentUser?.uid ?: return false
+        val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return false
         val conv = CryptoHub.listedConversation(Wire.directCid(me, uid))?.takeIf { !it.isGroup } ?: return false
         return if (conv.startedBy.isNotEmpty()) conv.accepted else conv.lastMessageCipher.isNotEmpty()
     }
@@ -55,7 +55,7 @@ object CallPrivacyIndex {
     fun refresh(uid: String) {
         if (uid.isEmpty()) return
         io.launch {
-            runCatching { FirebaseFirestore.getInstance().collection("users").document(uid).get().await() }.getOrNull()
+            runCatching { com.fariin.app.Fb.db.collection("users").document(uid).get().await() }.getOrNull()
                 ?.let { s -> (s.get("privacy") as? Map<*, *>)?.let { m ->
                     record(uid, m.mapNotNull { (k, v) -> (k as? String)?.let { it to (v as? String ?: "") } }.toMap())
                 } }

@@ -39,7 +39,7 @@ import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
 
 /** True for the one account that may choose and add custom emoji (iOS CustomReaction.canChoose). */
-fun canChooseCustom(): Boolean = CustomEmojiUpload.canUpload(FirebaseAuth.getInstance().currentUser?.uid)
+fun canChooseCustom(): Boolean = CustomEmojiUpload.canUpload(com.fariin.app.Fb.auth.currentUser?.uid)
 
 /**
  * The emoji chooser's Custom tab (iOS EmojiMorePicker customGrid): every custom emoji, the shipped

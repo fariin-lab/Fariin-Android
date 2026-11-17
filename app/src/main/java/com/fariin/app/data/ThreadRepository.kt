@@ -59,7 +59,7 @@ class ThreadRepository(
     private val me: String,
     private val crypto: FariinCrypto,
     private val scope: CoroutineScope,
-    private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    private val db: FirebaseFirestore = com.fariin.app.Fb.db,
     /** The chat's files (download, open, cache); null where media is not wired (tests). */
     val media: ChatMedia? = null,
 ) {

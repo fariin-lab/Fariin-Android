@@ -221,7 +221,7 @@ object FariinWidget {
     internal fun render(app: Context): Shown {
         val kept = load(app)
         // Signed in but nothing kept yet (placed before the app opened its list): ask to open it.
-        val known = if (!kept.signedIn && com.google.firebase.auth.FirebaseAuth.getInstance().currentUser != null)
+        val known = if (!kept.signedIn && com.fariin.app.Fb.auth.currentUser != null)
             HomeWidgetRules.Snapshot(signedIn = true, locked = true) else kept
         val s = HomeWidgetRules.masked(known, AppLock.enabled(app), showPreview(app))
         return Shown(s, s.rows.map { face(app, it.photo, it.group) })

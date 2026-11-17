@@ -61,7 +61,7 @@ private fun sizeWords(b: Long): String = when {
 @Composable
 internal fun ChatBackupPage(pop: () -> Unit) {
     val ctx = LocalContext.current
-    val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+    val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return
     val scope = rememberCoroutineScope()
     val c = Fariin.colors
     var last by remember { mutableStateOf(ChatBackup.lastBackup(ctx, uid)) }
@@ -212,7 +212,7 @@ private val ask = mutableStateOf<Drive.Auth.Ask?>(null)
 @Composable
 private fun BackupPasswordPage(onDone: (Boolean) -> Unit) {
     val ctx = LocalContext.current
-    val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+    val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return
     val scope = rememberCoroutineScope()
     val c = Fariin.colors
     var kind by remember { mutableStateOf<String?>(null) }

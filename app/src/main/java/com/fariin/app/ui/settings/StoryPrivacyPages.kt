@@ -64,7 +64,7 @@ private data class StoryPerson(val uid: String, val name: String, val photo: Str
 
 /** My accepted 1:1 chats, as iOS StoryContact.all (requests and blocks either way left out). */
 private fun storyPeople(): List<StoryPerson> {
-    val me = FirebaseAuth.getInstance().currentUser?.uid ?: return emptyList()
+    val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return emptyList()
     val convs = CryptoHub.listedAll()
     val ids = StoryRules.contacts(me, convs)
     return convs.filter { !it.isGroup && it.otherUid(me) in ids }
@@ -75,7 +75,7 @@ private fun storyPeople(): List<StoryPerson> {
 /** The two audiences of the Stories page, between View Receipts and the page itself. */
 @Composable
 internal fun StoryAudienceRows(push: (String) -> Unit) {
-    val me = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+    val me = com.fariin.app.Fb.auth.currentUser?.uid ?: ""
     LaunchedEffect(me) { StoryPrivacyStore.start(me) }
     val myFriends by StoryPrivacyStore.myFriends.collectAsState()
     val custom by StoryPrivacyStore.custom.collectAsState()
@@ -149,7 +149,7 @@ private fun AudienceCircle(color: androidx.compose.ui.graphics.Color, icon: andr
 /** iOS CustomStoryDetailView, from Settings > Stories. */
 @Composable
 internal fun StoryCustomPage(id: String, pop: () -> Unit) {
-    val me = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+    val me = com.fariin.app.Fb.auth.currentUser?.uid ?: ""
     LaunchedEffect(me) { StoryPrivacyStore.start(me) }
     val people = remember { com.fariin.app.ui.stories.storyPeople(me, CryptoHub.listedAll()) }
     com.fariin.app.ui.stories.CustomStoryDetailPage(id, people, pop)
@@ -158,7 +158,7 @@ internal fun StoryCustomPage(id: String, pop: () -> Unit) {
 /** iOS EveryonePrivacyView over StoryHiddenListPage: the people my Everyone stories leave out. */
 @Composable
 internal fun StoryEveryonePage(pop: () -> Unit) {
-    val me = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+    val me = com.fariin.app.Fb.auth.currentUser?.uid ?: ""
     LaunchedEffect(me) { StoryPrivacyStore.start(me) }
     val hidden by StoryPrivacyStore.hidden.collectAsState()
     val people = remember { storyPeople() }
@@ -207,7 +207,7 @@ internal fun StoryEveryonePage(pop: () -> Unit) {
 /** iOS MyFriendsPrivacyView: Who Can View This Story (all / except / only) and Allow Replies. */
 @Composable
 internal fun StoryMyChatsPage(pop: () -> Unit) {
-    val me = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+    val me = com.fariin.app.Fb.auth.currentUser?.uid ?: ""
     LaunchedEffect(me) { StoryPrivacyStore.start(me) }
     val a by StoryPrivacyStore.myFriends.collectAsState()
     val people = remember { storyPeople() }

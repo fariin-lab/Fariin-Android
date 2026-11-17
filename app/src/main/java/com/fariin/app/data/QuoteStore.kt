@@ -42,7 +42,7 @@ object QuoteStore {
     private val lastUsed = HashMap<String, Long>()
     private const val KEEP = 500
 
-    private fun uid(): String? = runCatching { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid }.getOrNull()
+    private fun uid(): String? = runCatching { com.fariin.app.Fb.auth.currentUser?.uid }.getOrNull()
 
     /** The saved cards into memory before a chat draws (ThreadRoute), so its first frame has them. */
     fun warm() = loadSaved()

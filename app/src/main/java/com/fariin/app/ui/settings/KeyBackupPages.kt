@@ -90,7 +90,7 @@ private fun SecretKindLink(password: Boolean, onToggle: () -> Unit) {
 @Composable
 internal fun KeyBackupPage(pop: () -> Unit) {
     val ctx = LocalContext.current
-    val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+    val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return
     val scope = rememberCoroutineScope()
     var on by remember { mutableStateOf(KeyBackup.cachedOn(ctx, uid)) }
     var editing by remember { mutableStateOf(false) }
@@ -180,7 +180,7 @@ internal fun KeyBackupPage(pop: () -> Unit) {
 @Composable
 fun KeyRestoreScreen(status: KeyBackup.Status, onRestored: () -> Unit, onSkip: () -> Unit) {
     val ctx = LocalContext.current
-    val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+    val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return
     val scope = rememberCoroutineScope()
     val c = Fariin.colors
     var pin by remember { mutableStateOf("") }

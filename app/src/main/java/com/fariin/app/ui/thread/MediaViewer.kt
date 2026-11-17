@@ -242,7 +242,7 @@ private fun ViewerBody(
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val media = chatMedia()
-    val me = host?.me ?: com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+    val me = host?.me ?: com.fariin.app.Fb.auth.currentUser?.uid.orEmpty()
     val pager = rememberPagerState(initialPage = start.coerceIn(0, (pages.size - 1).coerceAtLeast(0))) { pages.size }
     val page = pages.getOrNull(pager.currentPage) ?: return
     val video = remember { VideoCtl() }

@@ -169,7 +169,7 @@ private enum class Door(val providerId: String, val title: String) {
 
 /** AuthService.connectedIdentifier, Apple first, then Google, then a password address. */
 private fun currentDoor(): Pair<Door, String>? {
-    val user = FirebaseAuth.getInstance().currentUser ?: return null
+    val user = com.fariin.app.Fb.auth.currentUser ?: return null
     for (d in Door.entries) {
         val info = user.providerData.firstOrNull { it.providerId == d.providerId } ?: continue
         return d to (info.email?.takeIf { it.isNotEmpty() } ?: user.email ?: "")
@@ -187,10 +187,10 @@ private fun ChangeEmailPage(push: (String) -> Unit, pop: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var needsReauth by remember { mutableStateOf(false) }
     val door = remember { currentDoor() }
-    val canSend = EmailChangeRules.canSend(newEmail, FirebaseAuth.getInstance().currentUser?.email, sending)
+    val canSend = EmailChangeRules.canSend(newEmail, com.fariin.app.Fb.auth.currentUser?.email, sending)
 
     fun send() {
-        if (!EmailChangeRules.canSend(newEmail, FirebaseAuth.getInstance().currentUser?.email, sending)) return
+        if (!EmailChangeRules.canSend(newEmail, com.fariin.app.Fb.auth.currentUser?.email, sending)) return
         sending = true; error = null
         scope.launch {
             try {
@@ -252,8 +252,8 @@ private fun EmailCodePage(address: String, pop: () -> Unit, onDone: () -> Unit) 
                     AccountCall.adoptSession(reply)
                     TwoStepGate.renewAfterReauth(before)
                 }
-                runCatching { FirebaseAuth.getInstance().currentUser?.reload()?.await() }
-                runCatching { FirebaseAuth.getInstance().currentUser?.getIdToken(true)?.await() }
+                runCatching { com.fariin.app.Fb.auth.currentUser?.reload()?.await() }
+                runCatching { com.fariin.app.Fb.auth.currentUser?.getIdToken(true)?.await() }
                 onDone()
             } catch (e: AccountCallError) {
                 error = e.message; needsReauth = e.needsReauth
@@ -366,7 +366,7 @@ private fun SetAdditionalPasswordPage(isChange: Boolean, pop: () -> Unit) {
             try {
                 AccountCall.run("setAdditionalPassword", payload)
                 // Turning it on revokes every refresh token; pick up the new one before anything reads.
-                runCatching { FirebaseAuth.getInstance().currentUser?.getIdToken(true)?.await() }
+                runCatching { com.fariin.app.Fb.auth.currentUser?.getIdToken(true)?.await() }
                 pop()
             } catch (e: AccountCallError) { error = e.message; needsReauth = e.needsReauth }
             finally { busy = false }

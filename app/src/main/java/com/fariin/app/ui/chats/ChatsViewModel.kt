@@ -45,7 +45,7 @@ class ChatsViewModel(
 
     /** Suspends until [me] is the signed-in account again. */
     private suspend fun signedInAgain() {
-        val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+        val auth = com.fariin.app.Fb.auth
         kotlinx.coroutines.suspendCancellableCoroutine<Unit> { cont ->
             val l = object : com.google.firebase.auth.FirebaseAuth.AuthStateListener {
                 override fun onAuthStateChanged(a: com.google.firebase.auth.FirebaseAuth) {
@@ -67,11 +67,11 @@ class ChatsViewModel(
         // 1 s, 3 s, 10 s, 30 s, 60 s and every 60 s after; it stops only when the session itself is
         // over (account removed or disabled), which the sign-out path then handles.
         .retryWhen { cause, attempt ->
-            val ended = runCatching { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.getIdToken(true)?.await() }
+            val ended = runCatching { com.fariin.app.Fb.auth.currentUser?.getIdToken(true)?.await() }
                 .exceptionOrNull() is com.google.firebase.auth.FirebaseAuthInvalidUserException
             if (ended) {
                 emit(ConversationsRepository.State.Failed(com.fariin.app.data.LoadFailure.of(cause))); false
-            } else if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid != me) {
+            } else if (com.fariin.app.Fb.auth.currentUser?.uid != me) {
                 // Logged out (this list outlives it, kept per account): wait quietly for this same
                 // account to sign back in, then listen again. Without this the list stayed on the
                 // refusal it got at Log Out after a one-tap sign-in back.

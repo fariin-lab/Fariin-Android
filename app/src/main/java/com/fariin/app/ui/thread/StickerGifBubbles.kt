@@ -479,7 +479,7 @@ private enum class GifCategory(val term: String, val label: String) {
 
 @Composable
 internal fun GifTab(
-    me: String = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "",
+    me: String = com.fariin.app.Fb.auth.currentUser?.uid ?: "",
     onGif: (StickerGifRules.Gif) -> Unit,
     hide: () -> Float = { 0f },
     onScrolledIn: (Boolean) -> Unit = {},

@@ -198,7 +198,7 @@ object Insights {
     /** iOS InsightsHistoryLoader.load; null when it could not be read. */
     suspend fun history(me: String): History? {
         if (me.isEmpty()) return null
-        val account = FirebaseFirestore.getInstance().collection("users").document(me)
+        val account = com.fariin.app.Fb.db.collection("users").document(me)
         val from = InsightsCalendar.today().minusDays((reach - 1).toLong())
         return try {
             val daySnap = account.collection("insightsDaily").whereGreaterThanOrEqualTo("day", InsightsCalendar.key(from))

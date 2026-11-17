@@ -22,10 +22,10 @@ object OpenGate {
     }
 
     suspend fun check(cid: String, mid: String?): Result {
-        val me = FirebaseAuth.getInstance().currentUser?.uid ?: return Result.REFUSED
+        val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return Result.REFUSED
         // The official chat has no conversation document; every account has it.
         if (cid == OfficialChannel.CID) return Result.OPEN
-        val conv = FirebaseFirestore.getInstance().collection("conversations").document(cid)
+        val conv = com.fariin.app.Fb.db.collection("conversations").document(cid)
         val known = CryptoHub.listedConversation(cid) != null ||
             com.fariin.app.channel.ChannelFollows.docs.value.containsKey(cid)
         if (!known) {

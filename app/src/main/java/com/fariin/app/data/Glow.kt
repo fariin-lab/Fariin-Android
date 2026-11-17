@@ -165,7 +165,7 @@ object Glow {
     private var glowersFailed = false
     private var glowingFailed = false
     private var prefs: android.content.SharedPreferences? = null
-    private val db get() = FirebaseFirestore.getInstance()
+    private val db get() = com.fariin.app.Fb.db
 
     private fun seenKey(u: String) = "glowSeenUpTo.$u"
 

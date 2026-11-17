@@ -44,7 +44,7 @@ object SessionEnd {
         // one, and each server step has a cap (offline, a Firestore write never answers, and
         // "Logging out…" stood for good). A step past its cap is dropped; its write stays queued
         // under the old account and never runs as the next one.
-        val uid = FirebaseAuth.getInstance().currentUser?.uid
+        val uid = com.fariin.app.Fb.auth.currentUser?.uid
         DeviceRegistry.stopWatching()
         // iOS endCallsBeforeSignOut (audit M-015): a live call or a ring ends first, as my own end,
         // while the rules still let this account write it; otherwise the other side keeps a call
@@ -91,12 +91,12 @@ object SessionEnd {
         // pending writes, about 3 s at most so a dead network cannot hold the sign-out.
         kotlinx.coroutines.delay(800)
         kotlinx.coroutines.withTimeoutOrNull(2200) {
-            runCatching { com.google.firebase.firestore.FirebaseFirestore.getInstance().waitForPendingWrites().await() }
+            runCatching { com.fariin.app.Fb.db.waitForPendingWrites().await() }
         }
     }
 
     private suspend fun step(uid: String?, name: String, work: suspend () -> Unit) {
-        if (uid == null || FirebaseAuth.getInstance().currentUser?.uid != uid) {
+        if (uid == null || com.fariin.app.Fb.auth.currentUser?.uid != uid) {
             android.util.Log.w(BootWatch.TAG, "log out: $name skipped, the session changed"); return
         }
         if (BootWatch.capped(BootWatch.SIGN_OUT_STEP_MS) { work(); true } == null)
@@ -105,15 +105,15 @@ object SessionEnd {
 
     /** Auth signs out only the account the teardown was for, never one signed in since. */
     private fun endAuth(uid: String?): Boolean {
-        val now = FirebaseAuth.getInstance().currentUser?.uid
-        if (now == null || now == uid) { FirebaseAuth.getInstance().signOut(); return true }
+        val now = com.fariin.app.Fb.auth.currentUser?.uid
+        if (now == null || now == uid) { com.fariin.app.Fb.auth.signOut(); return true }
         android.util.Log.w(BootWatch.TAG, "log out: another account is signed in now, left as it is")
         return false
     }
 
     /** Texts still in this account's send queue (they are wiped with the account on log out). */
     fun unsentCount(): Int {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return 0
+        val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return 0
         return runCatching { com.fariin.app.local.SendQueue.all(uid).size }.getOrDefault(0)
     }
 
@@ -144,7 +144,7 @@ object SessionEnd {
      *  False (nothing done) when the removal was about an account that is no longer signed in. */
     suspend fun revokedSignOut(c: Context): Boolean {
         val uid = DeviceRegistry.revokedUid
-        if (uid == null || FirebaseAuth.getInstance().currentUser?.uid != uid) {
+        if (uid == null || com.fariin.app.Fb.auth.currentUser?.uid != uid) {
             android.util.Log.w(BootWatch.TAG, "removed-device sign-out for an old session dropped")
             return false
         }
@@ -163,7 +163,7 @@ object SessionEnd {
     suspend fun deletedNow(c: Context) {
         DeviceRegistry.stopWatching()
         Push.clearAccount(c)
-        FirebaseAuth.getInstance().signOut()
+        com.fariin.app.Fb.auth.signOut()
         wipe(c)
     }
 

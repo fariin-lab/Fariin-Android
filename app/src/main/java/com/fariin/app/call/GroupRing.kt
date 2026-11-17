@@ -114,11 +114,11 @@ object GroupRing {
     private var timer: Job? = null
     private var ringtone: Ringtone? = null
     private var app: Context? = null
-    private val db get() = FirebaseFirestore.getInstance()
+    private val db get() = com.fariin.app.Fb.db
 
     /** The `groupcall` push (FariinMessagingService). */
     fun onPush(context: Context, cid: String) {
-        val me = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         if (cid.isEmpty() || cid.contains("/")) return
         app = context.applicationContext
         if (_invite.value?.cid == cid || GroupCall.ui.value.cid == cid || cid in declinedHere) return
@@ -155,7 +155,7 @@ object GroupRing {
     fun onLinkNudge(context: Context, d: Map<String, String>) = linkInvite(context, d, nudge = true)
 
     private fun linkInvite(context: Context, d: Map<String, String>, nudge: Boolean) {
-        val me = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         val roomId = d["roomId"].orEmpty()
         val key = d["key"]?.let { CallLinkKey.ofText(it) } ?: return
         if (roomId.isEmpty() || roomId.contains("/") || key.roomId != roomId) return
@@ -197,7 +197,7 @@ object GroupRing {
         notifyRing(c, i)
         if (inFront()) try { c.startActivity(ringIntent(c, ACTION_RING)) } catch (_: Exception) {}
         // The call doc: ended, or answered / declined on my other phone, stops this ring.
-        val me = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+        val me = com.fariin.app.Fb.auth.currentUser?.uid ?: ""
         reg?.remove()
         reg = if (i.linkKey != null) {
             // A link's ring: my invite answered, declined, timed out or gone (the call ended) stops it.
@@ -257,7 +257,7 @@ object GroupRing {
 
     /** groupRingAnswer (functions-groups); an offline decline is tried again a few times. */
     fun answer(answer: String, cid: String, startedAtMs: Long?, tries: Int = 2, roomKind: String = "group") {
-        if (FirebaseAuth.getInstance().currentUser == null) return
+        if (com.fariin.app.Fb.auth.currentUser == null) return
         val body = GroupRingRules.answerBody(answer, cid, startedAtMs, roomKind)
         scope.launch {
             repeat(maxOf(1, tries)) { attempt ->

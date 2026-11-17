@@ -204,7 +204,7 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
             runs.mapNotNull { r -> r.latest.otherUid.takeIf { it.isNotEmpty() && r.latest.groupCid == null } })
         warmed++
     }
-    LaunchedEffect(me) { if (me.isNotEmpty() && com.google.firebase.auth.FirebaseAuth.getInstance().currentUser != null) com.fariin.app.call.CallLinks.watch(me) }
+    LaunchedEffect(me) { if (me.isNotEmpty() && com.fariin.app.Fb.auth.currentUser != null) com.fariin.app.call.CallLinks.watch(me) }
     val allLinks by com.fariin.app.call.CallLinks.links.collectAsState()
     val links = remember(allLinks, missedOnly, q) {
         if (missedOnly) emptyList() else allLinks.filter { q.isEmpty() || it.title.lowercase().contains(q) }
@@ -631,7 +631,7 @@ private fun callBack(ctx: android.content.Context, call: CallEntry, video: Boole
     if (g != null) { CallActivity.startGroup(ctx, g, call.name, video, start = true); return }
     // A multi-person call: the same people again, in a new room.
     call.adhoc?.let { a ->
-        val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         val people = a.others(me).map { com.fariin.app.call.CallPerson(it, a.name(it), a.photo(it)) }
         if (people.size >= 2) CallActivity.startAdhoc(ctx, people, video)
         else people.firstOrNull()?.let { CallActivity.startDial(ctx, it.uid, it.name, it.photo, video) }

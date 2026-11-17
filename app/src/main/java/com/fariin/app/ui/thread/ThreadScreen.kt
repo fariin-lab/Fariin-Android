@@ -561,7 +561,7 @@ private fun ThreadContent(
         fun answer(accept: Boolean) {
             restrictAnswer = false
             com.fariin.app.data.ChatRestrictions.scope.launch {
-                val myName = runCatching { com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users")
+                val myName = runCatching { com.fariin.app.Fb.db.collection("users")
                     .document(ui.me).get().await().getString("name") }.getOrNull().orEmpty()
                 com.fariin.app.data.ChatRestrictions.answer(ui.cid, ui.me, myName, accept)
             }

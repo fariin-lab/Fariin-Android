@@ -246,7 +246,7 @@ object StoryPrivacyStore {
         return kotlinx.coroutines.withTimeoutOrNull(timeoutMs) { serverLoaded.first { it } } ?: false
     }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val db get() = FirebaseFirestore.getInstance()
+    private val db get() = com.fariin.app.Fb.db
 
     fun start(me: String) {
         if (me.isEmpty() || me == loadedFor) return
@@ -378,7 +378,7 @@ object StoryNotify {
     private val _on = MutableStateFlow<Set<String>>(emptySet())
     val on: StateFlow<Set<String>> = _on
     private var loadedFor = ""
-    private val db get() = FirebaseFirestore.getInstance()
+    private val db get() = com.fariin.app.Fb.db
 
     fun load(me: String) {
         if (me.isEmpty() || me == loadedFor) return

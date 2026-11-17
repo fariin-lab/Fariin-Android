@@ -15,7 +15,7 @@ import kotlinx.coroutines.tasks.await
  * Every Firestore and callable touch of a 1:1 call, with the iOS shapes from [CallWire]. Nothing
  * here decides; [CallManager] does.
  */
-class CallSignaling(private val db: FirebaseFirestore = FirebaseFirestore.getInstance()) {
+class CallSignaling(private val db: FirebaseFirestore = com.fariin.app.Fb.db) {
     private val ts get() = FieldValue.serverTimestamp()
     private fun call(id: String) = db.collection(CallWire.CALLS).document(id)
 

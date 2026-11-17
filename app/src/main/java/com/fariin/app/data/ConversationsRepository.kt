@@ -22,7 +22,7 @@ import com.fariin.app.local.LocalCache
  * in `users`), the block list re-filter, burning expired disappearing messages.
  */
 class ConversationsRepository(
-    private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    private val db: FirebaseFirestore = com.fariin.app.Fb.db,
     /** Off in tests and the demo; on in the app (LocalCache.init runs at start). */
     private val useDiskCache: Boolean = true,
 ) {

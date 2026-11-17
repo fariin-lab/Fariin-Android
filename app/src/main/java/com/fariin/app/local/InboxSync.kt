@@ -43,10 +43,10 @@ object InboxSync {
 
     private suspend fun follow(ctx: Context, me: String, cid: String, from: Long, crypto: com.fariin.app.crypto.FariinCrypto) {
         var mark = from
-        val msgs = FirebaseFirestore.getInstance().collection("conversations").document(cid).collection("messages")
+        val msgs = com.fariin.app.Fb.db.collection("conversations").document(cid).collection("messages")
         // When I joined (groups): only a message from before that may be "not for me" for good.
         val joinedAt = runCatching {
-            val conv = FirebaseFirestore.getInstance().collection("conversations").document(cid).get().await()
+            val conv = com.fariin.app.Fb.db.collection("conversations").document(cid).get().await()
             com.fariin.app.data.Conversation.millis((conv.get("memberSince") as? Map<*, *>)?.get(me))
         }.getOrDefault(0.0)
         while (true) {

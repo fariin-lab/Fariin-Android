@@ -80,9 +80,9 @@ object AccountReport {
     }
 
     private suspend fun shareOnce(context: Context) {
-        val user = FirebaseAuth.getInstance().currentUser ?: throw IllegalStateException("You are logged out.")
+        val user = com.fariin.app.Fb.auth.currentUser ?: throw IllegalStateException("You are logged out.")
         val uid = user.uid
-        val db = FirebaseFirestore.getInstance()
+        val db = com.fariin.app.Fb.db
         val me = try { db.collection("users").document(uid).get().await().data ?: emptyMap() }
             catch (_: Exception) { throw IllegalStateException("Could not load everything. Check your connection and try again.") }
         val thisId = DeviceRegistry.thisDeviceId(context)

@@ -90,7 +90,7 @@ class ShareActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val me = FirebaseAuth.getInstance().currentUser?.uid
+        val me = com.fariin.app.Fb.auth.currentUser?.uid
         if (me == null) {
             Toast.makeText(this, "Log in to Fariin first", Toast.LENGTH_LONG).show()
             startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

@@ -200,7 +200,7 @@ object StoryList {
  * TODO (iOS has these): the local per-story seen flags.
  */
 class StoriesRepository(
-    private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    private val db: FirebaseFirestore = com.fariin.app.Fb.db,
 ) {
     fun listen(me: String, convs: () -> List<Conversation>, myName: () -> String, myPhoto: () -> String?): Flow<StoriesState> =
         callbackFlow {

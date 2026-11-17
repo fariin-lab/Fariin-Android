@@ -22,7 +22,7 @@ import java.util.Date
  */
 class StoryService(
     private val me: String,
-    private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    private val db: FirebaseFirestore = com.fariin.app.Fb.db,
     private val storage: FirebaseStorage = FirebaseStorage.getInstance(),
 ) {
     // ---- seen and receipts -------------------------------------------------------------------

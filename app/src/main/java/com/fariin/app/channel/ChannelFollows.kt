@@ -116,7 +116,7 @@ object ChannelFollows {
         stop()
         uid = me
         seedFromDisk(me)
-        val db = FirebaseFirestore.getInstance()
+        val db = com.fariin.app.Fb.db
         listReg = db.collection("users").document(me).collection("channels").limit(MAX_ENTRIES)
             .addSnapshotListener { snap, _ ->
                 snap ?: return@addSnapshotListener
@@ -192,7 +192,7 @@ object ChannelFollows {
             // Still followed, only past the cap (a LOW phone): its last document stays so the row stays.
             if (gone !in entries) _docs.update { it - gone }
         }
-        val db = FirebaseFirestore.getInstance()
+        val db = com.fariin.app.Fb.db
         val g = gen
         for (cid in want - docRegs.keys) {
             docRegs[cid] = db.collection("conversations").document(cid)
@@ -240,7 +240,7 @@ object ChannelFollows {
     fun conversations(): List<Conversation> = _docs.value.mapNotNull { (cid, d) ->
         val e = _entries.value[cid] ?: return@mapNotNull null
         val conv = Conversation.fromFirestore(cid, d)
-        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
+        val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: ""
         // My pin and archive on a channel I follow live on MY follow entry (a follower may not write
         // the channel's document); the list reads them as it does a chat's own (2026-11-06).
         conv.copy(followerRead = e.read, followerMuted = e.isMuted(),

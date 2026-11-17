@@ -224,7 +224,7 @@ object ReportSender {
     } catch (_: Exception) { null }
 
     private fun people(): FirestorePeople? =
-        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid?.let { FirestorePeople(it, CryptoHub.crypto) }
+        com.fariin.app.Fb.auth.currentUser?.uid?.let { FirestorePeople(it, CryptoHub.crypto) }
 
     /** The app's own block path (users/{me}/blocked/{uid}), after the report went. */
     suspend fun block(t: ReportTarget): Boolean {

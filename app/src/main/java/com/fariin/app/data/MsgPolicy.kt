@@ -51,7 +51,7 @@ object MsgPolicy {
 
     fun start(me: String) {
         stop()
-        val db = FirebaseFirestore.getInstance()
+        val db = com.fariin.app.Fb.db
         configReg = db.collection("config").document("msgPolicy").addSnapshotListener { snap, _ ->
             if (snap == null) return@addSnapshotListener
             setGlobal(snap.getBoolean(KEY) ?: true)
@@ -105,7 +105,7 @@ object MsgPolicy {
     /** iOS `confirm(for:)`: before a first message, ask the server once (2 s at most) for the
      *  switch and the recipient's own override, since the rules read the live values. */
     suspend fun confirm(other: String) {
-        val db = FirebaseFirestore.getInstance()
+        val db = com.fariin.app.Fb.db
         read(db.collection("config").document("msgPolicy"))?.let { setGlobal(it.getBoolean(KEY) ?: true) }
         if (other.isNotEmpty()) read(db.collection("users").document(other))?.let { record(other, it.data) }
     }

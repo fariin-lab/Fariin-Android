@@ -30,7 +30,7 @@ object ChatListActions {
     /** iOS AppLimits.pinnedChatsMax (admin panel `pinned_chats_max`, 5 when it has none). */
     val PINNED_MAX: Int get() = com.fariin.app.data.AppLimits.pinnedChatsMax
 
-    private fun doc(cid: String) = FirebaseFirestore.getInstance().collection("conversations").document(cid)
+    private fun doc(cid: String) = com.fariin.app.Fb.db.collection("conversations").document(cid)
 
     private suspend fun merge(me: String, cid: String, fields: Map<String, Any>): Boolean {
         if (me == DemoChats.ME || cid.isEmpty()) return true
@@ -82,7 +82,7 @@ object ChatListActions {
 
     /** iOS ChatService.clearMyMessages: every message I sent in [cid], deleted, 450 a batch. */
     suspend fun clearMyMessages(me: String, cid: String): Boolean = runCatching {
-        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        val db = com.fariin.app.Fb.db
         val docs = db.collection("conversations").document(cid).collection("messages")
             .whereEqualTo("authorId", me).get().await().documents
         docs.chunked(450).forEach { part -> db.batch().also { b -> part.forEach { b.delete(it.reference) } }.commit().await() }

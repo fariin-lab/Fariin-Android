@@ -214,8 +214,8 @@ fun CallLobbyScreen(keyText: String, videoFromPath: Boolean, g: GroupCallUi, onL
 
     LaunchedEffect(key) {
         val k = key ?: return@LaunchedEffect
-        val me = FirebaseAuth.getInstance().currentUser?.uid
-        if (me != null) myPhoto = try { FirebaseFirestore.getInstance().collection("users").document(me).get().await().getString("photoUrl") } catch (_: Exception) { null }
+        val me = com.fariin.app.Fb.auth.currentUser?.uid
+        if (me != null) myPhoto = try { com.fariin.app.Fb.db.collection("users").document(me).get().await().getString("photoUrl") } catch (_: Exception) { null }
         // The link's own document first: revoked, expired or missing says so at once (its creator
         // keeps the server's say, a revoked link's call can still be running).
         val d = CallLinks.readDoc(k.roomId)

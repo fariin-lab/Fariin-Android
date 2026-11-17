@@ -30,7 +30,7 @@ object ChatRestrictions {
     /** The writes outlive the page that asked for them (a switch flipped, then Back). */
     val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
     private val FIELDS = listOf("noScreenshots", "noForwarding", "noSaving")
-    private val db get() = FirebaseFirestore.getInstance()
+    private val db get() = com.fariin.app.Fb.db
 
     /** The open chat's restriction, read from the live list (every screen asks the same place). */
     fun isOn(cid: String): Boolean = cid.isNotEmpty() && ChatsNow.findAny(cid)?.isRestricted == true

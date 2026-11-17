@@ -173,7 +173,7 @@ data class AdhocCall(
  * hidden calls, the live row of a call in progress, saved call links.
  */
 class CallsRepository(
-    private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    private val db: FirebaseFirestore = com.fariin.app.Fb.db,
 ) {
     // Read from a background thread now (MainShell), its chats in parallel.
     private val cache = java.util.concurrent.ConcurrentHashMap<String, Pair<Double, List<CallEntry>>>()

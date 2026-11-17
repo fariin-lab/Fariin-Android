@@ -854,7 +854,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     // A Fariin admin sees Statistics at any size (iOS AdminStore: the rules let me read my own admins doc).
     val appAdmin by androidx.compose.runtime.produceState(false, me) {
         value = me.isNotEmpty() && runCatching {
-            com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("admins").document(me).get().await().exists()
+            com.fariin.app.Fb.db.collection("admins").document(me).get().await().exists()
         }.getOrDefault(false)
     }
     val showStats = iAmMember && com.fariin.app.data.AppFeatures.groupStats && com.fariin.app.data.GroupStats.showRow(conv, me, appAdmin)
@@ -877,7 +877,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 if (!alreadyMuted) com.fariin.app.ui.components.GlassAlertAction("Mute Instead") {
                     exitScope.launch {
                         val ok = runCatching {
-                            com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("conversations").document(cid)
+                            com.fariin.app.Fb.db.collection("conversations").document(cid)
                                 .set(mapOf("mutedBy" to mapOf(me to com.fariin.app.ui.chats.MuteFor.until(null))),
                                     com.google.firebase.firestore.SetOptions.merge()).await()
                         }.isSuccess
@@ -1186,7 +1186,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                             // Report and Leave, as iOS: leave and block the group so it cannot add me back.
                             com.fariin.app.data.LeaveUndo.start(cid, groupName.ifEmpty { "the group" }) {
                                 api.leaveGroup(cid)
-                                com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(me)
+                                com.fariin.app.Fb.db.collection("users").document(me)
                                     .collection("blockedGroups").document(cid).set(mapOf("at" to com.google.firebase.firestore.FieldValue.serverTimestamp())).await()
                             }
                             com.fariin.app.ui.components.Snack.undo("You left the group.", conv["photoUrl"] as? String, false,
@@ -1265,7 +1265,7 @@ private fun GroupCirclesRow(cid: String, me: String, conv: Map<String, Any?>, me
     val scope = rememberCoroutineScope()
     val circles = com.fariin.app.data.GroupInfoCircles
     var live by remember(cid) { mutableStateOf(false) }
-    val signedIn = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser != null
+    val signedIn = com.fariin.app.Fb.auth.currentUser != null
     if (signedIn) androidx.compose.runtime.DisposableEffect(cid) {
         val reg = com.fariin.app.call.GroupCall.watchActive(cid) { live = it }
         onDispose { reg.remove() }
@@ -1300,7 +1300,7 @@ private fun GroupCirclesRow(cid: String, me: String, conv: Map<String, Any?>, me
         heldUntil = value
         scope.launch {
             val ok = runCatching {
-                com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("conversations").document(cid)
+                com.fariin.app.Fb.db.collection("conversations").document(cid)
                     .set(mapOf("mutedBy" to mapOf(me to value)), com.google.firebase.firestore.SetOptions.merge()).await()
             }.isSuccess
             heldUntil = null

@@ -346,7 +346,7 @@ object LinkPreviews {
      * which knows nothing about the person. A name gone or released reads "Unavailable".
      */
     private suspend fun profileDraft(url: String, handle: String): Draft? {
-        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        val db = com.fariin.app.Fb.db
         val key = Usernames.lookupKey(handle) ?: return Draft(url, "Unavailable", "", null)
         val nd = runCatching { db.collection("usernames").document(key).get().await().data }.getOrNull() ?: return Draft(url, "Unavailable", "", null)
         val owner = nd["uid"] as? String

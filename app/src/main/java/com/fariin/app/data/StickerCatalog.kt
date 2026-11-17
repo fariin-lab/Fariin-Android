@@ -67,7 +67,7 @@ object StickerCatalog {
         val shipped = packs(context)
         if (!watching) {
             watching = true
-            com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("stickerPacks").addSnapshotListener { snap, _ ->
+            com.fariin.app.Fb.db.collection("stickerPacks").addSnapshotListener { snap, _ ->
                 snap ?: return@addSnapshotListener   // refused or offline: keep the last catalog
                 val list = snap.documents.map { d ->
                     val x = d.data.orEmpty()

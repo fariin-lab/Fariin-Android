@@ -46,18 +46,18 @@ object AppLifecycle : DefaultLifecycleObserver {
     override fun onStart(owner: LifecycleOwner) {
         inFront = true
         com.fariin.app.media.VoiceEar.back(app)   // a note still playing: raise to ear again
-        if (FirebaseAuth.getInstance().currentUser == null) return
+        if (com.fariin.app.Fb.auth.currentUser == null) return
         // Notifications of disappearing messages that ran out while the app was away.
         runCatching { com.fariin.app.push.NotificationPoster.pruneExpired(app) }
         runCatching { com.fariin.app.push.NotificationPoster.pruneDeleted(app) }   // deleted-for-everyone lines
         scope.launch { Presence.set(online = true, context = app) }
         com.fariin.app.data.AppConfig.foreground()   // the server's settings, when the last ask is old
-        try { FirebaseFirestore.getInstance().enableNetwork() } catch (_: Exception) {}
+        try { com.fariin.app.Fb.db.enableNetwork() } catch (_: Exception) {}
         reconnect()
         // Back in front: chats that moved while away are warmed before they are opened.
         com.fariin.app.data.ChatHistoryPreloader.retry()
         // ...and filed into the phone's history, opened or not (device-storage phase 2).
-        FirebaseAuth.getInstance().currentUser?.uid?.let { com.fariin.app.local.InboxSync.kick(app, it) }
+        com.fariin.app.Fb.auth.currentUser?.uid?.let { com.fariin.app.local.InboxSync.kick(app, it) }
         // Live location shares still running from before the app was closed pick up again.
         if (com.fariin.app.location.LiveShareService.shares.value.isEmpty()) runCatching { com.fariin.app.location.LiveShareService.restore(app) }
     }
@@ -66,7 +66,7 @@ object AppLifecycle : DefaultLifecycleObserver {
         inFront = false
         com.fariin.app.media.VoiceEar.away()   // out of the app: loudspeaker, sensor off
         Drafts.flush()
-        if (FirebaseAuth.getInstance().currentUser == null) return
+        if (com.fariin.app.Fb.auth.currentUser == null) return
         scope.launch { Presence.set(online = false, context = app) }
     }
 
@@ -77,7 +77,7 @@ object AppLifecycle : DefaultLifecycleObserver {
     }
 
     fun reconnect() {
-        val me = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         if (!::app.isInitialized) return
         ThreadRepository.recoverOpen()
         ThreadRepository.drainQueue(me, CryptoHub.get(app), scope)

@@ -110,11 +110,11 @@ fun liveGroupDoc(cid: String): Map<String, Any?> {
     // A group I was removed from this session opens as I last saw it, without me (iOS FormerGroups).
     var data by remember(cid) { mutableStateOf<Map<String, Any?>>(com.fariin.app.data.FormerGroups.get(cid) ?: emptyMap()) }
     DisposableEffect(cid) {
-        val reg = FirebaseFirestore.getInstance().collection("conversations").document(cid)
+        val reg = com.fariin.app.Fb.db.collection("conversations").document(cid)
             .addSnapshotListener { s, e ->
                 s?.data?.let { data = it }
                 // Refused: taken out of the group while this page is open. The page draws me out of it.
-                val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                val me = com.fariin.app.Fb.auth.currentUser?.uid
                 if (s == null && me != null && data.isNotEmpty() && com.fariin.app.crypto.Wire.isGroupCid(cid) &&
                     (e as? com.google.firebase.firestore.FirebaseFirestoreException)?.code ==
                     com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) {

@@ -33,7 +33,7 @@ class MediaSender(
     private val me: String,
     private val crypto: FariinCrypto,
     private val media: ChatMedia?,
-    private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    private val db: FirebaseFirestore = com.fariin.app.Fb.db,
 ) {
     private val convRef = db.collection("conversations").document(cid)
     private val isGroup = Wire.isGroupCid(cid)

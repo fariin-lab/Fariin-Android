@@ -175,7 +175,7 @@ private fun LinkBody(s: LinkState, onUsed: () -> Unit, onDeleted: (() -> Unit)?,
     val ctx = LocalContext.current
     var sendingLink by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     val sendScope = androidx.compose.runtime.rememberCoroutineScope()
-    val myUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+    val myUid = com.fariin.app.Fb.auth.currentUser?.uid
     if (sendingLink && myUid != null) com.fariin.app.ui.thread.ForwardSheet(myUid, onDismiss = { sendingLink = false }, title = "Send Link") { targets ->
         sendingLink = false
         val url = s.url ?: return@ForwardSheet

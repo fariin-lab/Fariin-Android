@@ -78,10 +78,10 @@ object Push {
         val app = c.applicationContext
         if (com.fariin.app.FariinApp.usingLocalBackend) return   // no FCM emulator: never touch the real project
         scope.launch {
-            val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return@launch
+            val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return@launch
             if (!prefs(app).contains(PUSH_ON)) {
                 val off = try {
-                    FirebaseFirestore.getInstance().collection("users").document(uid).get().await()
+                    com.fariin.app.Fb.db.collection("users").document(uid).get().await()
                         .getBoolean("notifPush") == false
                 } catch (_: Exception) { false }
                 if (off && !prefs(app).contains(PUSH_ON)) {
@@ -107,7 +107,7 @@ object Push {
 
     /** A new or rotated token (FirebaseMessagingService.onNewToken). */
     fun onNewToken(c: Context, token: String) {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         if (com.fariin.app.FariinApp.usingLocalBackend) return
         if (!pushOn(c)) return
         // A retired token still waiting to be deleted: register() saves the new one once it is gone.
@@ -117,7 +117,7 @@ object Push {
     }
 
     private fun saveToken(token: String, uid: String) {
-        val user = FirebaseFirestore.getInstance().collection("users").document(uid)
+        val user = com.fariin.app.Fb.db.collection("users").document(uid)
         user.collection("push").document("tokens").set(
             mapOf("fcmTokens" to FieldValue.arrayUnion(token), ANDROID_FIELD to FieldValue.arrayUnion(token)),
             SetOptions.merge(),
@@ -134,9 +134,9 @@ object Push {
     /** True once the token is off the account; false when it may still be listed there. */
     suspend fun unregister(c: Context): Boolean {
         if (com.fariin.app.FariinApp.usingLocalBackend) return true
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return false
+        val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return false
         val token = try { FirebaseMessaging.getInstance().token.await() } catch (_: Exception) { null } ?: return false
-        val db = FirebaseFirestore.getInstance()
+        val db = com.fariin.app.Fb.db
         val doc = db.collection("users").document(uid)
         repeat(3) { attempt ->
             try {

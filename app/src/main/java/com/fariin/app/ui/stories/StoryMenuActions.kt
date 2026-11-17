@@ -27,7 +27,7 @@ object StoryMenuActions {
     /** The story's address through Android's share sheet; mine carries my @name, as iOS links do. */
     suspend fun shareLink(c: Context, s: Story, me: String) {
         val handle = if (s.authorUid == me) runCatching {
-            FirebaseFirestore.getInstance().collection("users").document(me).get().await().getString("handle")
+            com.fariin.app.Fb.db.collection("users").document(me).get().await().getString("handle")
         }.getOrNull() else null
         val link = PostedStoriesRules.storyLink(s.id, handle)
         withContext(Dispatchers.Main) {

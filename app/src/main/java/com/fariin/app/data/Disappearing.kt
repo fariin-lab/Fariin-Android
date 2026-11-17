@@ -184,7 +184,7 @@ object Disappearing {
      * value attached. Answers whether the timer is now [seconds]; a refused write posts no line.
      */
     suspend fun set(cid: String, seconds: Int, me: String, myName: String,
-                    db: FirebaseFirestore = FirebaseFirestore.getInstance()): Boolean {
+                    db: FirebaseFirestore = com.fariin.app.Fb.db): Boolean {
         val ref = db.collection("conversations").document(cid)
         val current = try { (ref.get().await().get("disappearSeconds") as? Number)?.toInt() ?: 0 } catch (_: Exception) { 0 }
         if (current == seconds) return true

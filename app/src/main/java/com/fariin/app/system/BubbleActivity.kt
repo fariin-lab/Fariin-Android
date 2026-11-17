@@ -28,7 +28,7 @@ class BubbleActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val me = FirebaseAuth.getInstance().currentUser?.uid
+        val me = com.fariin.app.Fb.auth.currentUser?.uid
         val chat = intent.getStringExtra(PushRouter.EXTRA_OPEN_CID)
         if (me == null || chat == null) { finish(); return }
         cid = chat

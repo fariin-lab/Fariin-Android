@@ -37,7 +37,7 @@ class NotifActionWorker(c: Context, params: WorkerParameters) : CoroutineWorker(
         val kind = inputData.getString(KIND) ?: return Result.failure()
         val cid = inputData.getString(CID) ?: return Result.failure()
         val me = inputData.getString(ME) ?: return Result.failure()
-        if (FirebaseAuth.getInstance().currentUser?.uid != me) return Result.failure()
+        if (com.fariin.app.Fb.auth.currentUser?.uid != me) return Result.failure()
         val crypto = CryptoHub.get(c)
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         try {

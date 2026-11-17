@@ -32,8 +32,8 @@ import java.util.concurrent.TimeUnit
  */
 object ChannelService {
     private val fn get() = FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION)
-    private val db get() = FirebaseFirestore.getInstance()
-    private val me get() = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+    private val db get() = com.fariin.app.Fb.db
+    private val me get() = com.fariin.app.Fb.auth.currentUser?.uid ?: ""
 
     private fun region(): String? = Locale.getDefault().country.takeIf { it.length == 2 }
 

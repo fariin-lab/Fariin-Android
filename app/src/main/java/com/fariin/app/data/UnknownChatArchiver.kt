@@ -67,7 +67,7 @@ object UnknownChatArchiver {
             // Archive AND mute, as the footer says: archived alone would still buzz the phone.
             scope.launch {
                 runCatching {
-                    FirebaseFirestore.getInstance().collection("conversations").document(c.id).set(
+                    com.fariin.app.Fb.db.collection("conversations").document(c.id).set(
                         mapOf("archivedBy" to mapOf(me to true), "mutedBy" to mapOf(me to GroupInfoCircles.FOREVER)),
                         SetOptions.merge()).await()
                 }
@@ -86,7 +86,7 @@ object UnknownChatArchiver {
         }
         if (!wasOurs) return
         runCatching {
-            FirebaseFirestore.getInstance().collection("conversations").document(cid).set(
+            com.fariin.app.Fb.db.collection("conversations").document(cid).set(
                 mapOf("archivedBy" to mapOf(me to false), "mutedBy" to mapOf(me to 0.0)), SetOptions.merge()).await()
         }
     }

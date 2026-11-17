@@ -115,7 +115,7 @@ object PrivacySettings {
         reg?.remove(); reg = null
         uid = newUid
         if (newUid == null) { publish(emptyMap()); return }
-        reg = FirebaseFirestore.getInstance().collection("users").document(newUid).addSnapshotListener { snap, _ ->
+        reg = com.fariin.app.Fb.db.collection("users").document(newUid).addSnapshotListener { snap, _ ->
             val d = snap?.data ?: return@addSnapshotListener
             if (uid == newUid) publish(Presence.privacyOf(d))
         }
@@ -143,11 +143,11 @@ object PrivacySettings {
      * (the write waits in the queue), so the call returns as soon as the server or cache answers.
      */
     suspend fun set(key: String, value: String): String? {
-        val me = FirebaseAuth.getInstance().currentUser?.uid ?: return "You are logged out."
+        val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return "You are logged out."
         val before = map.value
         publish(before + (key to value))
         return try {
-            FirebaseFirestore.getInstance().collection("users").document(me)
+            com.fariin.app.Fb.db.collection("users").document(me)
                 .set(mapOf("privacy" to mapOf(key to value)), SetOptions.merge()).await()
             if (key == "lastSeen") Presence.set(true, app)
             // Who may see my photo changed: it gets a new name so cached copies are checked again.

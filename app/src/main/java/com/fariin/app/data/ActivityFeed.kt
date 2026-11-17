@@ -159,7 +159,7 @@ object ActivityFeed {
     private var itemsReg: ListenerRegistration? = null
     private var owner = ""
 
-    private fun user(uid: String) = FirebaseFirestore.getInstance().collection("users").document(uid)
+    private fun user(uid: String) = com.fariin.app.Fb.db.collection("users").document(uid)
 
     /** Signed in: the summary, for the chat list row. */
     fun start(me: String) {

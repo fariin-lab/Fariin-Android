@@ -192,7 +192,7 @@ class SharedMediaSource(
     private val cid: String,
     private val me: String,
     private val crypto: FariinCrypto,
-    private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    private val db: FirebaseFirestore = com.fariin.app.Fb.db,
 ) {
     /** What is already on the phone: the last answer, else the chat's saved copy. */
     fun local(): List<Message> = cache[cid] ?: com.fariin.app.local.LocalCache.loadThread(me, cid)

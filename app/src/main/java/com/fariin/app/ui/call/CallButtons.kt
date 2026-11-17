@@ -34,7 +34,7 @@ import com.google.firebase.auth.FirebaseAuth
  */
 @Composable
 fun ThreadCallButtons(cid: String, me: String, isGroup: Boolean, title: String, photoUrl: String?) {
-    if (cid.isEmpty() || FirebaseAuth.getInstance().currentUser == null) return
+    if (cid.isEmpty() || com.fariin.app.Fb.auth.currentUser == null) return
     val ctx = LocalContext.current
     if (!isGroup) {
         val peer = Wire.otherUid(cid, me)
@@ -52,7 +52,7 @@ fun ThreadCallButtons(cid: String, me: String, isGroup: Boolean, title: String, 
     var mayStart by remember(cid) { mutableStateOf(com.fariin.app.data.CryptoHub.listedConversation(cid)?.mayStartCall(me) == true) }
     DisposableEffect(cid) {
         val reg = GroupCall.watchActive(cid) { live = it }
-        val conv = FirebaseFirestore.getInstance().collection("conversations").document(cid)
+        val conv = com.fariin.app.Fb.db.collection("conversations").document(cid)
             .addSnapshotListener { snap, _ -> mayStart = GroupCallWire.mayStart(snap?.data, me) }
         onDispose { reg.remove(); conv.remove() }
     }

@@ -164,7 +164,7 @@ object AppConfig {
     /** At app start, before any screen: the launch snapshot for the account signed in now. */
     fun init(c: Context) {
         appCtx = c.applicationContext
-        launchUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        launchUid = com.fariin.app.Fb.auth.currentUser?.uid
         // The cache (a prefs file and a JSON parse) is read on the first value asked for, not here.
         prefs()
     }
@@ -213,7 +213,7 @@ object AppConfig {
 
     private fun listen() {
         if (epochReg != null) return
-        epochReg = FirebaseFirestore.getInstance().collection("config").document("epoch")
+        epochReg = com.fariin.app.Fb.db.collection("config").document("epoch")
             .addSnapshotListener { snap, _ ->
                 val v = (snap?.get("v") as? Number)?.toLong() ?: return@addSnapshotListener
                 if (v <= knownEpoch) return@addSnapshotListener

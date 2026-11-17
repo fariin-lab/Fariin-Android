@@ -64,7 +64,7 @@ internal fun AddToGroupSheet(api: PeopleApi, uid: String, name: String, onDismis
     val groups by produceState<List<Pair<Conversation, Map<String, Any?>>>?>(null, me) {
         val mine = CryptoHub.listedAll().filter { it.isGroup && !it.isChannel && it.users.contains(me) }
             .sortedBy { it.displayName(me).lowercase() }
-        val db = FirebaseFirestore.getInstance()
+        val db = com.fariin.app.Fb.db
         value = mine.map { g -> g to (runCatching { db.collection("conversations").document(g.id).get().await().data }.getOrNull() ?: emptyMap()) }
     }
     var working by remember { mutableStateOf<String?>(null) }

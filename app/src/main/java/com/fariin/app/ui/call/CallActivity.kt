@@ -281,7 +281,7 @@ class CallActivity : ComponentActivity() {
      */
     private fun voiceMessageAfterNoAnswer() {
         val peer = CallManager.ui.value.peerUid
-        val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        val me = com.fariin.app.Fb.auth.currentUser?.uid
         CallManager.closeNoAnswer()
         if (me != null && peer.isNotEmpty()) startActivity(com.fariin.app.system.ChatShortcuts.openIntent(this, com.fariin.app.call.CallWire.convId(me, peer)))
         finish()

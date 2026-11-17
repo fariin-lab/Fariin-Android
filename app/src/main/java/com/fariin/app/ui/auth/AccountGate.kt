@@ -88,7 +88,7 @@ fun AccountGate(me: String, auth: AuthRepository, onOwnPage: () -> Unit = {}, co
         if (twoStep == true) { phase = Phase.TwoStep; return@LaunchedEffect }
         if (twoStep == null) recheckTwoStep = true
         // Both reads have a limit: a stalled client must not hold the logo page.
-        val ref = FirebaseFirestore.getInstance().collection("users").document(me)
+        val ref = com.fariin.app.Fb.db.collection("users").document(me)
         val doc = com.fariin.app.device.BootWatch.capped(com.fariin.app.device.BootWatch.SERVER_READ_MS) { ref.get(Source.SERVER).await() }
             ?: com.fariin.app.device.BootWatch.capped(com.fariin.app.device.BootWatch.CACHE_READ_MS) { ref.get(Source.CACHE).await() }
         if (!current()) { android.util.Log.w(com.fariin.app.device.BootWatch.TAG, "late account check dropped"); return@LaunchedEffect }

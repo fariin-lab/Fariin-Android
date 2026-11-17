@@ -104,7 +104,7 @@ fun OnboardingPage(
     val cropPicker = com.fariin.app.ui.photo.rememberCirclePhotoPicker { photo = it }
 
     suspend fun quickLookup(h: String): HandleState? = try {
-        val snap = FirebaseFirestore.getInstance().collection("usernames").document(h.lowercase()).get(Source.SERVER).await()
+        val snap = com.fariin.app.Fb.db.collection("usernames").document(h.lowercase()).get(Source.SERVER).await()
         val owner = snap.getString("uid")
         when { !snap.exists() -> HandleState.Free; owner == api.me -> null; else -> HandleState.Taken }
     } catch (_: Exception) { null }

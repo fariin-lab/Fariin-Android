@@ -48,8 +48,8 @@ object DebugNotifs {
         thread(name = "notif-real") {
             runBlocking {
                 android.util.Log.d("FariinPush", "debug push for $cid")
-                val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return@runBlocking
-                val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return@runBlocking
+                val db = com.fariin.app.Fb.db
                 val q = db.collection("conversations").document(cid).collection("messages")
                     .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING).limit(20)
                 // A server read can stall on the emulator; the phone's own copy is enough for a test push.

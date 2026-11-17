@@ -106,7 +106,7 @@ object StoryOutbox {
                 dir.deleteRecursively(); continue
             }
             val id = dir.name
-            val doc = FirebaseFirestore.getInstance().collection("stories").document(id)
+            val doc = com.fariin.app.Fb.db.collection("stories").document(id)
             // Unreadable (offline): wait for a start that can tell whether it landed, never guess.
             // Any wait below STOPS the pass (return, not continue): a later ticket, such as the next part
             // of a long video, must never post before this one (parts 1, 3, 4, 2).

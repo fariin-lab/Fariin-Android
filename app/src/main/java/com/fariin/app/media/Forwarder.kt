@@ -83,7 +83,7 @@ object Forwarder {
         if (sourceCid.contains('_')) return null
         com.fariin.app.data.ChatsNow.find(sourceCid)?.let { if (!it.isChannel) return null }
         val d = com.fariin.app.channel.ChannelFollows.docs.value[sourceCid]
-            ?: runCatching { com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("conversations")
+            ?: runCatching { com.fariin.app.Fb.db.collection("conversations")
                 .document(sourceCid).get().await().data as Map<String, Any?>? }.getOrNull() ?: return null
         val info = com.fariin.app.channel.ChannelInfo.from(sourceCid, d)
         if (!info.isChannel) return null
@@ -96,7 +96,7 @@ object Forwarder {
         val listed = com.fariin.app.data.ChatsNow.find(sourceCid)
         if (listed != null && !listed.isGroup) return null
         val d = com.fariin.app.channel.ChannelFollows.docs.value[sourceCid]
-            ?: runCatching { com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("conversations")
+            ?: runCatching { com.fariin.app.Fb.db.collection("conversations")
                 .document(sourceCid).get().await().data as Map<String, Any?>? }.getOrNull()
         if (listed == null && d?.get("type") != "group") return null
         val title = listed?.displayName(me) ?: (d?.get("title") as? String).orEmpty()

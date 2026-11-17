@@ -421,7 +421,7 @@ fun ChannelBottomBar(ch: ChannelThreadUi, notice: String?) {
     val c = Fariin.colors
     val joined = ch.role != Role.VISITOR || ch.joining
     var menu by remember { mutableStateOf(false) }
-    val banned = ch.info.bannedUids.isNotEmpty() && ch.role == Role.VISITOR && ch.info.bannedUids.contains(com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid)
+    val banned = ch.info.bannedUids.isNotEmpty() && ch.role == Role.VISITOR && ch.info.bannedUids.contains(com.fariin.app.Fb.auth.currentUser?.uid)
     // No strip behind it (iOS systemBarChrome): the capsule floats over the chat's background.
     Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {

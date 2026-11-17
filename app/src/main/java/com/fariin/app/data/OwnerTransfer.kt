@@ -111,7 +111,7 @@ object OwnerTransfer {
      * else the words to show.
      */
     suspend fun reauthPassword(password: String): String? {
-        val user = FirebaseAuth.getInstance().currentUser ?: return NOT_VERIFIED
+        val user = com.fariin.app.Fb.auth.currentUser ?: return NOT_VERIFIED
         val address = user.providerData.firstOrNull { it.providerId == "password" }?.email?.takeIf { it.isNotEmpty() }
             ?: user.email?.takeIf { it.isNotEmpty() } ?: return NOT_VERIFIED
         val before = TwoStepGate.tokenBefore()
@@ -165,7 +165,7 @@ object JoinRequests {
 
     /** Live requests; a refused or failed read keeps the last list (iOS). */
     fun listen(cid: String, onChange: (List<Request>) -> Unit): ListenerRegistration =
-        FirebaseFirestore.getInstance().collection("conversations").document(cid).collection("joinRequests")
+        com.fariin.app.Fb.db.collection("conversations").document(cid).collection("joinRequests")
             .addSnapshotListener { s, _ -> s?.let { snap -> onChange(snap.documents.map { from(it.id, it.data ?: emptyMap()) }) } }
 
     /** The server's words when they are for the person, else "Could not do that" with ours. */

@@ -206,7 +206,7 @@ private fun PrivacyPage(push: (String) -> Unit, pop: () -> Unit) {
         }
         // The chat key backup with a PIN (2026-11-12): older messages come back after a reinstall.
         if (com.fariin.app.crypto.KeyBackup.ENABLED) SettingsSection(footer = "Bring your older messages back if you delete Fariin or change phones.") {
-            val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+            val uid = com.fariin.app.Fb.auth.currentUser?.uid
             var backupOn by remember { mutableStateOf(uid?.let { com.fariin.app.crypto.KeyBackup.cachedOn(ctx, it) }) }
             LaunchedEffect(uid) { uid?.let { u -> com.fariin.app.crypto.KeyBackup.status(ctx, u)?.let { backupOn = it.exists } } }
             SettingsRow("Backup PIN", value = when (backupOn) { true -> "On"; false -> "Off"; null -> null }, last = true) { push(PAGE_KEY_BACKUP) }
@@ -251,8 +251,8 @@ private fun AudiencePage(key: String, push: (String) -> Unit, pop: () -> Unit) {
 
 /** users/{me}/photoHiddenFrom/{uid} {at} (iOS PhotoPrivacy). */
 internal object PhotoHideFrom {
-    private fun col() = FirebaseAuth.getInstance().currentUser?.uid?.let {
-        FirebaseFirestore.getInstance().collection("users").document(it).collection("photoHiddenFrom")
+    private fun col() = com.fariin.app.Fb.auth.currentUser?.uid?.let {
+        com.fariin.app.Fb.db.collection("users").document(it).collection("photoHiddenFrom")
     }
     suspend fun load(): List<String> = try { col()?.get()?.await()?.documents?.map { it.id } ?: emptyList() } catch (_: Exception) { emptyList() }
     // Each change re-publishes my photo under a new name (iOS republishPhoto), so a person just
@@ -265,7 +265,7 @@ internal object PhotoHideFrom {
 
 /** The people I share a 1:1 with, from the chat list (uid, name, photo). */
 internal fun myChatPeople(): List<Triple<String, String, String?>> {
-    val me = FirebaseAuth.getInstance().currentUser?.uid ?: return emptyList()
+    val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return emptyList()
     return CryptoHub.listedAll().filter { !it.isGroup && it.otherUid(me).isNotEmpty() }
         .map { Triple(it.otherUid(me), it.displayName(me), it.displayPhoto(me)) }
         .distinctBy { it.first }.sortedBy { it.second.lowercase() }
@@ -430,7 +430,7 @@ internal fun MessagesPrivacyPage(push: (String) -> Unit, pop: () -> Unit, userna
  */
 internal object ChatKey {
     private fun fns() = FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
-    private fun uid() = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+    private fun uid() = com.fariin.app.Fb.auth.currentUser?.uid ?: ""
     private var app: Context? = null
     private fun prefs() = app?.getSharedPreferences("fariin_chatkey", Context.MODE_PRIVATE)
     fun bind(c: Context) { app = c.applicationContext }

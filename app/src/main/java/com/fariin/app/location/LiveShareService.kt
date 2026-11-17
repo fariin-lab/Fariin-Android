@@ -64,7 +64,7 @@ class LiveShareService : Service() {
         /** Stop in one chat; the service ends with the last one. [untilMs] ends a share this phone
          *  no longer holds (a reinstall, another session) from its card. */
         fun stop(ctx: Context, cid: String, untilMs: Long? = null) {
-            val me = FirebaseAuth.getInstance().currentUser?.uid
+            val me = com.fariin.app.Fb.auth.currentUser?.uid
             val was = _shares.value[cid] ?: untilMs?.let { Share(cid, "", it, "") }
             _shares.value = _shares.value - cid
             save(ctx)
@@ -74,7 +74,7 @@ class LiveShareService : Service() {
 
         /** Stop everywhere (sign-out, account deletion, the notification's Stop). */
         fun stopAll(ctx: Context) {
-            val me = FirebaseAuth.getInstance().currentUser?.uid
+            val me = com.fariin.app.Fb.auth.currentUser?.uid
             val all = _shares.value.values.toList()
             _shares.value = emptyMap()
             save(ctx)
@@ -128,7 +128,7 @@ class LiveShareService : Service() {
         val now = System.currentTimeMillis()
         val ended = _shares.value.values.filter { it.untilMs <= now }
         if (ended.isEmpty()) return
-        val me = FirebaseAuth.getInstance().currentUser?.uid
+        val me = com.fariin.app.Fb.auth.currentUser?.uid
         _shares.value = _shares.value.filterValues { it.untilMs > now }
         save(this)
         if (me != null) scope.launch { ended.forEach { LiveLocation.end(me, it.cid, it.untilMs) } }
@@ -161,7 +161,7 @@ class LiveShareService : Service() {
     }
 
     private fun send(loc: Location) {
-        val me = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         lastSentAt = System.currentTimeMillis()
         val acc = if (loc.hasAccuracy()) loc.accuracy else null
         val chats = _shares.value.values.toList()

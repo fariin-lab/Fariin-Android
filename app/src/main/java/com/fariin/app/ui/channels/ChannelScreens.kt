@@ -386,7 +386,7 @@ fun NewChannelScreen(me: String, onBack: () -> Unit, onDone: (String) -> Unit) {
                     error = com.fariin.app.data.AppLimits.ownedChannelsSentence(max); creating = false; return@launch
                 }
                 try {
-                    val my = FirebaseFirestore.getInstance().collection("users").document(me).get().await()
+                    val my = com.fariin.app.Fb.db.collection("users").document(me).get().await()
                     val id = halfMade ?: ChannelService.createGroupForChannel(name, my.getString("name") ?: "", my.getString("photoUrl")).also { halfMade = it }
                     if (!ChannelService.makeChannelWithRetry(id)) { error = "Could not create the channel. Try again."; creating = false; return@launch }
                     halfMade = null

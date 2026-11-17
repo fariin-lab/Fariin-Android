@@ -78,7 +78,7 @@ object ConnectionStatus {
                 }
             })
         }
-        FirebaseAuth.getInstance().addAuthStateListener { a -> scope.launch { watch(a.currentUser?.uid) } }
+        com.fariin.app.Fb.auth.addAuthStateListener { a -> scope.launch { watch(a.currentUser?.uid) } }
     }
 
     private fun route(up: Boolean) {
@@ -92,7 +92,7 @@ object ConnectionStatus {
         if (uid == probeUid) return
         probe?.remove(); probe = null; probeUid = uid
         if (uid == null) { _state.value = next(State.ONLINE, hasRoute, null); return }
-        probe = FirebaseFirestore.getInstance().collection("users").document(uid)
+        probe = com.fariin.app.Fb.db.collection("users").document(uid)
             .addSnapshotListener(MetadataChanges.INCLUDE) { snap, _ ->
                 if (snap == null) return@addSnapshotListener
                 if (!snap.metadata.isFromCache) {
@@ -109,7 +109,7 @@ object ConnectionStatus {
             val uid = probeUid ?: return@launch
             val ok = withTimeoutOrNull(PROBE_TIMEOUT_MS) {
                 runCatching {
-                    FirebaseFirestore.getInstance().collection("users").document(uid).get(Source.SERVER).await()
+                    com.fariin.app.Fb.db.collection("users").document(uid).get(Source.SERVER).await()
                 }.isSuccess
             } ?: false
             _state.value = next(_state.value, hasRoute, ok)

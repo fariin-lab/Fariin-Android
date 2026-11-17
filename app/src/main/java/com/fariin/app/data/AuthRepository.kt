@@ -43,7 +43,7 @@ import java.util.Date
  * Every success reports the login (notifyNewLogin, the new-login email) and remembers the door.
  */
 class AuthRepository(
-    private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
+    private val auth: FirebaseAuth = com.fariin.app.Fb.auth,
 ) {
     val currentUser: FirebaseUser? get() = auth.currentUser
     private val app: Context get() = FirebaseApp.getInstance().applicationContext

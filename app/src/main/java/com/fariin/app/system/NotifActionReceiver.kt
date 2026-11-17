@@ -30,7 +30,7 @@ import java.util.concurrent.TimeUnit
 class NotifActionReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, intent: Intent) {
         val cid = intent.getStringExtra(NotifActions.EXTRA_CID) ?: return
-        val me = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         // A notification from an account that is no longer signed in does nothing.
         if (intent.getStringExtra(NotifActions.EXTRA_ME) != me) { NotificationPoster.clear(c, cid); return }
         when (intent.action) {

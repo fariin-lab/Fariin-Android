@@ -186,7 +186,7 @@ internal object SecurityCheckup {
     private var running = false
     private var rerun = false
 
-    private fun uid() = FirebaseAuth.getInstance().currentUser?.uid
+    private fun uid() = com.fariin.app.Fb.auth.currentUser?.uid
 
     private fun resetForNewAccount() {
         scannedUid = uid()
@@ -258,9 +258,9 @@ internal object SecurityCheckup {
 
     /** The sign-in methods, reloaded from the server first: a cached user can list a removed password. */
     private suspend fun checkPassword(): Status {
-        val user = FirebaseAuth.getInstance().currentUser ?: return Status.Failed
+        val user = com.fariin.app.Fb.auth.currentUser ?: return Status.Failed
         try { user.reload().await() } catch (_: Exception) { return Status.Failed }
-        val fresh = FirebaseAuth.getInstance().currentUser ?: return Status.Failed
+        val fresh = com.fariin.app.Fb.auth.currentUser ?: return Status.Failed
         return SecurityCheckupRules.passwordStatus(fresh.providerData.map { it.providerId to it.email })
     }
 
@@ -275,7 +275,7 @@ internal object SecurityCheckup {
     private suspend fun checkDevices(ctx: Context): Pair<Status, List<SecurityCheckupRules.Device>> {
         val me = uid() ?: return Status.Failed to emptyList()
         val snap = try {
-            FirebaseFirestore.getInstance().collection("users").document(me).collection("devices").get(Source.SERVER).await()
+            com.fariin.app.Fb.db.collection("users").document(me).collection("devices").get(Source.SERVER).await()
         } catch (_: Exception) { return Status.Failed to emptyList() }
         val thisId = DeviceRegistry.thisDeviceId(ctx)
         val list = snap.documents.map { d ->
@@ -325,7 +325,7 @@ internal fun securityCheckupRoute(page: String, profile: MyProfile?, demo: Boole
 internal fun DevicesCheckupHeader(onCheckup: () -> Unit) {
     val c = Fariin.colors
     val ctx = LocalContext.current
-    val demo = FirebaseAuth.getInstance().currentUser == null   // the debug demo account has no Firebase user
+    val demo = com.fariin.app.Fb.auth.currentUser == null   // the debug demo account has no Firebase user
     // The answers are fetched while he looks at Devices, so the checkup opens already answered.
     LaunchedEffect(Unit) { if (demo) SecurityCheckup.demo() else SecurityCheckup.run(ctx) }
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -536,7 +536,7 @@ internal fun SecurityCheckupSheet(onClose: () -> Unit) {
     val c = Fariin.colors
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    val me = FirebaseAuth.getInstance().currentUser?.uid
+    val me = com.fariin.app.Fb.auth.currentUser?.uid
     val demo = me == null
     val profile = if (me != null) remember(me) { com.fariin.app.data.MyProfileRepository().listen(me) }.collectAsState(initial = null).value else null
     val state = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)

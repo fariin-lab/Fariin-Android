@@ -576,8 +576,8 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
     var captionFocused by remember { mutableStateOf(false) }
     var hours by remember { mutableIntStateOf(StoryRules.DEFAULT_HOURS) }
     val storyAdmin by androidx.compose.runtime.produceState<Boolean>(false) {
-        val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-        value = me != null && runCatching { com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("admins")
+        val me = com.fariin.app.Fb.auth.currentUser?.uid
+        value = me != null && runCatching { com.fariin.app.Fb.db.collection("admins")
             .document(me).get().await().exists() }.getOrDefault(false)
     }
     var hoursMenu by remember { mutableStateOf(false) }

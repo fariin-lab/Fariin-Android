@@ -114,7 +114,7 @@ interface PeopleApi {
 class FirestorePeople(
     override val me: String,
     private val crypto: FariinCrypto,
-    private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    private val db: FirebaseFirestore = com.fariin.app.Fb.db,
 ) : PeopleApi {
     private val fn get() = FirebaseFunctions.getInstance("me-central1")
     private fun conv(cid: String) = db.collection("conversations").document(cid)
@@ -582,8 +582,8 @@ object PhotoRepublish {
     }
 
     private suspend fun once(): Boolean {
-        val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return true
-        val db = FirebaseFirestore.getInstance()
+        val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return true
+        val db = com.fariin.app.Fb.db
         val d = try { db.collection("users").document(me).get().await() } catch (_: Exception) { return false }
         val photo = d.getString("photoUrl").orEmpty()
         if (photo.isEmpty()) return true

@@ -77,7 +77,7 @@ object AppFeatures {
     fun start() {
         MyLanguage.sync()
         reg?.remove()
-        reg = FirebaseFirestore.getInstance().collection("config").document("features")
+        reg = com.fariin.app.Fb.db.collection("config").document("features")
             .addSnapshotListener { snap, _ ->
                 if (snap == null) return@addSnapshotListener
                 // The Settings "New" pills are live, not next-open (a deleted doc clears them).
@@ -114,15 +114,15 @@ object AppFeatures {
 object MyLanguage {
     @Volatile private var doneFor: String? = null
     fun sync() {
-        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         if (doneFor == uid) return
         doneFor = uid
         val code = java.util.Locale.getDefault().language.lowercase()
         if (code.length != 2) return
-        val ref = FirebaseFirestore.getInstance().collection("users").document(uid)
+        val ref = com.fariin.app.Fb.db.collection("users").document(uid)
         ref.get(com.google.firebase.firestore.Source.SERVER).addOnSuccessListener { snap ->
             if (snap.getString("lang") == code) return@addOnSuccessListener
-            if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid != uid) return@addOnSuccessListener
+            if (com.fariin.app.Fb.auth.currentUser?.uid != uid) return@addOnSuccessListener
             ref.set(mapOf("lang" to code), com.google.firebase.firestore.SetOptions.merge())
         }
     }

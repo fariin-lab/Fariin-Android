@@ -121,7 +121,7 @@ object ChatHistoryPreloader {
         scope.launch {
             val ok = withTimeoutOrNull(GIVE_UP_MS) {
                 runCatching {
-                    FirebaseFirestore.getInstance().collection("conversations").document(cid).collection("messages")
+                    com.fariin.app.Fb.db.collection("conversations").document(cid).collection("messages")
                         .orderBy("createdAt", Query.Direction.DESCENDING)
                         .limit(ThreadRepository.PAGE_SIZE)
                         .get(Source.SERVER).await()

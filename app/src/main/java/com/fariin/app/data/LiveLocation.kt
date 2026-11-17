@@ -32,7 +32,7 @@ object LiveLocation {
     val LENGTHS = listOf(15 * 60_000L to "15 minutes", 60 * 60_000L to "1 hour", 8 * 60 * 60_000L to "8 hours")
     const val DEFAULT_LENGTH = 60 * 60_000L
 
-    private fun col(cid: String) = FirebaseFirestore.getInstance().collection("conversations").document(cid).collection("live")
+    private fun col(cid: String) = com.fariin.app.Fb.db.collection("conversations").document(cid).collection("live")
 
     private fun posJson(lat: Double, lon: Double, acc: Float?) =
         JSONObject().put("lat", lat).put("lon", lon).apply { if (acc != null) put("acc", acc.toDouble()) }.toString()

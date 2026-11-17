@@ -43,10 +43,10 @@ class FariinMessagingService : FirebaseMessagingService() {
         // alert itself is not shown (NotifPayload skips it).
         val alertBody = message.notification?.body ?: message.data["body"] ?: message.data["b"]
         if (message.data["kind"] != "call" && (alertBody == "Incoming call" || alertBody == "Incoming video call")) {
-            FirebaseAuth.getInstance().currentUser?.uid?.let { com.fariin.app.call.IncomingCallWatcher.onCallPush(applicationContext, it) }
+            com.fariin.app.Fb.auth.currentUser?.uid?.let { com.fariin.app.call.IncomingCallWatcher.onCallPush(applicationContext, it) }
         }
         if (message.data["kind"] == "call") {
-            val me = FirebaseAuth.getInstance().currentUser?.uid ?: return
+            val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
             com.fariin.app.call.IncomingCallWatcher.onCallPush(applicationContext, me)
             return
         }
@@ -102,7 +102,7 @@ class FariinMessagingService : FirebaseMessagingService() {
         suspend fun handle(c: Context, p: PushData) {
             DeviceRegistry.init(c)
             val ack = kotlinx.coroutines.coroutineScope { async(kotlinx.coroutines.Dispatchers.IO) { sendAck(p) } }
-            val me = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+            val me = com.fariin.app.Fb.auth.currentUser?.uid ?: ""
             val opened = HashMap<String, String?>()
             // A sender whose key this phone has not seen yet: one short fetch, then open again.
             p.cipher?.let { ct ->

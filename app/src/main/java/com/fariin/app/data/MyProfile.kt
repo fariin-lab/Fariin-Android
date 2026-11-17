@@ -39,7 +39,7 @@ data class MyProfile(
  * nothing here writes to Firestore. Emits null until the first snapshot or when it fails.
  */
 class MyProfileRepository(
-    private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    private val db: FirebaseFirestore = com.fariin.app.Fb.db,
 ) {
     fun listen(uid: String): Flow<MyProfile?> = callbackFlow {
         val reg = db.collection("users").document(uid).addSnapshotListener { snap, _ ->
