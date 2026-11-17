@@ -229,7 +229,9 @@ class MainActivity : ComponentActivity() {
                 if (later.started) { com.fariin.app.data.Glow.stop(); com.fariin.app.data.AppFeatures.stop(); com.fariin.app.data.AppConfig.stop(); com.fariin.app.data.MsgPolicy.stop() }
             }
         }
-        // The official Fariin chat (announcements and my read state).
+        // The official Fariin chat (announcements and my read state). Its row from the phone's copy now,
+        // with the other chats; the live listeners start a moment after the first frame.
+        remember(me) { com.fariin.app.data.OfficialChannel.seed(applicationContext, me) }
         androidx.compose.runtime.DisposableEffect(me) {
             val later = AfterFirstFrame(LATER_MS) {
                 val build = try {

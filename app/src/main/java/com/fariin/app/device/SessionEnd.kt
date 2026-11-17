@@ -207,6 +207,7 @@ object SessionEnd {
         com.fariin.app.data.SharedMediaSource.clear()      // All Media's opened messages
         com.fariin.app.data.ContactNames.clear()       // names I gave people belong to the account
         com.fariin.app.data.SearchRecents.wipe(c)      // what the account searched for
+        com.fariin.app.data.OfficialChannel.wipe(c)    // the official row kept for launch (personal notices too)
         com.fariin.app.data.OfficialStories.reset(c)
         com.fariin.app.data.ChannelStories.stop()
         com.fariin.app.data.ThreadSeed.clear()

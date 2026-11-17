@@ -319,9 +319,69 @@ object OfficialChannel {
 
     private var app: android.content.Context? = null
 
+    // THE ROW FROM THE PHONE'S COPY (owner 2026-11-17: "when you open the app it is not here, it comes
+    // late"). The listeners start 1.5 s after the first frame and the list has every other chat from
+    // the phone at once, so the official row came in last and pushed the list down. The last settled
+    // view (its newest announcements and my state) is kept per account and shown at launch; the live
+    // one takes over once all three sources have answered. Wiped at sign-out (SessionEnd).
+    private const val SAVED = "fariin_official_row"
+    private const val SAVED_MAX = 30
+    private var seededFor: String? = null
+    private var savedSig = 0
+
+    /** The kept view for [me], shown before [start]; once per account. Main thread, a small read. */
+    fun seed(context: android.content.Context, me: String) {
+        if (me.isEmpty() || seededFor == me || _view.value.latest != null) return
+        seededFor = me
+        val raw = context.getSharedPreferences(SAVED, android.content.Context.MODE_PRIVATE).getString(me, null) ?: return
+        runCatching {
+            val o = org.json.JSONObject(raw)
+            val st = o.getJSONObject("s")
+            val state = OfficialChannelState(
+                muted = st.optBoolean("muted"), mutedUntil = st.optDouble("mutedUntil", 0.0),
+                blocked = st.optBoolean("blocked"), pinned = st.optBoolean("pinned"),
+                archived = st.optBoolean("archived"), lastReadAt = st.optDouble("lastReadAt", 0.0),
+                clearedAt = st.optDouble("clearedAt", 0.0), markedUnread = st.optBoolean("markedUnread"))
+            val arr = o.getJSONArray("a")
+            val list = (0 until arr.length()).map { i ->
+                val a = arr.getJSONObject(i)
+                Announcement(id = a.getString("id"), kind = AnnouncementKind.from(a.optString("kind")),
+                    title = a.optString("title"), body = a.optString("body"),
+                    publishAt = a.optDouble("publishAt", 0.0), createdAt = a.optDouble("createdAt", 0.0),
+                    isPersonal = a.optBoolean("personal"))
+            }
+            if (list.isNotEmpty() && _view.value.latest == null) _view.value = View(list, state, loaded = false)
+        }
+    }
+
+    private fun save(v: View) {
+        val me = uid ?: return
+        val c = app ?: return
+        val keep = v.visible.takeLast(SAVED_MAX)
+        val st = v.state
+        val o = org.json.JSONObject()
+            .put("s", org.json.JSONObject().put("muted", st.muted).put("mutedUntil", st.mutedUntil)
+                .put("blocked", st.blocked).put("pinned", st.pinned).put("archived", st.archived)
+                .put("lastReadAt", st.lastReadAt).put("clearedAt", st.clearedAt).put("markedUnread", st.markedUnread))
+            .put("a", org.json.JSONArray().apply { keep.forEach { a -> put(org.json.JSONObject()
+                .put("id", a.id).put("kind", a.kind.raw).put("title", a.title).put("body", a.body)
+                .put("publishAt", a.publishAt).put("createdAt", a.createdAt).put("personal", a.isPersonal)) } })
+        val text = o.toString()
+        if (text.hashCode() == savedSig) return
+        savedSig = text.hashCode()
+        c.getSharedPreferences(SAVED, android.content.Context.MODE_PRIVATE).edit().putString(me, text).apply()
+    }
+
+    /** Sign-out: the kept rows go with the account. */
+    fun wipe(context: android.content.Context) {
+        context.getSharedPreferences(SAVED, android.content.Context.MODE_PRIVATE).edit().clear().apply()
+        seededFor = null; savedSig = 0
+    }
+
     fun start(context: android.content.Context, me: String, appBuild: Int) {
         if (uid == me && regs.isNotEmpty()) return
-        stop()
+        // The kept row stays on screen until the live view has settled.
+        stop(keepView = seededFor == me)
         app = context.applicationContext
         uid = me
         build = appBuild
@@ -349,7 +409,7 @@ object OfficialChannel {
         )
     }
 
-    fun stop() {
+    fun stop(keepView: Boolean = false) {
         regs.forEach { it.remove() }
         regs = emptyList()
         timer?.cancel(); timer = null
@@ -357,7 +417,7 @@ object OfficialChannel {
         uid = null
         broadcast = emptyList(); personal = emptyList(); state = OfficialChannelState()
         answered.clear()
-        _view.value = View()
+        if (!keepView) { _view.value = View(); seededFor = null }
     }
 
     private fun answer(source: String) {
@@ -374,7 +434,13 @@ object OfficialChannel {
         timer?.cancel()
         val boundary = (broadcast + personal).flatMap { listOfNotNull(it.publishAt, it.expiresAt) }.filter { it > now }.minOrNull()
         if (boundary != null) timer = scope.launch { delay(maxOf(250L, (boundary - now).toLong() + 250L)); recompute() }
-        _view.value = View(next, state, loaded = answered.size >= 3)
+        val loaded = answered.size >= 3
+        // Half answered (one source in, its state not yet): the kept row stays rather than jumping
+        // (a personal post missing, the pin or archive not known yet).
+        if (!loaded && seededFor == me && _view.value.latest != null && !_view.value.loaded) return
+        val v = View(next, state, loaded = loaded)
+        _view.value = v
+        if (loaded) save(v)
     }
 
     /** Opening the chat reads everything on screen: the watermark is the latest arrival shown. */
