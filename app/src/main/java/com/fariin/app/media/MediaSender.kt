@@ -76,6 +76,7 @@ class MediaSender(
                                members: List<String>?, msg: Map<String, Any>) {
         val fc = sealOrNull(fwdChannelJson, members)
         var out = if (fc != null) msg + ("fwdChannel" to fc) else msg
+        quoteId?.takeIf { com.fariin.app.data.QuoteRules.isQid(it) }?.let { out = out + ("quote" to mapOf("qid" to it)) }
         // The group or channel it came from (iOS sealedForwardSource), only beside `forwarded`. A
         // plain group's seal hands the JSON back, so there the map itself goes. A failed seal drops only this.
         val src = fwdSource?.takeIf { msg["forwarded"] == true }
@@ -88,6 +89,8 @@ class MediaSender(
 
     /** The group or channel a forward comes from (Message.ForwardSource), written as `fwd`. */
     var fwdSource: com.fariin.app.data.Message.ForwardSource? = null
+    /** A forwarded post's quoted card (iOS 80b0470bf): the same {qid} as the original, so it is not a new quote. */
+    var quoteId: String? = null
 
     /** End-to-end encrypted bytes go up as application/octet-stream (storage.rules `chat/`). */
     private suspend fun upload(cipher: ByteArray, path: String, onProgress: ((Float) -> Unit)? = null): String {

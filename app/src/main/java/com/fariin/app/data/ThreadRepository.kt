@@ -1373,15 +1373,17 @@ class ThreadRepository(
     /** A text forwarded into this chat (iOS sendText with `forwarded`), straight to the server. */
     suspend fun sendForwardedText(text: String, forwarded: Boolean, fwdChannelJson: String? = null,
                                   fwdSource: Message.ForwardSource? = null, fmt: String? = null,
-                                  clientId: String = UUID.randomUUID().toString().uppercase()) {
+                                  clientId: String = UUID.randomUUID().toString().uppercase(),
+                                  /** The forwarded post's quoted card (iOS 80b0470bf). */ quote: String? = null) {
         val t = text.trim()
+        val q = quote?.takeIf { QuoteRules.isQid(it) }
         if (t.isEmpty()) return
         val ts = System.currentTimeMillis().toDouble()
         // The source's bold goes along only while the words are exactly the ones it was measured on.
         val f = fmt?.takeIf { t == text }
         turn.withLock {
-            if (Wire.isGroupCid(cid)) sendGroup(t, clientId, ts, null, forwarded, fwdChannelJson = fwdChannelJson, fwdSource = fwdSource, fmt = f)
-            else sendDirect(t, clientId, ts, null, forwarded, fwdChannelJson = fwdChannelJson, fwdSource = fwdSource, fmt = f)
+            if (Wire.isGroupCid(cid)) sendGroup(t, clientId, ts, null, forwarded, fwdChannelJson = fwdChannelJson, fwdSource = fwdSource, fmt = f, quote = q)
+            else sendDirect(t, clientId, ts, null, forwarded, fwdChannelJson = fwdChannelJson, fwdSource = fwdSource, fmt = f, quote = q)
         }
     }
 

@@ -58,7 +58,7 @@ object Forwarder {
             val clientId = clientIds[t] ?: UUID.randomUUID().toString().uppercase()
             val instant = instantKind && runCatching {
                 MediaSender(t, me, crypto, ChatMedia(context, t, crypto))
-                    .also { it.fwdChannelJson = fc; it.fwdSource = source.takeIf { fwd } }
+                    .also { it.fwdChannelJson = fc; it.fwdSource = source.takeIf { fwd }; it.quoteId = m.quoteId }
                     .instant(m, sourceCid, m.text, fwd, clientId, System.currentTimeMillis().toDouble())
             }.onFailure { android.util.Log.i("FariinForward", "old forward to $t: ${it.message}") }.isSuccess
             val ok = instant || runCatching { sendTo(context, me, crypto, t, m, payload(), fwd, fc, source.takeIf { fwd }, clientId) }.isSuccess
@@ -157,7 +157,7 @@ object Forwarder {
     ) {
         val ts = System.currentTimeMillis().toDouble()
         val sender = MediaSender(target, me, crypto, ChatMedia(context, target, crypto))
-            .also { it.fwdChannelJson = fwdChannelJson; it.fwdSource = source }
+            .also { it.fwdChannelJson = fwdChannelJson; it.fwdSource = source; it.quoteId = m.quoteId }
         // Registered with MediaSend like a send from the composer (owner 2026-11-11, iOS fwd-cancel):
         // the X on a forwarded video still uploading only hid the bubble, and the video arrived anyway,
         // because nothing held this send for Cancel to stop. A Cancel ends the job quietly (join
@@ -175,7 +175,7 @@ object Forwarder {
             is Payload.Doc -> registered { sender.file((payload as Payload.Doc).prep, fwd, clientId, ts) }
             Payload.Text -> ThreadRepository(target, me, crypto, CoroutineScope(SupervisorJob() + Dispatchers.IO))
                 .sendForwardedText(m.text, fwd, fwdChannelJson, source,
-                    fmt = com.fariin.app.data.TextFormat.serialize(m.bold, m.text.length), clientId = clientId)
+                    fmt = com.fariin.app.data.TextFormat.serialize(m.bold, m.text.length), clientId = clientId, quote = m.quoteId)
             is Payload.Sticker -> ThreadRepository(target, me, crypto, CoroutineScope(SupervisorJob() + Dispatchers.IO))
                 .sendSticker((payload as Payload.Sticker).ref, null)
             is Payload.Gif -> ThreadRepository(target, me, crypto, CoroutineScope(SupervisorJob() + Dispatchers.IO))
