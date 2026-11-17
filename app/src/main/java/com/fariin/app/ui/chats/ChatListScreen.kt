@@ -745,7 +745,8 @@ fun ChatListScreen(
                                     onOpen(conv)
                                 }
                             },
-                            onLongPress = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); toggle(conv) })
+                            onLongPress = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); toggle(conv) },
+                            onPressStart = { if (!selecting) com.fariin.app.data.ThreadRowsPrefetch.prefetch(me, conv.id) })
                         }
                     }
                     val officialItem: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
@@ -1243,6 +1244,8 @@ internal fun ChatRow(
     selected: Boolean = false,
     onOpen: () -> Unit,
     onLongPress: () -> Unit = {},
+    /** The finger landed on the row: the chat's saved rows start reading (see ThreadRowsPrefetch). */
+    onPressStart: (() -> Unit)? = null,
     ring: List<Boolean> = emptyList(),
     onStoryTap: (() -> Unit)? = null,
     /** The story group this photo opens: the viewer zooms out of it and back into it (hero). */
@@ -1318,7 +1321,7 @@ internal fun ChatRow(
         Modifier.fillMaxWidth()
             .background(if (selected) MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f) else Color.Transparent)
             // The tap's grey before the chat opens (ui/components/ListPress).
-            .listPress(onLongClick = onLongPress, onClick = onOpen)
+            .listPress(onLongClick = onLongPress, onDown = onPressStart, onClick = onOpen)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

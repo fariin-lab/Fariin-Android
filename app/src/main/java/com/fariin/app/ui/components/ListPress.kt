@@ -30,7 +30,10 @@ const val PRESS_HOLD_MS = 200L
  * is pressed again from where the finger was. The click waits [PRESS_HOLD_MS].
  */
 @OptIn(ExperimentalFoundationApi::class)
-fun Modifier.listPress(enabled: Boolean = true, onLongClick: (() -> Unit)? = null, onClick: () -> Unit): Modifier = composed {
+fun Modifier.listPress(enabled: Boolean = true, onLongClick: (() -> Unit)? = null,
+                       /** Runs as the finger lands, before the tap is known (work the open will need). */
+                       onDown: (() -> Unit)? = null, onClick: () -> Unit): Modifier = composed {
+    val down = androidx.compose.runtime.rememberUpdatedState(onDown)
     val press = remember { MutableInteractionSource() }
     // Where the finger went down and whether it travelled: plain fields, read only in the callbacks.
     // They are set by the watcher below (it used to be a collector of the press stream per row: one
@@ -43,12 +46,13 @@ fun Modifier.listPress(enabled: Boolean = true, onLongClick: (() -> Unit)? = nul
     val slop = androidx.compose.ui.platform.LocalViewConfiguration.current.touchSlop
     pointerInput(Unit) {
         awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-            touch.down = down.position
+            val first = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            touch.down = first.position
             touch.moved = false
+            if (enabled) down.value?.invoke()
             while (true) {
-                val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
-                if ((change.position - down.position).getDistance() > slop) touch.moved = true
+                val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == first.id } ?: break
+                if ((change.position - first.position).getDistance() > slop) touch.moved = true
                 if (!change.pressed) break
             }
         }

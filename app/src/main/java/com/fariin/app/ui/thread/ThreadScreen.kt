@@ -1653,7 +1653,9 @@ private fun ThreadContent(
                         if (stop != null) actions.onNotice(stop) else { sendMotion.arm(SendMotion.Kind.MEDIA, ui.messages, sendAnim); val r = replyTo; replyTo = null; actions.onSendGif(gif, r) }
                     },
                     // iOS mentionPicker: groups only (MentionPicker.kt).
-                    mentions = if (ui.isGroup) MentionSource(ui.members, ui.me, ui.names, ui.photos) else null)
+                    // Kept while the members are the same: a new one on every pass (the class holds lists)
+                    // made the composer rebuild on each chat update in a group.
+                    mentions = if (ui.isGroup) remember(ui.members, ui.me, ui.names, ui.photos) { MentionSource(ui.members, ui.me, ui.names, ui.photos) } else null)
             }
         }
     }
