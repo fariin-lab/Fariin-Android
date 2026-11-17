@@ -164,21 +164,28 @@ object ActivityFeed {
     /** Signed in: the summary, for the chat list row. */
     fun start(me: String) {
         if (me == owner && summaryReg != null) return
-        stop()
+        stop(keepRow = me.isNotEmpty() && me == seededFor)
         owner = me
         if (me.isEmpty()) return
         summaryReg = user(me).collection("activityMeta").document("summary").addSnapshotListener { snap, _ ->
             if (snap == null) return@addSnapshotListener
             val d = snap.data
+            // An empty answer from the phone's cache says nothing new: the saved row stays.
+            if (d == null && snap.metadata.isFromCache && _summary.value != null) return@addSnapshotListener
             val last = d?.get("last") as? Map<*, *>
-            _summary.value = if (d == null) null else ActivitySummary(
+            val v = if (d == null) null else ActivitySummary(
                 unread = (d["unread"] as? Number)?.toInt() ?: 0,
                 kind = last?.get("kind") as? String ?: "", name = last?.get("n") as? String ?: "",
                 text = last?.get("text") as? String ?: "", emoji = last?.get("emoji") as? String ?: "",
                 at = Conversation.millis(last?.get("at")))
+            _summary.value = v
+            saveSummary(me, v)
         }
         prefsReg = user(me).collection("activityMeta").document("prefs").addSnapshotListener { snap, _ ->
-            if (snap != null) _muted.value = snap.getBoolean("muted") == true
+            if (snap == null) return@addSnapshotListener
+            val m = snap.getBoolean("muted") == true
+            _muted.value = m
+            app?.getSharedPreferences(PIN_FILE, 0)?.let { if (it.getBoolean("muted.$me", false) != m) it.edit().putBoolean("muted.$me", m).apply() }
         }
     }
 
@@ -194,13 +201,16 @@ object ActivityFeed {
         return ok
     }
 
-    fun stop() {
+    fun stop() { stop(keepRow = false) }
+
+    /** [keepRow]: the row read from the phone for this account stays while the listener starts. */
+    private fun stop(keepRow: Boolean) {
         summaryReg?.remove(); summaryReg = null
         prefsReg?.remove(); prefsReg = null
-        _muted.value = false
+        if (!keepRow) _muted.value = false
         stopItems()
         owner = ""
-        _summary.value = null
+        if (!keepRow) _summary.value = null
         _items.value = null
     }
 
@@ -231,7 +241,34 @@ object ActivityFeed {
     private val _pinned = MutableStateFlow(false)
     val pinned: StateFlow<Boolean> = _pinned
     fun loadPin(c: android.content.Context, me: String) {
-        _pinned.value = me.isNotEmpty() && c.getSharedPreferences(PIN_FILE, 0).getBoolean("pinned.$me", false)
+        val prefs = c.getSharedPreferences(PIN_FILE, 0)
+        _pinned.value = me.isNotEmpty() && prefs.getBoolean("pinned.$me", false)
+        // The row as it last was (owner 2026-11-17, launch): the listener starts after the first
+        // frame, so without this the Activity row came in late and pushed the chats below it down.
+        app = c.applicationContext
+        seededFor = me
+        if (me.isEmpty()) return
+        val saved = runCatching {
+            prefs.getString("sum.$me", null)?.let { org.json.JSONObject(it) }?.let { o ->
+                ActivitySummary(o.optInt("u"), o.optString("k"), o.optString("n"), o.optString("t"), o.optString("e"), o.optDouble("a", 0.0))
+            }
+        }.getOrNull()
+        if (saved != null) { _summary.value = saved; _muted.value = prefs.getBoolean("muted.$me", false); savedSig = saved.hashCode() }
+    }
+
+    @Volatile private var app: android.content.Context? = null
+    @Volatile private var seededFor = ""
+    @Volatile private var savedSig = 0
+
+    private fun saveSummary(me: String, v: ActivitySummary?) {
+        val c = app ?: return
+        val sig = v?.hashCode() ?: 0
+        if (sig == savedSig) return
+        savedSig = sig
+        val e = c.getSharedPreferences(PIN_FILE, 0).edit()
+        if (v == null) e.remove("sum.$me") else e.putString("sum.$me", org.json.JSONObject()
+            .put("u", v.unread).put("k", v.kind).put("n", v.name).put("t", v.text).put("e", v.emoji).put("a", v.at).toString())
+        e.apply()
     }
     fun setPinned(c: android.content.Context, on: Boolean) {
         if (owner.isEmpty()) return
@@ -242,6 +279,7 @@ object ActivityFeed {
     fun clearPin(c: android.content.Context) {
         c.getSharedPreferences(PIN_FILE, 0).edit().clear().apply()
         _pinned.value = false
+        seededFor = ""; savedSig = 0
     }
 
     /** Everything read (no ids), or just these. The row on the chat list leaves at once. */
