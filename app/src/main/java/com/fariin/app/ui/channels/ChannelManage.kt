@@ -1,5 +1,7 @@
 package com.fariin.app.ui.channels
 
+import androidx.compose.ui.draw.drawBehind
+import com.fariin.app.ui.photo.profilePhotoSource
 import com.fariin.app.ui.components.GlassDropdown
 import com.fariin.app.ui.components.GlassAlert
 import com.fariin.app.ui.settings.BarPage
@@ -297,7 +299,9 @@ fun ChannelEditSheet(cid: String, me: String, onClosed: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: () -> List<com.fariin.app.data.Conversation> = { emptyList() }) {
+fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: () -> List<com.fariin.app.data.Conversation> = { emptyList() },
+    /** A follower's 1:1 chat (opened or started) and their full profile, from the person card. */
+    onMessage: (String) -> Unit = {}, onProfile: (String) -> Unit = {}) {
     val c = Fariin.colors
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -362,6 +366,10 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: (
 
     val admins = team.sorted()
     val followerRows = rows.filter { it.uid !in admins }
+    var card by remember { mutableStateOf<ChannelService.Follower?>(null) }
+    card?.let { f -> FollowerCard(f, onDismiss = { card = null },
+        onMessage = { onMessage(chats().firstOrNull { !it.isGroup && it.users.contains(f.uid) }?.id ?: com.fariin.app.crypto.Wire.directCid(me, f.uid)) },
+        onProfile = { onProfile(f.uid) }) }
     val shown = ChannelAdmins.shownCount((countAtOpen ?: info.followerCount) + added, removed, admins.size)
     if (picking) {
         val have = (admins + rows.map { it.uid }).toSet()
@@ -403,12 +411,13 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: (
                 }
                 SettingsSection(header = ChannelRules.followersLine(shown), footer = ChannelAdmins.FOLLOWERS_FOOTER) {
                     admins.forEach { uid ->
-                        PersonLine(team.photos[uid], if (uid == me) "You" else team.names[uid] ?: "") {
+                        PersonLine(team.photos[uid], if (uid == me) "You" else team.names[uid] ?: "",
+                            onClick = if (uid == me) null else ({ card = ChannelService.Follower(uid, team.names[uid] ?: "", team.photos[uid]) })) {
                             Text(if (uid == team.owner) "Owner" else "Admin", fontSize = 14.sp, color = c.secondary)
                         }
                     }
                     followerRows.forEach { f ->
-                        PersonLine(f.photoUrl, f.name, username = f.username) {
+                        PersonLine(f.photoUrl, f.name, onClick = if (f.uid == me) null else ({ card = f }), username = f.username) {
                             if (mayRemove) RowMenu(listOf("Remove" to { confirm = f to false }, "Ban" to { confirm = f to true }))
                         }
                         if (f == rows.lastOrNull() && more) LaunchedEffect(f.uid) { load() }
@@ -717,4 +726,69 @@ internal fun SwitchLine(title: String, on: Boolean, bold: Boolean = false, enabl
 private fun Note(text: String) {
     Text(text, fontSize = 15.sp, color = Fariin.colors.secondary, textAlign = TextAlign.Start,
         modifier = Modifier.fillMaxWidth().padding(16.dp))
+}
+
+
+/**
+ * A follower tapped on the Followers page (both apps, owner 2026-11-17): a sheet as tall as its
+ * content with the big photo, name and @username, and Message / View Profile. It shows only what the
+ * row already showed (the photo the list was allowed to show), nothing more. The photo opens full
+ * screen when there is one.
+ */
+@Composable
+private fun FollowerCard(f: ChannelService.Follower, onDismiss: () -> Unit, onMessage: () -> Unit, onProfile: () -> Unit) {
+    val c = Fariin.colors
+    val photo = com.fariin.app.ui.photo.rememberProfilePhotoState()
+    // As tall as its content (owner 2026-11-17), sliding up over a dim; a tap on the dim or Back closes it.
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { shown = true }
+    val scope = rememberCoroutineScope()
+    fun close(then: () -> Unit = {}) { shown = false; scope.launch { kotlinx.coroutines.delay(220); onDismiss(); then() } }
+    val dim by androidx.compose.animation.core.animateFloatAsState(if (shown) 0.4f else 0f, label = "cardDim")
+    androidx.compose.ui.window.Dialog(onDismissRequest = { close() },
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        Box(Modifier.fillMaxSize().drawBehind { drawRect(Color.Black.copy(alpha = dim)) }
+            .clickable(interactionSource = null, indication = null) { close() }, contentAlignment = Alignment.BottomCenter) {
+            androidx.compose.animation.AnimatedVisibility(shown,
+                enter = androidx.compose.animation.slideInVertically { it }, exit = androidx.compose.animation.slideOutVertically { it }) {
+                androidx.compose.foundation.layout.Column(Modifier.fillMaxWidth()
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                    .background(c.bg).clickable(interactionSource = null, indication = null) { }
+                    .navigationBarsPadding().padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.size(width = 36.dp, height = 5.dp).clip(androidx.compose.foundation.shape.CircleShape).background(c.label.copy(alpha = 0.2f)))
+                    Spacer(Modifier.height(16.dp))
+                    // A plain placeholder (no photo) does nothing on a tap.
+                    Avatar(f.photoUrl, 96.dp, onResolved = photo::resolved,
+                        modifier = Modifier.profilePhotoSource(photo)
+                            .then(if (photo.hasPhoto) Modifier.clip(androidx.compose.foundation.shape.CircleShape)
+                                .clickable(onClickLabel = "View photo") { photo.show() } else Modifier))
+                    Spacer(Modifier.height(12.dp))
+                    Text(f.name, fontSize = 22.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = c.label,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    if (f.username.isNotEmpty()) Text("@${f.username}", fontSize = 15.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.height(20.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
+                        CardButton("Message", Modifier.weight(1f), filled = true) { close(onMessage) }
+                        CardButton("View Profile", Modifier.weight(1f), filled = false) { close(onProfile) }
+                    }
+                }
+            }
+        }
+    }
+    // The photo full screen, in its own window over the sheet; gone when the viewer has closed.
+    if (photo.open) androidx.compose.ui.window.Dialog(onDismissRequest = { photo.closeRequest?.invoke() },
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        Box(Modifier.fillMaxSize()) { com.fariin.app.ui.photo.ProfilePhotoViewer(photo, f.photoUrl) }
+    }
+}
+
+@Composable
+private fun CardButton(label: String, modifier: Modifier, filled: Boolean, onClick: () -> Unit) {
+    val c = Fariin.colors
+    Box(modifier.height(48.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(24.dp))
+        .background(if (filled) c.accent else c.label.copy(alpha = 0.08f)).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center) {
+        Text(label, fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = if (filled) c.onAccent else c.label)
+    }
 }

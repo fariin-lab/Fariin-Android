@@ -107,7 +107,8 @@ fun NavGraphBuilder.channelRoutes(nav: NavHostController, me: String, chats: () 
     }
     page("channelfollowers/{cid}") { e ->
         val cid = e.arguments?.getString("cid") ?: return@page
-        ChannelFollowersScreen(cid, me, onBack = { nav.popBackStack() }, chats = chats)
+        ChannelFollowersScreen(cid, me, onBack = { nav.popBackStack() }, chats = chats,
+            onMessage = { nav.navigate("thread/$it") }, onProfile = { nav.navigate("contact/$it") { launchSingleTop = true } })
     }
     page("channeladmins/{cid}") { e ->
         val cid = e.arguments?.getString("cid") ?: return@page
