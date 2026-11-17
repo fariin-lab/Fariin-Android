@@ -115,7 +115,20 @@ object ChatBackup {
      * SignInRestoreGate): the history pull waits, so marks made before the answer never hide the offer.
      */
     fun restoreQuestionOpen(uid: String): Boolean = ENABLED && LocalDb.meta(uid, "restore.checked") == null &&
-        LocalDb.meta(uid, "restored").isNullOrEmpty() && !LocalDb.hasSyncedMarks(uid)
+        LocalDb.meta(uid, "restored").isNullOrEmpty() && !LocalDb.hasSyncedMarks(uid) && !answeredHere(uid)
+
+    // ASKED ONCE PER ACCOUNT ON THIS PHONE (both apps, owner 2026-11-17: the question kept coming
+    // back). Kept outside the message store, so a store reset does not ask again. After this, a
+    // newer backup only shows on the Restore circle.
+    private const val ASKED_FILE = "fariin_restore_asked"
+    @Volatile private var app: Context? = null
+    fun init(ctx: Context) { app = ctx.applicationContext }
+    fun answeredHere(uid: String): Boolean =
+        app?.getSharedPreferences(ASKED_FILE, 0)?.getBoolean(uid, false) == true
+    /** Restore, Skip, Not Now, or nothing found: this account is not asked again on this phone. */
+    fun markAnswered(uid: String) {
+        app?.getSharedPreferences(ASKED_FILE, 0)?.edit()?.putBoolean(uid, true)?.apply()
+    }
 
     /** True when a restore was offered and skipped and that backup still waits (no automatic backup then). */
     fun restoreWaiting(ctx: Context, uid: String): Boolean = !LocalDb.meta(uid, "restore.waiting").isNullOrEmpty()
@@ -220,6 +233,7 @@ object ChatBackup {
         if (!whole) return "Some chats couldn't be restored. Check your connection and tap Restore again."
         LocalDb.setMeta(uid, "restore.checked", found.made.toString())
         LocalDb.setMeta(uid, "restored", found.made.toString())
+        markAnswered(uid)
         LocalDb.setMeta(uid, "restore.waiting", "")
         // Media after messages and chats (both apps): the backup's media key becomes ours, then
         // each file goes where this app keeps opened media. A missing or bad one is skipped.

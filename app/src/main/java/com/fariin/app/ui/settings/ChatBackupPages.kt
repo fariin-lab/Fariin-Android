@@ -275,7 +275,7 @@ fun ChatBackupGate(me: String) {
     val c = Fariin.colors
     val db = com.fariin.app.local.LocalDb
     var step by remember { mutableStateOf(when {
-        db.meta(me, "restore.checked") == null && db.meta(me, "restored").isNullOrEmpty() && !db.hasSyncedMarks(me) -> "look"
+        ChatBackup.restoreQuestionOpen(me) -> "look"
         ChatBackup.frequency(ctx, me) == "off" && db.meta(me, "backup.asked") == null -> "card"
         else -> "" }) }
     var found by remember { mutableStateOf<ChatBackup.Found?>(null) }
@@ -297,7 +297,7 @@ fun ChatBackupGate(me: String) {
     suspend fun search(t: String) {
         token = t
         found = runCatching { ChatBackup.find(ctx, me, t) }.getOrNull()
-        if (found == null) { db.setMeta(me, "restore.checked", "none"); step = "card" } else step = "restore"
+        if (found == null) { db.setMeta(me, "restore.checked", "none"); ChatBackup.markAnswered(me); step = "card" } else step = "restore"
     }
     val google = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
         val t = (ctx as? android.app.Activity)?.let { Drive.tokenFrom(it, res.data) }
@@ -314,7 +314,7 @@ fun ChatBackupGate(me: String) {
                     Drive.Auth.Failed -> { db.setMeta(me, "restore.checked", "failed"); step = "card" }
                 }
             } }) { Text("Continue", color = c.accent) } },
-            dismissButton = { TextButton({ db.setMeta(me, "restore.checked", "skipped"); step = "card" }) { Text("Not Now", color = c.accent) } },
+            dismissButton = { TextButton({ db.setMeta(me, "restore.checked", "skipped"); ChatBackup.markAnswered(me); step = "card" }) { Text("Not Now", color = c.accent) } },
             containerColor = c.card)
         "restore" -> found?.let { f ->
             GlassAlert(onDismissRequest = {},
@@ -339,7 +339,7 @@ fun ChatBackupGate(me: String) {
                 }) { Text("Restore", color = c.accent) } },
                 dismissButton = { TextButton({
                     // Skipped: the restore still waits (no automatic backup over it) and stays offered.
-                    db.setMeta(me, "restore.checked", f.made.toString()); db.setMeta(me, "restore.waiting", f.made.toString())
+                    db.setMeta(me, "restore.checked", f.made.toString()); ChatBackup.markAnswered(me); db.setMeta(me, "restore.waiting", f.made.toString())
                     step = "card"
                 }) { Text("Skip", color = c.accent) } },
                 containerColor = c.card)

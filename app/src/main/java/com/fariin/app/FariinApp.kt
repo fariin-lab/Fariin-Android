@@ -89,6 +89,7 @@ class FariinApp : Application() {
             runCatching { com.fariin.app.data.HiddenMessages.load(this) }; runCatching { com.fariin.app.data.HiddenLast.load(this) } }, "prefs-prefetch").apply { isDaemon = true }.start() }, PREFS_PREFETCH_DELAY_MS)
         StartClock.mark("prefs+reactionart")
         com.fariin.app.ui.thread.DecodedPictures.init(this)
+        com.fariin.app.backup.ChatBackup.init(this)
         com.fariin.app.ui.thread.StickerLottie.init(this)
         android.os.Handler(mainLooper).postDelayed({ com.fariin.app.ui.thread.Emoji3DArt.preload(this) }, 4_000)
         StartClock.mark("stickers")

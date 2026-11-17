@@ -84,6 +84,7 @@ object ChatTransfer {
         if (!whole) return "Some chats couldn't be moved. Show a new code and try again."
         LocalDb.setMeta(uid, "restored", head.made.toString())
         LocalDb.setMeta(uid, "restore.checked", head.made.toString())
+        ChatBackup.markAnswered(uid)
         // Same order as the upload, header last: the old phone sees "Done" when its header is gone.
         for (n in listOf("manifest.bin") + names + "chats.bin" + "header.json") runCatching { dir.child(n).delete().await() }
         return null
