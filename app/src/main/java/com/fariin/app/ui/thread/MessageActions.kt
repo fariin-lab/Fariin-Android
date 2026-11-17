@@ -382,6 +382,8 @@ internal fun DeleteDialog(m: Message, ui: ThreadUi, actions: ThreadActions,
 /** Reactions under the bubble: a pill per emoji, up to three faces, else the count; mine tinted. */
 @Composable
 internal fun ReactionChips(m: Message, ui: ThreadUi, isMe: Boolean, onTap: (String) -> Unit) {
+    // Most rows have none: no watchers set up for them (two per row, every row of a chat's open).
+    if (m.reactions.isEmpty()) return
     val retired = rememberRetired()
     val chips = remember(m.reactions, ui.me, retired) { MessageRules.reactionChips(m.reactions, ui.me, retired) }
     if (chips.isEmpty()) return

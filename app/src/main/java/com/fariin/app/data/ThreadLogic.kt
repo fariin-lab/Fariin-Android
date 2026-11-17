@@ -112,8 +112,15 @@ object ThreadLogic {
     /** The bubble's time: "9:41 AM" or "09:41" with the phone's 24-hour setting. */
     fun timeLabel(millis: Double, is24h: Boolean, zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String {
         val t = Instant.ofEpochMilli(millis.toLong()).atZone(zone).toLocalTime()
-        return DateTimeFormatter.ofPattern(if (is24h) "HH:mm" else "h:mm a", locale).format(t)
+        return timeFormat(is24h, locale).format(t)
     }
+
+    /** The pattern read once per clock style and language, not once per bubble drawn. */
+    private fun timeFormat(is24h: Boolean, locale: Locale): DateTimeFormatter {
+        val key = (if (is24h) "24|" else "12|") + locale.toLanguageTag()
+        return timeFormats[key] ?: DateTimeFormatter.ofPattern(if (is24h) "HH:mm" else "h:mm a", locale).also { timeFormats[key] = it }
+    }
+    private val timeFormats = java.util.concurrent.ConcurrentHashMap<String, DateTimeFormatter>()
 }
 
 /**
