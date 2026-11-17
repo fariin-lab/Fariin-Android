@@ -481,6 +481,8 @@ class MainActivity : ComponentActivity() {
                         shape = com.fariin.app.ui.call.CallCardShape(26.dp.toPx() * cardT)
                         clip = true
                     } else Modifier)) {
+            // The chat page built once off screen after launch, so the first open is not its first build.
+            com.fariin.app.ui.thread.ThreadWarmUp(me)
             Box(Modifier.fillMaxSize()
                 // Nor while a page change plays (PageMotion.moving): a tap on the list then opened a
                 // second chat under the first one still sliding. Read at the touch, not in composition.
@@ -531,6 +533,11 @@ class MainActivity : ComponentActivity() {
     @Volatile private var started = false
 
     @Volatile private var openChat: String? = null
+
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        com.fariin.app.ui.thread.ThreadWarm.lastTouchMs = ev.eventTime
+        return super.dispatchTouchEvent(ev)
+    }
 
     override fun onStart() {
         super.onStart()

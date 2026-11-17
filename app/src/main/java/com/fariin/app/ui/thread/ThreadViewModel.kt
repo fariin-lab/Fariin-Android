@@ -49,6 +49,7 @@ class ThreadViewModel(cid: String, me: String, crypto: FariinCrypto, context: Co
 @Composable
 fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Unit) {
     val app = LocalContext.current.applicationContext
+    remember { ThreadWarm.done = true }   // a real chat is open: no warm-up after this (ThreadWarmUp)
     val vm: ThreadViewModel = viewModel(key = "thread-$cid") { ThreadViewModel(cid, me, crypto, app) }
     // Held while a page slides: each answer (server page, synced, pins) used to rebuild the whole
     // chat mid-slide, 4 to 6 times in the first second on a cheap phone; they land together after.
