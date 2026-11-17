@@ -146,7 +146,10 @@ fun MainShell(
     remember { com.fariin.app.data.BubbleStyles.init(context) }
     val power = rememberPowerState()
     val glass = power.glass()
-    var tab by rememberSaveable { mutableIntStateOf(TAB_CHATS) }
+    // Read only inside the tab row, the tabs and effects, never in this body: a tab change then
+    // does not run the whole shell again (its listeners, badges and the rest).
+    val tabState = rememberSaveable { mutableIntStateOf(TAB_CHATS) }
+    var tab by tabState
     val unread = unreadChatsBadge(chats.chats, me)
     // The call history, read here so the Calls tab's missed badge counts from any tab (iOS
     // MainShell callsRepo). Each chat's calls are re-read only when that chat moves.
@@ -173,11 +176,13 @@ fun MainShell(
     }
     var callsMark by remember { mutableStateOf(com.fariin.app.data.CallsSeen.load(context)) }
     // On the Calls tab every loaded missed call is seen (iOS markCallsSeen).
-    LaunchedEffect(tab, calls) {
-        val list = calls
-        if (tab == TAB_CALLS && list != null) {
-            val m = com.fariin.app.data.CallsSeen.seen(list, me, callsMark)
-            if (m != callsMark) { callsMark = m; com.fariin.app.data.CallsSeen.save(context, m) }
+    LaunchedEffect(calls) {
+        androidx.compose.runtime.snapshotFlow { tabState.intValue == TAB_CALLS }.collect { onCalls ->
+            val list = calls
+            if (onCalls && list != null) {
+                val m = com.fariin.app.data.CallsSeen.seen(list, me, callsMark)
+                if (m != callsMark) { callsMark = m; com.fariin.app.data.CallsSeen.save(context, m) }
+            }
         }
     }
     val missed = calls?.let { com.fariin.app.data.CallsSeen.count(it, me, callsMark) } ?: 0
@@ -254,7 +259,7 @@ fun MainShell(
         tab = t
     }
     // System back on another tab goes to Chats first, then leaves the app (Android tab apps).
-    BackHandler(enabled = tab != TAB_CHATS) { tab = TAB_CHATS }
+    BackToChats(tabState)
 
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val inset = BarHeight + BarMargin * 2 + navBottom
@@ -325,6 +330,12 @@ fun MainShell(
         // recording 2026-11-09). The story camera uses it.
         com.fariin.app.ui.components.TopOverlay.content?.invoke()
     }
+}
+
+/** System back on another tab goes to Chats first, then leaves the app (Android tab apps). */
+@Composable
+private fun BackToChats(tab: androidx.compose.runtime.MutableIntState) {
+    BackHandler(enabled = tab.intValue != TAB_CHATS) { tab.intValue = TAB_CHATS }
 }
 
 /**
