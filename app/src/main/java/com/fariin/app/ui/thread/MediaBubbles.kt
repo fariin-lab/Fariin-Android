@@ -201,7 +201,10 @@ internal fun rememberBitmap(file: File?, targetPx: Int, maxLongPx: Int = 0): Ima
     val key = file?.let { "${it.absolutePath}|${it.length()}|$targetPx|$maxLongPx" }
     val exact = key?.let { DecodedPictures.of(lowRam).get(it) }
     val v by produceState(initialValue = exact ?: file?.let { if (maxLongPx == 0) DecodedPictures.byFile.get(it.absolutePath) else null }, file, targetPx) {
-        if (exact != null || file == null || key == null) return@produceState
+        // Keys changed (another file here): never keep the last file's picture on show.
+        if (exact != null) { value = exact; return@produceState }
+        if (file == null || key == null) { value = null; return@produceState }
+        DecodedPictures.byFile.get(file.absolutePath)?.takeIf { maxLongPx == 0 }?.let { value = it }
         value = withContext(Dispatchers.IO) {
             // Bubble-sized pictures only: the full-screen viewer (a view-once photo among them) is never kept.
             decodeSampled(file, targetPx, maxLongPx, lowRam)?.also {
@@ -255,7 +258,10 @@ private val Placeholders = android.util.LruCache<String, ImageBitmap>(96)
 internal fun rememberPlaceholder(thumb: String?, blurhash: String?): ImageBitmap? {
     val key = thumb ?: blurhash
     val v by produceState(initialValue = key?.let { Placeholders.get(it) }, thumb, blurhash) {
-        if (value != null || key == null) return@produceState
+        // Keys changed: this message's own placeholder, never the last one's.
+        if (key == null) { value = null; return@produceState }
+        Placeholders.get(key)?.let { value = it; return@produceState }
+        value = null
         value = withContext(Dispatchers.Default) { makePlaceholder(thumb, blurhash)?.also { Placeholders.put(key, it) } }
     }
     return v
