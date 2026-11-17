@@ -188,6 +188,7 @@ class ThreadRepository(
                 .filter { !HiddenMessages.isHidden(it.id) && !Disappearing.isExpired(it, now) }
             // A forward just sent here is in the first frame too, under the saved rows.
             val echoes = ForwardEchoes.of(cid).filter { e -> saved.none { it.rowId == e.rowId } }
+            savedRows = saved.associate { it.id to it.createdAtMillis.toLong() }
             if (saved.isNotEmpty() || echoes.isNotEmpty()) {
                 // Owner's Pixel 2026-11-09: a first open after launch slid in empty and the rows came
                 // a beat later, a second open was full at once. The saved rows now draw on the first
@@ -243,6 +244,27 @@ class ThreadRepository(
         startListeners()
     }
 
+    /** The saved rows the chat opened with (id to time), until the server's first answer checks them. */
+    @Volatile private var savedRows: Map<String, Long> = emptyMap()
+
+    /**
+     * Saved rows inside the newest page's span that the server no longer has (a message removed
+     * there, a send that never landed) leave the phone's copy (owner's Pixel 2026-11-17: a removed
+     * forward stayed in the saved copy of "believe" and drew on every open, then went). The same
+     * check the older pages already make.
+     */
+    private fun dropRemovedSaved(snap: com.google.firebase.firestore.QuerySnapshot) {
+        val rows = savedRows
+        if (rows.isEmpty()) return
+        savedRows = emptyMap()
+        val ids = snap.documents.mapTo(HashSet()) { it.id }
+        // A short page is the whole chat; a full one covers from its oldest row up.
+        val lo = if (snap.size() < PAGE_SIZE) Long.MIN_VALUE
+            else snap.documents.mapNotNull { it.getTimestamp("createdAt")?.toDate()?.time }.minOrNull() ?: return
+        val gone = rows.filter { (id, at) -> at >= lo && id !in ids }.keys
+        if (gone.isNotEmpty()) com.fariin.app.local.LocalDb.forget(me, cid, gone)
+    }
+
     private fun startListeners() {
         if (msgReg != null) return
         closed = false
@@ -268,6 +290,7 @@ class ThreadRepository(
                 // latency); everything else is folded into one redraw per interval.
                 val urgent = firstMsgAnswer || snap.documentChanges.any { it.document.getString("authorId") == me }
                 firstMsgAnswer = false
+                if (!snap.metadata.isFromCache) dropRemovedSaved(snap)
                 seeded = false
                 live = true
                 windowFromServer = !snap.metadata.isFromCache
