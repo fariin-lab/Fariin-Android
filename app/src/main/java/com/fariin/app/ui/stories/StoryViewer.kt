@@ -1627,7 +1627,7 @@ private fun ReplyBar(
     val focus = LocalFocusManager.current
     // The keyboard closed by Back or its own button: the field gives up focus too, or the react
     // bar stayed over a paused story with no keyboard (Pixel 2026-11-05).
-    val imeShown = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current) > 0
+    val imeShown by com.fariin.app.ui.components.rememberImeUp()
     var imeSeen by remember(story.id) { mutableStateOf(false) }
     LaunchedEffect(imeShown, focused) {
         if (imeShown) imeSeen = true

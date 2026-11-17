@@ -141,7 +141,7 @@ private fun PagerBody(
     // while the keyboard is up, so the pages never move with it (as the single editor).
     var bottomPx by remember { mutableIntStateOf(0) }
     var chromePx by remember { mutableIntStateOf(0) }
-    val imeUp = WindowInsets.ime.getBottom(density) > 0
+    val imeUp by com.fariin.app.ui.components.rememberImeUp()
     val ime = WindowInsets.ime
     val imeNow = { ime.getBottom(density) > 0 }
     val topDp = with(density) { WindowInsets.statusBars.getTop(this).toDp() } + (44 + 16).dp

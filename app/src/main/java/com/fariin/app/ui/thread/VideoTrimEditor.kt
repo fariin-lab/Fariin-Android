@@ -412,7 +412,7 @@ private fun VideoEditorBody(uri: Uri, caption: String, onCaption: (String) -> Un
     var hd by remember { mutableStateOf(com.fariin.app.media.SentQuality.high(ctx)) }
     var bottomPx by remember { mutableIntStateOf(0) }
     val ime = WindowInsets.ime
-    val imeUp = ime.getBottom(density) > 0
+    val imeUp by com.fariin.app.ui.components.rememberImeUp()
     val imeNow = { ime.getBottom(density) > 0 }
     LaunchedEffect(imeUp) { if (imeUp) s.pause() }
     val topDp = with(density) { WindowInsets.statusBars.getTop(this).toDp() } + (44 + 16).dp

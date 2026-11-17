@@ -192,7 +192,7 @@ private fun EditorBody(
     // bottom height is not taken while the keyboard is up, so the photo never moves with it.
     var box by remember { mutableStateOf(IntSize.Zero) }
     var bottomPx by remember { mutableIntStateOf(0) }
-    val imeUp = WindowInsets.ime.getBottom(density) > 0
+    val imeUp by com.fariin.app.ui.components.rememberImeUp()
     // Read at layout time, not from the last composition: the keyboard's first frame reaches the
     // layout (and takes the navigation bar padding with it) before a recomposition says it is up.
     val ime = WindowInsets.ime

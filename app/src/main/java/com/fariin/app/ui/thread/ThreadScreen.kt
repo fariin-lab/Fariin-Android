@@ -9,6 +9,7 @@ import com.fariin.app.ui.components.cachedVector
 import androidx.compose.material3.DropdownMenuItem
 import kotlinx.coroutines.tasks.await
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.offset
 import androidx.compose.ui.draw.clipToBounds
 import kotlinx.coroutines.flow.first
 import androidx.compose.foundation.layout.ime
@@ -1007,16 +1008,24 @@ private fun ThreadContent(
     // The keyboard's height now, kept for AttachKeyboard; while the attach sheet holds it, the chat
     // keeps that height under it (the extra padding fills what the closing keyboard gives back), and
     // glides back down when the sheet closes.
-    val imeNowPx = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current)
-    androidx.compose.runtime.SideEffect { AttachKeyboard.lastImePx = imeNowPx }
+    // Both read in the layout below, never here: the keyboard's height read in composition rebuilt this
+    // whole page on every frame of the keyboard sliding in and out (each frame of the inset animation
+    // on Android 11+; 2026-11-17 trace, ThreadContent's body ~13 ms a pass on the cheap emulator).
+    val imeInsets = androidx.compose.foundation.layout.WindowInsets.ime
     // The + sheet's photos, read once the chat has settled, so its first frame already has pictures.
     LaunchedEffect(Unit) { kotlinx.coroutines.delay(700); AttachWarm.warm(context) }
-    val heldAnim by androidx.compose.animation.core.animateIntAsState(AttachKeyboard.heldPx,
+    val heldAnim = androidx.compose.animation.core.animateIntAsState(AttachKeyboard.heldPx,
         androidx.compose.animation.core.tween(if (AttachKeyboard.heldPx > 0) 0 else 260), label = "attachHold")
-    val holdDp = with(androidx.compose.ui.platform.LocalDensity.current) { (heldAnim - imeNowPx).coerceAtLeast(0).toDp() }
     Column(Modifier.fillMaxSize().then(com.fariin.app.ui.components.chatWallpaperOf(ui.cid))
         .then(if (com.fariin.app.ui.components.SheetKeyboard.covering) Modifier else Modifier.imePadding())
-        .padding(bottom = holdDp)) {
+        // The extra room the attach sheet holds (its height less the keyboard now), as bottom padding.
+        .layout { m, c ->
+            val imeNow = imeInsets.getBottom(this)
+            AttachKeyboard.lastImePx = imeNow
+            val extra = (heldAnim.value - imeNow).coerceAtLeast(0)
+            val p = m.measure(c.offset(vertical = -extra))
+            layout(p.width, (p.height + extra).coerceIn(c.minHeight, c.maxHeight)) { p.place(0, 0) }
+        }) {
         OpenWhen(showPins) {
             // Pins found in the loaded page or fetched by id (iOS pinnedPreviews), oldest first.
             val all = com.fariin.app.data.PinRules.sheetOrder(pins) { id -> ui.messages.firstOrNull { it.id == id } ?: ui.pinned[id] }

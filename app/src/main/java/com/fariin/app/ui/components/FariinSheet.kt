@@ -237,8 +237,7 @@ fun FariinSheetDialog(motion: SheetMotion, handle: Boolean = false, fill: Color?
         SheetDialogWindow(Fariin.colors.dark, typing)
         // The keyboard, if up, goes down before the sheet closes (SheetMotion.close).
         val sheetView = androidx.compose.ui.platform.LocalView.current
-        val imeUp = androidx.compose.runtime.rememberUpdatedState(
-            androidx.compose.foundation.layout.WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current) > 0)
+        val imeUp = rememberImeUp()
         SideEffect {
             motion.keyboardFirst = {
                 if (imeUp.value) {
