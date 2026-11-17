@@ -97,8 +97,9 @@ import java.util.Locale
 @Composable
 fun CallsTab(me: String, conversations: List<Conversation>, demoCalls: List<CallEntry>?, shared: List<CallEntry>? = null,
              error: String? = null, onRetry: () -> Unit = {},
-             /** False while another tab is open (MainShell keeps this one alive behind it). */
-             active: Boolean = true) {
+             /** False while another tab is open (MainShell keeps this one alive behind it). Read only in
+              *  the small scopes below, so a tab change does not rebuild the whole Calls tab. */
+             active: androidx.compose.runtime.State<Boolean> = CallsAlwaysOn) {
     // The shell already reads the history for the missed badge: shown as is, not read twice.
     if (demoCalls == null && shared != null) { CallsScreen(me, shared, true, conversations, error, onRetry, active); return }
     val repo = remember { CallsRepository() }
@@ -159,7 +160,7 @@ internal object CallsLive {
 
 @Composable
 private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, groups: List<Conversation> = emptyList(),
-                        error: String? = null, onRetry: () -> Unit = {}, active: Boolean = true) {
+                        error: String? = null, onRetry: () -> Unit = {}, active: androidx.compose.runtime.State<Boolean> = CallsAlwaysOn) {
     val c = Fariin.colors
     var missedOnly by rememberSaveable { mutableStateOf(false) }
     var search by rememberSaveable { mutableStateOf("") }
@@ -170,8 +171,8 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
     // row a new time, so any small change rebuilt the whole list, even hidden behind a chat
     // (sampled on the Pixel as a mid-range phone, 2026-11-10).
     var now by remember { androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(active, calls) {
-        if (active) { now = System.currentTimeMillis(); while (true) { kotlinx.coroutines.delay(60_000); now = System.currentTimeMillis() } }
+    WhileOpen(active, calls) { on ->
+        if (on) { now = System.currentTimeMillis(); while (true) { kotlinx.coroutines.delay(60_000); now = System.currentTimeMillis() } }
     }
     val ctx = LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -216,10 +217,10 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
     }
     // iOS LiveGroupCalls: the calls going in my groups, above the history (not under Missed or a search).
     val groupKey = remember(groups) { groups.filter { it.isGroup }.joinToString(",") { it.id } }
-    LaunchedEffect(groupKey, active) { if (active) com.fariin.app.ui.call.LiveGroupCalls.sync(groups) }
+    WhileOpen(active, groupKey) { on -> if (on) com.fariin.app.ui.call.LiveGroupCalls.sync(groups) }
     // Up to 40 group-call listeners, only while this tab is shown (battery audit 2026-11-05): the
     // tab stays alive behind the others now, so they stop when it is hidden, not only when it goes.
-    androidx.compose.runtime.DisposableEffect(active) { onDispose { com.fariin.app.ui.call.LiveGroupCalls.stopAll() } }
+    StopGroupCallsOnChange(active)
     val liveAll by com.fariin.app.ui.call.LiveGroupCalls.calls.collectAsState()
     val live = if (missedOnly || q.isNotEmpty()) emptyList() else liveAll
     // Select mode (iOS edit mode): run ids (a run's newest call) and "link:<roomId>" for links.
@@ -231,8 +232,8 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
     var pendingCall by remember { mutableStateOf<Pair<CallEntry, Boolean>?>(null) }
     fun leaveSelect() { selecting = false; picked = emptySet() }
     // Hidden behind another tab, its dialogs (windows of their own) close, as when the tab went.
-    LaunchedEffect(active) { if (!active) { askDelete = false; linkFailed = false; pendingCall = null } }
-    androidx.activity.compose.BackHandler(enabled = active && selecting) { leaveSelect() }
+    WhileOpen(active, Unit) { on -> if (!on) { askDelete = false; linkFailed = false; pendingCall = null } }
+    BackWhileOpen(active, selecting) { leaveSelect() }
     fun toggle(id: String) { picked = if (id in picked) picked - id else picked + id }
     fun deletePicked() {
         val ids = mutableSetOf<String>()
@@ -657,4 +658,25 @@ internal fun callTimeLabel(ms: Long, is24h: Boolean, nowMs: Long = System.curren
         days < 7 -> SimpleDateFormat("EEEE", loc).format(Date(ms))
         else -> SimpleDateFormat("MMM d", loc).format(Date(ms))
     }
+}
+
+private val CallsAlwaysOn: androidx.compose.runtime.State<Boolean> = androidx.compose.runtime.mutableStateOf(true)
+
+/** [block] runs again whenever [key] or the tab's open state changes, with whether it is open. */
+@Composable
+private fun WhileOpen(active: androidx.compose.runtime.State<Boolean>, key: Any?, block: suspend kotlinx.coroutines.CoroutineScope.(Boolean) -> Unit) {
+    val on = active.value
+    LaunchedEffect(key, on) { block(on) }
+}
+
+/** The live group-call watchers stop each time the tab opens or closes (they start again on open). */
+@Composable
+private fun StopGroupCallsOnChange(active: androidx.compose.runtime.State<Boolean>) {
+    val on = active.value
+    androidx.compose.runtime.DisposableEffect(on) { onDispose { com.fariin.app.ui.call.LiveGroupCalls.stopAll() } }
+}
+
+@Composable
+private fun BackWhileOpen(active: androidx.compose.runtime.State<Boolean>, enabled: Boolean, onBack: () -> Unit) {
+    androidx.activity.compose.BackHandler(enabled = active.value && enabled, onBack = onBack)
 }

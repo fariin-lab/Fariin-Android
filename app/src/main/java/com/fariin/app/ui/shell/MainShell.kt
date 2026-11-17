@@ -278,26 +278,30 @@ fun MainShell(
                 // 65 ms frame on the Pixel 5; Stories, Calls or Settings about 210 ms on the low-end
                 // phone). Four tabs at most, so the memory is bounded. See [KeptTab].
                 KeptTab(TAB_CHATS, tab, reselect[TAB_CHATS]) { shown ->
+                    val listActive = androidx.compose.runtime.rememberUpdatedState(shown)
                     ChatListScreen(chats, me, decryptor, stories = stories, onRetry = onRetryChats,
                         onSettings = { select(TAB_SETTINGS) },
                         onNewStory = { storyRequest++; select(TAB_STORIES) },
-                        active = shown)
+                        active = listActive)
                 }
                 KeptTab(TAB_STORIES, tab, reselect[TAB_STORIES]) { shown ->
+                    val storiesActive = androidx.compose.runtime.rememberUpdatedState(shown)
                     StoriesTab(me, heldWhileHidden(shown, chats.chats), if (demo) DemoSettings.stories() else null, storyRequest,
                         shared = if (demo) null else heldWhileHidden(shown, stories),
-                        active = shown)
+                        active = storiesActive)
                 }
                 // The calls list scrolls under the bar and lifts its New Call button by the inset.
                 KeptTab(TAB_CALLS, tab, reselect[TAB_CALLS]) { shown ->
+                    val callsActive = androidx.compose.runtime.rememberUpdatedState(shown)
                     CallsTab(me, heldWhileHidden(shown, chats.chats), if (demo) DemoSettings.calls() else null,
                         shared = heldWhileHidden(shown, calls),
-                        error = callsError, onRetry = { callsRetry++ }, active = shown)
+                        error = callsError, onRetry = { callsRetry++ }, active = callsActive)
                 }
                 // My Profile (Settings) reads the same feed for its Posted stories card.
                 KeptTab(TAB_SETTINGS, tab, reselect[TAB_SETTINGS]) { shown ->
+                    val settingsActive = androidx.compose.runtime.rememberUpdatedState(shown)
                     com.fariin.app.ui.glow.ProvideMyStories(heldWhileHidden(shown, stories), heldWhileHidden(shown, chats.chats)) {
-                        SettingsTab(me, if (demo) DemoSettings.profile else null, onSignOut, active = shown)
+                        SettingsTab(me, if (demo) DemoSettings.profile else null, onSignOut, active = settingsActive)
                     }
                 }
             }

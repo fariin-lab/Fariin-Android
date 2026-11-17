@@ -90,8 +90,9 @@ import com.fariin.app.ui.theme.Fariin
  */
 @Composable
 fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit,
-                /** False while another tab is open (MainShell keeps this one alive behind it). */
-                active: Boolean = true) {
+                /** False while another tab is open (MainShell keeps this one alive behind it). Read only
+                 *  by [TabSideEffects], so a tab change does not rebuild the whole Settings tab. */
+                active: androidx.compose.runtime.State<Boolean> = AlwaysOn) {
     val profile = if (demoProfile != null) {
         demoProfile
     } else {
@@ -103,7 +104,6 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit,
     var stack by rememberSaveable { mutableStateOf(listOf<String>()) }
     val push: (String) -> Unit = { stack = stack + it }
     val pop: () -> Unit = { stack = stack.dropLast(1) }
-    BackHandler(enabled = active && stack.isNotEmpty(), onBack = pop)
     // A page asked for from outside Settings (the chat list's Things you can do > Chat color).
     val asked by SettingsLink.requests.collectAsState()
     LaunchedEffect(asked) { asked?.let { stack = listOf(it); SettingsLink.requests.value = null } }
@@ -116,10 +116,7 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit,
     val page = stack.lastOrNull()
     // A Settings page hides the tab bar, the home list shows it (iOS).
     // Hidden behind another tab, it leaves the bar alone.
-    androidx.compose.runtime.DisposableEffect(page == null, active) {
-        if (active) com.fariin.app.ui.shell.TabBarVisibility.hidden = page != null
-        onDispose { com.fariin.app.ui.shell.TabBarVisibility.hidden = false }
-    }
+    TabSideEffects(active, stack.isNotEmpty(), page == null, pop)
     // The grey page under the white section cards (iOS grouped background).
     Box(Modifier.fillMaxSize().background(Fariin.colors.bgSecondary)) {
       // Pages move as the chats do (Motion): the iOS push, solid pages, parallax underneath.
@@ -606,4 +603,17 @@ private fun UsernamePage(me: String, profile: MyProfile?, pop: () -> Unit) {
 object SettingsLink {
     val requests = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     fun request(page: String) { requests.value = page }
+}
+
+private val AlwaysOn: androidx.compose.runtime.State<Boolean> = androidx.compose.runtime.mutableStateOf(true)
+
+/** Back pops a page, and a page hides the tab bar, only while this tab is the open one. */
+@Composable
+private fun TabSideEffects(active: androidx.compose.runtime.State<Boolean>, hasPages: Boolean, home: Boolean, pop: () -> Unit) {
+    val on = active.value
+    BackHandler(enabled = on && hasPages, onBack = pop)
+    androidx.compose.runtime.DisposableEffect(home, on) {
+        if (on) com.fariin.app.ui.shell.TabBarVisibility.hidden = !home
+        onDispose { com.fariin.app.ui.shell.TabBarVisibility.hidden = false }
+    }
 }

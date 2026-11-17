@@ -146,8 +146,9 @@ fun ChatListScreen(
     onSettings: () -> Unit = {},
     onNewStory: () -> Unit = {},
     stories: com.fariin.app.data.StoriesState = com.fariin.app.data.StoriesState(),
-    /** False while another tab shows: the list stays alive behind it, its Back handlers off. */
-    active: Boolean = true,
+    /** False while another tab shows: the list stays alive behind it, its Back handlers off. Read
+     *  only by those handlers, so a tab change no longer rebuilds the whole list screen. */
+    active: androidx.compose.runtime.State<Boolean> = AlwaysActive,
     /** Retry on the error page: the list listens again. */
     onRetry: () -> Unit = {},
 ) {
@@ -234,9 +235,10 @@ fun ChatListScreen(
     val linkLabel = com.fariin.app.data.ConnectionStatus.label(link)
 
     // System back peels one layer at a time: selection, then search, then the archive page.
-    BackHandler(enabled = active && selecting) { selected = emptySet(); selectMode = false }
-    BackHandler(enabled = active && !selecting && searching) { searching = false; query = "" }
-    BackHandler(enabled = active && !selecting && !searching && showArchive) { showArchive = false }
+    PeelBack(active, selecting, searching, showArchive,
+        clearSelection = { selected = emptySet(); selectMode = false },
+        closeSearch = { searching = false; query = "" },
+        closeArchive = { showArchive = false })
 
     val source = if (showArchive) state.archived else state.chats
     // Kept until the list, the filter or the page changes: these were rebuilt on every recomposition
@@ -1620,4 +1622,16 @@ private fun ActivityChatRow(s: com.fariin.app.data.ActivitySummary, muted: Boole
             }
         }
     }
+}
+
+private val AlwaysActive: androidx.compose.runtime.State<Boolean> = androidx.compose.runtime.mutableStateOf(true)
+
+/** The list's Back handlers, in their own scope: [active] flips on every tab change. */
+@Composable
+private fun PeelBack(active: androidx.compose.runtime.State<Boolean>, selecting: Boolean, searching: Boolean, showArchive: Boolean,
+                     clearSelection: () -> Unit, closeSearch: () -> Unit, closeArchive: () -> Unit) {
+    val on = active.value
+    BackHandler(enabled = on && selecting, onBack = clearSelection)
+    BackHandler(enabled = on && !selecting && searching, onBack = closeSearch)
+    BackHandler(enabled = on && !selecting && !searching && showArchive, onBack = closeArchive)
 }

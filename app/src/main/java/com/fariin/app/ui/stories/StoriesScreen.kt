@@ -98,8 +98,9 @@ import kotlinx.coroutines.delay
  */
 @Composable
 fun StoriesTab(me: String, conversations: List<Conversation>, demo: Pair<MyProfile, StoriesState>?, addRequest: Int = 0, shared: StoriesState? = null,
-               /** False while another tab is open (MainShell keeps this one alive behind it). */
-               active: Boolean = true) {
+               /** False while another tab is open (MainShell keeps this one alive behind it). Read only in
+                *  small scopes ([WhileShown]), so a tab change does not rebuild the whole Stories tab. */
+               active: androidx.compose.runtime.State<Boolean> = StoriesAlwaysOn) {
     val state: StoriesState
     val profile: MyProfile?
     if (demo != null) {
@@ -129,7 +130,7 @@ private fun <T> kotlinx.coroutines.flow.Flow<T>.collectFlow(initial: T): T {
 }
 
 @Composable
-private fun StoriesScreen(me: String, conversations: List<Conversation>, profile: MyProfile?, state: StoriesState, live: Boolean, addRequest: Int, active: Boolean = true) {
+private fun StoriesScreen(me: String, conversations: List<Conversation>, profile: MyProfile?, state: StoriesState, live: Boolean, addRequest: Int, active: androidx.compose.runtime.State<Boolean> = StoriesAlwaysOn) {
     val c = Fariin.colors
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -187,7 +188,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     // when the tab shows; it fails open, and the rules are what hold the line.
     val limits = com.fariin.app.data.StoryLimits
     LaunchedEffect(profile?.verified) { limits.verified = profile?.verified == true }
-    LaunchedEffect(me, live, active) { if (live && active) limits.refresh(me) }
+    WhileShown(active, me, live) { on -> if (live && on) limits.refresh(me) }
     val addStory: () -> Unit = {
         if (live) {
             if (limits.dailyReached()) {
@@ -215,7 +216,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     LaunchedEffect(pickError) { if (pickError != null) { delay(3000); pickError = null } }
     // "Xm ago" moves once a minute.
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(active) { if (active) { now = System.currentTimeMillis(); while (true) { delay(60_000); now = System.currentTimeMillis() } } }
+    WhileShown(active) { on -> if (on) { now = System.currentTimeMillis(); while (true) { delay(60_000); now = System.currentTimeMillis() } } }
     var viewedCollapsed by rememberSaveable { mutableStateOf(false) }
     var hiddenCollapsed by rememberSaveable { mutableStateOf(false) }
     var posted by rememberSaveable { mutableStateOf(false) }
@@ -279,8 +280,8 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     // The tab stays alive behind the others (MainShell), but its pages are windows of their own and
     // would stay on screen over the open tab: they close when it is hidden, as they did when the
     // whole tab went.
-    LaunchedEffect(active) {
-        if (!active) {
+    WhileShown(active) { on ->
+        if (!on) {
             viewing = null; camera = false; library = false; post.clear(); composingText = false; posted = false; tooLong = false; dayLimit = false
             addMore = false; libraryFlight = null
             privacyPages.clear(); glowPage = false; glowNotifs = false; hideTarget = null; moreOpen = false
@@ -577,7 +578,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     }
     // A failed post says so (iOS "Couldn't post story"): Try Again while its ticket waits on disk,
     // which is also retried by itself when the connection comes back (MainShell).
-    (upload as? StoryUploads.State.Failed)?.takeIf { live && active }?.let { f ->
+    (upload as? StoryUploads.State.Failed)?.takeIf { live && active.value }?.let { f ->
         val waiting = remember(f) { com.fariin.app.data.StoryOutbox.hasWaiting(context, me) }
         val dismiss = { StoryUploads.state.value = null }
         com.fariin.app.ui.components.GlassAlert(
@@ -868,3 +869,13 @@ private fun demoColor(url: String): Color =
 
 /** The last New Story press (chat list button, launcher shortcut) the Stories tab acted on. */
 private object AddRequests { var handled = 0 }
+
+private val StoriesAlwaysOn: androidx.compose.runtime.State<Boolean> = androidx.compose.runtime.mutableStateOf(true)
+
+/** [block] runs again whenever [keys] or the tab's open state changes, with whether it is open. Its
+ *  own scope: only this rebuilds when the tab opens or closes. */
+@Composable
+private fun WhileShown(active: androidx.compose.runtime.State<Boolean>, vararg keys: Any?, block: suspend kotlinx.coroutines.CoroutineScope.(Boolean) -> Unit) {
+    val on = active.value
+    LaunchedEffect(keys = arrayOf(*keys, on)) { block(on) }
+}
