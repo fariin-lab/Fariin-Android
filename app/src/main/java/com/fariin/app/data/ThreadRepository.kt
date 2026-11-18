@@ -2454,7 +2454,7 @@ class ThreadRepository(
         val TOMBSTONE_STRIP = listOf("imageUrl", "videoUrl", "thumbUrl", "audioUrl", "fileUrl", "album",
             "fileName", "fileSize", "waveform", "duration", "blurhash", "linkPreview", "poll", "locationCard",
             "contactCard", "replyTo", "reactions", "videoEnc", "thumbEnc", "viewOnce", "mentions", "forwarded",
-            "fwdChannel", "fwd", "thumb", "edits", "editedAt", "quote", "bs", "bsd", "fmt")   // bs/bsd: the rules refuse a tombstone keeping a bubble style (iOS b189891b)
+            "fwdChannel", "fwd", "thumb", "edits", "editedAt", "quote", "bs", "bsd", "fmt", "origin", "fileNameEnc")   // bs/bsd: the rules refuse a tombstone keeping a bubble style (iOS b189891b)
     }
 }
 
