@@ -27,6 +27,9 @@ import kotlinx.coroutines.withTimeoutOrNull
  * or for a short quiet spell: only after [SETTLE_MS] of answers from the phone's copy alone, and
  * then one server read decides (a quiet chat list is not a broken one).
  */
+/** A server step refused at once because the phone has no network; its message is the sentence to show. */
+class Offline : Exception("You're offline. Try again when you're connected.")
+
 object ConnectionStatus {
     enum class State { ONLINE, WAITING_FOR_NETWORK, CONNECTING }
 
@@ -55,6 +58,12 @@ object ConnectionStatus {
 
     private val _state = MutableStateFlow(State.ONLINE)
     val state: StateFlow<State> = _state
+
+    /** No network route at all: a server step is refused at once instead of spinning (iOS loading audit). */
+    val offline: Boolean get() = _state.value == State.WAITING_FOR_NETWORK
+
+    /** Throws [Offline] when there is no network, before a server step a person waits on. */
+    fun requireOnline() { if (offline) throw Offline() }
 
     private val scope by lazy { CoroutineScope(SupervisorJob() + Dispatchers.Main) }
     @Volatile private var hasRoute = true

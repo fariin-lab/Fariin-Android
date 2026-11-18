@@ -79,6 +79,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
+/** New Channel's best-effort writes after Next (description, reactions, photo): not tied to the page. */
+private val newChannelScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main.immediate)
+
 /**
  * FIND CHANNELS (Kulan-iOS DiscoverChannelsView): public channels in the server's ranked order,
  * the official one ("Fariin News", @fariin, verified) first with its "Official" mark, then this
@@ -367,6 +370,8 @@ fun NewChannelScreen(me: String, onBack: () -> Unit, onDone: (String) -> Unit) {
     var photo by remember { mutableStateOf<ByteArray?>(null) }
     val scope = rememberCoroutineScope()
     val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    // The owned-groups check starts as the page opens, so Next does not wait for it (iOS loading audit).
+    LaunchedEffect(Unit) { com.fariin.app.data.AppLimits.askOwnedGroupsAhead() }
     val picker = com.fariin.app.ui.photo.rememberCirclePhotoPicker { photo = it }
     if (picker.pending != null) { picker.Host("Channel photo", "Shown in chats and on the channel page"); return }
     // The phone's Back on the form goes to the intro, as the bar's arrow does (owner 2026-11-09: it
@@ -391,18 +396,28 @@ fun NewChannelScreen(me: String, onBack: () -> Unit, onDone: (String) -> Unit) {
                     if (!ChannelService.makeChannelWithRetry(id)) { error = "Could not create the channel. Try again."; creating = false; return@launch }
                     halfMade = null
                     // The rest is best-effort: the channel stands without it, but the user is told what is missing.
-                    val missed = mutableListOf<String>()
-                    try { ChannelService.setDescription(id, about) } catch (_: Exception) { if (about.isNotBlank()) missed += "description" }
-                    // Reactions start ON with the default set (iOS 2dc585e8, owner 2026-11-07), the page's switch.
-                    try { com.fariin.app.data.ChannelReactions.save(id, "some", com.fariin.app.data.ChannelReactions.defaultSet) }
-                    catch (e: Exception) { android.util.Log.w("NewChannel", "default reactions not saved", e); missed += "reactions" }
+                    // Only the invite link is waited for (the next page shows it). Description, reactions
+                    // and photo save side by side after Next (iOS loading audit 2026-11-17).
+                    val missed = java.util.Collections.synchronizedList(mutableListOf<String>())
+                    val ph = photo; val desc = about
+                    val rest = newChannelScope.launch {
+                        kotlinx.coroutines.coroutineScope {
+                            launch { try { ChannelService.setDescription(id, desc) } catch (_: Exception) { if (desc.isNotBlank()) missed += "description" } }
+                            // Reactions start ON with the default set (iOS 2dc585e8, owner 2026-11-07), the page's switch.
+                            launch { try { com.fariin.app.data.ChannelReactions.save(id, "some", com.fariin.app.data.ChannelReactions.defaultSet) }
+                                catch (e: Exception) { android.util.Log.w("NewChannel", "default reactions not saved", e); missed += "reactions" } }
+                            if (ph != null) launch { try { com.fariin.app.data.FirestorePeople(me, com.fariin.app.data.CryptoHub.get(appCtx)).setGroupPhoto(id, ph) } catch (_: Exception) { missed += "photo" } }
+                        }
+                    }
                     try { ChannelService.createPrimaryLink(id) } catch (_: Exception) { missed += "invite link" }
-                    photo?.let { ph -> try { com.fariin.app.data.FirestorePeople(me, com.fariin.app.data.CryptoHub.get(appCtx)).setGroupPhoto(id, ph) } catch (_: Exception) { missed += "photo" } }
                     cid = id; creating = false; step = 2
-                    if (missed.isNotEmpty()) {
-                        val what = when (missed.size) { 1 -> "the ${missed[0]}"; 2 -> "the ${missed[0]} and ${missed[1]}"; else -> "the " + missed.dropLast(1).joinToString(", ") + " and ${missed.last()}" }
-                        val them = if (missed.size == 1) "it" else "them"
-                        com.fariin.app.ui.components.Snack.show("Channel created, but $what couldn't be saved. Add $them in channel settings.", long = true)
+                    newChannelScope.launch {
+                        rest.join()
+                        if (missed.isNotEmpty()) {
+                            val what = when (missed.size) { 1 -> "the ${missed[0]}"; 2 -> "the ${missed[0]} and ${missed[1]}"; else -> "the " + missed.dropLast(1).joinToString(", ") + " and ${missed.last()}" }
+                            val them = if (missed.size == 1) "it" else "them"
+                            com.fariin.app.ui.components.Snack.show("Channel created, but $what couldn't be saved. Add $them in channel settings.", long = true)
+                        }
                     }
                 } catch (_: Exception) { error = "Could not create the channel. Try again."; creating = false }
             }

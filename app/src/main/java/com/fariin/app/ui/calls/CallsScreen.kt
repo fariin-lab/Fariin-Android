@@ -167,6 +167,8 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     // A second tap on Calls: to the top.
     com.fariin.app.ui.shell.OnTabReselect { listState.animateScrollToItem(0) }
+    // Calls in view: a call link is made ahead, so Create a Call Link shows it at once (iOS loading audit).
+    LaunchedEffect(active.value) { if (active.value) com.fariin.app.call.CallLinks.makeAhead() }
     // One clock a minute while the tab is open (as Stories). Read fresh on every pass, it gave every
     // row a new time, so any small change rebuilt the whole list, even hidden behind a chat
     // (sampled on the Pixel as a mid-range phone, 2026-11-10).

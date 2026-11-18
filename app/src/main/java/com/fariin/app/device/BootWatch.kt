@@ -15,7 +15,7 @@ object BootWatch {
     const val SERVER_READ_MS = 5_000L
     const val CACHE_READ_MS = 1_500L
     /** Each server step of Log Out (offline, a Firestore write never answers). */
-    const val SIGN_OUT_STEP_MS = 4_000L
+    const val SIGN_OUT_STEP_MS = 3_500L
 
     /** [read] with a limit: null for no answer in time or an error. A real cancel still cancels. */
     suspend fun <T> capped(ms: Long, read: suspend () -> T): T? = withTimeoutOrNull(ms) {

@@ -74,7 +74,7 @@ object Passkeys {
     private val fn get() = FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION)
 
     private suspend fun call(name: String, data: Map<String, Any?> = emptyMap()): Map<*, *> =
-        fn.getHttpsCallable(name).call(data).await().getData() as? Map<*, *> ?: emptyMap<String, Any>()
+        fn.getHttpsCallable(name).withTimeout(20, java.util.concurrent.TimeUnit.SECONDS).call(data).await().getData() as? Map<*, *> ?: emptyMap<String, Any>()
 
     /**
      * The server's challenge, asked for when the Passkeys page opens so Add shows the phone's sheet at

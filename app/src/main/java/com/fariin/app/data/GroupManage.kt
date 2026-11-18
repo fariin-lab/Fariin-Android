@@ -28,11 +28,22 @@ object GroupManage {
     private val me get() = com.fariin.app.Fb.auth.currentUser?.uid ?: ""
     private fun conv(cid: String) = db.collection("conversations").document(cid)
 
+    /**
+     * A member-card or admin action (iOS loading audit 2026-11-17): refused at once offline, and
+     * 15 s at most, never Firestore's endless wait for a server that is not there.
+     */
+    private suspend fun memberStep(work: suspend () -> Unit) {
+        ConnectionStatus.requireOnline()
+        kotlinx.coroutines.withTimeoutOrNull(15_000) { work(); true }
+            ?: throw IllegalStateException("No answer from the server. Try again.")
+    }
+
     private suspend fun call(name: String, data: Map<String, Any?>, seconds: Long = 20): Map<*, *>? =
         fn.getHttpsCallable(name).withTimeout(seconds, TimeUnit.SECONDS).call(data).await().getData() as? Map<*, *>
 
     /** GroupInviteService.errorText: the server's sentence when it is one to act on, else the fallback. */
     fun errorText(e: Exception, fallback: String): String {
+        if (e is Offline) return e.message ?: fallback
         val f = e as? FirebaseFunctionsException ?: return fallback
         val told = setOf(FirebaseFunctionsException.Code.INVALID_ARGUMENT, FirebaseFunctionsException.Code.PERMISSION_DENIED,
             FirebaseFunctionsException.Code.NOT_FOUND, FirebaseFunctionsException.Code.FAILED_PRECONDITION,
@@ -81,7 +92,7 @@ object GroupManage {
     // ---- Admins --------------------------------------------------------------------------------
 
     /** promoteGroupAdmin: no chat line (iOS 2026-10-23); restrictions cleared only by who may lift them. */
-    suspend fun promote(cid: String, uid: String, rights: List<String>, team: GroupAdmins.Team) {
+    suspend fun promote(cid: String, uid: String, rights: List<String>, team: GroupAdmins.Team): Unit = memberStep {
         // The admin panel's ceiling (getAppConfig groupAdminsMax, 20 shipped); the owner is not counted.
         val max = AppConfig.int(AppConfig.K.groupAdminsMax)
         if (max > 0 && uid !in team.admins && team.admins.count { it != team.owner } >= max)   // 0 = no limit
@@ -101,7 +112,7 @@ object GroupManage {
     }
 
     /** demoteGroupAdmin. */
-    suspend fun demote(cid: String, uid: String) {
+    suspend fun demote(cid: String, uid: String): Unit = memberStep {
         conv(cid).update(mapOf(
             "admins" to FieldValue.arrayRemove(uid),
             "adminRights.$uid" to FieldValue.delete(),
@@ -112,7 +123,7 @@ object GroupManage {
     }
 
     /** setAdminRights. */
-    suspend fun setRights(cid: String, uid: String, rights: List<String>) {
+    suspend fun setRights(cid: String, uid: String, rights: List<String>): Unit = memberStep {
         conv(cid).update(mapOf(
             "adminRights.$uid" to rights,
             "adminEdit" to mapOf("uid" to uid, "by" to me),
@@ -125,7 +136,7 @@ object GroupManage {
      * until they are added again), their admin and restriction state gone; the "<me> removed X"
      * line only when the message rule would take mine.
      */
-    suspend fun removeMember(cid: String, uid: String, name: String) {
+    suspend fun removeMember(cid: String, uid: String, name: String): Unit = memberStep {
         val ref = conv(cid)
         val d = ref.get().await().data ?: emptyMap()
         val mod = (d["mod"] as? Map<*, *>)?.get("state") as? String ?: "ok"
@@ -160,7 +171,7 @@ object GroupManage {
      * deleted when [flags] is empty or [until] is not ahead. The rules: the Remove members right,
      * and never for the owner or an admin. The chat line is best effort, as iOS's `try?`.
      */
-    suspend fun restrictMember(cid: String, uid: String, name: String, flags: List<String>, until: Double) {
+    suspend fun restrictMember(cid: String, uid: String, name: String, flags: List<String>, until: Double): Unit = memberStep {
         val lift = flags.isEmpty() || until <= System.currentTimeMillis()
         conv(cid).update(if (lift) mapOf(
             "restrictedFlags.$uid" to FieldValue.delete(),
@@ -284,8 +295,10 @@ object GroupManage {
     suspend fun createLink(cid: String, options: Map<String, Any?>): GroupLink =
         linkOf(call("createGroupLink", options + ("cid" to cid)))
 
-    suspend fun editLink(cid: String, code: String, changes: Map<String, Any?>): GroupLink =
-        linkOf(call("editGroupLink", changes + mapOf("cid" to cid, "code" to code)))
+    suspend fun editLink(cid: String, code: String, changes: Map<String, Any?>): GroupLink {
+        ConnectionStatus.requireOnline()
+        return linkOf(call("editGroupLink", changes + mapOf("cid" to cid, "code" to code), seconds = 15))
+    }
 
     suspend fun revokeLink(cid: String, code: String): GroupLink = linkOf(call("revokeGroupLink", mapOf("cid" to cid, "code" to code)))
 

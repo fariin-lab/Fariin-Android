@@ -96,6 +96,10 @@ interface PeopleApi {
     /** `usernameChangeStatus`: may I rename now? null when the server could not say (then nothing is blocked). */
     suspend fun usernameChangeStatus(): UsernameChangeStatus? = null
     suspend fun saveName(name: String)
+    /** The part of a name change the server can refuse (a name posing as a company); throws with the words. */
+    suspend fun checkName(name: String) {}
+    /** The name write alone, after [checkName]; Edit Profile closes before it lands. */
+    suspend fun writeName(name: String) = saveName(name)
     suspend fun uploadPhoto(jpegOrAny: ByteArray)
     /** iOS ProfileStore.removePhoto: no picture, back to the letter. */
     suspend fun removePhoto() {}
@@ -319,15 +323,21 @@ class FirestorePeople(
     }.getOrNull()
 
     /** ProfileStore name save: `users/{me}.name`, then `names.<me>` in every chat I am in. */
-    override suspend fun saveName(name: String) {
-        val n = name.trim()
+    override suspend fun saveName(name: String) { checkName(name); writeName(name) }
+
+    override suspend fun checkName(name: String) {
         // A name that poses as a company or a verified person is refused in words (iOS SettingsView,
         // checkDisplayName, 2026-10-13 audit). The server's guard would put the old name back anyway;
-        // asking first turns that into a sentence. A failed check (offline, old server) does not block.
-        val verdict = try { call("checkDisplayName", mapOf("name" to n)) } catch (_: Exception) { null }
+        // asking first turns that into a sentence. A failed check (offline, old server) does not block,
+        // and it waits 5 s at most (iOS loading audit 2026-11-17).
+        val verdict = try { call("checkDisplayName", mapOf("name" to name.trim()), seconds = 5) } catch (_: Exception) { null }
         if (verdict?.get("ok") == false) {
             throw IllegalArgumentException((verdict["message"] as? String) ?: "That name can’t be used.")
         }
+    }
+
+    override suspend fun writeName(name: String) {
+        val n = name.trim()
         db.collection("users").document(me).set(mapOf("name" to n), SetOptions.merge()).await()
         updateMyConvs(mapOf("names.$me" to n))
     }

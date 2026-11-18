@@ -123,7 +123,9 @@ fun CreateCallLinkScreen(onClose: () -> Unit) {
     var attempt by remember { mutableIntStateOf(0) }
     LaunchedEffect(attempt) {
         failed = false
-        draft = try { CallLinks.create() } catch (_: Exception) { failed = true; null }
+        // The link made when Calls opened, if there is one; else one now.
+        draft = (if (attempt == 0) CallLinks.takeAhead() else null)
+            ?: try { CallLinks.create() } catch (_: Exception) { failed = true; null }
     }
     val state = remember(draft?.roomId) { draft?.let { LinkState(it.roomId, it.key, it.name, it.approval, it.video, admin = true) } }
     fun persist() { state?.let { CallLinks.persist(CallLinkDraft(it.roomId, it.key, it.name, it.approval ?: true, it.video ?: false)) } }
@@ -259,6 +261,7 @@ private fun LinkBody(s: LinkState, onUsed: () -> Unit, onDeleted: (() -> Unit)?,
         val key = CallLinkKey.ofText(s.key) ?: return@NameDialog
         scope.launch {
             try { s.name = CallLinks.rename(s.roomId, key, name); editing = false }
+            catch (e: com.fariin.app.data.Offline) { editing = false; error = e.message }
             catch (_: Exception) { editing = false; error = "Couldn't save the name" }
         }
     }

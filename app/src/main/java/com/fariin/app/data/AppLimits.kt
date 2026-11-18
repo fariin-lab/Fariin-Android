@@ -6,6 +6,7 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.functions.FirebaseFunctions
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.async
 import java.util.concurrent.TimeUnit
 
 /**
@@ -89,7 +90,24 @@ object AppLimits {
      * {ok, count, max}). Returns the ceiling when I am at it, else null. A check that cannot be
      * answered lets the create go; the server's own check on the new group still holds the line.
      */
-    suspend fun ownedGroupsFull(): Int? = try {
+    suspend fun ownedGroupsFull(): Int? {
+        // An answer asked when the page opened (under a minute old) is used, finished or in flight.
+        val a = ahead.takeIf { android.os.SystemClock.elapsedRealtime() - aheadAt < 60_000 }
+        ahead = null
+        return if (a != null) a.await() else askOwnedGroups()
+    }
+
+    private val aheadScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+    @Volatile private var ahead: kotlinx.coroutines.Deferred<Int?>? = null
+    @Volatile private var aheadAt = 0L
+
+    /** New Group / New Channel opened: the limit check starts now, so Next does not wait for it (iOS loading audit). */
+    fun askOwnedGroupsAhead() {
+        ahead = aheadScope.async { askOwnedGroups() }
+        aheadAt = android.os.SystemClock.elapsedRealtime()
+    }
+
+    private suspend fun askOwnedGroups(): Int? = try {
         withTimeoutOrNull(10_000) {
             val d = FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION).getHttpsCallable("groupCreateCheck")
                 .withTimeout(10, TimeUnit.SECONDS).call().await().getData() as? Map<*, *>

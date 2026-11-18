@@ -69,13 +69,38 @@ object ChannelService {
         }
         if (args.isEmpty()) return PreviewResult.Refused(NOT_PUBLIC)
         return try {
-            ChannelPreview.from(call("publicGroupPreview", args))?.let { PreviewResult.Found(it) } ?: PreviewResult.Refused(NOT_PUBLIC)
+            val raw = call("publicGroupPreview", args, seconds = 8)
+            ChannelPreview.from(raw)?.let { if (cid != null) PreviewDisk.put(cid, raw); PreviewResult.Found(it) } ?: PreviewResult.Refused(NOT_PUBLIC)
         } catch (e: FirebaseFunctionsException) {
             if (e.code == FirebaseFunctionsException.Code.NOT_FOUND || e.code == FirebaseFunctionsException.Code.PERMISSION_DENIED)
                 PreviewResult.Refused(e.message ?: NOT_PUBLIC)
             else PreviewResult.Failed("Couldn't connect. Check your connection and try again.")
         } catch (_: Exception) {
             PreviewResult.Failed("Couldn't connect. Check your connection and try again.")
+        }
+    }
+
+    /** The preview last fetched for [cid], from disk, so a cold start shows it at once (iOS loading audit). */
+    fun savedPreview(cid: String): ChannelPreview? = PreviewDisk.get(cid)?.let { ChannelPreview.from(it) }
+
+    /** Public group previews kept on disk as the server sent them (public data only), newest 200. */
+    private object PreviewDisk {
+        private fun prefs() = com.google.firebase.FirebaseApp.getInstance().applicationContext.getSharedPreferences("fariin_group_previews", android.content.Context.MODE_PRIVATE)
+        fun put(cid: String, raw: Map<*, *>?) {
+            if (raw == null) return
+            runCatching {
+                val p = prefs()
+                val e = p.edit().putString(cid, org.json.JSONObject(raw).toString())
+                if (p.all.size > 200) p.all.keys.firstOrNull { it != cid }?.let { e.remove(it) }
+                e.apply()
+            }
+        }
+        fun get(cid: String): Map<*, *>? = runCatching { prefs().getString(cid, null)?.let { plain(org.json.JSONObject(it)) as? Map<*, *> } }.getOrNull()
+        private fun plain(v: Any?): Any? = when (v) {
+            is org.json.JSONObject -> v.keys().asSequence().associateWith { plain(v.opt(it)) }
+            is org.json.JSONArray -> (0 until v.length()).map { plain(v.opt(it)) }
+            org.json.JSONObject.NULL -> null
+            else -> v
         }
     }
 

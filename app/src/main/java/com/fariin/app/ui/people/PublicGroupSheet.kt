@@ -47,7 +47,8 @@ import kotlinx.coroutines.launch
 fun PublicGroupSheet(cid: String, onClose: () -> Unit, onOpenChat: (String) -> Unit, onOpenChannel: ((String) -> Unit)? = null) {
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
-    var preview by remember { mutableStateOf<ChannelPreview?>(null) }
+    // The preview saved last time shows at once, even after a cold start; the server's answer replaces it.
+    var preview by remember(cid) { mutableStateOf(ChannelService.savedPreview(cid)?.takeIf { !(it.isChannel && onOpenChannel != null) }) }
     var problem by remember { mutableStateOf<String?>(null) }
     var joining by remember { mutableStateOf(false) }
     var requested by remember { mutableStateOf(false) }
@@ -55,8 +56,8 @@ fun PublicGroupSheet(cid: String, onClose: () -> Unit, onOpenChat: (String) -> U
         when (val r = ChannelService.preview(cid)) {
             // A channel's @name opens the channel itself (its posts), not a join sheet.
             is ChannelService.PreviewResult.Found -> if (r.preview.isChannel && onOpenChannel != null) { onClose(); onOpenChannel(cid) } else preview = r.preview
-            is ChannelService.PreviewResult.Refused -> problem = r.text
-            is ChannelService.PreviewResult.Failed -> problem = r.text
+            is ChannelService.PreviewResult.Refused -> { preview = null; problem = r.text }
+            is ChannelService.PreviewResult.Failed -> if (preview == null) problem = r.text
         }
     }
     ModalBottomSheet(onDismissRequest = onClose, containerColor = sheetFill, shape = SheetShape) {

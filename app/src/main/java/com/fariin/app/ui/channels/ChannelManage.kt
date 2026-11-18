@@ -89,6 +89,9 @@ import kotlinx.coroutines.launch
 
 private fun toast(ctx: android.content.Context, text: String) = Toast.makeText(ctx, text, Toast.LENGTH_SHORT).show()
 
+/** Each channel's first followers page last seen, for this run of the app (admins only see it). */
+private object FollowersSeen { val map = java.util.concurrent.ConcurrentHashMap<String, ChannelService.FollowerPage>() }
+
 /**
  * The admin's management rows on the channel page: Edit Channel, Followers, Administrators. One
  * rounded card like the page's others (the page already has its side gutter).
@@ -315,8 +318,11 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: (
     var countAtOpen by remember(cid) { mutableStateOf<Int?>(null) }
     LaunchedEffect(doc.isNotEmpty()) { if (doc.isNotEmpty() && countAtOpen == null) countAtOpen = info.followerCount }
     var removed by remember(cid) { mutableIntStateOf(0) }
-    var rows by remember(cid) { mutableStateOf<List<ChannelService.Follower>>(emptyList()) }
-    var more by remember(cid) { mutableStateOf(true) }
+    // The first page last seen for this channel shows at once; the fresh one replaces it (iOS loading audit).
+    val seenPage = remember(cid) { FollowersSeen.map[cid] }
+    var rows by remember(cid) { mutableStateOf(seenPage?.rows ?: emptyList()) }
+    var more by remember(cid) { mutableStateOf(seenPage?.more ?: true) }
+    var fresh by remember(cid) { mutableStateOf(false) }
     var loading by remember(cid) { mutableStateOf(false) }
     var failed by remember(cid) { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
@@ -339,8 +345,17 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: (
     }
 
     suspend fun load() {
-        if (loading || !more) return
+        if (loading || (fresh && !more)) return
         loading = true; failed = false
+        if (!fresh) {
+            try {
+                val first = ChannelService.followers(cid, null)
+                rows = first.rows; more = first.more; fresh = true
+                FollowersSeen.map[cid] = first
+            } catch (_: Exception) { if (rows.isEmpty()) failed = true }
+            loading = false
+            return
+        }
         try {
             val page = ChannelService.followers(cid, rows.lastOrNull()?.uid)
             val seen = rows.map { it.uid }.toSet()
@@ -561,7 +576,8 @@ private fun ChannelAdminPicker(cid: String, exclude: Set<String>, onClose: () ->
                     if (f.uid == rows.lastOrNull()?.uid && more) LaunchedEffect(f.uid) { load() }
                 }
                 when {
-                    loading -> com.fariin.app.ui.components.LoadingRow()
+                    // Before the first answer the list is only not known yet: no "No followers yet" flash (iOS loading audit).
+                    loading || (rows.isEmpty() && more && !failed) -> com.fariin.app.ui.components.LoadingRow()
                     shown.isEmpty() -> Note(if (failed) ChannelAdmins.PICK_FAILED else if (q.isEmpty()) ChannelAdmins.PICK_EMPTY else ChannelAdmins.PICK_NONE)
                 }
             }

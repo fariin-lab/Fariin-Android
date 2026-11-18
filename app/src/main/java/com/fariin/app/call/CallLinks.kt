@@ -16,6 +16,7 @@ import javax.crypto.spec.SecretKeySpec
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.async
 
 /**
  * One call link's root key, as iOS CallLinkKey (Services/CallLinkService.swift), byte for byte:
@@ -318,6 +319,39 @@ object CallLinks {
         throw last ?: IllegalStateException("createCallLink")
     }
 
+    // A link made ahead the moment Calls opens (iOS loading audit 2026-11-17), so Create a Call Link
+    // shows it at once. One per account; one retry; used once.
+    private val aheadScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+    @Volatile private var ahead: kotlinx.coroutines.Deferred<CallLinkDraft?>? = null
+    @Volatile private var aheadFor: String? = null
+
+    fun makeAhead() {
+        val uid = me ?: return
+        val a = ahead
+        // In flight, or done with a link, for this account: keep it. Done with nothing: try again.
+        if (a != null && aheadFor == uid && (a.isActive || aheadReady != null)) return
+        aheadFor = uid; aheadReady = null
+        ahead = aheadScope.async {
+            var got: CallLinkDraft? = null
+            for (i in 0 until 2) {
+                try { got = create(); break }
+                catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (_: Exception) {}
+            }
+            aheadReady = got
+            got
+        }
+    }
+    @Volatile private var aheadReady: CallLinkDraft? = null
+
+    /** The link made ahead for this account, waited for if still on its way; null if there is none. */
+    suspend fun takeAhead(): CallLinkDraft? {
+        val a = ahead ?: return null
+        if (aheadFor != me) return null
+        ahead = null; aheadReady = null
+        return try { a.await() } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { null }
+    }
+
     /** Into my list; safe more than once. createdAt only on the first save. */
     fun persist(d: CallLinkDraft) {
         val uid = me ?: return
@@ -328,7 +362,8 @@ object CallLinks {
 
     suspend fun rename(roomId: String, key: CallLinkKey, name: String): String {
         val clean = CallLinkDefaults.clamp(name.trim())
-        fn.getHttpsCallable("updateCallLink").call(mapOf("roomId" to roomId, "encName" to key.encryptName(clean))).await()
+        com.fariin.app.data.ConnectionStatus.requireOnline()
+        fn.getHttpsCallable("updateCallLink").withTimeout(15, java.util.concurrent.TimeUnit.SECONDS).call(mapOf("roomId" to roomId, "encName" to key.encryptName(clean))).await()
         val uid = me
         if (uid != null && _links.value.any { it.roomId == roomId }) {
             list(uid).document(roomId).set(mapOf("name" to clean), SetOptions.merge())

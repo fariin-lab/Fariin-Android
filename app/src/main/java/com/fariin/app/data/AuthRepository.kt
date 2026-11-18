@@ -57,7 +57,7 @@ class AuthRepository(
     }
 
     private suspend fun call(name: String, data: Map<String, Any?> = emptyMap()): Map<*, *>? =
-        fn.getHttpsCallable(name).call(data).await().getData() as? Map<*, *>
+        fn.getHttpsCallable(name).withTimeout(20, java.util.concurrent.TimeUnit.SECONDS).call(data).await().getData() as? Map<*, *>
 
     // ---- email + password ---------------------------------------------------------------
 

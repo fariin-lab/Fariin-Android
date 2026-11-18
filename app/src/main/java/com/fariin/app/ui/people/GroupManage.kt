@@ -172,7 +172,7 @@ sealed interface GroupPage {
 }
 
 private fun failText(e: Exception, fallback: String = "Couldn't save. Try again."): String =
-    if (e is com.fariin.app.data.LimitReached) e.message ?: fallback
+    if (e is com.fariin.app.data.LimitReached || e is com.fariin.app.data.Offline) e.message ?: fallback
     else if (e is com.google.firebase.firestore.FirebaseFirestoreException &&
         e.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) "You don't have the right to do that." else fallback
 
@@ -1186,6 +1186,9 @@ private fun TypeLine(title: String, selected: Boolean, last: Boolean = false, on
 
 // ---- Invite Links (iOS GroupLinksPage) -------------------------------------------------------
 
+/** Each group's link list last seen, for this run of the app: the page opens on it. */
+private object LinkListSeen { val map = java.util.concurrent.ConcurrentHashMap<String, GroupLinkList>() }
+
 private fun copy(ctx: Context, text: String) {
     (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Invite link", text))
     if (android.os.Build.VERSION.SDK_INT < 33) Snack.show("Link copied")
@@ -1203,10 +1206,13 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val doc = liveGroupDoc(cid)
-    var list by remember { mutableStateOf<GroupLinkList?>(null) }
+    // The last list seen for this group shows at once; the server's answer replaces it (iOS loading audit).
+    val seen = remember(cid) { LinkListSeen.map[cid] }
+    var list by remember { mutableStateOf(seen) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var working by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
+    var fromServer by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
     var confirmDeleteAll by remember { mutableStateOf(false) }
     var revokeTarget by remember { mutableStateOf<GroupLink?>(null) }
@@ -1219,7 +1225,8 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
     suspend fun reload() {
         try {
             val fresh = GroupManage.listLinks(cid)
-            list = fresh; loadError = null
+            list = fresh; loadError = null; fromServer = true
+            LinkListSeen.map[cid] = fresh
             val public = doc["isPublic"] == true && !(doc["username"] as? String).isNullOrEmpty()
             if (fresh.primary == null && !triedAuto && !public) {
                 triedAuto = true
@@ -1228,7 +1235,7 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
             }
         } catch (e: Exception) {
             if (list == null) loadError = GroupManage.errorText(e, "The links could not be loaded. Try again.")
-            else problem = GroupManage.errorText(e, "The links could not be refreshed. Try again.")
+            else if (fromServer) problem = GroupManage.errorText(e, "The links could not be refreshed. Try again.")
         }
     }
     fun change(fallback: String, work: suspend () -> Unit) {
@@ -1240,7 +1247,7 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
         }
     }
     // Only once the group is known: an empty doc read as "not public" and made a link for a public one.
-    LaunchedEffect(cid, doc.isNotEmpty()) { if (doc.isNotEmpty() && list == null) reload() }
+    LaunchedEffect(cid, doc.isNotEmpty()) { if (doc.isNotEmpty() && !fromServer) reload() }
     // iOS "Send in Fariin": the link goes into the chats I pick, as a plain text message.
     var sendingLink by remember { mutableStateOf<String?>(null) }
     val myUid = com.fariin.app.Fb.auth.currentUser?.uid

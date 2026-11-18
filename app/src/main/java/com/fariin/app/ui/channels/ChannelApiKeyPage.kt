@@ -83,15 +83,23 @@ object ChannelApiKey {
             ?: emptyMap<String, Any>()
 }
 
+/** Each channel's API key status last seen, for this run of the app (never the key itself). */
+private object ApiKeySeen {
+    data class Status(val hasKey: Boolean, val hint: String?, val createdAt: Long?)
+    val map = java.util.concurrent.ConcurrentHashMap<String, Status>()
+}
+
 @Composable
 fun ChannelApiKeyScreen(cid: String, onBack: () -> Unit) {
     val c = Fariin.colors
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    var loading by remember { mutableStateOf(true) }
-    var hasKey by remember { mutableStateOf(false) }
-    var hint by remember { mutableStateOf<String?>(null) }
-    var createdAt by remember { mutableStateOf<Long?>(null) }
+    // The last status seen for this channel shows at once; the server's answer replaces it (iOS loading audit).
+    val seen = remember(cid) { ApiKeySeen.map[cid] }
+    var loading by remember { mutableStateOf(seen == null) }
+    var hasKey by remember { mutableStateOf(seen?.hasKey ?: false) }
+    var hint by remember { mutableStateOf(seen?.hint) }
+    var createdAt by remember { mutableStateOf(seen?.createdAt) }
     var freshKey by remember { mutableStateOf<String?>(null) }
     var copied by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
@@ -110,9 +118,10 @@ fun ChannelApiKeyScreen(cid: String, onBack: () -> Unit) {
             hasKey = d["hasKey"] as? Boolean ?: false
             hint = d["hint"] as? String
             createdAt = (d["createdAt"] as? Number)?.toLong()
+            ApiKeySeen.map[cid] = ApiKeySeen.Status(hasKey, hint, createdAt)
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            error = errText(e)
+            if (seen == null) error = errText(e)
         }
         loading = false
     }
@@ -130,6 +139,7 @@ fun ChannelApiKeyScreen(cid: String, onBack: () -> Unit) {
                 } else {
                     freshKey = null; hasKey = false; hint = null; createdAt = null
                 }
+                ApiKeySeen.map[cid] = ApiKeySeen.Status(hasKey, hint, createdAt)
                 haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e

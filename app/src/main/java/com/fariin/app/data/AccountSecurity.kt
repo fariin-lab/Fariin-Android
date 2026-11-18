@@ -100,7 +100,7 @@ object AccountCall {
 
     /** One call to functions-account; every failure comes back as an [AccountCallError]. */
     suspend fun run(name: String, payload: Map<String, Any?> = emptyMap()): Map<*, *> = try {
-        fn.getHttpsCallable(name).call(payload).await().getData() as? Map<*, *> ?: emptyMap<String, Any>()
+        fn.getHttpsCallable(name).withTimeout(20, java.util.concurrent.TimeUnit.SECONDS).call(payload).await().getData() as? Map<*, *> ?: emptyMap<String, Any>()
     } catch (e: Exception) { throw AccountCallError.from(e) }
 
     /** After a call that revokes the refresh tokens: sign in with the session the server minted after it. */

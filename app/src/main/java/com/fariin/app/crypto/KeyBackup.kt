@@ -92,7 +92,7 @@ object KeyBackup {
         val (lock, auth) = derive(pin, salt, st.ops, st.mem, crypto) ?: return Restore.Failed("This backup cannot be read.")
         val r = try {
             com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
-                .getHttpsCallable("keyBackupRestore").call(mapOf("auth" to B64.encode(auth))).await().getData() as? Map<*, *> ?: emptyMap<String, Any>()
+                .getHttpsCallable("keyBackupRestore").withTimeout(15, java.util.concurrent.TimeUnit.SECONDS).call(mapOf("auth" to B64.encode(auth))).await().getData() as? Map<*, *> ?: emptyMap<String, Any>()
         } catch (e: FirebaseFunctionsException) {
             val d = e.details as? Map<*, *>
             return when (e.code) {

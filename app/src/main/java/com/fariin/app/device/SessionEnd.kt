@@ -5,6 +5,7 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.Dispatchers
 
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 
 import com.fariin.app.ui.components.GlassAlert
 import android.content.Context
@@ -49,13 +50,17 @@ object SessionEnd {
         // iOS endCallsBeforeSignOut (audit M-015): a live call or a ring ends first, as my own end,
         // while the rules still let this account write it; otherwise the other side keeps a call
         // nobody is in. Capped like every step.
-        step(uid, "calls") { endCalls() }
-        // iOS SessionWipe: "offline" goes out while the account can still write it.
-        step(uid, "presence") { com.fariin.app.data.Presence.set(online = false, context = c) }
-        step(uid, "device record") { DeviceRegistry.removeThisDevice() }
+        // iOS SessionWipe: "offline" goes out while the account can still write it. The server
+        // steps do not depend on each other: they run side by side, so offline the wait is one
+        // cap, not four in a row.
         val deleting = forDeletion.also { forDeletion = false }
         var tokenOff = false
-        step(uid, "push token") { tokenOff = Push.unregister(c) }
+        kotlinx.coroutines.coroutineScope {
+            launch { step(uid, "calls") { endCalls() } }
+            launch { step(uid, "presence") { com.fariin.app.data.Presence.set(online = false, context = c) } }
+            launch { step(uid, "device record") { DeviceRegistry.removeThisDevice() } }
+            launch { step(uid, "push token") { tokenOff = Push.unregister(c) } }
+        }
         if (endAuth(uid)) {
             // Offline, the token could not come off the account: the token itself is retired, so
             // the account's pushes stop reaching this phone; the next sign-in gets a new one.

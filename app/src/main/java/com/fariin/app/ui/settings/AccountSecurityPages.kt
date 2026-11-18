@@ -273,26 +273,40 @@ private fun EmailCodePage(address: String, pop: () -> Unit, onDone: () -> Unit) 
 // ---------------------------------------------------------------- Two-step verification
 
 /** iOS TwoStepVerificationView: an explanation and one action until it is on, a list once it is. */
+/** The two-step status last seen, per account, for this run of the app. */
+internal object TwoStepSeen {
+    data class Status(val uid: String, val enabled: Boolean, val hint: String, val masked: String)
+    @Volatile private var last: Status? = null
+    fun get(): Status? = last?.takeIf { it.uid == com.fariin.app.Fb.auth.currentUser?.uid }
+    fun put(enabled: Boolean, hint: String, masked: String) {
+        val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return
+        last = Status(uid, enabled, hint, masked)
+    }
+}
+
 @Composable
 private fun TwoStepPage(push: (String) -> Unit, pop: () -> Unit) {
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
-    var loading by remember { mutableStateOf(true) }
-    var loadedOnce by remember { mutableStateOf(false) }
-    var enabled by remember { mutableStateOf(false) }
-    var hint by remember { mutableStateOf("") }
-    var masked by remember { mutableStateOf("") }
+    // The last status this account saw shows at once; the server's answer replaces it (iOS loading audit).
+    val seen = remember { TwoStepSeen.get() }
+    var loading by remember { mutableStateOf(seen == null) }
+    var loadedOnce by remember { mutableStateOf(seen != null) }
+    var enabled by remember { mutableStateOf(seen?.enabled ?: false) }
+    var hint by remember { mutableStateOf(seen?.hint ?: "") }
+    var masked by remember { mutableStateOf(seen?.masked ?: "") }
     var error by remember { mutableStateOf<String?>(null) }
 
     suspend fun load() {
-        loading = true
+        if (!loadedOnce) loading = true
         try {
             val d = AccountCall.run("twoStepStatus")
             enabled = d["enabled"] == true
             hint = d["hint"] as? String ?: ""
             masked = d["recoveryEmail"] as? String ?: ""
+            TwoStepSeen.put(enabled, hint, masked)
             loadedOnce = true; error = null
-        } catch (e: AccountCallError) { error = e.message }
+        } catch (e: AccountCallError) { if (!loadedOnce) error = e.message }
         loading = false
     }
     LaunchedEffect(Unit) { load() }

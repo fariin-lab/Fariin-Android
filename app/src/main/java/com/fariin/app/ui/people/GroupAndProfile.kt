@@ -103,6 +103,9 @@ import kotlinx.coroutines.tasks.await
 import androidx.compose.ui.res.painterResource
 import kotlinx.coroutines.Dispatchers
 
+/** Edit Profile's writes that finish after the page closed (photo upload, bio): not tied to the page. */
+private val profileSaveScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.Main.immediate)
+
 @Composable
 private fun Field(value: String, placeholder: String, enabled: Boolean = true, onChange: (String) -> Unit) {
     val c = Fariin.colors
@@ -195,16 +198,29 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
                 scope.launch {
                     busy = true; saving = true
                     try {
-                        if (name.trim() != me?.name) api.saveName(name)
-                        // The held photo goes now (iOS: nothing changes until Save).
-                        stagedJpeg?.let { j ->
-                            api.uploadPhoto(j)
-                            com.fariin.app.data.ProfilePhotoHistory.record(appCtx, api.me, j); historyGen++
-                        }
-                        if (stagedRemove && stagedJpeg == null) api.removePhoto()
+                        // Only the step the server can refuse is waited for (the name check, 5 s at
+                        // most); the rest finishes after the page closes (iOS loading audit 2026-11-17).
+                        val newName = name.trim().takeIf { it != me?.name }
+                        if (newName != null) api.checkName(newName)
+                        val jpeg = stagedJpeg
+                        val remove = stagedRemove && jpeg == null
                         // Without a loaded profile the bio is only empty, not cleared by anyone (iOS).
-                        if (me != null && about.trim() != me?.about?.trim()) com.fariin.app.data.ProfileWrites.saveAbout(api.me, about)
+                        val newAbout = about.takeIf { me != null && about.trim() != me?.about?.trim() }
                         onBack()
+                        profileSaveScope.launch {
+                            try {
+                                if (newName != null) api.writeName(newName)
+                                // The held photo goes now (iOS: nothing changes until Save).
+                                jpeg?.let { j ->
+                                    api.uploadPhoto(j)
+                                    com.fariin.app.data.ProfilePhotoHistory.record(appCtx, api.me, j)
+                                }
+                                if (remove) api.removePhoto()
+                                if (newAbout != null) com.fariin.app.data.ProfileWrites.saveAbout(api.me, newAbout)
+                            } catch (e: kotlinx.coroutines.CancellationException) { throw e
+                            } catch (e: com.fariin.app.data.LimitReached) { com.fariin.app.ui.components.Snack.show(e.message ?: "Couldn't save your profile.")
+                            } catch (_: Exception) { com.fariin.app.ui.components.Snack.show("Couldn't save your profile. Try again.") }
+                        }
                     } catch (e: IllegalArgumentException) { error = e.message ?: "That name can’t be used." }
                     catch (_: Exception) { error = "Couldn't save. Try again." }
                     busy = false; saving = false
@@ -606,6 +622,8 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
     val people = remember(chats) { contactsFrom(chats, api.me) }
+    // The owned-groups check starts as the page opens, so Create does not wait for it (iOS loading audit).
+    LaunchedEffect(Unit) { com.fariin.app.data.AppLimits.askOwnedGroupsAhead() }
     // In tap order (iOS `order`): a person found by username is not among [people], so the pick keeps the person.
     var chosen by remember { mutableStateOf(listOf<Person>()) }
     val picked = chosen.map { it.uid }.toSet()
@@ -1405,11 +1423,21 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
                     try {
                         if (trimmed != (savedName ?: title)) { api.renameGroup(cid, trimmed); savedName = trimmed }
                         if (trimmedDesc != (savedDesc ?: description.trim())) { api.setGroupDescription(cid, trimmedDesc); savedDesc = trimmedDesc }
+                        // The photo uploads after the page closes (iOS loading audit 2026-11-17): the
+                        // name and description above are the steps the server can refuse.
                         val p = newPhoto
-                        if (p != null) { api.setGroupPhoto(cid, p); forgetImage(ctx, photoUrl) }
-                        else if (removePhoto && !photoUrl.isNullOrEmpty()) api.removeGroupPhoto(cid)
+                        val dropPhoto = p == null && removePhoto && !photoUrl.isNullOrEmpty()
+                        val app = ctx.applicationContext
+                        val oldUrl = photoUrl
                         saving = false
                         onClose()
+                        if (p != null || dropPhoto) profileSaveScope.launch {
+                            try {
+                                if (p != null) { api.setGroupPhoto(cid, p); forgetImage(app, oldUrl) }
+                                else api.removeGroupPhoto(cid)
+                            } catch (e: kotlinx.coroutines.CancellationException) { throw e
+                            } catch (_: Exception) { com.fariin.app.ui.components.Snack.show("Couldn't save the group photo. Try again.") }
+                        }
                     } catch (e: Exception) {
                         saving = false
                         error = e.message?.takeIf { it.isNotBlank() } ?: "Couldn't save. Try again."
