@@ -249,7 +249,11 @@ object ChatList {
         if (raw.isEmpty()) {
             if (!c.lastImageUrl.isNullOrEmpty() && !hidden) return RowPreview("Photo", prefix = prefix, photo = true)
             // A blank summary on a chat that has messages is not a new chat: empty, not "Say hello".
-            return if (c.lastSender.isNotEmpty()) RowPreview("") else RowPreview("Say hello", icon = PreviewIcon.HELLO)
+            if (c.lastSender.isNotEmpty()) return RowPreview("")
+            // "Say hello" is for a new 1:1 only; a new group or channel says it was made (iOS aba2ed43f).
+            if (c.isChannel) return RowPreview("Channel created")
+            if (c.isGroup) return RowPreview("Group created")
+            return RowPreview("Say hello", icon = PreviewIcon.HELLO)
         }
         // iOS decodedLast. Suspended or disabled by Fariin: the reason, never its last message.
         if (c.fariinLocked()) return RowPreview(if (c.isChannel) "This channel is unavailable" else "This group is unavailable")
