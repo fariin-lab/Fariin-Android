@@ -626,6 +626,60 @@ internal fun MemberCard(cid: String, me: String, uid: String, conv: Map<String, 
     }
 }
 
+/**
+ * The member card's look for a person outside a group's own list (a channel follower, owner
+ * 2026-11-17: "the one we already have in group"): photo (full screen on a tap), name, @username,
+ * Message / Voice / Video, and Open Profile. Nothing the profile does not already show.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun PersonCard(uid: String, name: String, face: String?, username: String, onClose: () -> Unit,
+                        onMessage: (String) -> Unit, onProfile: (String) -> Unit) {
+    val c = Fariin.colors
+    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val cardPhoto = com.fariin.app.ui.photo.rememberProfilePhotoState()
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    ModalBottomSheet(onDismissRequest = onClose, sheetState = sheet, containerColor = c.bgSecondary) {
+        val root = androidx.compose.ui.platform.LocalView.current.rootView
+        if (cardPhoto.open) androidx.compose.ui.window.Popup(
+            onDismissRequest = { cardPhoto.closeRequest?.invoke() },
+            popupPositionProvider = object : androidx.compose.ui.window.PopupPositionProvider {
+                override fun calculatePosition(anchorBounds: androidx.compose.ui.unit.IntRect, windowSize: androidx.compose.ui.unit.IntSize,
+                    layoutDirection: androidx.compose.ui.unit.LayoutDirection, popupContentSize: androidx.compose.ui.unit.IntSize) =
+                    androidx.compose.ui.unit.IntOffset.Zero
+            },
+            properties = androidx.compose.ui.window.PopupProperties(focusable = true, clippingEnabled = false)) {
+            val d = androidx.compose.ui.platform.LocalDensity.current
+            Box(Modifier.requiredSize(with(d) { root.width.toDp() }, with(d) { root.height.toDp() })) { com.fariin.app.ui.photo.ProfilePhotoViewer(cardPhoto, face,
+                style = com.fariin.app.ui.photo.ProfilePhotoStyle(landsSquare = true)) }
+        }
+        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Avatar(face, 96.dp, onResolved = cardPhoto::resolved,
+                modifier = Modifier.profilePhotoSource(cardPhoto).then(
+                    if (cardPhoto.hasPhoto) Modifier.clip(CircleShape).clickable(interactionSource = null, indication = null,
+                        onClickLabel = "View photo") { cardPhoto.show() } else Modifier))
+            Text(name, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.label, maxLines = 1, modifier = Modifier.padding(top = 10.dp))
+            if (username.isNotEmpty()) Text("@$username", fontSize = 15.sp, color = c.secondary, maxLines = 1)
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                val share = Modifier.weight(1f)
+                ActionTile("Message", ImageVector.cachedVector(R.drawable.ic_chat), share) { onClose(); onMessage(uid) }
+                ActionTile("Voice", ImageVector.cachedVector(R.drawable.ic_call_voice), share) {
+                    onClose(); com.fariin.app.ui.call.CallActivity.startDial(ctx, uid, name, face, video = false)
+                }
+                ActionTile("Video", ImageVector.cachedVector(R.drawable.ic_call_video), share) {
+                    onClose(); com.fariin.app.ui.call.CallActivity.startDial(ctx, uid, name, face, video = true)
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            SettingsSection {
+                SettingsRow("Open Profile", icon = rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_sf_person_fill)),
+                    trailing = Trailing.NONE, last = true) { onClose(); onProfile(uid) }
+            }
+        }
+    }
+}
+
 // ---- Members (iOS GroupMembersSheet) ----------------------------------------------------------
 
 /**
