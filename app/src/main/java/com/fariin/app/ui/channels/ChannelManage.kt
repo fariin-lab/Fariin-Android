@@ -1,5 +1,8 @@
 package com.fariin.app.ui.channels
 
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawBehind
 import com.fariin.app.ui.photo.profilePhotoSource
 import com.fariin.app.ui.components.GlassDropdown
@@ -750,28 +753,52 @@ private fun FollowerCard(f: ChannelService.Follower, onDismiss: () -> Unit, onMe
         Box(Modifier.fillMaxSize().drawBehind { drawRect(Color.Black.copy(alpha = dim)) }
             .clickable(interactionSource = null, indication = null) { close() }, contentAlignment = Alignment.BottomCenter) {
             androidx.compose.animation.AnimatedVisibility(shown,
-                enter = androidx.compose.animation.slideInVertically { it }, exit = androidx.compose.animation.slideOutVertically { it }) {
-                androidx.compose.foundation.layout.Column(Modifier.fillMaxWidth()
-                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-                    .background(c.bg).clickable(interactionSource = null, indication = null) { }
-                    .navigationBarsPadding().padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 20.dp),
+                enter = androidx.compose.animation.slideInVertically(androidx.compose.animation.core.spring(0.82f, 380f)) { it } +
+                    androidx.compose.animation.fadeIn(),
+                exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut()) {
+                // A floating card (inset, round on all corners) with the person's photo, blurred, behind its top.
+                androidx.compose.foundation.layout.Column(Modifier.navigationBarsPadding().padding(10.dp).fillMaxWidth()
+                    .shadow(24.dp, androidx.compose.foundation.shape.RoundedCornerShape(32.dp), clip = false)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(32.dp))
+                    .background(c.bg).clickable(interactionSource = null, indication = null) { },
                     horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(Modifier.size(width = 36.dp, height = 5.dp).clip(androidx.compose.foundation.shape.CircleShape).background(c.label.copy(alpha = 0.2f)))
-                    Spacer(Modifier.height(16.dp))
-                    // A plain placeholder (no photo) does nothing on a tap.
-                    Avatar(f.photoUrl, 96.dp, onResolved = photo::resolved,
-                        modifier = Modifier.profilePhotoSource(photo)
-                            .then(if (photo.hasPhoto) Modifier.clip(androidx.compose.foundation.shape.CircleShape)
-                                .clickable(onClickLabel = "View photo") { photo.show() } else Modifier))
-                    Spacer(Modifier.height(12.dp))
-                    Text(f.name, fontSize = 22.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = c.label,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                    if (f.username.isNotEmpty()) Text("@${f.username}", fontSize = 15.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Spacer(Modifier.height(20.dp))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
-                        CardButton("Message", Modifier.weight(1f), filled = true) { close(onMessage) }
-                        CardButton("View Profile", Modifier.weight(1f), filled = false) { close(onProfile) }
+                    Box(Modifier.fillMaxWidth().height(196.dp), contentAlignment = Alignment.BottomCenter) {
+                        // The hero: the photo itself, soft and dim; no photo, a quiet wash of the accent.
+                        Box(Modifier.fillMaxWidth().height(128.dp).align(Alignment.TopCenter).then(
+                            if (f.photoUrl.isNullOrEmpty()) Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(
+                                listOf(c.accent.copy(alpha = 0.28f), c.accent.copy(alpha = 0.06f)))) else Modifier)) {
+                            if (!f.photoUrl.isNullOrEmpty()) coil3.compose.AsyncImage(f.photoUrl, null,
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize().blur(36.dp).graphicsLayer { alpha = 0.85f })
+                            Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(
+                                listOf(Color.Transparent, c.bg.copy(alpha = 0.55f), c.bg))))
+                        }
+                        Box(Modifier.align(Alignment.TopCenter).padding(top = 8.dp).size(width = 36.dp, height = 5.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape).background(c.label.copy(alpha = 0.22f)))
+                        // The photo in a ring of the card's colour; a tap opens it (a placeholder does nothing).
+                        Box(Modifier.size(124.dp).clip(androidx.compose.foundation.shape.CircleShape).background(c.bg), contentAlignment = Alignment.Center) {
+                            Avatar(f.photoUrl, 112.dp, onResolved = photo::resolved,
+                                modifier = Modifier.profilePhotoSource(photo)
+                                    .then(if (photo.hasPhoto) Modifier.clip(androidx.compose.foundation.shape.CircleShape)
+                                        .clickable(onClickLabel = "View photo") { photo.show() } else Modifier))
+                        }
                     }
+                    Spacer(Modifier.height(12.dp))
+                    Text(f.name, fontSize = 24.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = c.label,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 24.dp))
+                    if (f.username.isNotEmpty()) Text("@${f.username}", fontSize = 16.sp, color = c.secondary, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                    Spacer(Modifier.height(10.dp))
+                    Text("Follows this channel", fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                        color = c.accent, modifier = Modifier.clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(c.accent.copy(alpha = 0.10f)).padding(horizontal = 12.dp, vertical = 5.dp))
+                    Spacer(Modifier.height(22.dp))
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) {
+                        CardButton("Message", com.fariin.app.R.drawable.ic_chat, Modifier.weight(1f), filled = true) { close(onMessage) }
+                        CardButton("Profile", com.fariin.app.R.drawable.ic_sf_person, Modifier.weight(1f), filled = false) { close(onProfile) }
+                    }
+                    Spacer(Modifier.height(16.dp))
                 }
             }
         }
@@ -784,11 +811,14 @@ private fun FollowerCard(f: ChannelService.Follower, onDismiss: () -> Unit, onMe
 }
 
 @Composable
-private fun CardButton(label: String, modifier: Modifier, filled: Boolean, onClick: () -> Unit) {
+private fun CardButton(label: String, icon: Int, modifier: Modifier, filled: Boolean, onClick: () -> Unit) {
     val c = Fariin.colors
-    Box(modifier.height(48.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(24.dp))
-        .background(if (filled) c.accent else c.label.copy(alpha = 0.08f)).clickable(onClick = onClick),
-        contentAlignment = Alignment.Center) {
-        Text(label, fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = if (filled) c.onAccent else c.label)
+    val ink = if (filled) c.onAccent else c.accent
+    androidx.compose.foundation.layout.Column(modifier.height(72.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
+        .background(if (filled) c.accent else c.accent.copy(alpha = 0.10f)).clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center) {
+        Icon(ImageVector.cachedVector(icon), null, tint = ink, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.height(5.dp))
+        Text(label, fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = ink)
     }
 }
