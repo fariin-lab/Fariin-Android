@@ -336,7 +336,10 @@ fun PageFrame(id: String, content: @Composable () -> Unit) {
         }
         // The light change's fade (PageMotion.alpha), read in the draw phase only; no offscreen copy.
         .graphicsLayer {
-            alpha = PageMotion.alpha(id)
+            // A page no longer on screen (covered once a change landed) is not drawn: a nav host page
+            // under a kept chat sat a third off to the left over it until the nav host let it go
+            // (owner's Pixel 2026-11-17, Discover > a channel "opens broken").
+            alpha = if (PageMotion.top != null && !PageMotion.shows(id)) 0f else PageMotion.alpha(id)
             compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
         }
         // While the page moves, its touches go nowhere (PageMotion.moving). After the move, so it

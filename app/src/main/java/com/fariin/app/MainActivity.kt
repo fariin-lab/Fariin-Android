@@ -1,5 +1,6 @@
 package com.fariin.app
 
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.statusBars
@@ -947,8 +948,14 @@ private fun KeptChat(held: KeptChats.Held, topId: String?, saveable: androidx.co
     val onTop = topId == id
     androidx.compose.runtime.SideEffect { held.back.setOnTop(onTop) }
     LaunchedEffect(held) { androidx.compose.runtime.snapshotFlow { pm.moving }.collect { held.back.setMoving(it) } }
+    // Drawn over the nav host's pages while it is the page moving over the other (arriving, or
+    // leaving with Back): the layer sits under the nav host, so a page it came from (Discover, a
+    // profile) covered it as it slid in (owner's Pixel 2026-11-17).
+    val above by androidx.compose.runtime.remember(id) {
+        androidx.compose.runtime.derivedStateOf { if (pm.forward) pm.top == id else pm.other == id && pm.moving }
+    }
     // Covered and still (a page landed over it): not drawn at all.
-    Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (pm.top == null || pm.shows(id)) 1f else 0f }
+    Box(Modifier.fillMaxSize().zIndex(if (above) 1f else 0f).graphicsLayer { alpha = if (pm.top == null || pm.shows(id)) 1f else 0f }
         .then(if (onTop) Modifier else Modifier.clearAndSetSemantics { })) {
         held.entry.LocalOwnersProvider(saveable) {
             CompositionLocalProvider(LocalOnBackPressedDispatcherOwner provides held.back) {

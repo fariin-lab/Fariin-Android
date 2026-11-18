@@ -56,7 +56,10 @@ fun NavGraphBuilder.channelRoutes(nav: NavHostController, me: String, chats: () 
         onInfo = { nav.navigate("officialinfo") { launchSingleTop = true } }) }
     page("officialinfo") { com.fariin.app.ui.official.OfficialInfoRoute(onBack = { nav.popBackStack() }) }
     page("findchannels") {
-        FindChannelsScreen(me, onBack = { nav.popBackStack() }, onOpen = { cid -> nav.navigate("thread/$cid") })
+        // The saved posts start loading now, off the main thread (as a chat-list tap does): a channel
+        // opened from here read them on the opening frame and its slide stalled (owner's Pixel 2026-11-17).
+        FindChannelsScreen(me, onBack = { nav.popBackStack() }, onOpen = { cid ->
+            com.fariin.app.data.ThreadRowsPrefetch.prefetch(me, cid); nav.navigate("thread/$cid") })
     }
     page("newchannel") {
         NewChannelScreen(me, onBack = { nav.popBackStack() },
