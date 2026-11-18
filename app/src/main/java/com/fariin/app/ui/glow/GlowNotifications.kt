@@ -93,13 +93,14 @@ data class GlowEvent(
  */
 suspend fun loadGlowEvents(me: String, mine: List<Story>, conversations: List<Conversation>): GlowLoad<List<GlowEvent>> = coroutineScope {
     val out = mutableListOf<GlowEvent>()
-    val glows = try { Glow.fetchRecentGlowers() } catch (_: Exception) { return@coroutineScope GlowLoad.Failed }
-    val dates = glows.toMap()
-    val people = Glow.people(glows.map { it.first }, dates)
-    val resolved = (people as? GlowLoad.Loaded)?.value.orEmpty()
-    for ((uid, at) in glows) {
-        val p = resolved.firstOrNull { it.id == uid } ?: continue
-        out.add(GlowEvent("glow-$uid", p, GlowEvent.Kind.GLOWED, atMs = at))
+    // The glow rows run beside the story loves, not before them (iOS loading audit).
+    val glowRows = async {
+        val glows = try { Glow.fetchRecentGlowers() } catch (_: Exception) { return@async null }
+        val people = Glow.people(glows.map { it.first }, glows.toMap())
+        val resolved = (people as? GlowLoad.Loaded)?.value.orEmpty()
+        glows.mapNotNull { (uid, at) ->
+            resolved.firstOrNull { it.id == uid }?.let { GlowEvent("glow-$uid", it, GlowEvent.Kind.GLOWED, atMs = at) }
+        }
     }
     if (me.isNotEmpty()) {
         val who: (String) -> Pair<String, String?> = { u ->
@@ -107,7 +108,7 @@ suspend fun loadGlowEvents(me: String, mine: List<Story>, conversations: List<Co
             (c?.names?.get(u) ?: "") to c?.photos?.get(u)
         }
         val service = StoryService(me)
-        mine.map { s -> async { s to service.fetchViewers(s.id, who) } }.awaitAll().forEach { (s, viewers) ->
+        mine.map { s -> async { s to service.fetchViewers(s.id, who)?.also { com.fariin.app.ui.stories.StoryViewersCache.put(s.id, it) } } }.awaitAll().forEach { (s, viewers) ->
             for (v in viewers ?: return@forEach) {
                 val r = v.reaction.orEmpty()
                 if (r.isEmpty()) continue
@@ -132,8 +133,12 @@ suspend fun loadGlowEvents(me: String, mine: List<Story>, conversations: List<Co
                 GlowEvent.Kind.ACCEPTED_REQUEST, atMs = at))
         }
     }
-    GlowLoad.Loaded(out.sortedByDescending { it.atMs })
+    out.addAll(glowRows.await() ?: return@coroutineScope GlowLoad.Failed)
+    GlowLoad.Loaded(out.sortedByDescending { it.atMs }).also { GlowEventsSeen.byMe[me] = it.value }
 }
+
+/** The last notifications list per account this run, shown first on the next open. */
+private object GlowEventsSeen { val byMe = java.util.concurrent.ConcurrentHashMap<String, List<GlowEvent>>() }
 
 private enum class Chip(val title: String) { ALL("All"), GLOWERS("Glowers"), LOVES("Loves") }
 
@@ -160,10 +165,12 @@ fun GlowNotificationsPage(
     var chip by rememberSaveable { mutableStateOf(Chip.ALL) }
     var reload by remember { mutableIntStateOf(0) }
     var refreshing by remember { mutableStateOf(false) }
-    var load by remember { mutableStateOf<GlowLoad<List<GlowEvent>>>(GlowLoad.Loading) }
+    var load by remember { mutableStateOf<GlowLoad<List<GlowEvent>>>(GlowEventsSeen.byMe[me]?.let { GlowLoad.Loaded(it) } ?: GlowLoad.Loading) }
     LaunchedEffect(reload) {
-        if (!refreshing) load = GlowLoad.Loading
-        load = loadGlowEvents(me, mine, conversations)
+        if (!refreshing && load !is GlowLoad.Loaded) load = GlowLoad.Loading
+        val r = loadGlowEvents(me, mine, conversations)
+        // A failed refresh keeps the rows already up.
+        if (r is GlowLoad.Loaded || load !is GlowLoad.Loaded) load = r
         refreshing = false
     }
     val glowOn = AppFeatures.glow

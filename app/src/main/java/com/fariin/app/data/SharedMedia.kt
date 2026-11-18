@@ -195,7 +195,7 @@ class SharedMediaSource(
     private val db: FirebaseFirestore = com.fariin.app.Fb.db,
 ) {
     /** What is already on the phone: the last answer, else the chat's saved copy. */
-    fun local(): List<Message> = cache[cid] ?: com.fariin.app.local.LocalCache.loadThread(me, cid)
+    fun local(): List<Message> = memory(cid) ?: com.fariin.app.local.LocalCache.loadThread(me, cid)
 
     /** The server's answer, or null when the load failed (which is not the same as no media). */
     suspend fun fetch(): List<Message>? {
@@ -214,8 +214,15 @@ class SharedMediaSource(
     companion object {
         /** Warm copy per chat, so the profile card and the page open at once on re-entry. */
         private val cache = ConcurrentHashMap<String, List<Message>>()
+        /** The open chat's own messages, newest copy, so its profile's media is there on the first frame. */
+        private val live = ConcurrentHashMap<String, List<Message>>()
+
+        fun noteLive(cid: String, messages: List<Message>) { if (cid.isNotEmpty() && messages.isNotEmpty()) live[cid] = messages }
+
+        /** What memory already holds for [cid], without touching the disk: the last answer, else the open chat's. */
+        fun memory(cid: String): List<Message>? = cache[cid] ?: live[cid]
 
         /** Sign-out: opened messages must not outlive the account in memory (iOS clearSharedMediaCache). */
-        fun clear() { cache.clear(); com.fariin.app.ui.people.ChatStorageRules.lastItems.clear() }
+        fun clear() { cache.clear(); live.clear(); com.fariin.app.ui.people.ChatStorageRules.lastItems.clear() }
     }
 }

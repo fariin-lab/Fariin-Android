@@ -317,8 +317,16 @@ object Glow {
                 }
             }.awaitAll()
         }
-        return GlowRules.resolved(uids, found)
+        return GlowRules.resolved(uids, found).also { r ->
+            if (r is GlowLoad.Loaded) r.value.forEach { seenPeople[it.id] = it }
+        }
     }
+
+    /** Every Glow face fetched this run, so a list opens with the last copy (iOS loading audit). */
+    private val seenPeople = java.util.concurrent.ConcurrentHashMap<String, GlowPerson>()
+
+    /** The last copy of [uids] in order, or null when any one was never fetched. */
+    fun seenPeople(uids: List<String>): List<GlowPerson>? = uids.map { seenPeople[it] ?: return null }
 
     /** Somebody's live stories from the public mirror `users/{uid}/publicStories`, newest first. */
     suspend fun postedStories(uid: String): GlowLoad<List<PostedStory>> {

@@ -155,6 +155,25 @@ object ChannelGuestPreviews {
     val cache = java.util.concurrent.ConcurrentHashMap<String, ChannelPreview>()
     /** Chats whose preview answer came back (channel or not), so they are no longer waiting. */
     val answered = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
+    private val asked = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val warmScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() +
+        kotlinx.coroutines.Dispatchers.IO.limitedParallelism(3))
+
+    /** An Explore row on screen asks for its visitor page ahead (iOS loading audit), once per
+     *  process, so a tap opens with the header already there. Groups land in the disk copy. */
+    fun warm(cid: String) {
+        if (cache[cid] != null || !asked.add(cid)) return
+        warmScope.launch {
+            val r = ChannelService.preview(cid)
+            if (r is ChannelService.PreviewResult.Failed) { asked.remove(cid); return@launch }
+            if (r !is ChannelService.PreviewResult.Found || r.preview.isMember) return@launch
+            // The same notes the chat page's own ask makes, on the main thread.
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                if (r.preview.isChannel) { cache[cid] = r.preview; CryptoHub.notePlainGroup(cid) }
+                else com.fariin.app.ui.people.GroupGuestPreviews.cache[cid] = r.preview
+            }
+        }
+    }
 
     /** From the first frame: a group chat I am not in, with no channel flag readable and no answer
      *  yet, may be a channel I visit; until the answer it is drawn as neither. */

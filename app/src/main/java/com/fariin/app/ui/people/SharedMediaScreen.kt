@@ -109,7 +109,7 @@ internal fun rememberSharedMedia(cid: String, me: String): SharedMediaState {
     val ctx = LocalContext.current
     // Delete for Me in the chat takes the item off these pages too (iOS isGone).
     val hidden by HiddenMessages.ids.collectAsState()
-    val raw by produceState<Pair<List<Message>, Boolean>>(emptyList<Message>() to false, cid, me) {
+    val raw by produceState<Pair<List<Message>, Boolean>>((SharedMediaSource.memory(cid) ?: emptyList()) to false, cid, me) {
         val source = SharedMediaSource(cid, me, CryptoHub.get(ctx.applicationContext))
         val local = withContext(Dispatchers.IO) { runCatching { source.local() }.getOrDefault(emptyList()) }
         if (local.isNotEmpty()) value = local to false

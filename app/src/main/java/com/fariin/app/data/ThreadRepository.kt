@@ -2122,8 +2122,11 @@ class ThreadRepository(
      * "Search on the profile glitches").
      */
     suspend fun searchCorpus(limit: Int = ChatSearch.CORPUS_LIMIT): List<ChatSearch.Item> = try {
-        kotlinx.coroutines.withContext(Dispatchers.Default) { readCorpus(limit) }
+        kotlinx.coroutines.withContext(Dispatchers.Default) { readCorpus(limit) }.also { ChatSearch.seen["$me/$cid"] = it }
     } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { emptyList() }
+
+    /** The corpus this account last read for this chat, this run of the app (iOS loading audit). */
+    fun seenCorpus(): List<ChatSearch.Item>? = ChatSearch.seen["$me/$cid"]
 
     private suspend fun readCorpus(limit: Int): List<ChatSearch.Item> {
         val snap = convRef.collection("messages")

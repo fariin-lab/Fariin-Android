@@ -30,6 +30,9 @@ object ChatSearch {
     /** iOS goToCurrentMatch: up to 18 older pages are loaded to reach a match. */
     const val JUMP_PAGES = 18
 
+    /** The last corpus per account and chat ("me/cid"), so a second search starts on it at once. */
+    val seen = java.util.concurrent.ConcurrentHashMap<String, List<Item>>()
+
     private val MARKS = Regex("\\p{M}+")
 
     /** One character folded the way iOS folds it: case, diacritics and width. May be empty or longer. */

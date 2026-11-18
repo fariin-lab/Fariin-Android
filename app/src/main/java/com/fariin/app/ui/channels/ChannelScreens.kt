@@ -171,6 +171,8 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                             // Followed, just followed, or one I run (owner/admin: in its `users`, no follow entry).
                             val mine = r.cid !in leaving && (entries.containsKey(r.cid) || justFollowed.contains(r.cid) ||
                                 com.fariin.app.data.CryptoHub.listedConversation(r.cid)?.users?.contains(me) == true)
+                            // On screen and not mine: fetch its visitor page now, so a tap opens filled.
+                            androidx.compose.runtime.LaunchedEffect(r.cid, mine) { if (!mine) ChannelGuestPreviews.warm(r.cid) }
                             val pill = when {
                                 mine -> JoinPillState.JOINED
                                 joiningNow.contains(r.cid) -> JoinPillState.JOINING
@@ -207,6 +209,8 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                         items(shown, key = { it.cid }, contentType = { "channel" }) { r ->
                             val mine = r.cid !in leaving && (justJoined.contains(r.cid) ||
                                 com.fariin.app.data.CryptoHub.listedConversation(r.cid)?.users?.contains(me) == true)
+                            // On screen and not mine: fetch its visitor page now, so a tap opens filled.
+                            androidx.compose.runtime.LaunchedEffect(r.cid, mine) { if (!mine) ChannelGuestPreviews.warm(r.cid) }
                             val pill = when {
                                 mine -> JoinPillState.JOINED
                                 joiningNow.contains(r.cid) -> JoinPillState.JOINING

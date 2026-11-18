@@ -963,8 +963,10 @@ private fun ThreadContent(
             InChatSearchLink.requests.value = null
             selected.clear(); replyTo = null; editing = null
             search.open()
-            // The corpus is read while the field takes focus; anything typed meanwhile runs again on it.
-            val corpus = actions.onSearchCorpus()
+            // The last corpus serves at once; the fresh one is read while the field takes focus,
+            // and anything typed meanwhile runs again on it.
+            actions.onSearchCorpusSeen()?.let { search.corpus = it }
+            val corpus = actions.onSearchCorpus().ifEmpty { search.corpus }
             if (search.active) { search.corpus = corpus; if (search.update(uiNow.value.messages, force = true, navigate = true)) goToMatch() }
         }
     }

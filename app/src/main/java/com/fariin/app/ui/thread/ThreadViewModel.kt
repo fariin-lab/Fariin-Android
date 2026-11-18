@@ -319,6 +319,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         onEnsureLoaded = { id -> vm.repo.ensureLoaded(id) },
         onHiddenByBlock = { id -> vm.repo.isHiddenByBlock(id) },
         onSearchCorpus = { vm.repo.searchCorpus() },
+        onSearchCorpusSeen = { vm.repo.seenCorpus() },
         onReachMatch = { id -> vm.repo.ensureLoaded(id, maxPages = com.fariin.app.data.ChatSearch.JUMP_PAGES) },
         onEditHistory = { m -> vm.repo.editHistory(m) },
         onDeleteMany = { plan ->
@@ -418,6 +419,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     }
     val uploadCancel = remember(vm, me) { UploadCancel(me, vm.repo::cancelMediaSend, vm.repo::cancelAlbumItem) }
     // The run of voice notes the player follows when one ends, also after this chat is left (iOS handOff).
+    LaunchedEffect(ui.cid, ui.messages) { com.fariin.app.data.SharedMediaSource.noteLive(ui.cid, ui.messages) }
     LaunchedEffect(ui.cid, ui.messages) { vm.repo.media?.let { com.fariin.app.media.VoiceRun.publish(ui.cid, ui.messages, it) } }
     CompositionLocalProvider(LocalChatMedia provides vm.repo.media, LocalUploadCancel provides uploadCancel) {
         ThreadScreen(ui, onBack = onBack, onSend = vm.repo::sendText, onLoadOlder = vm.repo::loadOlderPage, onRetry = vm.repo::retry,

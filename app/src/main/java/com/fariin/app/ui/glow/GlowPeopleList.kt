@@ -72,10 +72,14 @@ fun GlowPeopleListPage(title: String, startOnGlowing: Boolean = false, onOpenPer
     var search by rememberSaveable { mutableStateOf("") }
     var reload by remember { mutableIntStateOf(0) }
     val uids = (if (tab == 0) s.glowers else s.glowing).sorted()
-    var load by remember { mutableStateOf<GlowLoad<List<GlowPerson>>>(GlowLoad.Loading) }
+    var load by remember { mutableStateOf<GlowLoad<List<GlowPerson>>>(Glow.seenPeople(uids)?.let { GlowLoad.Loaded(it) } ?: GlowLoad.Loading) }
     LaunchedEffect(uids, reload) {
-        if (load !is GlowLoad.Loaded || uids.isEmpty()) load = if (uids.isEmpty()) GlowLoad.Loaded(emptyList()) else GlowLoad.Loading
-        load = Glow.people(uids)
+        // The last copy goes up at once; the fetch replaces it, and a failure keeps it.
+        val seen = Glow.seenPeople(uids)
+        if (seen != null) load = GlowLoad.Loaded(seen)
+        else if (load !is GlowLoad.Loaded || uids.isEmpty()) load = if (uids.isEmpty()) GlowLoad.Loaded(emptyList()) else GlowLoad.Loading
+        val r = Glow.people(uids)
+        if (r is GlowLoad.Loaded || seen == null) load = r
     }
     var failed by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
