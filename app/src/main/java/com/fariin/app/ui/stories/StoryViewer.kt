@@ -15,6 +15,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -733,6 +735,23 @@ fun StoryViewer(
         return Rect(c.x - vw / 2f, c.y - vh / 2f, c.x + vw / 2f, c.y + vh / 2f)
     }
 
+    /** The pager's clip right now (the layer's shape below), or null when it is not clipped. */
+    fun flightClipFor(w: Float, h: Float): Shape? {
+        val live = sheetStories.indexOfFirst { it.id == sheetFor }
+        if (sheetFor != null && live >= 0 && !hero.live) {
+            val g = StorySheetGeometry(w, h, topInset, density, sheet.fraction, StorySheetGeometry.ownFooter(bottomInset, density))
+            val pl = g.placement(live - sheet.row.value)
+            return CardShape(w / 2f, g.restCenterY, w, g.contentH, pl.corner / maxOf(0.001f, pl.h / g.contentH))
+        }
+        if (!(hero.f > 0.0001f || hero.shrink < 1f)) return null
+        val c = card(); val r = visibleRect()
+        val s = maxOf(r.width / c.width, r.height / c.height)
+        if (s <= 0f) return null
+        val bandBottom = c.center.y + r.height / s / 2f
+        return CardShape(c.center.x, c.center.y, r.width / s, r.height / s, cornerFor(r) / s, maxOf(0f, h - bandBottom) * StoryMotion.chrome(hero.f))
+    }
+
+
     Box(
         Modifier.fillMaxSize().onSizeChanged { size = it }
             .graphicsLayer { alpha = if (hero.visible) hero.rootAlpha else 0f },
@@ -784,7 +803,19 @@ fun StoryViewer(
                     val bar = StoryMotion.chrome(hero.f)
                     shape = CardShape(c.center.x, c.center.y, r.width / s, r.height / s, radius / s, maxOf(0f, h - bandBottom) * bar)
                 }
-            },
+            }.then(if (android.os.Build.VERSION.SDK_INT >= 28) Modifier else Modifier.drawWithContent {
+                // Android 8 and older: the pager's pages are layers of their own and escaped the layer's
+                // outline clip above, so the story flew home to a round photo as a square with the
+                // picture in its corners (owner's video 2026-11-19, Oppo A5s). The same shape, cut on
+                // the canvas, which every layer drawn inside it obeys.
+                val ds = drawContext.size
+                val sh = flightClipFor(ds.width, ds.height)
+                if (sh == null) drawContent()
+                else {
+                    val path = androidx.compose.ui.graphics.Path().apply { addOutline(sh.createOutline(ds, layoutDirection, this@drawWithContent)) }
+                    clipPath(path) { this@drawWithContent.drawContent() }
+                }
+            }),
         ) { page ->
             val g = groups.getOrNull(page) ?: return@HorizontalPager
             Box(
@@ -1820,7 +1851,12 @@ private data class CardShape(val cx: Float, val cy: Float, val w: Float, val h: 
     override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
         val l = cx - w / 2f
         val t = cy - h / 2f
-        return Outline.Rounded(RoundRect(l, t, l + w, t + h + below, CornerRadius(r)))
+        // Never more than half the shorter side: flying home to a round photo the corner reaches exactly
+        // half, and a hair over it made Android 8 drop the rounding, so the card landed as a square
+        // with the story in its corners (owner's video 2026-11-19, Oppo A5s). RoundedCornerShape caps
+        // its corners the same way.
+        val cap = minOf(w, h + below) / 2f
+        return Outline.Rounded(RoundRect(l, t, l + w, t + h + below, CornerRadius(r.coerceIn(0f, maxOf(0f, cap)))))
     }
 }
 
