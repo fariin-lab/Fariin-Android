@@ -774,7 +774,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                     }
                 }
             }
-            Spacer(Modifier.height(30.dp))
+            com.fariin.app.ui.components.PageEndSpace()
         }
     }
     // Over the page, under the menus and the photo viewer: the photo's melting copy.
@@ -856,7 +856,7 @@ private fun GroupsInCommonPage(groups: List<Conversation>, me: String, onBack: (
         Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top)) {
             Spacer(Modifier.height(12.dp))
             SettingsSection { groups.forEach { g -> GroupInCommonRow(g, me, onOpenChat) } }
-            Spacer(Modifier.height(30.dp))
+            com.fariin.app.ui.components.PageEndSpace()
         }
     }
 }

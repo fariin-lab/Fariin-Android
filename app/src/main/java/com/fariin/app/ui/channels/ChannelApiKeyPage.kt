@@ -262,7 +262,7 @@ fun ChannelApiKeyScreen(cid: String, onBack: () -> Unit) {
                         icon = painterResource(if (exampleCopied) R.drawable.ic_sf_checkmark else R.drawable.ic_sf_doc_on_doc),
                         titleColor = c.blue, trailing = Trailing.NONE, last = true) { copy("Example", example); exampleCopied = true }
                 }
-                Spacer(Modifier.height(24.dp))
+                com.fariin.app.ui.components.PageEndSpace(24.dp)
             }
         }
     }

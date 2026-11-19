@@ -247,7 +247,7 @@ private fun GroupSettingsPage(cid: String, me: String, onBack: () -> Unit, open:
                 SettingsRow("Recent Actions", icon = rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_sf_clock_arrow)), last = true,
                     badge = NewBadgeSpots.GROUP_SETTINGS_RECENT_ACTIONS) { open(GroupPage.RecentActions) }
             }
-            Spacer(Modifier.height(24.dp))
+            com.fariin.app.ui.components.PageEndSpace(24.dp)
         }
     }
 }

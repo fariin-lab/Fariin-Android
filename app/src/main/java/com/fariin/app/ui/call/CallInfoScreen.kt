@@ -122,7 +122,7 @@ fun CallInfoScreen(run: CallRun, me: String, onBack: () -> Unit, onCall: (video:
                     }
                 }
             }
-            Spacer(Modifier.height(24.dp))
+            com.fariin.app.ui.components.PageEndSpace(24.dp)
         }
     }
 }
