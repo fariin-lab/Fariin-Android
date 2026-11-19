@@ -40,6 +40,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -1239,6 +1242,19 @@ private fun StoryPage(
         }
     }
 
+    // Pinch zoom state; on release it springs back to 1x and no pan.
+    var zooming by remember { mutableStateOf(false) }
+    var zoomScale by remember(story.id) { mutableFloatStateOf(1f) }
+    var zoomPan by remember(story.id) { mutableStateOf(Offset.Zero) }
+    var zoomOrigin by remember(story.id) { mutableStateOf(TransformOrigin.Center) }
+    LaunchedEffect(zooming) {
+        if (zooming || (zoomScale == 1f && zoomPan == Offset.Zero)) return@LaunchedEffect
+        val s0 = zoomScale; val p0 = zoomPan
+        androidx.compose.animation.core.animate(0f, 1f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.85f, stiffness = 500f)) { t, _ ->
+            zoomScale = s0 + (1f - s0) * t; zoomPan = p0 * (1f - t)
+        }
+        zoomScale = 1f; zoomPan = Offset.Zero
+    }
     val slop = LocalViewConfiguration.current.touchSlop
     val focus = LocalFocusManager.current
     Box(
@@ -1257,6 +1273,24 @@ private fun StoryPage(
                     val wait = if (!held && !vertical) maxOf(1L, 220L - (android.os.SystemClock.uptimeMillis() - down.uptimeMillis)) else Long.MAX_VALUE
                     val ev = withTimeoutOrNull(wait) { awaitPointerEvent() }
                     if (ev == null) { held = true; holding = true; continue }
+                    // Two fingers: pinch zoom (reference viewer). The story holds still, the chrome
+                    // fades, and letting go springs the picture back to its own size.
+                    if (!vertical && ev.changes.count { it.pressed } >= 2) {
+                        holding = true; zooming = true
+                        val c0 = ev.calculateCentroid(useCurrent = true)
+                        zoomOrigin = if (card.width > 0f && card.height > 0f) TransformOrigin(
+                            ((c0.x - card.left) / card.width).coerceIn(0f, 1f), ((c0.y - card.top) / card.height).coerceIn(0f, 1f)) else TransformOrigin.Center
+                        ev.changes.forEach { it.consume() }
+                        while (true) {
+                            val e = awaitPointerEvent()
+                            if (e.changes.none { it.pressed }) break
+                            zoomScale = (zoomScale * e.calculateZoom()).coerceIn(1f, 5f)
+                            zoomPan += e.calculatePan()
+                            e.changes.forEach { it.consume() }
+                        }
+                        zooming = false; holding = false
+                        break
+                    }
                     val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
                     if (ch.isConsumed) { holding = false; break }   // the pager took the swipe
                     tracker.addPosition(ch.uptimeMillis, ch.position)
@@ -1299,9 +1333,14 @@ private fun StoryPage(
             // clip never played (Oppo A5s, 2026-11-18).
             var playTapped by remember(story.id) { mutableStateOf(false) }
             val waitsForPlay = story.isVideo && !com.fariin.app.perf.rememberPowerState().autoplayVideos && !playTapped
-            StoryMedia(story, active = active && !stopped, onLoaded = { loaded = true },
-                onVideoProgress = { progress = it }, onVideoEnd = { goNext() }, isCurrentPage = active,
-                tapped = playTapped, onPlayTap = { playTapped = true })
+            Box(Modifier.fillMaxSize().graphicsLayer {
+                transformOrigin = zoomOrigin; scaleX = zoomScale; scaleY = zoomScale
+                translationX = zoomPan.x; translationY = zoomPan.y
+            }) {
+                StoryMedia(story, active = active && !stopped, onLoaded = { loaded = true },
+                    onVideoProgress = { progress = it }, onVideoEnd = { goNext() }, isCurrentPage = active,
+                    tapped = playTapped, onPlayTap = { playTapped = true })
+            }
             // iOS repostTapArea: a repost's middle column pauses it and shows the original author;
             // their face and name open the profile.
             val taps = remember(story.id, waitsForPlay) { story.taps + listOfNotNull(story.repostOf?.takeIf { !waitsForPlay }?.let { REPOST_TAP }) }
@@ -1314,7 +1353,7 @@ private fun StoryPage(
             // (iOS chrome), so a card on its way down is the story alone (owner 2026-11-03).
             Column(
                 Modifier.fillMaxWidth()
-                    .graphicsLayer { alpha = chrome() }
+                    .graphicsLayer { alpha = chrome() * (2f - zoomScale).coerceIn(0f, 1f) }
                     .drawBehind { drawRect(TopScrim, size = androidx.compose.ui.geometry.Size(size.width, 90.dp.toPx())) }
                     .padding(bottom = 18.dp),
             ) {
@@ -1451,7 +1490,7 @@ private fun StoryPage(
                 Text(linked, color = Color.White, fontSize = 16.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
                     style = TextStyle(shadow = androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.25f), blurRadius = 8f)),
                     modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth()
-                        .graphicsLayer { alpha = chrome() }
+                        .graphicsLayer { alpha = chrome() * (2f - zoomScale).coerceIn(0f, 1f) }
                         .padding(start = 16.dp, end = 16.dp, bottom = 14.dp))
             }
         }
@@ -1459,7 +1498,7 @@ private fun StoryPage(
         // Under the card, on the black: my own bar, or the reply field (which rides the keyboard).
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                .graphicsLayer { alpha = chrome() }
+                .graphicsLayer { alpha = chrome() * (2f - zoomScale).coerceIn(0f, 1f) }
                 .navigationBarsPadding().imePadding(),
         ) {
             // The author deletes; so does a group's owner or an admin with Delete messages (the rules'

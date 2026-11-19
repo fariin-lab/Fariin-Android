@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fariin line icon for Settings (Fariin News, a folded newspaper), drawn to sit with the Safety and Help icons: 1.5 stroke, round ends. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M5.75 4.75h10.5a1 1 0 0 1 1 1v12.5a2 2 0 0 0 2 2H6.75a3 3 0 0 1-3-3V6.75a2 2 0 0 1 2-2z" android:strokeColor="#FF000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+    <path android:pathData="M17.25 9.25h2a1 1 0 0 1 1 1v8a2 2 0 0 1-2 2" android:strokeColor="#FF000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+    <path android:pathData="M7.25 8.25h3.5v3.5h-3.5z" android:strokeColor="#FF000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+    <path android:pathData="M13 8.75h1.25M13 11.25h1.25M7.25 14.75h7M7.25 17.25h7" android:strokeColor="#FF000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+</vector>

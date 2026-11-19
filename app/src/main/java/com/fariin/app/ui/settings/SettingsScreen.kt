@@ -260,9 +260,16 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
                     badge = NewBadgeSpots.INVITE) {
                     shareInvite(ctx, profile?.handle)
                 }
-                SettingsRow("Safety", painterResource(R.drawable.ic_set_safety), trailing = Trailing.NONE,
-                    badge = NewBadgeSpots.SAFETY) {
-                    openWeb(ctx, "https://fariin.com/safety")
+                // Owner 2026-11-19: Safety (a web page) gave way to Fariin News, the official
+                // @fariin channel opened in the app.
+                val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
+                val newsScope = androidx.compose.runtime.rememberCoroutineScope()
+                SettingsRow("Fariin News", painterResource(R.drawable.ic_set_news)) {
+                    newsScope.launch {
+                        val cid = FariinNews.cid ?: com.fariin.app.data.PublicGroups.resolveGroup(FariinNews.HANDLE)?.also { FariinNews.cid = it }
+                        if (cid != null) channelNav.open(cid)
+                        else android.widget.Toast.makeText(ctx, "Couldn't open Fariin News. Check your connection and try again.", android.widget.Toast.LENGTH_SHORT).show()
+                    }
                 }
                 SettingsRow("Help & About", painterResource(R.drawable.ic_set_help), last = true,
                     badge = NewBadgeSpots.HELP) { push(PAGE_ABOUT) }
@@ -616,4 +623,10 @@ private fun TabSideEffects(active: androidx.compose.runtime.State<Boolean>, hasP
         if (on) com.fariin.app.ui.shell.TabBarVisibility.hidden = !home
         onDispose { com.fariin.app.ui.shell.TabBarVisibility.hidden = false }
     }
+}
+
+/** The official news channel behind Settings › Fariin News; its cid is found once by name. */
+private object FariinNews {
+    const val HANDLE = "fariin"
+    @Volatile var cid: String? = null
 }

@@ -74,16 +74,21 @@ internal fun StickerInfoSheet(m: Message, onDismiss: () -> Unit) {
     // The sealed picture of one someone made, opened as the bubble opens it.
     val file = if (mine) rememberGatedFile(m.localPath ?: m.imageUrl, m.enc, null).file else null
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    // Owner 2026-11-19: View sticker pack closes this sheet first, then the pack slides up as its
+    // own sheet (it used to swap in place, a pop).
+    val infoState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    @Composable
+    fun closeButton() = Box(Modifier.fillMaxWidth().height(60.dp)) {
+        Box(Modifier.padding(start = 12.dp).size(44.dp).align(Alignment.CenterStart).clip(CircleShape)
+            .background(c.label.copy(alpha = 0.08f)).clickable(onClick = onDismiss), contentAlignment = Alignment.Center) {
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = c.label, modifier = Modifier.size(20.dp))
+        }
+    }
+    if (!showPack) ModalBottomSheet(onDismissRequest = onDismiss, sheetState = infoState,
         containerColor = sheetFill, shape = SheetShape, dragHandle = null) {
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.fillMaxWidth().height(60.dp)) {
-                Box(Modifier.padding(start = 12.dp).size(44.dp).align(Alignment.CenterStart).clip(CircleShape)
-                    .background(c.label.copy(alpha = 0.08f)).clickable(onClick = onDismiss), contentAlignment = Alignment.Center) {
-                    Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = c.label, modifier = Modifier.size(20.dp))
-                }
-            }
-            if (!showPack) {
+            closeButton()
+            run {
                 StickerArt(packId, s.stickerId, m.localPath ?: m.imageUrl, m.enc, Modifier.size(200.dp))
                 Spacer(Modifier.height(10.dp))
                 Text("${pack?.title ?: "Stickers"} · Fariin", fontSize = 15.sp, color = c.secondary)
@@ -101,13 +106,20 @@ internal fun StickerInfoSheet(m: Message, onDismiss: () -> Unit) {
                         Spacer(Modifier.width(14.dp))
                         Text(if (favorite) "Remove from Favorites" else "Add to Favorites", fontSize = 17.sp, color = c.label)
                     }
-                    if (pack != null) Row(rowMod(true) { showPack = true }, verticalAlignment = Alignment.CenterVertically) {
+                    if (pack != null) Row(rowMod(true) { scope.launch { infoState.hide(); showPack = true } }, verticalAlignment = Alignment.CenterVertically) {
                         Icon(ImageVector.cachedVector(R.drawable.ic_sf_square_grid), null, tint = c.label, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(14.dp))
                         Text("View sticker pack", fontSize = 17.sp, color = c.label)
                     }
                 }
-            } else if (pack != null) {
+            }
+        }
+    }
+    if (showPack && pack != null) ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = sheetFill, shape = SheetShape, dragHandle = null) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            closeButton()
+            run {
                 Text(pack.title, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp))
                 Spacer(Modifier.height(12.dp))
