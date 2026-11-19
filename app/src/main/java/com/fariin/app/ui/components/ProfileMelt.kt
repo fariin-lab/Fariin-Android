@@ -155,7 +155,9 @@ fun ProfileMeltOverlay(m: ProfileMeltState, photoSize: Dp, squircle: Boolean = f
     }
     Box(Modifier.fillMaxSize().onGloballyPositioned { m.origin = it.positionInWindow() }) {
         if (!showing) return@Box
-        val shader = remember { if (liquid) RuntimeShader(MELT_SKSL) else null }
+        // Kept as Any: a RuntimeShader-typed local here made older phones look the class up and crash
+        // (Android 8.1, 2026-11-18). Only MeltFx, reached on 13+, names the type.
+        val shader: Any? = remember { if (liquid) MeltFx.make() else null }
         val shape = if (squircle) RoundedCornerShape(photoSize * 0.27f) else CircleShape
         // Only the strip from the top down past the photo's resting place: a full-screen layer under
         // a blur cost a whole screen of work on every frame of the scroll.
@@ -176,10 +178,8 @@ fun ProfileMeltOverlay(m: ProfileMeltState, photoSize: Dp, squircle: Boolean = f
                     // work every frame; a few fixed sizes are set up once and reused.
                     val step = 2.dp.toPx()
                     val blur = (kotlin.math.round(k * k * 18.dp.toPx() / step) * step).coerceAtLeast(0.5f)
-                    renderEffect = if (k <= 0f) null else RenderEffect.createChainEffect(
-                        RenderEffect.createRuntimeShaderEffect(shader, "content"),
-                        RenderEffect.createBlurEffect(blur, blur, Shader.TileMode.DECAL),
-                    ).asComposeRenderEffect()
+                    renderEffect = if (k <= 0f || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) null
+                        else MeltFx.effect(shader, blur)
                 } else {
                     alpha = 1f - ((p - 0.6f) / 0.4f).coerceIn(0f, 1f)
                 }
@@ -243,4 +243,14 @@ fun androidx.compose.foundation.layout.BoxScope.ProfileMeltTitle(m: ProfileMeltS
             if (!subtitle.isNullOrEmpty()) androidx.compose.material3.Text(subtitle, fontSize = 13.sp, color = c.secondary, maxLines = 1)
         }
     }
+}
+
+/** Everything that names the Android 13 shader types, so older phones never load them. */
+@androidx.annotation.RequiresApi(Build.VERSION_CODES.TIRAMISU)
+private object MeltFx {
+    fun make(): Any = RuntimeShader(MELT_SKSL)
+    fun effect(shader: Any, blur: Float): androidx.compose.ui.graphics.RenderEffect = RenderEffect.createChainEffect(
+        RenderEffect.createRuntimeShaderEffect(shader as RuntimeShader, "content"),
+        RenderEffect.createBlurEffect(blur, blur, Shader.TileMode.DECAL),
+    ).asComposeRenderEffect()
 }

@@ -334,7 +334,7 @@ internal object AnimatedShaders {
     private val shaders = HashMap<AnimatedLook, RuntimeShader>()
 
     /** [intensity] is the particle setting (0..2), read by Snow, Rain and Glowing Dots only. Not for Doodles. */
-    fun get(a: AnimatedWallpaper, width: Float, height: Float, phase: Float, dark: Boolean, intensity: Int): RuntimeShader {
+    fun get(a: AnimatedWallpaper, width: Float, height: Float, phase: Float, dark: Boolean, intensity: Int): android.graphics.Shader {
         val s = shaders.getOrPut(a.look) {
             RuntimeShader(when (a.look) {
                 AnimatedLook.LIQUID_METAL -> LIQUID_METAL
