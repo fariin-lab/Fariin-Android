@@ -1357,7 +1357,10 @@ internal fun ChatRow(
                 StoryOriginRecorders[storyKey] = rec
                 onDispose { if (StoryOriginRecorders[storyKey] === rec) StoryOriginRecorders.remove(storyKey) }
             }
-            Box(Modifier.size(54.dp).then(if (onStoryTap != null) Modifier.clickable(onClickLabel = "View story") { StoryOriginRecorders.values.toList().forEach { it() }; onStoryTap() }.semantics { contentDescription = "Story" } else Modifier)
+            Box(Modifier.size(54.dp).then(if (onStoryTap != null) Modifier.clickable(
+                // No press shade: the story opens at once (iOS), and on older Android the shade was a
+                // grey square behind the round photo (owner 2026-11-19, Oppo A5s).
+                interactionSource = null, indication = null, onClickLabel = "View story") { StoryOriginRecorders.values.toList().forEach { it() }; onStoryTap() }.semantics { contentDescription = "Story" } else Modifier)
                 .then(if (storyKey == null) Modifier else Modifier.onPlaced { placed[0] = it }
                     .graphicsLayer { alpha = if (com.fariin.app.ui.stories.StoryOrigins.hiddenKey == storyKey) 0f else 1f }),
                 contentAlignment = Alignment.Center) {

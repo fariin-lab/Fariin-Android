@@ -1061,7 +1061,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             Avatar(groupPhotoUrl, 100.dp, kind = com.fariin.app.ui.components.AvatarKind.of(true, conv["channel"] == true),
                 onResolved = photo::resolved,
                 modifier = Modifier.profilePhotoSource(photo).profileMeltSource(melt).then(
-                if (photoChoice != null) Modifier.combinedClickable(onClickLabel = "View story", onClick = photoChoice.tap,
+                if (photoChoice != null) Modifier.combinedClickable(interactionSource = null, indication = null, onClickLabel = "View story", onClick = photoChoice.tap,
                     onLongClickLabel = "View photo", onLongClick = photoChoice.hold).semantics { contentDescription = "Group photo" }
                 else if (photo.hasPhoto) Modifier.combinedClickable(interactionSource = null, indication = null,   // no grey flash on landing
                     onClickLabel = "View photo", onClick = { photo.show() },

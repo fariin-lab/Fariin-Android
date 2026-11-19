@@ -357,7 +357,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                 Avatar(info.avatarUrl, 132.dp, squircle = true, kind = com.fariin.app.ui.components.AvatarKind.CHANNEL,
                     onResolved = photo::resolved,
                     modifier = Modifier.profilePhotoSource(photo).then(Modifier.profileMeltSource(melt)).then(
-                    if (photoChoice != null) Modifier.combinedClickable(onClickLabel = "View story", onClick = photoChoice.tap,
+                    if (photoChoice != null) Modifier.combinedClickable(interactionSource = null, indication = null, onClickLabel = "View story", onClick = photoChoice.tap,
                         onLongClickLabel = "View photo", onLongClick = photoChoice.hold)
                     else if (photo.hasPhoto) Modifier.combinedClickable(onClickLabel = "View photo", onClick = { photo.show() },
                         onLongClickLabel = "View photo", onLongClick = {
