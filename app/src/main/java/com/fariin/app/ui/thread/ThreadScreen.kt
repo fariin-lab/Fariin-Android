@@ -357,11 +357,15 @@ private fun ThreadContent(
     var editing by remember { mutableStateOf<Message?>(null) }
     // iOS dropDeletedReplyTarget: the message being replied to was deleted for everyone while the
     // reply bar was up; sending would copy its words into the quote, so the quote goes and says so.
-    LaunchedEffect(replyTo?.id, ui.messages) {
-        val r = replyTo ?: return@LaunchedEffect
-        if (ui.messages.firstOrNull { it.id == r.id }?.deleted == true) {
-            replyTo = null
-            actions.onNotice("That message is no longer available")
+    // Read in a snapshot flow, not as the effect's key: a key is read by the whole thread body, so
+    // starting or ending a reply recomposed every row (Oppo A5s 2026-11-19, 30-70 ms frames on Reply).
+    val msgsForReply = androidx.compose.runtime.rememberUpdatedState(ui.messages)
+    LaunchedEffect(Unit) {
+        androidx.compose.runtime.snapshotFlow {
+            val id = replyTo?.id
+            id != null && msgsForReply.value.firstOrNull { it.id == id }?.deleted == true
+        }.collect { gone ->
+            if (gone) { replyTo = null; actions.onNotice("That message is no longer available") }
         }
     }
     var historyFor by remember { mutableStateOf<Message?>(null) }
@@ -523,7 +527,9 @@ private fun ThreadContent(
             onSendNote = { targets, note -> actions.onForwardWithNote(msgs, targets, note); selected.clear() })
     }
     com.fariin.app.ui.settings.BubbleStyleSheet.Host(ui.cid.ifEmpty { null })   // the menu's "Bubble Style" (MessageActions.kt)
-    menuFor?.let { m0 ->
+    // Its own recompose scope (Isolated): opening or closing the menu redraws the menu, not the
+    // whole thread body (each row recomposed on every open and close, Oppo 2026-11-19).
+    Isolated { menuFor?.let { m0 ->
         // The live copy: the long press keeps the row's first lambda, so a stamp, edit or
         // reaction that landed since (an expiresAt, say) would be missing from a held copy.
         val m = ui.messages.firstOrNull { it.rowId == m0.rowId } ?: m0
@@ -535,7 +541,7 @@ private fun ThreadContent(
             onEditHistory = { historyFor = it },
             onCallBack = if (ui.isGroup) null else ({ callBackFor = it }),
             source = menuSource, preview = menuPreview, onLifted = { menuLifted = m.rowId }, onLanded = { menuLifted = null })
-    }
+    } }
     // The call menu's "Voice Call" / "Video Call": the same question the bubble's tap asks.
     callBackFor?.let { cm ->
         val peer = com.fariin.app.crypto.Wire.otherUid(ui.cid, ui.me)
@@ -578,7 +584,7 @@ private fun ThreadContent(
         actions.onDeleteMany(plan); selected.clear()
     }
     val ch = ui.channel
-    postMenuFor?.let { m ->
+    Isolated { postMenuFor?.let { m ->
         if (ch != null) com.fariin.app.ui.channels.ChannelPostMenu(ch, m, onDismiss = { postMenuFor = null; postPreview = null }, preview = postPreview,
             onCopy = { copyOf(m, it); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
             onDelete = { deleteFor = it }, onQuote = { quoteFor = it }, onForward = { forwardFor = it },
@@ -590,7 +596,7 @@ private fun ThreadContent(
             onStats = { statsFor = it },
             pinned = if (ui.canPin && com.fariin.app.data.PinRules.offers(m)) (m.id in ui.pinnedIds) else null,
             onPin = { if (it.id in ui.pinnedIds) actions.onUnpin(it.id) else actions.onPin(it) })
-    }
+    } }
     statsFor?.let { m ->
         androidx.compose.ui.window.Dialog(onDismissRequest = { statsFor = null },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
@@ -3502,3 +3508,10 @@ private fun Modifier.clearOfButtonBar(): Modifier {
         clipRect(0f, 0f, size.width, (size.height - band).coerceAtLeast(0f)) { this@drawWithContent.drawContent() }
     }
 }
+
+/**
+ * A recompose scope of its own: state read inside [content] redraws only [content], not the
+ * composable around it (the thread body holds the menus' state; reading it there redrew every row).
+ */
+@Composable
+private fun Isolated(content: @Composable () -> Unit) = content()
