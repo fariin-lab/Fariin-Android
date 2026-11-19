@@ -441,6 +441,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     LaunchedEffect(uid) { if (uid != me) com.fariin.app.data.PlusVisitors.record(uid) }
     var addingToGroup by remember { mutableStateOf(false) }
     var sharingProfile by remember { mutableStateOf(false) }
+    var giftOpen by remember { mutableStateOf(false) }
     var exportJob by remember { mutableStateOf<ChatExportRun.Job?>(null) }
     val shareCtx = androidx.compose.ui.platform.LocalContext.current
     var blocked by remember { mutableStateOf(false) }
@@ -741,6 +742,11 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             }
             person?.links?.let { ProfileLinkChips(it, Modifier.padding(horizontal = 16.dp).padding(bottom = 12.dp)) }
             if (uid != me) com.fariin.app.data.ContactNames.note(uid)?.let { NotesCard(it) }
+            // Fariin Plus: Gift Fariin Plus, its own card (never my own page or a blocked person's).
+            if (uid != me && !blocked && com.fariin.app.data.PlusStore.giftsShown) SettingsSection {
+                SettingsRow("Gift Fariin Plus", icon = androidx.compose.ui.res.painterResource(R.drawable.ic_gift),
+                    titleColor = com.fariin.app.ui.settings.PlusBlue, trailing = Trailing.NONE, last = true) { giftOpen = true }
+            }
             SettingsSection {
                 DisappearingRow(timer, short = true, badge = NewBadgeSpots.PROFILE_DISAPPEARING) { timerOpen = true }
                 // iOS: Restricted chat, for a chat that exists (the switch lives on it).
@@ -783,11 +789,14 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             com.fariin.app.ui.components.PageEndSpace()
         }
     }
+    if (giftOpen) com.fariin.app.ui.settings.GiftPlusSheet(uid, name, person?.photoUrl ?: conv?.photos?.get(uid)) { giftOpen = false }
     // Over the page, under the menus and the photo viewer: the photo's melting copy.
     com.fariin.app.ui.components.ProfileMeltOverlay(melt, 100.dp) { Avatar(person?.photoUrl ?: conv?.photos?.get(uid), 100.dp) }
     com.fariin.app.ui.components.GlassMenu(moreOpen, moreAnchor, buildList {
         if (shareProfile != null) add(com.fariin.app.ui.components.GlassMenuItem("Share Profile",
             androidx.compose.ui.res.painterResource(R.drawable.ic_link_share)) { shareProfile() })
+        if (uid != me && !blocked && com.fariin.app.data.PlusStore.giftsShown) add(com.fariin.app.ui.components.GlassMenuItem("Gift Fariin Plus",
+            androidx.compose.ui.res.painterResource(R.drawable.ic_gift)) { giftOpen = true })
         if (addToGroup != null) add(com.fariin.app.ui.components.GlassMenuItem("Add to a Group",
             androidx.compose.ui.res.painterResource(R.drawable.ic_add_member)) { addToGroup() })
         if (fromChat) add(com.fariin.app.ui.components.GlassMenuItem("Change Wallpaper",

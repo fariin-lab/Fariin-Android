@@ -712,7 +712,8 @@ fun ChatListScreen(
                             ListRow("Archived", fi(R.drawable.ic_archive), trailing = "$archivedCount") { showArchive = true }
                         }
                     }
-                    val row: @Composable (Conversation) -> Unit = { conv ->
+                    // hold: what a long press does instead of selecting (a Recent row's Remove from Recent).
+                    val rowHold: @Composable (Conversation, (() -> Unit)?) -> Unit = { conv, hold ->
                         val ring = com.fariin.app.data.StoryRings.forChat(conv, me, stories, storyHidden)
                         // Android's swipe (owner 2026-11-06): one action, left only, as Google's lists:
                         // archive (unarchive in the Archive), with Undo. Mute, Delete, Pin and Read are
@@ -747,10 +748,11 @@ fun ChatListScreen(
                                     onOpen(conv)
                                 }
                             },
-                            onLongPress = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); toggle(conv) },
+                            onLongPress = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); if (hold != null) hold() else toggle(conv) },
                             onPressStart = { if (!selecting) com.fariin.app.data.ThreadRowsPrefetch.prefetch(me, conv.id) })
                         }
                     }
+                    val row: @Composable (Conversation) -> Unit = { rowHold(it, null) }
                     val officialItem: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
                         item(key = com.fariin.app.data.OfficialChannel.CID, contentType = "chat") {
                             Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) {
@@ -796,11 +798,22 @@ fun ChatListScreen(
                                 item(key = "h-recent") { RecentHeader { SearchRecents.clear(appCtx, me) } }
                                 items(recents, key = { "r-" + it.id }, contentType = { "chat" }) { e ->
                                     val conv = if (e.kind == "chat") byId[e.key] else null
-                                    if (conv != null) row(conv)
-                                    else if (e.kind == "person") {
-                                        val p = com.fariin.app.data.Person(e.key, e.title, e.handle, e.photo.ifEmpty { null })
-                                        PersonRow(p) {
-                                            scope.launch { people.startChat(p)?.let { cid -> SearchRecents.recordPerson(appCtx, me, p, cid); searching = false; query = ""; people.chat(cid) } ?: run { searching = false; query = ""; people.contact(p.uid) } }   // the chat can't be made (their Messages setting): their page, never a dead tap (owner 2026-11-10)
+                                    // A long press offers Remove from Recent (iOS 7571e6bf5); results keep no menu.
+                                    var removeMenu by remember { mutableStateOf(false) }
+                                    Box {
+                                        if (conv != null) rowHold(conv) { removeMenu = true }
+                                        else if (e.kind == "person") {
+                                            val p = com.fariin.app.data.Person(e.key, e.title, e.handle, e.photo.ifEmpty { null })
+                                            PersonRow(p, onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); removeMenu = true }) {
+                                                scope.launch { people.startChat(p)?.let { cid -> SearchRecents.recordPerson(appCtx, me, p, cid); searching = false; query = ""; people.chat(cid) } ?: run { searching = false; query = ""; people.contact(p.uid) } }   // the chat can't be made (their Messages setting): their page, never a dead tap (owner 2026-11-10)
+                                            }
+                                        }
+                                        com.fariin.app.ui.components.GlassDropdown(removeMenu, onDismissRequest = { removeMenu = false },
+                                            offset = androidx.compose.ui.unit.DpOffset(16.dp, 0.dp)) {
+                                            androidx.compose.material3.DropdownMenuItem(
+                                                text = { Text("Remove from Recent", color = c.red) },
+                                                trailingIcon = { Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark_circle), contentDescription = null, tint = c.red) },
+                                                onClick = { removeMenu = false; SearchRecents.remove(appCtx, me, e.key) })
                                         }
                                     }
                                 }
@@ -1209,9 +1222,9 @@ private fun Centered(icon: ImageVector?, title: String, body: String?, action: P
 /** Section label, Material style: small, in the brand blue, 16 from the edge. */
 /** A person found by username (iOS newPersonRow): photo, name, the @handle in blue. */
 @Composable
-private fun PersonRow(p: com.fariin.app.data.Person, onClick: () -> Unit) {
+private fun PersonRow(p: com.fariin.app.data.Person, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     val c = Fariin.colors
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().combinedClickable(onLongClick = onLongClick, onClick = onClick).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
         Avatar(p.photoUrl, 54.dp, Modifier.padding(vertical = 9.dp))
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {

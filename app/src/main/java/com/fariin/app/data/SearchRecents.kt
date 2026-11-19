@@ -47,6 +47,12 @@ object SearchRecents {
         remember(c, me, Entry("person", p.uid, p.shownName, p.handle, p.photoUrl ?: ""), twin = chatId?.let { "chat:$it" })
     }
 
+    /** One row (iOS remove(key:)): every saved entry with that id, whatever kind recorded it. */
+    fun remove(c: Context, me: String, key: String) {
+        start(c, me)
+        if (entries.removeAll { it.key == key }) save(c, me)
+    }
+
     fun clear(c: Context, me: String) {
         entries.clear()
         save(c, me)

@@ -96,6 +96,10 @@ import com.fariin.app.ui.theme.LocalFariinColors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.tasks.await
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -461,6 +465,26 @@ internal fun ViewersSheet(
     // A group story's list is the poster's to read only: "All Viewers", then Replies (iOS group
     // stories v2), the story's shared thread, when replies are on and it is not a channel's.
     val readOnly = story.groupId != null
+    // Fariin Plus storyRewatch: on MY OWN story only (not a group's read-only list, not Fariin's own),
+    // how many times each viewer came back. Asked when the list loads, then every 20 s while open;
+    // memory only. Any answer but {state:"on"} draws nothing.
+    var again by remember(storyId) { mutableStateOf<Map<String, Int>>(emptyMap()) }
+    val rewatchOn = com.fariin.app.data.PlusStore.state("storyRewatch") == com.fariin.app.data.PlusStore.State.ON &&
+        !readOnly && story.authorUid == me && !com.fariin.app.data.OfficialStories.isOfficial(story)
+    LaunchedEffect(storyId, rewatchOn) {
+        if (!rewatchOn) { again = emptyMap(); return@LaunchedEffect }
+        while (true) {
+            val d = try {
+                com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.PlusStore.REGION)
+                    .getHttpsCallable("plusStoryRewatch").call(mapOf("storyId" to storyId)).await().getData() as? Map<*, *>
+            } catch (_: Exception) { null }
+            if (d != null) again = if (d["state"] == "on") (d["counts"] as? Map<*, *>).orEmpty().mapNotNull { (k, v) ->
+                val n = (v as? Number)?.toInt() ?: 0
+                if (k is String && n >= 1) k to n else null
+            }.toMap() else emptyMap()
+            delay(20_000)
+        }
+    }
     val repliesTab = readOnly && com.fariin.app.data.GroupStoryRules.hasRepliesTab(story, convs)
     val first = if (readOnly) "All Viewers" else customName ?: StoryRules.audienceTitle(story)
     val bothTabs = if (readOnly) repliesTab else story.audienceLabel == "everyone" && !story.oneTime
@@ -610,7 +634,7 @@ internal fun ViewersSheet(
                         LazyColumn(Modifier.fillMaxWidth().weight(1f).nestedScroll(listPull)) {
                             items(rows.size, key = { rows[it].uid }) { i ->
                                 val v = rows[i]
-                                ViewerRow(v, readOnly, isHidden = v.uid in hidden,
+                                ViewerRow(v, readOnly, isHidden = v.uid in hidden, again = again[v.uid] ?: 0,
                                     onOpen = { onOpenPerson(v.uid) },
                                     onSendMessage = { onSendMessage(v) },
                                     onToggleHidden = { StoryPrivacyStore.setHidden(setOf(v.uid), v.uid !in hidden) },
@@ -644,7 +668,7 @@ private fun SheetTab(title: String, selected: Boolean, enabled: Boolean, onClick
 /** One viewer (iOS StoryViewerRowContent): 46dp face with the reaction disc, name, "6m ago", the "...". */
 @Composable
 private fun ViewerRow(
-    v: StoryViewer, readOnly: Boolean, isHidden: Boolean,
+    v: StoryViewer, readOnly: Boolean, isHidden: Boolean, again: Int = 0,
     onOpen: () -> Unit, onSendMessage: () -> Unit, onToggleHidden: () -> Unit, onBlock: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
@@ -671,6 +695,16 @@ private fun ViewerRow(
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(v.name, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(viewedAgo(v.viewedAtMs), color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        }
+        // Plus: watched again N times, a small Plus-blue capsule before the "…" button.
+        if (again >= 1) Row(Modifier.padding(start = 8.dp).clip(CircleShape).background(com.fariin.app.ui.settings.PlusBlue.copy(alpha = 0.18f))
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .semantics(mergeDescendants = true) { contentDescription = if (again == 1) "Watched again once" else "Watched again $again times" },
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            Icon(ImageVector.cachedVector(R.drawable.ic_sf_arrow_clockwise), contentDescription = null,
+                tint = com.fariin.app.ui.settings.PlusBlue, modifier = Modifier.size(12.dp))
+            Text("$again", color = com.fariin.app.ui.settings.PlusBlue, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum"))
         }
         if (!readOnly) {
             Box {
