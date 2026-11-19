@@ -97,8 +97,10 @@ internal fun ChatRowVerifiedMark(conv: Conversation, me: String) {
         // Looked up while the row is on screen, at most once a day (VerifiedPeople).
         LaunchedEffect(other) { VerifiedPeople.warm(ctx.applicationContext, other) }
         val kinds by VerifiedPeople.kinds.collectAsState()
-        val kind = VerifiedPeople.badge(kinds, other) ?: return
-        Seal(if (VerifiedPeople.isGold(kind)) SealGold else SealBlue, "Verified")
+        val kind = VerifiedPeople.badge(kinds, other)
+        if (kind != null) Seal(if (VerifiedPeople.isGold(kind)) SealGold else SealBlue, "Verified")
+        // The Plus star after the tick (only while Plus is visible to me and they have it).
+        com.fariin.app.ui.settings.PlusBadge(other, 16.dp, Modifier.padding(start = 4.dp))
         return
     }
     if (conv.modLabel == "scam" || conv.modLabel == "fake") {

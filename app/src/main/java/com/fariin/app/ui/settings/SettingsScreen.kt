@@ -85,7 +85,7 @@ import com.fariin.app.ui.theme.Fariin
  * (SettingsSearch.kt), Share profile = my QR code and the scanner, Invite Friends (QrPages.kt),
  * Chat Wallpaper and Chat Color (LookPages.kt), App Icon (AppIconPage.kt).
  *
- * Subscriptions (SubscriptionsPage.kt): a preview for @v only, as iOS.
+ * Subscription (SubscriptionsPage.kt): the Fariin Plus page, only while plusState says visible.
  * TODO: the admin sections.
  */
 @Composable
@@ -229,9 +229,9 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
                     badge = NewBadgeSpots.MY_PROFILE) { push(PAGE_GLOW_PROFILE) }
             }
             SettingsSection {
-                // Subscriptions, first in this card, for @v alone while it is being built (iOS,
-                // owner 2026-10-27). The page is a preview: nothing on it is sold or switched on.
-                if (showsSubscriptions(profile?.handle)) SettingsRow("Subscriptions", painterResource(R.drawable.ic_star_outline),
+                // Fariin Plus, first in this card, only while the server's plusState says visible
+                // (contract v1): the app never checks a name or uid itself.
+                if (com.fariin.app.data.PlusStore.visible) SettingsRow("Subscription", painterResource(R.drawable.ic_plus_badge),
                     badge = NewBadgeSpots.SUBSCRIPTIONS) { push(PAGE_SUBSCRIPTIONS) }
                 SettingsRow("Account", painterResource(R.drawable.ic_account),
                     badge = NewBadgeSpots.ACCOUNT) { push(PAGE_ACCOUNT) }
@@ -338,6 +338,7 @@ private fun ProfileHeader(profile: MyProfile?, photo: com.fariin.app.ui.photo.Pr
                     Spacer(Modifier.width(6.dp))
                     com.fariin.app.ui.components.VerifiedSeal(c.blue, Modifier.size(22.dp), "Verified")
                 }
+                if (profile != null) PlusBadge(profile.uid, 22.dp, Modifier.padding(start = 6.dp))
             }
             val h = profile?.handle.orEmpty()
             if (h.isNotEmpty()) Text("@$h", fontSize = 17.sp, color = c.secondary, modifier = Modifier.padding(top = 2.dp))

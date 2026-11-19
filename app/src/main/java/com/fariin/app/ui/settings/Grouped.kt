@@ -143,6 +143,8 @@ internal fun SettingsRow(
     badge: String? = null,
     /** A line always under the title, however short (the Devices page's Security Checkup row). */
     subtitle: String? = null,
+    /** The icon's own colour (the Plus row's star); default the title's colour. */
+    iconTint: Color? = null,
     onClick: (() -> Unit)? = null,
 ) {
     val c = Fariin.colors
@@ -158,7 +160,7 @@ internal fun SettingsRow(
         if (icon != null) {
             Box(Modifier.width(40.dp), contentAlignment = Alignment.CenterStart) {
                 // iOS SettingsRowLabel: the icon is the text's colour, not grey (owner 2026-11-04: grey looked dead).
-                Icon(icon, contentDescription = null, tint = titleColor ?: c.label, modifier = Modifier.size(24.dp))
+                Icon(icon, contentDescription = null, tint = iconTint ?: titleColor ?: c.label, modifier = Modifier.size(24.dp))
             }
             Spacer(Modifier.width(16.dp))
         }

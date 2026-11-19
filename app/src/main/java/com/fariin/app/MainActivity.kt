@@ -224,10 +224,11 @@ class MainActivity : ComponentActivity() {
                 com.fariin.app.data.AppConfig.start(me)   // getAppConfig: this account's settings and limits
                 com.fariin.app.data.MsgPolicy.start(me)
                 com.fariin.app.data.Glow.start(applicationContext, me)
+                com.fariin.app.data.PlusStore.start(me)
             }
             onDispose {
                 later.cancel()
-                if (later.started) { com.fariin.app.data.Glow.stop(); com.fariin.app.data.AppFeatures.stop(); com.fariin.app.data.AppConfig.stop(); com.fariin.app.data.MsgPolicy.stop() }
+                if (later.started) { com.fariin.app.data.PlusStore.stop(); com.fariin.app.data.Glow.stop(); com.fariin.app.data.AppFeatures.stop(); com.fariin.app.data.AppConfig.stop(); com.fariin.app.data.MsgPolicy.stop() }
             }
         }
         // The official Fariin chat (announcements and my read state). Its row from the phone's copy now,
@@ -571,6 +572,7 @@ class MainActivity : ComponentActivity() {
         // A page change cut off by leaving the app lands now, never left a third of the way across.
         com.fariin.app.ui.components.PageMotion.settle()
         com.fariin.app.system.AppUpdateGate.onForeground(this)
+        com.fariin.app.data.PlusStore.onForeground()
         com.fariin.app.system.LowStorage.checkAndWarn(applicationContext)
         PushRouter.activeChatId = openChat
         DeviceRegistry.startHeartbeat()
@@ -578,6 +580,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         started = false
+        com.fariin.app.data.PlusStore.onBackground()
         com.fariin.app.ui.components.PageMotion.settle()
         PushRouter.activeChatId = null   // a chat open behind the home screen still gets its notification
         DeviceRegistry.stopHeartbeat()

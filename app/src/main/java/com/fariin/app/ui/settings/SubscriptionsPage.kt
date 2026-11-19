@@ -1,163 +1,243 @@
 package com.fariin.app.ui.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
-import com.fariin.app.ui.components.cachedVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fariin.app.R
+import com.fariin.app.data.PlusStore
 import com.fariin.app.ui.components.FariinSheetDialog
-import com.fariin.app.ui.components.FloatingIcon
+import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.ui.components.rememberSheetMotion
 import com.fariin.app.ui.components.sheetDrag
 import com.fariin.app.ui.theme.Fariin
+import java.text.DateFormat
+import java.util.Date
 
 /*
- * Settings > Subscriptions (iOS SubscriptionsView): A PREVIEW, shown only to @v (owner 2026-10-27,
- * the same gate as iOS). Nothing here is real yet: no purchase, no feature switched on. The button
- * says "Coming Soon" and does nothing, and the line under it says so. A tap on a feature opens a
- * sheet that explains it.
+ * Settings > Subscription > Fariin Plus (iOS PlusView, contract v1). Exists only while the server's
+ * plusState says visible; the page closes itself if that turns false. Every feature row comes from
+ * the server's states ("off" rows are not listed); nothing here unlocks anything.
  */
 
 internal const val PAGE_SUBSCRIPTIONS = "settings:subscriptions"
 
-/** iOS: the row is there for the account whose username is "v", and for nobody else. */
-internal fun showsSubscriptions(handle: String?) = handle?.lowercase() == "v"
+/** The one Plus colour (owner): Fariin blue. */
+val PlusBlue = Color(0xFF0590F7)
 
-private class PlusFeature(val icon: Int, val title: String, val detail: String, val more: String)
+private class PlusFeature(val id: String, val icon: Int, val title: String, val detail: String)
 
 private val plusFeatures = listOf(
-    PlusFeature(R.drawable.ic_sf_arrow_up, "Bigger Files", "Send files and videos up to 4 GB each.",
-        "Share long videos, big documents and whole folders in one go, in any chat. Everyone can still open what you send, whether they have Plus or not."),
-    PlusFeature(R.drawable.ic_sf_bolt_fill, "Faster Downloads", "Photos, videos and files arrive at full speed.",
-        "Media you open downloads at the full speed of your connection, so long videos and large files are ready sooner."),
-    PlusFeature(R.drawable.ic_mic, "Voice to Text", "Read a voice message when you can't listen.",
-        "Tap a voice message to see what was said as text. Useful in a meeting, on the bus, or anywhere you can't play sound."),
-    PlusFeature(R.drawable.ic_sf_globe, "Translate Chats", "Read any message in your own language.",
-        "Messages in another language show a Translate button. Your own messages are sent as you wrote them."),
-    PlusFeature(R.drawable.ic_story_folder, "More Folders and Pins", "Up to 20 chat folders and 10 pinned chats.",
-        "Sort your chats into more folders and keep more of them pinned at the top of your list."),
-    PlusFeature(R.drawable.ic_sf_face_smiling, "Extra Stickers and Reactions", "Packs and reactions only members get.",
-        "New sticker packs and reactions that only Plus members can send. Everyone in the chat still sees them."),
-    PlusFeature(R.drawable.ic_sf_person, "Video Profile Photo", "A short moving clip on your profile.",
-        "Set a few seconds of video as your profile picture. It plays when someone opens your profile."),
-    PlusFeature(R.drawable.ic_set_appearance, "App Icons", "Pick an icon for Fariin on your Home Screen.",
-        "Choose from a set of extra app icons for your Home Screen."),
-    PlusFeature(R.drawable.ic_eye_off, "Quiet Story Viewing", "Watch stories without showing up in the views.",
-        "Watch stories without appearing in the list of who has seen them, for as long as you leave it on."),
-    PlusFeature(R.drawable.ic_star_outline, "Member Badge", "A star beside your name in chats and lists.",
-        "A small star next to your name shows that you support Fariin."),
+    PlusFeature("badge", R.drawable.ic_plus_badge, "Plus badge next to your name",
+        "A star next to your name in chats, lists and your profile, so people know you have Plus."),
+    PlusFeature("storyExpiry", R.drawable.ic_sf_clock, "Choose how long a story stays",
+        "Choose how many hours your story stays up, instead of always one day."),
+    PlusFeature("appIcons", R.drawable.ic_sf_square_grid, "Custom app icons",
+        "Pick a different Fariin icon for your home screen."),
+    PlusFeature("morePins", R.drawable.ic_pin_menu, "More pinned chats",
+        "Pin more chats to the top of your chat list."),
+    PlusFeature("profileVisitors", R.drawable.ic_views, "See who visited your profile",
+        "See who opened your profile lately, from the eye button at the top of Settings."),
+    PlusFeature("animatedAvatar", R.drawable.ic_sf_person_crop_circle_fill, "Animated profile pictures",
+        "Use a short video as your profile picture. It plays in chats and on your profile."),
+    PlusFeature("storyRewatch", R.drawable.ic_sf_arrow_clockwise, "See when someone watches your story again",
+        "In your story's viewers list, a small number shows who came back and how many times."),
+    PlusFeature("bubbleStyles", R.drawable.ic_settings_chats, "Exclusive chat bubble styles",
+        "Give your chat bubbles a look that only Plus members have."),
+    PlusFeature("sharedWallpaper", R.drawable.ic_wallpaper, "Chat wallpaper both sides see",
+        "Set one wallpaper for a chat, and the other person sees it too."),
+    PlusFeature("sendEffects", R.drawable.ic_sf_sparkles, "Message send effects",
+        "Send a message with a short animation, like hearts or confetti."),
+    PlusFeature("chatKey", R.drawable.ic_chat_key, "Choose your own Chat Key",
+        "Pick your own Chat Key instead of the random 6-digit one Fariin makes for you."),
+    PlusFeature("gifts", R.drawable.ic_gift, "Gift Fariin Plus",
+        "Give Fariin Plus to a friend from their profile."),
+    PlusFeature("chatFolders", R.drawable.ic_story_folder, "Chat Folders",
+        "Sort your chats into folders and switch between them at the top of your chat list."),
 )
 
 @Composable
 internal fun SubscriptionsPage(pop: () -> Unit) {
-    val c = Fariin.colors
-    var opened by remember { mutableStateOf<PlusFeature?>(null) }
-    Box(Modifier.fillMaxSize()) {
-        ScrollPage("Subscriptions", pop) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 12.dp, bottom = 6.dp),
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                // The star alone, in the iOS gradient.
-                val gradient = Brush.linearGradient(listOf(Color(0xFF7B61FF), Color(0xFF0A84FF), Color(0xFF2BD2C9)))
-                Icon(ImageVector.cachedVector(R.drawable.ic_sf_star_fill), contentDescription = null, tint = Color.White,
-                    modifier = Modifier.size(72.dp).graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
-                        .drawWithContent { drawContent(); drawRect(gradient, blendMode = BlendMode.SrcIn) })
-                Text("Fariin Plus", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = c.label)
-                Text("More of Fariin, and it helps keep the app free for everyone.", fontSize = 15.sp,
-                    color = c.secondary, textAlign = TextAlign.Center)
+    // Plus went away for this account while the page was open: so does the page.
+    val popNow by rememberUpdatedState(pop)
+    LaunchedEffect(PlusStore.visible) { if (!PlusStore.visible) popNow() }
+    var opened by remember { mutableStateOf<String?>(null) }
+    val shown = plusFeatures.filter { PlusStore.state(it.id) != PlusStore.State.OFF }
+    ScrollPage("Fariin Plus", pop) {
+        PlusHeader()
+        if (shown.isNotEmpty()) SettingsSection(header = "Features",
+            footer = if (!PlusStore.purchasesOn) "Buying Fariin Plus in the app is coming later." else null) {
+            shown.forEachIndexed { i, f ->
+                val on = PlusStore.state(f.id) == PlusStore.State.ON
+                SettingsRow(f.title, painterResource(f.icon), value = if (on) "On" else null,
+                    subtitle = if (f.id == "morePins") PlusStore.pinnedChats?.let { "Up to $it pinned chats" } else null,
+                    iconTint = if (f.id == "badge") PlusBlue else null,
+                    last = i == shown.lastIndex) { opened = f.id }
             }
-            SettingsSection(header = "What's included") {
-                plusFeatures.forEachIndexed { i, f ->
-                    SettingsRow(f.title, painterResource(f.icon), subtitle = f.detail, last = i == plusFeatures.lastIndex) { opened = f }
-                }
-            }
-            // Room for the button bar pinned below.
-            Spacer(Modifier.height(130.dp))
         }
-        // Always on screen, at the foot (owner 2026-10-27: "no need to scroll for it").
-        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(c.bgSecondary)
-            .padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(horizontal = 20.dp).padding(top = 10.dp, bottom = 6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.fillMaxWidth().height(50.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.5f)),
-                contentAlignment = Alignment.Center) {
-                Text("Coming Soon", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.onAccent)
-            }
-            Text("A preview. These features aren't available yet and nothing can be bought here.",
-                fontSize = 12.sp, color = c.secondary, textAlign = TextAlign.Center)
-        }
+        Spacer(Modifier.height(24.dp))
     }
-    opened?.let { f -> PlusFeatureSheet(f) { opened = null } }
+    opened?.let { start -> PlusFeatureSheet(shown, start) { opened = null } }
 }
 
-/** One feature, explained: its icon, its name and a few lines on what it does (iOS FeatureSheet). */
+/** The page's top: the star, the name and where this account stands. */
 @Composable
-private fun PlusFeatureSheet(f: PlusFeature, onDismiss: () -> Unit) {
+private fun PlusHeader() {
+    val c = Fariin.colors
+    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 12.dp, bottom = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        PlusBadgeImage(72.dp)
+        Text("Fariin Plus", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = c.label)
+        val until = PlusStore.untilMs
+        val line = when {
+            PlusStore.isPlus && until != null -> "Active until " + DateFormat.getDateInstance(DateFormat.LONG).format(Date(until))
+            PlusStore.isPlus -> "Active"
+            else -> "Not active"
+        }
+        Text(line, fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center)
+    }
+}
+
+/** The star alone, in the Plus colour, whatever the uid (the Plus page, sheets). */
+@Composable
+fun PlusBadgeImage(size: Dp, modifier: Modifier = Modifier, tint: Color = PlusBlue) {
+    Icon(ImageVector.cachedVector(R.drawable.ic_plus_badge), contentDescription = null, tint = tint, modifier = modifier.size(size))
+}
+
+/**
+ * The Plus badge beside a name: draws nothing unless Plus is visible to this account and [uid] has
+ * it, so it can sit after any name without an `if`. [size] = the verified mark's size beside it.
+ * [opensPage]: a tap opens the Plus page as a sheet (a profile, where the tap means nothing else).
+ */
+@Composable
+fun PlusBadge(uid: String, size: Dp, modifier: Modifier = Modifier, opensPage: Boolean = false) {
+    if (!PlusStore.showsBadge(uid)) return
+    var page by remember { mutableStateOf(false) }
+    Icon(ImageVector.cachedVector(R.drawable.ic_plus_badge), contentDescription = null, tint = PlusBlue,
+        modifier = modifier.size(size).semantics { contentDescription = "Fariin Plus" }
+            .then(if (opensPage) Modifier.clickable(interactionSource = null, indication = null) { page = true } else Modifier))
+    if (page) PlusPageSheet { page = false }
+}
+
+/** The Plus page in a sheet with Done (a tap on someone's badge, or a locked feature's row). */
+@Composable
+fun PlusPageSheet(onDismiss: () -> Unit) {
+    val c = Fariin.colors
+    val motion = rememberSheetMotion { onDismiss() }
+    LaunchedEffect(PlusStore.visible) { if (!PlusStore.visible) motion.close() }
+    var opened by remember { mutableStateOf<String?>(null) }
+    FariinSheetDialog(motion, fill = c.bgSecondary) { _ ->
+        Box(Modifier.fillMaxSize()) {
+            val shown = plusFeatures.filter { PlusStore.state(it.id) != PlusStore.State.OFF }
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                Spacer(Modifier.height(44.dp))
+                PlusHeader()
+                if (shown.isNotEmpty()) SettingsSection(header = "Features",
+                    footer = if (!PlusStore.purchasesOn) "Buying Fariin Plus in the app is coming later." else null) {
+                    shown.forEachIndexed { i, f ->
+                        val on = PlusStore.state(f.id) == PlusStore.State.ON
+                        SettingsRow(f.title, painterResource(f.icon), value = if (on) "On" else null,
+                            subtitle = if (f.id == "morePins") PlusStore.pinnedChats?.let { "Up to $it pinned chats" } else null,
+                            iconTint = if (f.id == "badge") PlusBlue else null,
+                            last = i == shown.lastIndex) { opened = f.id }
+                    }
+                }
+                Spacer(Modifier.height(32.dp))
+            }
+            Box(Modifier.fillMaxWidth().height(28.dp).sheetDrag(motion))
+            Text("Done", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.accent,
+                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).clip(CircleShape)
+                    .clickable { motion.close() }.padding(horizontal = 8.dp, vertical = 4.dp))
+            opened?.let { start -> PlusFeatureSheet(shown, start) { opened = null } }
+        }
+    }
+}
+
+/** One page per shown feature, swiped sideways, opening on the tapped one; one button closes it. */
+@Composable
+private fun PlusFeatureSheet(features: List<PlusFeature>, start: String, onDismiss: () -> Unit) {
+    if (features.isEmpty()) { onDismiss(); return }
     val c = Fariin.colors
     val motion = rememberSheetMotion { onDismiss() }
     val density = LocalDensity.current
     val windowH = LocalWindowInfo.current.containerSize.height
-    val statusTop = WindowInsets.statusBars.getTop(density)
-    val navBottom = WindowInsets.navigationBars.getBottom(density)
-    var contentH by remember { mutableIntStateOf(0) }
-    val restH = if (contentH > 0) contentH.toFloat() else with(density) { 400.dp.toPx() }
-    val wantMid = with(density) { windowH - statusTop - 10.dp.toPx() - restH - navBottom }.coerceAtLeast(0f)
-    if (motion.mid <= 0f) motion.mid = wantMid
-    androidx.compose.runtime.SideEffect { motion.fitMid(wantMid) }
+    val want = with(density) { (windowH - WindowInsets.statusBars.getTop(density) - 10.dp.toPx() - 500.dp.toPx() - WindowInsets.navigationBars.getBottom(density)).coerceAtLeast(0f) }
+    if (motion.mid <= 0f) motion.mid = want
+    androidx.compose.runtime.SideEffect { motion.fitMid(want) }
+    val pager = rememberPagerState(initialPage = features.indexOfFirst { it.id == start }.coerceAtLeast(0)) { features.size }
     FariinSheetDialog(motion, fill = c.bgSecondary) { _ ->
-        Box(Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
-                .onSizeChanged { if (it.height > 0) contentH = it.height }.padding(horizontal = 28.dp),
-                horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(ImageVector.cachedVector(f.icon), contentDescription = null, tint = c.label,
-                    modifier = Modifier.padding(top = 64.dp).size(52.dp))
-                Text(f.title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label,
-                    textAlign = TextAlign.Center, modifier = Modifier.padding(top = 16.dp))
-                Text(f.more, fontSize = 17.sp, color = c.secondary, textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 10.dp))
-                Text("Coming with Fariin Plus", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.secondary,
-                    modifier = Modifier.padding(top = 32.dp, bottom = 20.dp))
+        Column(Modifier.fillMaxWidth().height(500.dp)) {
+            Box(Modifier.fillMaxWidth().height(28.dp).sheetDrag(motion), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(36.dp, 5.dp).clip(CircleShape).background(c.secondary.copy(alpha = 0.4f)))
             }
-            Box(Modifier.fillMaxWidth().height(28.dp).sheetDrag(motion))
-            FloatingIcon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Close", onClick = { motion.close() },
-                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp), circle = true)
+            HorizontalPager(pager, Modifier.fillMaxWidth().weight(1f)) { i ->
+                val f = features[i]
+                Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.padding(horizontal = 20.dp).padding(top = 8.dp).fillMaxWidth().height(190.dp)
+                        .clip(RoundedCornerShape(28.dp)).background(PlusBlue.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center) {
+                        Icon(ImageVector.cachedVector(f.icon), contentDescription = null,
+                            tint = if (f.id == "badge") PlusBlue else c.label, modifier = Modifier.size(60.dp))
+                    }
+                    Text(f.title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 24.dp).padding(top = 22.dp))
+                    Text(f.detail, fontSize = 17.sp, color = c.secondary, textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 28.dp).padding(top = 14.dp))
+                }
+            }
+            Row(Modifier.fillMaxWidth().padding(bottom = 18.dp), horizontalArrangement = Arrangement.Center) {
+                features.indices.forEach { i ->
+                    Box(Modifier.padding(horizontal = 3.5.dp).size(7.dp).clip(CircleShape)
+                        .background(if (i == pager.currentPage) c.label else c.secondary.copy(alpha = 0.35f)))
+                }
+            }
+            val cur = features.getOrNull(pager.currentPage)
+            val label = if (cur != null && PlusStore.state(cur.id) == PlusStore.State.ON) "OK" else "Included in Fariin Plus"
+            Box(Modifier.padding(horizontal = 20.dp).padding(bottom = 12.dp).fillMaxWidth().height(50.dp).clip(CircleShape)
+                .background(PlusBlue).clickable { motion.close() }, contentAlignment = Alignment.Center) {
+                Text(label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+            }
         }
     }
 }

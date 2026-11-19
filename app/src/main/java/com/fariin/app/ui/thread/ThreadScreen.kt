@@ -1805,6 +1805,8 @@ private fun HeaderBody(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Uni
                             Spacer(Modifier.width(5.dp))
                             com.fariin.app.ui.components.VerifiedSeal(c.blue, Modifier.size(16.dp), "Verified")
                         }
+                        if (!ui.isGroup && ui.channel == null)
+                            com.fariin.app.ui.settings.PlusBadge(com.fariin.app.crypto.Wire.otherUid(ui.cid, ui.me), 16.dp, Modifier.padding(start = 5.dp))
                         // The timer is on: a small mark beside the name (iOS ChatHeaderView secondary icon).
                         if (ui.disappearSeconds > 0) {
                             Spacer(Modifier.width(5.dp))

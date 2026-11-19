@@ -181,6 +181,7 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
                             Spacer(Modifier.width(4.dp))
                             com.fariin.app.ui.components.VerifiedSeal(c.blue, Modifier.size(15.dp), "Verified")
                         }
+                        com.fariin.app.ui.settings.PlusBadge(uidOf(conv), 15.dp, Modifier.padding(start = 4.dp))
                     }
                     // The line's room is kept while the handle loads, so its arrival moves nothing.
                     when {
@@ -690,6 +691,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                     Spacer(Modifier.width(6.dp))
                     com.fariin.app.ui.components.VerifiedSeal(if (vKind != null && com.fariin.app.data.VerifiedPeople.isGold(vKind)) androidx.compose.ui.graphics.Color(0xFFE8B21E) else c.blue, Modifier.size(20.dp), "Verified")
                 }
+                // A tap on the star opens the Plus page as a sheet.
+                com.fariin.app.ui.settings.PlusBadge(uid, 20.dp, Modifier.padding(start = 6.dp), opensPage = true)
             }
             person?.handle?.takeIf { it.isNotEmpty() }?.let { com.fariin.app.ui.components.CopyOnHold("@$it") { Text("@$it", fontSize = 16.sp, color = c.secondary) } }
             Spacer(Modifier.height(16.dp))
