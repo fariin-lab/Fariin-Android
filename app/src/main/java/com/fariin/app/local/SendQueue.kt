@@ -34,6 +34,8 @@ object SendQueue {
         val mentions: List<String> = emptyList(),
         /** A channel post's bold runs as the wire JSON (TextFormat), sealed only at the send. */
         val fmt: String? = null,
+        /** Fariin Plus send effect (hearts, confetti, balloons, sparkles), plain `fx` like `bs`. */
+        val fx: String? = null,
     )
 
     @Volatile private var root: File? = null
@@ -108,6 +110,7 @@ object SendQueue {
             e.replyText?.let { put("rt", it) }
             if (e.mentions.isNotEmpty()) put("mn", JSONArray(e.mentions))
             e.fmt?.let { put("fm", it) }
+            e.fx?.let { put("fx", it) }
         })
     }.toString()
 
@@ -120,7 +123,7 @@ object SendQueue {
             Entry(id, cid, t, o.optDouble("ts", 0.0),
                 o.optString("rid").ifEmpty { null }, o.optString("ra").ifEmpty { null }, if (o.has("rt")) o.getString("rt") else null,
                 o.optJSONArray("mn")?.let { m -> (0 until m.length()).mapNotNull { j -> m.optString(j).ifEmpty { null } } } ?: emptyList(),
-                o.optString("fm").ifEmpty { null })
+                o.optString("fm").ifEmpty { null }, o.optString("fx").ifEmpty { null })
         }
     }
 }

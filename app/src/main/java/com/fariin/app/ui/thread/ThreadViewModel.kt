@@ -226,6 +226,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         onSendReply = { t, r -> vm.repo.sendText(t, r) },
         onSendMentioned = { t, r, ids -> vm.repo.sendText(t, r, ids) },
         onSendBold = { t, r, ids, fmt -> vm.repo.sendText(t, r, ids, fmt) },
+        onSendFx = { t, r, ids, fmt, fx -> vm.repo.sendText(t, r, ids, fmt, fx) },
         onSendSticker = { s, r -> vm.repo.sendSticker(s, r) },
         onSendGif = { g, r -> vm.repo.sendGif(g, r) },
         onPollImage = { jpeg -> vm.repo.uploadPollImage(jpeg) },

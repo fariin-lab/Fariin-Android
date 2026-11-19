@@ -1,5 +1,8 @@
 package com.fariin.app.ui.settings
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
+
 import com.fariin.app.ui.components.GlassAlert
 import com.fariin.app.ui.components.underBar
 
@@ -61,6 +64,28 @@ internal object AppIcons {
         Choice(".IconSand", "Sand", R.drawable.app_icon_sand),
     )
 
+    /** Fariin Plus icons (feature appIcons): offered only while plusState says so. */
+    val plus = listOf(
+        Choice(".IconPlusBlack", "Plus Black", R.drawable.app_icon_plus_black),
+        Choice(".IconPlusBlue", "Plus Blue", R.drawable.app_icon_plus_blue),
+        Choice(".IconBlush", "Blush", R.drawable.app_icon_blush),
+        Choice(".IconLavender", "Lavender", R.drawable.app_icon_lavender),
+        Choice(".IconPeach", "Peach", R.drawable.app_icon_peach),
+    )
+    private val every get() = all + plus
+    fun isPlus(alias: String) = plus.any { it.alias == alias }
+
+    /**
+     * On every real plusState answer: a Plus icon kept while appIcons is not "on" goes back to the
+     * default (never on an offline or old answer; the caller only calls it on a real one).
+     */
+    fun enforce(c: Context) {
+        val app = c.applicationContext
+        if (com.fariin.app.data.PlusStore.state("appIcons") == com.fariin.app.data.PlusStore.State.ON) return
+        val now = runCatching { shown(app) }.getOrNull() ?: return
+        if (isPlus(now)) runCatching { choose(app, all[0].alias) }
+    }
+
     private fun component(c: Context, alias: String) = ComponentName(c.packageName, "com.fariin.app$alias")
 
     private fun enabled(c: Context, alias: String): Boolean {
@@ -71,14 +96,14 @@ internal object AppIcons {
 
     /** The last pick, kept on disk so a pick the app died before finishing can be finished later. */
     private fun saved(c: Context): String? =
-        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_CHOSEN, null)?.takeIf { a -> all.any { it.alias == a } }
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_CHOSEN, null)?.takeIf { a -> every.any { it.alias == a } }
     private const val PREFS = "fariin_appicon"
     private const val KEY_CHOSEN = "chosen"
 
     /** The alias the launcher shows now: the one enabled, else the default (enabled in the manifest).
      *  With more than one enabled (a pick not finished yet), the last pick. */
     fun current(c: Context): String {
-        val on = all.filter { enabled(c, it.alias) }.map { it.alias }
+        val on = every.filter { enabled(c, it.alias) }.map { it.alias }
         if (on.size > 1) saved(c)?.takeIf { it in on }?.let { return it }
         return on.firstOrNull() ?: all[0].alias
     }
@@ -91,7 +116,7 @@ internal object AppIcons {
     fun heal(c: Context) {
         val app = c.applicationContext
         val keep = saved(app) ?: return
-        val extra = runCatching { all.count { it.alias != keep && enabled(app, it.alias) } }.getOrDefault(0)
+        val extra = runCatching { every.count { it.alias != keep && enabled(app, it.alias) } }.getOrDefault(0)
         if (extra == 0 || !enabled(app, keep)) return
         chosen = keep
         // heal runs on a start-up thread; the lifecycle observer must be added on the main thread.
@@ -122,7 +147,7 @@ internal object AppIcons {
         androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.addObserver(object : androidx.lifecycle.DefaultLifecycleObserver {
             override fun onStop(owner: androidx.lifecycle.LifecycleOwner) {
                 val keep = chosen ?: return
-                for (ch in all) if (ch.alias != keep) runCatching {
+                for (ch in every) if (ch.alias != keep) runCatching {
                     app.packageManager.setComponentEnabledSetting(component(app, ch.alias), PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP)
                 }
                 chosen = null
@@ -139,6 +164,7 @@ internal fun AppIconPage(pop: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     // iOS says so after a change: "You have changed the icon for "Fariin"." with the new icon.
     var changed by remember { mutableStateOf<AppIcons.Choice?>(null) }
+    var plusPage by remember { mutableStateOf(false) }
     val barScroll = rememberScrollState()
     BarPage("App Icon", onBack = pop, under = underBar(barScroll)) { top ->
         Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -166,6 +192,41 @@ internal fun AppIconPage(pop: () -> Unit) {
                     }
                 }
             }
+            // Fariin Plus icons: locked opens the Plus page, on switches; Plus Black/Blue carry the star.
+            val plusState = com.fariin.app.data.PlusStore.state("appIcons")
+            if (plusState != com.fariin.app.data.PlusStore.State.OFF) {
+                Text("Fariin Plus", fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(start = 4.dp, top = 8.dp))
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(c.card).padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                    AppIcons.plus.chunked(4).forEach { row ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                            row.forEach { ch ->
+                                val sel = ch.alias == current
+                                Column(Modifier.weight(1f).clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {
+                                    if (ch.alias == current) return@clickable
+                                    if (plusState != com.fariin.app.data.PlusStore.State.ON) { plusPage = true; return@clickable }
+                                    try { AppIcons.choose(ctx, ch.alias); current = ch.alias; changed = ch }
+                                    catch (e: Exception) { error = e.message ?: "Something went wrong." }
+                                }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    val shape = RoundedCornerShape(15.dp)
+                                    Box {
+                                        Image(painterResource(ch.art), contentDescription = ch.label, contentScale = ContentScale.Crop,
+                                            modifier = Modifier.size(64.dp).clip(shape)
+                                                .border(if (sel) 3.dp else 1.dp, if (sel) c.label else c.label.copy(alpha = 0.1f), shape))
+                                        if (ch.alias == ".IconPlusBlack" || ch.alias == ".IconPlusBlue")
+                                            PlusBadgeImage(16.dp, Modifier.align(Alignment.TopEnd).offset(x = 5.dp, y = (-5).dp)
+                                                .clip(androidx.compose.foundation.shape.CircleShape).background(c.card).padding(2.dp))
+                                    }
+                                    Text(ch.label, fontSize = 13.sp, color = if (sel) c.label else c.secondary, maxLines = 1)
+                                }
+                            }
+                            repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+                        }
+                    }
+                }
+                Text("The launcher may take a few seconds to show the new icon, and some launchers remove the shortcut from the home screen.",
+                    fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 4.dp))
+            }
             // iOS: "...on your Home Screen, in notifications and in the App Library." Android has no
             // App Library and keeps its own small notification icon, so the line names what changes here.
             Text("The icon changes on your Home screen and in the app list.", fontSize = 13.sp, color = c.secondary,
@@ -186,6 +247,7 @@ internal fun AppIconPage(pop: () -> Unit) {
             confirmButton = { TextButton(onClick = { changed = null }) { Text("OK", color = c.label) } },
             containerColor = c.card, titleContentColor = c.label, textContentColor = c.label)
     }
+    if (plusPage) PlusPageSheet { plusPage = false }
     error?.let { msg ->
         GlassAlert(onDismissRequest = { error = null }, title = { Text("Couldn't change the icon") }, text = { Text(msg) },
             confirmButton = { TextButton(onClick = { error = null }) { Text("OK", color = c.label) } },

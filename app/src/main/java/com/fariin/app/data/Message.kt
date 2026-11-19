@@ -115,6 +115,8 @@ data class Message(
     val quoteId: String? = null,
     /** The sender's bubble style id, plain `bs` beside the sealed text (BubbleStyles); null = normal. */
     val bubbleStyle: String? = null,
+    /** Fariin Plus send effect, plain `fx` (SendEffects.IDS); played only after the server says so. */
+    val fx: String? = null,
     /** The sender chose the style's corner decorations too, plain `bsd` (BubbleStyles.placed). */
     val bubbleDecor: Boolean = false,
     /** A channel post's bold runs (TextFormat), from `fmt` opened like the text; empty = all regular. */
@@ -342,6 +344,7 @@ data class Message(
                 },
                 quoteId = ((data["quote"] as? Map<*, *>)?.get("qid") as? String)?.takeIf { QuoteRules.isQid(it) },
                 bubbleStyle = BubbleStyles.parseId(data["bs"]),
+                fx = (data["fx"] as? String)?.takeIf { it in SendEffects.IDS },
                 bubbleDecor = BubbleStyles.parseDecor(data["bsd"]),
                 // A 1:1 takes bold only when both it and the words are sealed (iOS bold-everywhere):
                 // runs stored in the clear would tell the server where the bold words are.

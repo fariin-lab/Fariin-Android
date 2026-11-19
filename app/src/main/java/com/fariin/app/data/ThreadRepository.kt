@@ -853,7 +853,10 @@ class ThreadRepository(
     fun sendText(text: String, reply: Message?, mentions: List<String>) = sendText(text, reply, mentions, null)
 
     /** [fmt]: a channel post's bold runs as wire JSON (TextFormat) for text.trim(); null = none. */
-    fun sendText(text: String, reply: Message?, mentions: List<String>, fmt: String?) {
+    fun sendText(text: String, reply: Message?, mentions: List<String>, fmt: String?) = sendText(text, reply, mentions, fmt, null)
+
+    /** [fx]: a Fariin Plus send effect; only on a single bubble (never on a split long text). */
+    fun sendText(text: String, reply: Message?, mentions: List<String>, fmt: String?, fx: String?) {
         val t = text.trim()
         if (t.isEmpty()) return
         // iOS ThreadView.send: one bubble holds 2,500 (owner 2026-10-29); longer text goes out as
@@ -868,21 +871,21 @@ class ThreadRepository(
             }
             return
         }
-        sendOne(t, reply, mentions, null, fmt = fmt)
+        sendOne(t, reply, mentions, null, fmt = fmt, fx = fx?.takeIf { it in SendEffects.IDS })
     }
 
     private var lastTap = 0.0
 
     /** One bubble's text; [after] = the send it must follow (a long text's earlier bubble). */
     private fun sendOne(t: String, reply: Message?, mentions: List<String>, after: kotlinx.coroutines.Job?, card: Boolean = true,
-                        fmt: String? = null): kotlinx.coroutines.Job? {
+                        fmt: String? = null, fx: String? = null): kotlinx.coroutines.Job? {
         // A card is quoted by its noun (iOS safeText), never by its raw marker.
         val ref = reply?.let { Message.ReplyRef(it.id, it.authorId, (CardRules.previewWord(it.text) ?: it.bodyText).take(200)) }
         // Never the same millisecond as the bubble before (a long text's parts keep their order on screen).
         val tap = maxOf(System.currentTimeMillis().toDouble(), lastTap + 1).also { lastTap = it }
         val clientId = UUID.randomUUID().toString().uppercase()
         val e = SendQueue.Entry(clientId, cid, t, tap, ref?.id, ref?.authorId, ref?.text, mentions,
-            fmt = fmt)
+            fmt = fmt, fx = fx)
         // The link card follows the text (iOS attachLinkPreview): one built while typing shows on
         // my bubble at once; otherwise it is fetched for up to 6 s beside the send.
         if (card) LinkPreviews.cardUrlFor(t, LinkPreviews.enabled(), LinkPreviews.takeSuppressed(cid))
@@ -930,10 +933,12 @@ class ThreadRepository(
         // My bubble style read ONCE, at the tap: the bubble on screen and the message sent carry the
         // same one even if the style is changed while this one is still going up.
         val style = styleAtSend.getOrPut(e.clientId) { BubbleStyles.forSending(cid).let { it to BubbleStyles.decorForSending(it) } }
+        e.fx?.let { fxAtSend[e.clientId] = it }
         pending[e.clientId] = Message(
             id = e.clientId, authorId = me, text = e.text, createdAtMillis = e.ts, hasServerTime = false,
             clientTs = e.ts, clientId = e.clientId, sendState = Message.SendState.SENDING, replyTo = ref,
             mentions = e.mentions, bubbleStyle = style.first, bubbleDecor = style.second,   // from the first frame
+            fx = e.fx,
             bold = TextFormat.parse(e.fmt, e.text.length),
         )
         rebuild()
@@ -951,6 +956,7 @@ class ThreadRepository(
                 order.noteAck(e.clientId, System.currentTimeMillis() - e.ts)
                 SendQueue.remove(me, e.clientId)
                 styleAtSend.remove(e.clientId)
+                fxAtSend.remove(e.clientId)
                 cardFor.remove(e.clientId)?.let { u -> on.launch { attachCard(e.clientId, u) } }
             } catch (x: Exception) {
                 cardFor.remove(e.clientId)
@@ -1019,7 +1025,7 @@ class ThreadRepository(
         // quoted reply, its mentions and its bold. It used to go as a new plain message.
         val tap = maxOf(System.currentTimeMillis().toDouble(), lastTap + 1).also { lastTap = it }
         val fmt = TextFormat.serialize(m.bold, m.text.length)
-        val e = SendQueue.Entry(id, cid, m.text, tap, m.replyTo?.id, m.replyTo?.authorId, m.replyTo?.text, m.mentions, fmt = fmt)
+        val e = SendQueue.Entry(id, cid, m.text, tap, m.replyTo?.id, m.replyTo?.authorId, m.replyTo?.text, m.mentions, fmt = fmt, fx = m.fx)
         drive(e, checkFirst = true, sendScope, save = true)
     }
 
@@ -1751,6 +1757,9 @@ class ThreadRepository(
         (snap.get("users") as? List<*>)?.filterIsInstance<String>()
     } catch (_: Exception) { null } ?: memberUids()
 
+    /** clientId -> Plus send effect for that text; dropped once it is on the server. */
+    private val fxAtSend = java.util.concurrent.ConcurrentHashMap<String, String>()
+
     /** clientId -> (bs, bsd) as read when the text was sent; dropped once it is on the server. */
     private val styleAtSend = java.util.concurrent.ConcurrentHashMap<String, Pair<String?, Boolean>>()
 
@@ -1826,6 +1835,7 @@ class ThreadRepository(
         // A quoted channel post: only the server snapshot's id, in the clear (iOS ChatService).
         if (quote != null) msg["quote"] = mapOf("qid" to quote)
         if (countsAsUnread && storyMention == null) putBubbleStyle(msg, clientId)
+        if (!forwarded && quote == null && storyMention == null) fxAtSend[clientId]?.let { msg["fx"] = it }
         // A poll says in the clear only pollMulti / pollEndsAt (iOS ChatService); the rest stays sealed.
         msg.putAll(PollRules.clearFields(t))
         batch.set(convRef.collection("messages").document(clientId), msg)
@@ -1917,6 +1927,7 @@ class ThreadRepository(
             runCatching { crypto.sealForGroup(j, members, cid) }.getOrNull()?.let { msg["fwd"] = if (it == j) s.map() else it }
         }
         if (quote != null) msg["quote"] = mapOf("qid" to quote)   // a quoted channel post (iOS sendGroupText)
+        if (!forwarded && quote == null) fxAtSend[clientId]?.let { msg["fx"] = it }
         // Bold runs (TextFormat), sealed like the text: plain in a plain channel.
         if (fmt != null && t.isNotEmpty()) msg["fmt"] = crypto.sealForGroup(fmt, members, cid)
         // No bubble style in a group or channel (iOS spec 2026-11-10: styles are 1:1 only).
@@ -2486,7 +2497,7 @@ class ThreadRepository(
         val TOMBSTONE_STRIP = listOf("imageUrl", "videoUrl", "thumbUrl", "audioUrl", "fileUrl", "album",
             "fileName", "fileSize", "waveform", "duration", "blurhash", "linkPreview", "poll", "locationCard",
             "contactCard", "replyTo", "reactions", "videoEnc", "thumbEnc", "viewOnce", "mentions", "forwarded",
-            "fwdChannel", "fwd", "thumb", "edits", "editedAt", "quote", "bs", "bsd", "fmt", "origin", "fileNameEnc")   // bs/bsd: the rules refuse a tombstone keeping a bubble style (iOS b189891b)
+            "fwdChannel", "fwd", "thumb", "edits", "editedAt", "quote", "bs", "bsd", "fx", "fmt", "origin", "fileNameEnc")   // bs/bsd: the rules refuse a tombstone keeping a bubble style (iOS b189891b)
     }
 }
 

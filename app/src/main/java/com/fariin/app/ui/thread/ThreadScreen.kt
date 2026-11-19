@@ -52,6 +52,7 @@ import com.fariin.app.media.VoiceRecorder
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -341,6 +342,11 @@ private fun ThreadContent(
     // Long-press menu, delete question, info, reply and edit targets (MessageActions.kt).
     var callBackFor by remember { mutableStateOf<Message?>(null) }
     var menuFor by remember { mutableStateOf<Message?>(null) }
+    // Fariin Plus send effects: the one picked on Send's hold (read once by the send), and the one playing.
+    val fxNext = remember { mutableStateOf<String?>(null) }
+    var fxPlaying by remember { mutableStateOf<Pair<String, Long>?>(null) }
+    var fxPlusPage by remember { mutableStateOf(false) }
+    if (fxPlusPage) com.fariin.app.ui.settings.PlusPageSheet { fxPlusPage = false }
     // Where the pressed row sits is read from its own coordinates at the long press (each row keeps
     // a handle, set once it is placed; no per-frame position callback), and the pressed row's own copy
     // for the lifted message (MessageMenuOverlay); the real row hides while its copy is up.
@@ -1442,6 +1448,23 @@ private fun ThreadContent(
                 // iOS: at the composer's side margin, 10 above it, over the edge glass.
                 }, modifier = Modifier.align(Alignment.BottomEnd).zIndex(1f).padding(end = COMPOSER_SIDE, bottom = with(density) { bottomBarPx.toDp() } + 10.dp))
             }
+            // Fariin Plus send effect over the chat; it has no touch handling, so taps go through.
+            fxPlaying?.let { (id, k) -> Box(Modifier.matchParentSize().zIndex(2f)) { SendEffectOverlay(id, k) { fxPlaying = null } } }
+            // Receiving: others' new messages with an effect, newest 20 on open, or a live arrival
+            // while at the bottom with the app in front; only what plusEffects names plays.
+            if (ui.channel == null) {
+                val fxCtx = LocalContext.current
+                val newest = ui.messages.lastOrNull()?.id
+                LaunchedEffect(ui.cid, newest) {
+                    if (newest == null || !com.fariin.app.data.PlusStore.inFront) return@LaunchedEffect
+                    if (listState.firstVisibleItemIndex > 1) return@LaunchedEffect
+                    val cand = com.fariin.app.data.SendEffects.candidates(fxCtx, ui.cid, ui.me, ui.messages.takeLast(20))
+                    if (cand.isEmpty()) return@LaunchedEffect
+                    val mid = com.fariin.app.data.SendEffects.ask(fxCtx, ui.cid, cand.map { it.id }) ?: return@LaunchedEffect
+                    val fx = cand.firstOrNull { it.id == mid }?.fx ?: return@LaunchedEffect
+                    if (!com.fariin.app.data.SendEffects.animationsOff(fxCtx)) fxPlaying = fx to System.nanoTime()
+                }
+            }
         }
         // The bottom bar floats over the end of the chat too (iOS paints no bar behind its controls):
         // it takes no height of its own, draws over the list's last stretch, and the list is padded by it.
@@ -1551,6 +1574,8 @@ private fun ThreadContent(
                 // The box's words, for the link card above it (LinkDraftBar).
                 var linkText by remember { mutableStateOf(actions.draft) }
                 val send: (String, List<String>, String?) -> Unit = { t, ids, fmt ->
+                    val fx = fxNext.value.also { fxNext.value = null }
+                    val sendFx = actions.onSendFx
                     val r = replyTo
                     val e = editing
                     val tagged = actions.onSendMentioned.takeIf { ids.isNotEmpty() }
@@ -1570,6 +1595,11 @@ private fun ThreadContent(
                                 quoting = q
                                 actions.onNotice("Couldn't send the quote. Try again.")
                             }
+                        }
+                        // Fariin Plus: the effect rides this one bubble; I see it play at once.
+                        fx != null && sendFx != null -> {
+                            replyTo = null; sendFx(t, r, ids, fmt, fx)
+                            if (!com.fariin.app.data.SendEffects.animationsOff(context)) fxPlaying = fx to System.nanoTime()
                         }
                         bolded != null && fmt != null -> { replyTo = null; bolded(t, r, ids, fmt) }
                         tagged != null -> { replyTo = null; tagged(t, r, ids) }
@@ -1660,6 +1690,11 @@ private fun ThreadContent(
                     onRecording = steady1 { r: Boolean -> voiceRecording = r }, onCapturing = steady1(actions.onRecordingVoice),
                     voiceOff = held(com.fariin.app.data.GroupAdmins.SendKind.VOICE), onVoiceOff = steady1(actions.onNotice),
                     onRowPlaced = steady1 { r: androidx.compose.ui.geometry.Rect? -> sendMotion.composerRow = r },
+                    // Fariin Plus send effects: 1:1s and groups, not channels, not the first message
+                    // in a chat, not while quoting or editing.
+                    effects = if (ch != null || editing != null || quoting != null || ui.messages.isEmpty()) com.fariin.app.data.PlusStore.State.OFF
+                        else com.fariin.app.data.PlusStore.state("sendEffects"),
+                    onPickFx = steady1 { id: String? -> if (id == null) fxPlusPage = true else fxNext.value = id },
                     onCamera = steady0 {
                         val stop = held(com.fariin.app.data.GroupAdmins.SendKind.PHOTOS)
                         if (stop != null) actions.onNotice(stop) else { attachCamera = true; attachOpen = true }
@@ -2678,6 +2713,10 @@ private fun Composer(
     mentions: MentionSource? = null,
     /** The field / record bar row's place on screen, where a send flies from (SendMotion.kt). */
     onRowPlaced: (androidx.compose.ui.geometry.Rect?) -> Unit = {},
+    /** Fariin Plus send effects on Send's hold: OFF = no menu; LOCKED = one row to the Plus page. */
+    effects: com.fariin.app.data.PlusStore.State = com.fariin.app.data.PlusStore.State.OFF,
+    /** An effect picked (then the send runs), or null = the locked row (open the Plus page). */
+    onPickFx: (String?) -> Unit = {},
     /** The camera in the field (iOS, 2026-10-15); null hides it. */
     onCamera: (() -> Unit)? = null,
     /** The empty field's grey words ("Broadcast" for a channel's admin). */
@@ -3001,8 +3040,8 @@ private fun Composer(
                     Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_sf_arrow_up), contentDescription = "Send voice message", tint = Color.White, modifier = Modifier.size(22.dp))
                 }
             } else if ((draft.isNotBlank() || sendsWithoutText) && !recording) {
-                Box(
-                    Modifier.size(COMPOSER_BUTTON).floating(fill = myFill()).clickable {
+                var fxMenu by remember { mutableStateOf(false) }
+                val sendNow = {
                         val t = draft
                         val ids = mentions?.let { com.fariin.app.data.MentionRules.forSend(t.trim(), picks, it.members) } ?: emptyList()
                         // The runs measured on the words as sent (trimmed), as iOS does.
@@ -3012,9 +3051,27 @@ private fun Composer(
                         boxBold = emptyList()
                         draft = ""
                         onSend(t, ids, fmt)
-                    },
+                }
+                val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+                val holdable = effects != com.fariin.app.data.PlusStore.State.OFF && prefill == null && draft.isNotBlank()
+                Box(
+                    Modifier.size(COMPOSER_BUTTON).floating(fill = myFill()).then(Modifier.combinedClickable(
+                        onLongClick = if (holdable) ({ haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); fxMenu = true }) else null,
+                        onClick = { sendNow() })),
                     contentAlignment = Alignment.Center,
                 ) {
+                    com.fariin.app.ui.components.GlassDropdown(fxMenu, onDismissRequest = { fxMenu = false }) {
+                        if (effects == com.fariin.app.data.PlusStore.State.ON) {
+                            Text("Send with Effect", fontSize = 13.sp, color = Fariin.colors.secondary,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+                            com.fariin.app.data.SendEffects.IDS.forEach { id ->
+                                androidx.compose.material3.DropdownMenuItem(text = { Text(com.fariin.app.data.SendEffects.title(id)) },
+                                    onClick = { fxMenu = false; onPickFx(id); sendNow() })
+                            }
+                        } else androidx.compose.material3.DropdownMenuItem(
+                            text = { Column { Text("Send with Effect"); Text("Fariin Plus", fontSize = 12.sp, color = Fariin.colors.secondary) } },
+                            onClick = { fxMenu = false; onPickFx(null) })
+                    }
                     // iOS: a tick while editing (the change is saved, not sent), the arrow otherwise.
                     Icon(androidx.compose.ui.res.painterResource(if (prefill != null) R.drawable.ic_sf_checkmark else R.drawable.ic_sf_arrow_up),
                         contentDescription = if (prefill != null) "Save" else "Send", tint = Color.White, modifier = Modifier.size(22.dp))

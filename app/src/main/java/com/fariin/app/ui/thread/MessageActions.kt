@@ -75,6 +75,8 @@ data class ThreadActions(
     val onSendMentioned: ((String, Message?, List<String>) -> Unit)? = null,
     /** A channel post with bold runs ([TextFormat] wire JSON), with its reply and @mentions. */
     val onSendBold: ((String, Message?, List<String>, String) -> Unit)? = null,
+    /** Fariin Plus: a text with a send effect (words, reply, @mentions, bold runs, effect id). */
+    val onSendFx: ((String, Message?, List<String>, String?, String) -> Unit)? = null,
     /** The new words, and their bold runs as wire JSON (null = none). */
     val onEdit: (Message, String, String?) -> Unit = { _, _, _ -> },
     val onDeleteForEveryone: (Message) -> Unit = {},
