@@ -161,9 +161,14 @@ internal fun StickerArt(packId: String, stickerId: String, url: String?, enc: co
     when {
         own != null -> AsyncImage(own, contentDescription = null, contentScale = ContentScale.Fit, modifier = modifier)
         packId == "mine" || (asset == null && enc != null) -> {
-            val got = rememberGatedFile(url, enc, AutoDownload.Kind.PHOTOS)
+            // Owner 2026-11-19 (the grey box for seconds): a sticker seen once is drawn from its own
+            // copy, kept by sticker id (each send has its own link, so the link cache missed it), and
+            // a sticker is never held back by photo auto-download (it is a few KB).
+            val seen = remember(packId, stickerId) { SeenStickers.file(ctx, packId, stickerId) }
+            val got = rememberGatedFile(if (seen != null) null else url, enc, null)
+            LaunchedEffect(got.file) { got.file?.let { f -> withContext(kotlinx.coroutines.Dispatchers.IO) { SeenStickers.keep(ctx, packId, stickerId, f) } } }
             val px = with(LocalDensity.current) { StickerGifRules.STICKER_SIDE.dp.roundToPx() }
-            val bmp = rememberBitmap(got.file, px)
+            val bmp = rememberBitmap(seen ?: got.file, px)
             Box(modifier) { if (bmp != null) Image(bmp, null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) }
         }
         asset != null && asset.endsWith(".tgs") -> {
@@ -946,3 +951,26 @@ private fun Modifier.gridTopClip(hide: () -> Float): Modifier = this.then(Modifi
     val top = ((TOP_BAND - 2) * (1f - hide()) + 6f).dp.toPx()
     clipRect(top = top) { this@drawWithContent.drawContent() }
 })
+
+
+/** Custom stickers already seen on this phone, by sticker id (plain copies in the app's cache). */
+internal object SeenStickers {
+    private val safe = Regex("^[A-Za-z0-9_-]{1,80}$")
+    private fun dir(ctx: android.content.Context) = java.io.File(ctx.cacheDir, "seen-stickers")
+    private fun name(packId: String, stickerId: String) =
+        if (safe.matches(packId) && safe.matches(stickerId)) "${packId}_$stickerId" else null
+
+    fun file(ctx: android.content.Context, packId: String, stickerId: String): java.io.File? =
+        name(packId, stickerId)?.let { java.io.File(dir(ctx), it) }?.takeIf { it.isFile && it.length() > 0 }
+
+    fun keep(ctx: android.content.Context, packId: String, stickerId: String, from: java.io.File) {
+        val n = name(packId, stickerId) ?: return
+        runCatching {
+            val d = dir(ctx).apply { mkdirs() }
+            val to = java.io.File(d, n)
+            if (to.isFile && to.length() > 0) return
+            val tmp = java.io.File(d, "$n.part")
+            from.copyTo(tmp, overwrite = true); tmp.renameTo(to)
+        }
+    }
+}
