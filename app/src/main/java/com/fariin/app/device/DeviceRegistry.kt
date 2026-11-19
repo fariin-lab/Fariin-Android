@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -107,10 +108,13 @@ object DeviceRegistry {
         _revoked.value = reason
     }
 
-    private suspend fun reasonFor(uid: String, id: String) = DeviceRecord.reason(
-        replaced = noteExists(uid, "deviceReplaced", id),
-        refusedForLimit = noteExists(uid, "deviceRefusals", id),
-    )
+    // Both notes are read at once, not one after the other: on a slow phone each server read is about
+    // a second, and the "Logged in on another phone" notice waited for both (owner 2026-11-19).
+    private suspend fun reasonFor(uid: String, id: String) = kotlinx.coroutines.coroutineScope {
+        val replaced = async { noteExists(uid, "deviceReplaced", id) }
+        val refused = async { noteExists(uid, "deviceRefusals", id) }
+        DeviceRecord.reason(replaced = replaced.await(), refusedForLimit = refused.await())
+    }
 
     // ------------------------------------------------------------------ this device
 
@@ -206,15 +210,28 @@ object DeviceRegistry {
         val uid = uid ?: return
         if (watcher != null) return
         val id = thisDeviceId(app)
-        watcher = devices(uid).document(id).addSnapshotListener(MetadataChanges.INCLUDE) { snap, error ->
+        // The whole device list, not only this phone's record (owner 2026-11-19, same as iOS 190f827e5):
+        // the server removes this record only after the new phone has registered and its trigger has
+        // woken up, seconds later. A newer phone in the list means this one is replaced now; the
+        // order is the server's own (later createdAt, or the same and a higher id), so a phone the
+        // server would keep is never signed out.
+        watcher = devices(uid).addSnapshotListener(MetadataChanges.INCLUDE) { snap, error ->
             if (!registered) return@addSnapshotListener
             if (snap == null && error != null) {
                 // An error ends the listener for good; drop it so the next start watches again.
                 watcher?.remove(); watcher = null
                 return@addSnapshotListener
             }
-            if (snap == null || snap.metadata.isFromCache || snap.exists()) return@addSnapshotListener
-            scope.launch { revoke(uid, id) }
+            if (snap == null || snap.metadata.isFromCache || snap.metadata.hasPendingWrites()) return@addSnapshotListener
+            val mine = snap.documents.firstOrNull { it.id == id }
+            if (mine == null) { scope.launch { revoke(uid, id) }; return@addSnapshotListener }
+            val myAt = mine.getTimestamp("createdAt") ?: return@addSnapshotListener
+            val newer = snap.documents.any { d ->
+                if (d.id == id) return@any false
+                val at = d.getTimestamp("createdAt") ?: return@any false
+                at > myAt || (at == myAt && d.id > id)
+            }
+            if (newer && stillSignedIn(uid)) { revokedUid = uid; _revoked.value = DeviceRecord.Reason.NEW_PHONE }
         }
     }
 

@@ -3482,7 +3482,12 @@ private fun QuickForwardButton(ui: ThreadUi, m: Message, isMe: Boolean) {
  */
 @Composable
 private fun Modifier.clearOfButtonBar(): Modifier {
-    val band = androidx.compose.foundation.layout.WindowInsets.tappableElement.getBottom(androidx.compose.ui.platform.LocalDensity.current)
+    // The 3-button bar's own height. Below Android 11 "tappable" is the whole system inset, keyboard
+    // included, so it only says whether the bar is tappable; the height is the navigation bar's
+    // (owner 2026-11-19, Oppo: with the keyboard up a keyboard's height of messages went blank).
+    val d = androidx.compose.ui.platform.LocalDensity.current
+    val tappable = androidx.compose.foundation.layout.WindowInsets.tappableElement.getBottom(d)
+    val band = if (tappable > 0) minOf(tappable, androidx.compose.foundation.layout.WindowInsets.navigationBars.getBottom(d)) else 0
     // Android 8.x puts a 90% white band behind the buttons; while a chat is open the band is clear so
     // the wallpaper shows (lists elsewhere still need it to hide rows under the buttons).
     val view = androidx.compose.ui.platform.LocalView.current
