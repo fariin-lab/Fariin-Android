@@ -1855,6 +1855,11 @@ private fun DatePill(text: String) = NoticePill(text, vertical = 8.dp)
 
 @Composable
 private fun NoticePill(text: String, vertical: Dp = 4.dp, icon: Boolean = false) {
+    val mark = when (text) {
+        com.fariin.app.data.ThreadRepository.BLOCKED_NOTICE -> com.fariin.app.R.drawable.ic_block
+        com.fariin.app.data.ThreadRepository.UNBLOCKED_NOTICE -> com.fariin.app.R.drawable.ic_unblock
+        else -> if (icon) com.fariin.app.R.drawable.ic_disappearing else null
+    }
     val c = Fariin.colors
     // A long notice (two lines and more) is a centred rounded card, not a wide strip with a capsule's
     // ends (owner 2026-11-13: "the card is ugly"): at most 300 wide, centred words, the lock above
@@ -1879,8 +1884,8 @@ private fun NoticePill(text: String, vertical: Dp = 4.dp, icon: Boolean = false)
         Row(Modifier.clip(CircleShape).background(receivedFill()).padding(horizontal = 12.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically) {
             // The timer line leads with the timer mark (iOS NoticeRow symbol "timer").
-            if (icon) {
-                Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_disappearing), null,
+            if (mark != null) {
+                Icon(androidx.compose.ui.res.painterResource(mark), null,
                     tint = c.label, modifier = Modifier.size(13.dp))
                 Spacer(Modifier.width(4.dp))
             }

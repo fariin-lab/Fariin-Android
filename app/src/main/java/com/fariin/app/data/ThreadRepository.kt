@@ -694,6 +694,22 @@ class ThreadRepository(
             all[KEYS_NOTICE_ID] = Message(id = KEYS_NOTICE_ID, authorId = "", text = KEYS_NOTICE, type = "system",
                 createdAtMillis = n.createdAtMillis, hasServerTime = true)
         }
+        // "You blocked / unblocked this person" (iOS blockNotices): from my own block list, for my
+        // eyes only, never written to the chat. 1:1 only, and only inside the loaded history.
+        if (!Wire.isGroupCid(cid) && cid.contains('_')) {
+            val other = Wire.otherUid(cid, me)
+            val snap = BlockList.snapshot
+            val events = ArrayList<Pair<Double, Boolean>>()
+            snap.spans[other]?.forEach { events += it.start to true; events += it.endInclusive to false }
+            snap.entries[other]?.let { events += it to true }
+            val floor = if (_state.value.canLoadOlder) (all.values.filter { it.hasServerTime }.minOfOrNull { it.createdAtMillis } ?: Double.MAX_VALUE) else Double.NEGATIVE_INFINITY
+            for ((ms, on) in events) {
+                if (ms <= 0 || ms < floor) continue
+                val id = "local-block-${if (on) "on" else "off"}-${ms.toLong()}"
+                all[id] = Message(id = id, authorId = "", text = if (on) BLOCKED_NOTICE else UNBLOCKED_NOTICE, type = "system",
+                    createdAtMillis = ms, hasServerTime = true)
+            }
+        }
         // A pending copy shows until its echo arrives (same clientId). It is dropped only once the
         // SERVER has the message: a refused write rolls the local echo back, and the copy must still
         // be there to turn into a failed bubble (it used to vanish without a word).
@@ -2416,6 +2432,9 @@ class ThreadRepository(
         private val listenExec: java.util.concurrent.ScheduledExecutorService =
             java.util.concurrent.Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "fariin-chat-listen").apply { isDaemon = true } }
 
+        /** My own block lines (iOS blockNotices), never written to the chat. */
+        const val BLOCKED_NOTICE = "You blocked this person."
+        const val UNBLOCKED_NOTICE = "You unblocked this person."
         /** The one row standing for the messages sealed before this phone's keys (iOS words). */
         const val KEYS_NOTICE_ID = "fariin-keys-notice"
         const val KEYS_NOTICE = "Messages from before you signed in on this device aren't available here. They're end-to-end encrypted."
