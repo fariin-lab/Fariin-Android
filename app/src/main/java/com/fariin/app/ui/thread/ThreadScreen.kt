@@ -405,6 +405,7 @@ private fun ThreadContent(
     // cheap phone took 90-150 ms frames for it).
     val showPins = remember { mutableStateOf(false) }
     val uiNow = androidx.compose.runtime.rememberUpdatedState(ui)
+    val uiMessages = androidx.compose.runtime.rememberUpdatedState(ui.messages)
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     // Swipe Actions (Settings > Chats, off by default): the capsule's Up and Down slots for a message.
@@ -1158,7 +1159,14 @@ private fun ThreadContent(
                 remember(ui.messages, ui.disappearSeconds) { com.fariin.app.data.Disappearing.timerSince(ui.messages) })
             val linkTap = rememberBubbleLinkTap(ui, actions.onNotice)
             val quoteTap = remember { { id: String -> jumpToQuote(id) } }
-            androidx.compose.runtime.CompositionLocalProvider(LocalTimerMark provides timerMark, LocalSearchTerm provides search.term,
+            // The rows get a copy of the chat that changes only when something a row shows changes,
+            // not on every new list of messages: each row took the whole ThreadUi, so every update of
+            // a send (shown, sent, delivered) redrew every visible bubble (Oppo A5s 2026-11-19, 47%
+            // late frames on Send). A reply's quote reads the live list through LocalThreadMessages.
+            val rowKey = ui.copy(messages = emptyList(), pinned = emptyMap(), loaded = true, synced = true, loadingOlder = false)
+            val rowUi = remember(rowKey) { ui }
+            androidx.compose.runtime.CompositionLocalProvider(LocalThreadMessages provides uiMessages,
+                LocalTimerMark provides timerMark, LocalSearchTerm provides search.term,
                 LocalBubbleLinkTap provides linkTap,
                 LocalQuoteJump provides (if (selecting) null else quoteTap),
                 // Nothing INSIDE the list may draw glass from the list itself: the group's welcome card
@@ -1286,7 +1294,7 @@ private fun ThreadContent(
                                     if (m.deleted) null else com.fariin.app.channel.ChannelRules.shownViews(m.views, m.authorId, ui.me),
                             ) {
                                 Column(Modifier.fillMaxWidth().combinedClickableLong { postPreview = { MessageRow(ui, m, g, is24h, {}) {} }; postMenuFor = m }) {
-                                    MessageRow(ui, m, g, is24h, { failedFor = it }) { viewing = withChatGallery(it, uiNow.value.messages, uiNow.value.isGroup || uiNow.value.channel != null) }
+                                    MessageRow(rowUi, m, g, is24h, { failedFor = it }) { viewing = withChatGallery(it, uiNow.value.messages, uiNow.value.isGroup || uiNow.value.channel != null) }
                                     // A text post carries its reactions inside the bubble; the rest under it.
                                     // A photo, video or album post draws its bar inside its bubble (MediaRow), as text posts do.
                                     // A picture, video or album post's pills sit inside its bubble (MediaRow).
@@ -1304,7 +1312,7 @@ private fun ThreadContent(
                                     Column(Modifier.fillMaxWidth()) {
                                         // No share button beside a post while ticking (iOS).
                                         androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.channels.LocalPostSelecting provides true) {
-                                            MessageRow(ui, m, g, is24h, {}) {}
+                                            MessageRow(rowUi, m, g, is24h, {}) {}
                                         }
                                         ReactionChips(m, ui, m.authorId == ui.me) {}
                                     }
@@ -1326,7 +1334,7 @@ private fun ThreadContent(
                                         menuSource = lc?.let { menuSourceOf(it, m.authorId == ui.me) }
                                         menuPreview = {
                                             Column(Modifier.fillMaxWidth()) {
-                                                MessageRow(ui, m, g, is24h, {}) {}
+                                                MessageRow(rowUi, m, g, is24h, {}) {}
                                                 ReactionChips(m, ui, m.authorId == ui.me) {}
                                             }
                                         }
@@ -1340,7 +1348,7 @@ private fun ThreadContent(
                                         ReactNow.set(m, next)
                                         actions.onReact(m, next)
                                     }) {
-                                    MessageRow(ui, m, g, is24h, { failedFor = it }) { viewing = withChatGallery(it, uiNow.value.messages, uiNow.value.isGroup || uiNow.value.channel != null) }
+                                    MessageRow(rowUi, m, g, is24h, { failedFor = it }) { viewing = withChatGallery(it, uiNow.value.messages, uiNow.value.isGroup || uiNow.value.channel != null) }
                                     // iOS: a pill opens who reacted (channels keep their own chips).
                                     ReactionChips(ReactNow.shown(m, ui.me), ui, m.authorId == ui.me) { reactorsFor = m.rowId }
                                 }
@@ -1873,7 +1881,7 @@ private fun NoticePill(text: String, vertical: Dp = 4.dp, icon: Boolean = false)
     // ends (owner 2026-11-13: "the card is ugly"): at most 300 wide, centred words, the lock above
     // the encryption notice.
     if (text.length > 48) {
-        val keys = text == com.fariin.app.data.ThreadRepository.KEYS_NOTICE
+        val keys = text == com.fariin.app.data.ThreadRepository.KEYS_NOTICE || text == com.fariin.app.data.ThreadRepository.KEYS_NOTICE_SOME
         Box(Modifier.fillMaxWidth().padding(vertical = vertical + 4.dp), contentAlignment = Alignment.Center) {
             Column(Modifier.widthIn(max = 300.dp).clip(RoundedCornerShape(18.dp)).background(receivedFill())
                 .padding(horizontal = 16.dp, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -2467,7 +2475,9 @@ private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
         Box(Modifier.width(3.dp).fillMaxHeight().background(bar))
         // The quoted photo, video poster, GIF or sticker (iOS QuoteChrome thumb, 34 square), read
         // from the original in this chat; none once it is deleted or view-once.
-        val original = if (r.isStatus) null else remember(r.id, ui.messages) { ui.messages.firstOrNull { it.id == r.id } }
+        val live = LocalThreadMessages.current
+        val original = remember(r.id, r.isStatus, live) { androidx.compose.runtime.derivedStateOf {
+            if (r.isStatus) null else (live?.value ?: ui.messages).firstOrNull { it.id == r.id } } }.value
         if (original != null && hasReplyThumb(original)) {
             ReplyThumb(original, 34.dp, Modifier.padding(start = 4.dp).align(Alignment.CenterVertically))
         }
@@ -3515,3 +3525,6 @@ private fun Modifier.clearOfButtonBar(): Modifier {
  */
 @Composable
 private fun Isolated(content: @Composable () -> Unit) = content()
+
+/** The chat's live list of messages, for a row whose [ThreadUi] copy is kept steady (a reply's quote). */
+internal val LocalThreadMessages = androidx.compose.runtime.staticCompositionLocalOf<androidx.compose.runtime.State<List<Message>>?> { null }

@@ -691,7 +691,10 @@ class ThreadRepository(
             all[m.rowId] = m
         }
         newestUnopened?.let { n ->
-            all[KEYS_NOTICE_ID] = Message(id = KEYS_NOTICE_ID, authorId = "", text = KEYS_NOTICE, type = "system",
+            // Older messages this phone can open still show above the line (owner 2026-11-19, kreak's
+            // chat: a video from before it read as "aren't available"), so then it says "Some".
+            val olderShown = all.values.any { !it.isSystem && it.createdAtMillis < n.createdAtMillis }
+            all[KEYS_NOTICE_ID] = Message(id = KEYS_NOTICE_ID, authorId = "", text = if (olderShown) KEYS_NOTICE_SOME else KEYS_NOTICE, type = "system",
                 createdAtMillis = n.createdAtMillis, hasServerTime = true)
         }
         // "You blocked / unblocked this person" (iOS blockNotices): from my own block list, for my
@@ -2438,6 +2441,7 @@ class ThreadRepository(
         /** The one row standing for the messages sealed before this phone's keys (iOS words). */
         const val KEYS_NOTICE_ID = "fariin-keys-notice"
         const val KEYS_NOTICE = "Messages from before you signed in on this device aren't available here. They're end-to-end encrypted."
+        const val KEYS_NOTICE_SOME = "Some messages from before you signed in on this device aren't available here. They're end-to-end encrypted."
         /** The list's line for a quote sent without words of mine. */
         const val QUOTED_POST = "Quoted post"
 
