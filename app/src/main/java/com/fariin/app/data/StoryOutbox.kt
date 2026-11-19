@@ -146,7 +146,7 @@ object StoryOutbox {
             }
             active += id   // running: not "waiting" to the alert while it goes
             try {
-                StoryService(me).post(media, o.optString("caption"), choice, picked, o.optInt("hours", 24), convs, o.optBoolean("capture"),
+                StoryService(me).post(media, o.optString("caption"), choice, picked, o.optInt("hours", StoryRules.DEFAULT_HOURS), convs, o.optBoolean("capture"),
                     myFriends, hidden, lists, fixedId = id, group = group)
                 dir.deleteRecursively()
             } catch (e: StoryService.PostRefused) {

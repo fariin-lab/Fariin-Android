@@ -437,6 +437,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     val me = api.me
     // The copy from the last visit draws at once; the fresh read replaces it (no bio popping in).
     var person by remember { mutableStateOf<Person?>(ProfileMemo.get(uid)) }
+    // Fariin Plus profile visitors: tell the server I opened this profile (silent, hourly at most).
+    LaunchedEffect(uid) { if (uid != me) com.fariin.app.data.PlusVisitors.record(uid) }
     var addingToGroup by remember { mutableStateOf(false) }
     var sharingProfile by remember { mutableStateOf(false) }
     var exportJob by remember { mutableStateOf<ChatExportRun.Job?>(null) }

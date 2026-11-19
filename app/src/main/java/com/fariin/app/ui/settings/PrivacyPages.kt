@@ -9,6 +9,9 @@ import com.fariin.app.ui.components.listPress
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
@@ -465,6 +468,9 @@ internal object ChatKey {
     }
 
     fun valid(pin: String) = pin.length in 4..6 && pin.all { it in '0'..'9' }
+
+    /** A key this phone chose (Plus) and the server accepted: shown as this device's key. */
+    fun saveOwn(pin: String) = save(true, pin)
 }
 
 /** iOS ChatPinPage / ChatPinSetSheet: make a key, show and share it, make a new one, or turn it off. */
@@ -505,6 +511,9 @@ internal fun ChatKeyPage(pop: () -> Unit) {
         }
     }
     val c = Fariin.colors
+    var ownKey by remember { mutableStateOf(false) }
+    var plusPage by remember { mutableStateOf(false) }
+    androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
     ScrollPage("Chat Key", pop) {
         ErrorNote(error)
         val footer = "Anyone with your Chat Key can message and call you. Share it only with people you trust."
@@ -559,7 +568,18 @@ internal fun ChatKeyPage(pop: () -> Unit) {
                 }
             }
         }
+        // Fariin Plus: pick your own digits (only to accounts that can see Plus, and not "off").
+        val plusKey = com.fariin.app.data.PlusStore.state("chatKey")
+        if (!rolling && plusKey != com.fariin.app.data.PlusStore.State.OFF)
+            SettingsSection(footer = "Fariin makes a random 6-digit key for you, different from everyone else's.") {
+                SettingsRow("Choose Your Own Key", last = true, accessory = { PlusTag() }) {
+                    if (plusKey == com.fariin.app.data.PlusStore.State.ON) ownKey = true else plusPage = true
+                }
+            }
     }
+    if (ownKey) OwnChatKeyPage(pop = { ownKey = false }) { saved -> pin = saved; set = true; ownKey = false }
+    }
+    if (plusPage) PlusPageSheet { plusPage = false }
     if (intro) ChatKeyIntroSheet(onDismiss = { intro = false }) { run { makeKey(); syncMessagesMode(true) } }
     // The contact page's bottom sheet (no photo: it is my own key). Same work as run(), awaited so the
     // button spins; a failure still shows on the page.
@@ -686,5 +706,104 @@ private fun KeyPill(label: String, icon: Int, modifier: Modifier = Modifier, onC
         Icon(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(icon), null, tint = c.label, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(6.dp))
         Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label)
+    }
+}
+
+/** The grey "Fariin Plus" tag at the end of a row whose feature comes with Plus. */
+@Composable
+internal fun PlusTag() {
+    val c = Fariin.colors
+    Text("Fariin Plus", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.secondary,
+        modifier = Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+            .background(c.secondary.copy(alpha = 0.15f)).padding(horizontal = 7.dp, vertical = 3.dp))
+}
+
+/** Plus "Choose Your Own Key" rules, as the server checks them: 4 to 6 ASCII digits, not one digit
+ *  repeated, not a run up or down. The 2nd and 3rd count only from 4 digits. */
+internal object OwnKeyRules {
+    fun length(p: String) = p.length in 4..6 && p.all { it in '0'..'9' }
+    fun notRepeated(p: String) = p.length >= 4 && p.toSet().size > 1
+    fun notRun(p: String): Boolean {
+        if (p.length < 4) return false
+        val d = p.zipWithNext { a, b -> b - a }
+        return !(d.all { it == 1 } || d.all { it == -1 })
+    }
+    fun ok(p: String) = length(p) && notRepeated(p) && notRun(p)
+}
+
+/** Plus: "Choose Your Own Key" (iOS ChooseOwnKeyPage). Save calls setChatPin({pin}). */
+@Composable
+private fun OwnChatKeyPage(pop: () -> Unit, onSaved: (String) -> Unit) {
+    val c = Fariin.colors
+    val scope = rememberCoroutineScope()
+    androidx.activity.compose.BackHandler { pop() }
+    var digits by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val ok = OwnKeyRules.ok(digits)
+    fun save() {
+        if (!ok || busy) return
+        busy = true; error = null
+        scope.launch {
+            val pinNow = digits
+            try {
+                FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
+                    .getHttpsCallable("setChatPin").call(mapOf("pin" to pinNow)).await()
+                ChatKey.saveOwn(pinNow)
+                try { syncMessagesMode(true) } catch (_: Exception) {}
+                onSaved(pinNow)
+            } catch (e: com.google.firebase.functions.FirebaseFunctionsException) {
+                val code = e.code
+                val shows = code == com.google.firebase.functions.FirebaseFunctionsException.Code.INVALID_ARGUMENT ||
+                    code == com.google.firebase.functions.FirebaseFunctionsException.Code.ALREADY_EXISTS ||
+                    code == com.google.firebase.functions.FirebaseFunctionsException.Code.RESOURCE_EXHAUSTED ||
+                    (code == com.google.firebase.functions.FirebaseFunctionsException.Code.PERMISSION_DENIED &&
+                        com.fariin.app.data.PlusStore.detailsCode(e) == "PLUS_REQUIRED")
+                error = if (shows && !e.message.isNullOrBlank()) e.message else "Couldn't save your Chat Key. Try again."
+            } catch (_: Exception) {
+                error = "Couldn't save your Chat Key. Try again."
+            } finally { busy = false }
+        }
+    }
+    androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
+        ScrollPage("Choose Your Own Key", pop, action = {
+            com.fariin.app.ui.components.FloatingTextAction("Save", enabled = ok && !busy, busy = busy) { save() }
+        }) {
+            val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+            LaunchedEffect(Unit) { focus.requestFocus() }
+            SettingsSection(footer = "Your current key stops working when you save. People who already used it stay in your chats.") {
+                androidx.compose.foundation.text.BasicTextField(digits,
+                    { v -> digits = v.filter { it in '0'..'9' }.take(6) },
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 34.sp, fontWeight = FontWeight.SemiBold, color = c.label,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center, letterSpacing = 6.sp),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(c.accent),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword,
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { save() }),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp, horizontal = 16.dp)
+                        .then(Modifier.focusRequester(focus)))
+            }
+            SettingsSection(header = "Rules", footer = "Every Chat Key is different. If someone already has this one, you'll be asked to choose another.") {
+                RuleRow("4 to 6 digits", OwnKeyRules.length(digits))
+                RuleRow("Not one digit repeated, like 1111", OwnKeyRules.notRepeated(digits))
+                RuleRow("Not a run, like 1234 or 4321", OwnKeyRules.notRun(digits), last = true)
+            }
+            error?.let { Text(it, fontSize = 13.sp, color = c.red, modifier = Modifier.padding(horizontal = 32.dp, vertical = 4.dp)) }
+        }
+    }
+}
+
+@Composable
+private fun RuleRow(text: String, met: Boolean, @Suppress("UNUSED_PARAMETER") last: Boolean = false) {
+    val c = Fariin.colors
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        if (met) Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_checkmark_circle_fill), contentDescription = "Met",
+            tint = Color(0xFF34C759), modifier = Modifier.size(22.dp))
+        else Box(Modifier.size(22.dp).padding(1.5.dp).border(1.5.dp, c.secondary.copy(alpha = 0.6f), CircleShape))
+        Spacer(Modifier.width(14.dp))
+        Text(text, fontSize = 16.sp, color = c.label)
     }
 }

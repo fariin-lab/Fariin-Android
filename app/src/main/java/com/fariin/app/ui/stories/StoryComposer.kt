@@ -575,11 +575,9 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
     val media = cur.media
     var captionFocused by remember { mutableStateOf(false) }
     var hours by remember { mutableIntStateOf(StoryRules.DEFAULT_HOURS) }
-    val storyAdmin by androidx.compose.runtime.produceState<Boolean>(false) {
-        val me = com.fariin.app.Fb.auth.currentUser?.uid
-        value = me != null && runCatching { com.fariin.app.Fb.db.collection("admins")
-            .document(me).get().await().exists() }.getOrDefault(false)
-    }
+    // The lifetime picker is Fariin Plus (storyExpiry "on"); everyone else posts the app's
+    // storyExpiryHours, never a hard-coded day. The server corrects a lifetime it does not allow.
+    val pickHours = com.fariin.app.data.PlusStore.state("storyExpiry") == com.fariin.app.data.PlusStore.State.ON
     var hoursMenu by remember { mutableStateOf(false) }
     var stickerTray by remember { mutableStateOf(false) }
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -992,8 +990,7 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
                         modifier = Modifier.fillMaxWidth().focusProperties { canFocus = captionArmed }
                             .onFocusChanged { captionFocused = it.isFocused })
                 }
-                // The lifetime ring is for Fariin admins only (iOS AdminStore.isAdmin); everyone else posts 24 h.
-                if (storyAdmin) Box {
+                if (pickHours) Box {
                     // Picking a lifetime must not hand the caption the focus (and the keyboard).
                     Box(Modifier.size(44.dp).clip(CircleShape).clickable {
                         captionArmed = false; focus.clearFocus(force = true); keyboard?.hide(); hoursMenu = true
@@ -1101,7 +1098,7 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
                     if (prepared.size == items.size) prepared else items.map { Pair(it.media, null) }
                 items.forEachIndexed { i, item ->
                     val (p, job) = outs[i]
-                    StoryUploads.start(ctx, me, p, item.caption, choice, picked, hours, storyConvs(conversations), capture, lists,
+                    StoryUploads.start(ctx, me, p, item.caption, choice, picked, if (pickHours) hours else StoryRules.DEFAULT_HOURS, storyConvs(conversations), capture, lists,
                         videoEdit = if (p.video != null) job else null)
                 }
                 // ONE flight home, the item on the card.

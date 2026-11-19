@@ -154,6 +154,7 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit,
             page == PAGE_SETTINGS_SEARCH -> SettingsSearchPage(push, pop)
             page == PAGE_APP_ICON -> AppIconPage(pop)
             page == PAGE_SUBSCRIPTIONS -> SubscriptionsPage(pop)
+            page == PAGE_PROFILE_VISITORS -> ProfileVisitorsPage(pop)
             page == PAGE_BUBBLE_STYLE -> BubbleStylePage(onClose = pop)
             page == PAGE_GLOW_PROFILE -> com.fariin.app.ui.glow.GlowProfilePage(me, profile,
                 onEdit = com.fariin.app.ui.people.LocalPeopleNav.current.editProfile, onBack = pop)
@@ -299,6 +300,8 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
                     modifier = Modifier.align(Alignment.Center))
                 com.fariin.app.ui.components.FloatingIcon(ImageVector.cachedVector(R.drawable.ic_search_ios), "Search settings",
                     onClick = { openSettingsSearch(push) }, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp))
+                // Fariin Plus: who visited my profile, mirroring Search on the left.
+                ProfileVisitorsButton(Modifier.align(Alignment.CenterStart).padding(start = 4.dp)) { push(PAGE_PROFILE_VISITORS) }
             }
         }
     }

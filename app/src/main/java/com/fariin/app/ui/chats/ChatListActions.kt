@@ -27,8 +27,14 @@ import kotlinx.coroutines.tasks.await
  * The debug demo (made-up chats) never writes.
  */
 object ChatListActions {
-    /** iOS AppLimits.pinnedChatsMax (admin panel `pinned_chats_max`, 5 when it has none). */
-    val PINNED_MAX: Int get() = com.fariin.app.data.AppLimits.pinnedChatsMax
+    /** iOS AppLimits.pinnedChatsMax (admin panel `pinned_chats_max`, 5 when it has none); with Fariin Plus
+     *  visible and morePins "on", the larger of that and plusState limits.pinnedChats. */
+    val PINNED_MAX: Int get() {
+        val free = com.fariin.app.data.AppLimits.pinnedChatsMax
+        val plus = com.fariin.app.data.PlusStore
+        val more = plus.pinnedChats
+        return if (plus.visible && plus.state("morePins") == com.fariin.app.data.PlusStore.State.ON && more != null) maxOf(free, more) else free
+    }
 
     private fun doc(cid: String) = com.fariin.app.Fb.db.collection("conversations").document(cid)
 
@@ -94,7 +100,9 @@ object ChatListActions {
         val official = com.fariin.app.data.OfficialChannel.view.value
         val pinned = all.count { it.isPinned(me) } + if (official.state.pinned && official.latest != null) 1 else 0
         if (pinned + adding <= PINNED_MAX) return false
-        Snack.show("You can pin up to $PINNED_MAX chats. Unpin one to pin this chat.")
+        // Plus is named only to an account that can see it, and only while it is "locked" for it.
+        val more = if (com.fariin.app.data.PlusStore.state("morePins") == com.fariin.app.data.PlusStore.State.LOCKED) " Fariin Plus lets you pin more." else ""
+        Snack.show("You can pin up to $PINNED_MAX chats. Unpin one to pin this chat.$more")
         return true
     }
 
