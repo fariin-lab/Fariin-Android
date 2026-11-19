@@ -10,6 +10,8 @@ import com.fariin.app.device.DeviceRegistry
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.tasks.await
 import java.text.DateFormat
 import java.util.Date
@@ -36,7 +38,7 @@ object AccountReport {
     /** Pure: the file's text. */
     fun build(
         now: Long, uid: String, name: String, handle: String, about: String, email: String?, joinedMs: Long?, hasPhoto: Boolean,
-        providers: List<String>, privacy: Map<String, String>, devices: List<Device>, blocked: List<Blocked>, chats: Int,
+        providers: List<String>, privacy: Map<String, String>, devices: List<Device>?, blocked: List<Blocked>, chats: Int,
         fmt: (Long) -> String,
     ): String = buildString {
         append("Fariin, account information\n")
@@ -56,8 +58,9 @@ object AccountReport {
         if (privacy.isEmpty()) append("  Defaults\n")
         for ((k, v) in privacy.toSortedMap()) append("  $k: $v\n")
         append("\nDEVICES\n")
-        if (devices.isEmpty()) append("  None\n")
-        for (d in devices.sortedByDescending { it.lastSeenMs }) {
+        if (devices == null) append("  Could not be loaded right now. Try again on a better connection.\n")
+        else if (devices.isEmpty()) append("  None\n")
+        for (d in devices.orEmpty().sortedByDescending { it.lastSeenMs }) {
             append("  ${d.model}, ${d.os}, app ${d.app}, last active ${fmt(d.lastSeenMs)}")
             append(if (d.thisDevice) " (this phone)\n" else "\n")
         }
@@ -83,18 +86,25 @@ object AccountReport {
         val user = com.fariin.app.Fb.auth.currentUser ?: throw IllegalStateException("You are logged out.")
         val uid = user.uid
         val db = com.fariin.app.Fb.db
-        val me = try { db.collection("users").document(uid).get().await().data ?: emptyMap() }
+        // Every read is capped: on a weak connection one can hang for good and the row spun forever.
+        val me = try { kotlinx.coroutines.withTimeout(8_000) { db.collection("users").document(uid).get().await().data } ?: emptyMap() }
             catch (_: Exception) { throw IllegalStateException("Could not load everything. Check your connection and try again.") }
         val thisId = DeviceRegistry.thisDeviceId(context)
-        val devices = try {
+        val devices = kotlinx.coroutines.withTimeoutOrNull(8_000) { try {
             db.collection("users").document(uid).collection("devices").get().await().documents.map { d ->
                 Device(d.getString("model") ?: "", d.getString("os") ?: "", d.getString("appVersion") ?: "",
                     (d.get("lastSeenAt") as? Timestamp)?.toDate()?.time ?: 0L, d.id == thisId)
             }
-        } catch (_: Exception) { throw IllegalStateException("Could not load everything. Check your connection and try again.") }
-        val blocked = BlockList.snapshot.entries.keys.sorted().map { b ->
-            val d = try { db.collection("users").document(b).get().await().data } catch (_: Exception) { null }
-            Blocked(d?.get("name") as? String ?: "", d?.get("handle") as? String ?: "")
+        } catch (_: Exception) { null } }
+        // All lookups at once, each capped; one that runs out prints "An account you blocked".
+        val blocked = kotlinx.coroutines.coroutineScope {
+            BlockList.snapshot.entries.keys.sorted().map { b ->
+                async {
+                    val d = try { kotlinx.coroutines.withTimeoutOrNull(5_000) { db.collection("users").document(b).get().await().data } }
+                        catch (_: Exception) { null }
+                    Blocked(d?.get("name") as? String ?: "", d?.get("handle") as? String ?: "")
+                }
+            }.awaitAll()
         }
         val profile = MyProfile.fromFirestore(uid, me)
         val joined = (me["joinedAt"] as? Timestamp)?.toDate()?.time ?: user.metadata?.creationTimestamp
