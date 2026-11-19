@@ -752,6 +752,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                     onLeft: () -> Unit, onOpenPerson: (String) -> Unit, start: String? = null,
                     onOpenChat: (String) -> Unit = {}) {
     val c = Fariin.colors
+    com.fariin.app.ui.components.NoKeyboardOnOpen()
     val scope = rememberCoroutineScope()
     val me = api.me
     val users = (conv["users"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()

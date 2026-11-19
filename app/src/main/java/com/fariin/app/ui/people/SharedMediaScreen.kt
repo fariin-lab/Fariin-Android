@@ -225,6 +225,7 @@ private fun MediaTile(item: SharedMedia.Item, modifier: Modifier, cid: String = 
 @Composable
 internal fun SharedMediaScreen(cid: String, state: SharedMediaState, onBack: () -> Unit) {
     val c = Fariin.colors
+    com.fariin.app.ui.components.NoKeyboardOnOpen()
     val tabs = SharedMedia.Tab.entries
     val pager = rememberPagerState { tabs.size }
     val scope = rememberCoroutineScope()

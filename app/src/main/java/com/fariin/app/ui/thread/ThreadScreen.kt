@@ -2356,7 +2356,12 @@ private fun MediaRow(
     }) { ms, cons ->
         val loose = cons.copy(minWidth = 0, minHeight = 0)
         val pic = ms.first { it.layoutId == "pic" }.measure(loose)
-        val head = ms.firstOrNull { it.layoutId == "head" }?.measure(loose)
+        // The header (sender, forwarded tag, reply quote) fills whatever width it is given, so given the
+        // bubble's full width it made a picture's bubble that wide, with empty space beside the picture
+        // (owner 2026-11-19, a reply with a tall photo). It gets the picture's width, as the reference
+        // app (a long quote is cut with "..."), and no less than 120 for a very thin picture.
+        val head = ms.firstOrNull { it.layoutId == "head" }
+            ?.measure(loose.copy(maxWidth = maxOf(pic.width, 120.dp.roundToPx()).coerceAtMost(cons.maxWidth)))
         val w = maxOf(pic.width, head?.width ?: 0).coerceAtMost(cons.maxWidth)
         // Caption and pills: up to the bubble's width, never wider; the bar exactly that width (its
         // chevron at the right edge from the first frame).

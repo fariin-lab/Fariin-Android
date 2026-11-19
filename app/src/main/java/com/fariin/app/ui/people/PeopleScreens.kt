@@ -430,6 +430,7 @@ internal fun Pill(text: String, bg: Color, ink: Color, onClick: () -> Unit) {
  */
 @Composable
 fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: () -> Unit, onOpenChat: (String) -> Unit) {
+    com.fariin.app.ui.components.NoKeyboardOnOpen()
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
     val me = api.me

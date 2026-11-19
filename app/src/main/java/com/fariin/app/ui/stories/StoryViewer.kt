@@ -1332,7 +1332,9 @@ private fun StoryPage(
             // middle free: the repost column lay over the disc, so the tap showed the author and the
             // clip never played (Oppo A5s, 2026-11-18).
             var playTapped by remember(story.id) { mutableStateOf(false) }
-            val waitsForPlay = story.isVideo && !com.fariin.app.perf.rememberPowerState().autoplayVideos && !playTapped
+            // Story videos always play by themselves (owner 2026-11-19): the reference app does, and a
+            // story is watched full screen on purpose. Power Saving's Autoplay is for chats.
+            val waitsForPlay = false
             Box(Modifier.fillMaxSize().graphicsLayer {
                 transformOrigin = zoomOrigin; scaleX = zoomScale; scaleY = zoomScale
                 translationX = zoomPan.x; translationY = zoomPan.y
@@ -1543,7 +1545,7 @@ private fun StoryMedia(
         if (!isCurrentPage) return@Box
         // Power Saving > Autoplay videos off: the poster and a play disc until the viewer taps it
         // (the story's timer waits, because nothing has loaded yet).
-        val autoplay = com.fariin.app.perf.rememberPowerState().autoplayVideos
+        val autoplay = true   // see waitsForPlay: stories are not gated by Power Saving's Autoplay
         if (!autoplay && !tapped) {
             Box(Modifier.size(72.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color.Black.copy(alpha = 0.45f))
                 .clickable { onPlayTap() }.semantics { contentDescription = "Play video" },
