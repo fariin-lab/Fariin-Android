@@ -16,6 +16,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -327,7 +330,10 @@ internal fun StickerPanel(me: String, onSticker: (StickerRef) -> Unit, onGif: (S
         .border(1.dp, Color.White.copy(alpha = if (c.dark) 0.12f else 0.7f), panelShape)) {
         if (gifs) GifTab(me, onGif, hide = hide, onScrolledIn = { barsHidden = it })
         else StickerTab(me, onSticker, hide = hide, onScrolledIn = { barsHidden = it })
-        Box(Modifier.fillMaxWidth().align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 10.dp, end = 10.dp, bottom = 8.dp)
+        // The bar's raw height: navigationBarsPadding reads 0 in here (the page above already took the
+        // inset), which left GIFs | Stickers under a three-button bar (Oppo, 2026-11-18).
+        val navBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        Box(Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(start = 10.dp, end = 10.dp, bottom = 8.dp + navBar)
             .graphicsLayer { translationY = hide() * 60.dp.toPx(); alpha = 1f - hide() }) {
             Row(Modifier.align(Alignment.Center).width(200.dp).height(38.dp).floating(RoundedCornerShape(19.dp)).padding(3.dp)) {
                 for ((label, isGif) in listOf("GIFs" to true, "Stickers" to false)) {
@@ -571,13 +577,17 @@ private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, qu
         return
     }
     // Stills only while the panel slides (ThreadScreen LocalPanelMoving); the videos start once it stands.
-    val play = autoplay() && !LocalPanelMoving.current
+    val gridState = state ?: androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState()
+    // A LOW phone shows the stills while the grid scrolls and plays once it stops: a dozen moving
+    // tiles under a finger made half the frames late on an Oppo A5s (2026-11-18).
+    val low = PowerSaving.state.value.deviceClass == com.fariin.app.perf.PerfClass.LOW
+    val play = autoplay() && !LocalPanelMoving.current && !(low && gridState.isScrollInProgress)
     val changes by GifLists.changes.collectAsState()
     // iOS grid (2026-11-07): 3 columns edge to edge (no side margin), 2 apart both ways, square
     // corners; the top and bottom padding stay as they were.
     val edge = androidx.compose.foundation.layout.PaddingValues(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())
     LazyVerticalStaggeredGrid(StaggeredGridCells.Fixed(3), modifier = Modifier.fillMaxSize(), contentPadding = edge,
-        state = state ?: androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState(),
+        state = gridState,
         horizontalArrangement = Arrangement.spacedBy(2.dp), verticalItemSpacing = 2.dp) {
         val items = list ?: emptyList()
         // Still loading (a new phone has no cached list): grey tiles, so the grid reads as coming,
