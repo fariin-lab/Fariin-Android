@@ -1471,8 +1471,11 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
                 modifier = Modifier.clip(CircleShape).background(c.card).clickable(onClick = pick).padding(horizontal = 20.dp, vertical = 9.dp))
             Spacer(Modifier.height(8.dp))
             // Name and description in ONE card, a line between them (iOS EditGroupView).
-            SettingsSection(footer = w("Optional. Shown on the group's info page.")) {
-                Field(name, w("Group Name")) { name = it.take(com.fariin.app.channel.ChannelRules.NAME_MAX) }
+            // Verified (owner 2026-11-19, as the reference app): the name is fixed, the rest edits.
+            val locked = remember(cid) { com.fariin.app.data.ChatsNow.find(cid)?.verified == true }
+            SettingsSection(footer = if (locked) (if (channel) "Verified channels can't change their name or link." else "Verified groups can't change their name or link.")
+                else w("Optional. Shown on the group's info page.")) {
+                Field(name, w("Group Name"), enabled = !locked) { name = it.take(com.fariin.app.channel.ChannelRules.NAME_MAX) }
                 Box(Modifier.fillMaxWidth().padding(start = 16.dp).height(0.5.dp).background(c.separator))
                 DescriptionField(desc, descFocus) { desc = GroupRules.oneParagraph(it) }
             }

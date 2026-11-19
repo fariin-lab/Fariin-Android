@@ -1061,6 +1061,8 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
     val ch = doc["channel"] == true
     val noun = if (ch) "channel" else "group"
     val Noun = if (ch) "Channel" else "Group"
+    // Verified (owner 2026-11-19, as the reference app): the link and the type are fixed.
+    val locked = doc["verified"] == true && isPublicNow
     val showPublic = wantsPublic ?: isPublicNow
     val typed = name ?: current
     val changed = typed != current
@@ -1115,13 +1117,14 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
             SettingsSection(header = "$Noun Type", footer = if (showPublic) (if (ch) "Anyone can find this channel in search and follow it." else "Anyone can find this group in search and join it without an invite.")
                 else if (ch) "People can follow only with an invite link." else "People can join only with an invite link, or when an admin adds them.") {
                 TypeLine("Public $Noun", showPublic) {
+                    if (locked) return@TypeLine
                     wantsPublic = true
                     if (typed.isEmpty()) {
                         name = com.fariin.app.channel.ChannelRules.suggestLink(doc["title"] as? String ?: "", noun)
                         scope.launch { delay(350); runCatching { linkFocus.requestFocus() } }
                     }
                 }
-                TypeLine("Private $Noun", !showPublic, last = true) { if (isPublicNow) confirmPrivate = true else wantsPublic = false }
+                TypeLine("Private $Noun", !showPublic, last = true) { if (locked) return@TypeLine; if (isPublicNow) confirmPrivate = true else wantsPublic = false }
             }
             // A channel's Protect Content lives here, under its type (iOS channel type page).
             if (ch) {
@@ -1142,6 +1145,7 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
             }
             if (showPublic) {
                 SettingsSection(header = "Public Link", footer = when {
+                    locked -> "Verified ${noun}s can't change their name or link."
                     !changed && typed.isNotEmpty() -> "People can open this $noun with fariin.com/$typed."
                     note != null -> null   // the ring line below says it
                     typed.isEmpty() && !askedForLink -> "A public $noun needs a link. Pick one of ${com.fariin.app.channel.ChannelRules.LINK_MIN} to ${com.fariin.app.channel.ChannelRules.LINK_MAX} characters: letters, numbers and _."
@@ -1153,7 +1157,7 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
                         Text("fariin.com/", fontSize = 17.sp, color = c.label)
                         Box(Modifier.weight(1f)) {
                             if (typed.isEmpty()) Text("link", fontSize = 17.sp, color = c.secondary)
-                            BasicTextField(typed, { name = it.trim() }, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
+                            BasicTextField(typed, { name = it.trim() }, enabled = !locked, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
                                 cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth().focusRequester(linkFocus))
                         }
                     }
