@@ -178,7 +178,11 @@ private fun openWeb(ctx: Context, url: String, onFail: () -> Unit) {
     val uri = Uri.parse(url)
     val host = (uri.host ?: "").lowercase()
     val view = Intent(Intent.ACTION_VIEW, uri)
-    if (host == "youtu.be" || host == "youtube.com" || host.endsWith(".youtube.com")) {
+    // Video sites and social networks open in their own app when it is installed (iOS build 1222:
+    // x, twitter, snapchat, instagram, tiktok, facebook, threads, t.me, wa.me); else the in-app browser.
+    val social = listOf("youtu.be", "youtube.com", "x.com", "twitter.com", "snapchat.com", "instagram.com", "tiktok.com",
+        "facebook.com", "fb.com", "threads.net", "threads.com", "t.me", "wa.me")
+    if (social.any { host == it || host.endsWith(".$it") }) {
         if (android.os.Build.VERSION.SDK_INT >= 30) {
             try { ctx.startActivity(Intent(view).addFlags(Intent.FLAG_ACTIVITY_REQUIRE_NON_BROWSER)); return }
             catch (_: ActivityNotFoundException) {}
