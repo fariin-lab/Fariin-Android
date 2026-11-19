@@ -101,6 +101,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -1162,7 +1163,8 @@ private fun ThreadContent(
             LazyColumn(
                 Modifier.fillMaxSize().then(if (edgeHaze != null) Modifier.hazeSource(edgeHaze)
                     .then(if (liquid) Modifier.layerBackdrop(liquidBackdrop) else Modifier)
-                    .then(if (walled) com.fariin.app.ui.components.chatWallpaperStripOf(ui.cid) else Modifier) else Modifier), state = listState, reverseLayout = true,
+                    .then(if (walled) com.fariin.app.ui.components.chatWallpaperStripOf(ui.cid) else Modifier) else Modifier)
+                    .clearOfButtonBar(), state = listState, reverseLayout = true,
                 contentPadding = remember(density, composerPx) { ListPadding(density, composerPx) }.also {
                     it.top = with(density) { topBarPx.toDp() } + 8.dp
                 },
@@ -3464,5 +3466,29 @@ private fun QuickForwardButton(ui: ThreadUi, m: Message, isMe: Boolean) {
         .background(if (c.dark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f))
         .clickable(onClickLabel = "Forward") { QuickForward.request.value = m }, contentAlignment = Alignment.Center) {
         Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_menu_forward), "Forward", tint = c.label, modifier = Modifier.size(16.dp))
+    }
+}
+
+/**
+ * Messages stop at the top of a 3-button bar (owner 2026-11-19, Oppo A5s): the bar's strip shows only
+ * the wallpaper, the way the reference app keeps it, not bubbles and times scrolling under the buttons.
+ * Drawn after the wallpaper modifier, so the wallpaper still fills the strip. A gesture strip is not
+ * tappable, so it reads 0 and nothing changes there.
+ */
+@Composable
+private fun Modifier.clearOfButtonBar(): Modifier {
+    val band = androidx.compose.foundation.layout.WindowInsets.tappableElement.getBottom(androidx.compose.ui.platform.LocalDensity.current)
+    // Android 8.x puts a 90% white band behind the buttons; while a chat is open the band is clear so
+    // the wallpaper shows (lists elsewhere still need it to hide rows under the buttons).
+    val view = androidx.compose.ui.platform.LocalView.current
+    if (android.os.Build.VERSION.SDK_INT < 29 && band > 0) androidx.compose.runtime.DisposableEffect(view) {
+        val w = (view.context as? android.app.Activity)?.window
+        val was = w?.navigationBarColor
+        w?.navigationBarColor = android.graphics.Color.TRANSPARENT
+        onDispose { if (w != null && was != null) w.navigationBarColor = was }
+    }
+    if (band <= 0) return this
+    return this.drawWithContent {
+        clipRect(0f, 0f, size.width, (size.height - band).coerceAtLeast(0f)) { this@drawWithContent.drawContent() }
     }
 }
