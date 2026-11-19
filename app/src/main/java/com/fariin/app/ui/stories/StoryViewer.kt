@@ -1294,11 +1294,17 @@ private fun StoryPage(
                 layout(c.maxWidth, c.maxHeight) { p.place(card.left.roundToInt(), card.top.roundToInt()) }
             }.clip(RoundedCornerShape(StorySheetGeometry.CARD_RADIUS.dp)).background(Color.Black),
         ) {
+            // A video that waits for its Play tap (autoplay off, as on every LOW phone) keeps the
+            // middle free: the repost column lay over the disc, so the tap showed the author and the
+            // clip never played (Oppo A5s, 2026-11-18).
+            var playTapped by remember(story.id) { mutableStateOf(false) }
+            val waitsForPlay = story.isVideo && !com.fariin.app.perf.rememberPowerState().autoplayVideos && !playTapped
             StoryMedia(story, active = active && !stopped, onLoaded = { loaded = true },
-                onVideoProgress = { progress = it }, onVideoEnd = { goNext() }, isCurrentPage = active)
+                onVideoProgress = { progress = it }, onVideoEnd = { goNext() }, isCurrentPage = active,
+                tapped = playTapped, onPlayTap = { playTapped = true })
             // iOS repostTapArea: a repost's middle column pauses it and shows the original author;
             // their face and name open the profile.
-            val taps = remember(story.id) { story.taps + listOfNotNull(story.repostOf?.let { REPOST_TAP }) }
+            val taps = remember(story.id, waitsForPlay) { story.taps + listOfNotNull(story.repostOf?.takeIf { !waitsForPlay }?.let { REPOST_TAP }) }
             if (taps.isNotEmpty()) StoryTapLayer(taps, card.width, card.height, armed,
                 onArm = { armed = it }, onOpen = { url -> armed = null; onLink(url) },
                 person = story.repostOf?.let { r -> (r.authorName.ifEmpty { "Reposted" }) to authorPhoto(r.authorUid) },
@@ -1482,6 +1488,8 @@ private fun StoryMedia(
     onLoaded: () -> Unit,
     onVideoProgress: (Float) -> Unit,
     onVideoEnd: () -> Unit,
+    tapped: Boolean,
+    onPlayTap: () -> Unit,
 ) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         if (!story.isVideo) {
@@ -1497,10 +1505,9 @@ private fun StoryMedia(
         // Power Saving > Autoplay videos off: the poster and a play disc until the viewer taps it
         // (the story's timer waits, because nothing has loaded yet).
         val autoplay = com.fariin.app.perf.rememberPowerState().autoplayVideos
-        var tapped by remember(story.id) { mutableStateOf(false) }
         if (!autoplay && !tapped) {
             Box(Modifier.size(72.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color.Black.copy(alpha = 0.45f))
-                .clickable { tapped = true }.semantics { contentDescription = "Play video" },
+                .clickable { onPlayTap() }.semantics { contentDescription = "Play video" },
                 contentAlignment = Alignment.Center) {
                 Icon(ImageVector.cachedVector(R.drawable.ic_sf_play_fill), contentDescription = null, tint = Color.White, modifier = Modifier.size(40.dp))
             }
