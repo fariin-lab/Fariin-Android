@@ -1231,7 +1231,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                         createdMs?.let { "Created ${com.fariin.app.data.MessageInfoRules.dateLine(it, is24)}." }).joinToString("\n"),
                     fontSize = 14.sp, color = c.secondary, modifier = Modifier.fillMaxWidth().padding(start = 32.dp, end = 32.dp, top = 4.dp))
             }
-            Spacer(Modifier.height(30.dp))
+            com.fariin.app.ui.components.PageEndSpace()
         }
     }
     // Over the page, under the menus and the photo viewer: the photo's melting copy.

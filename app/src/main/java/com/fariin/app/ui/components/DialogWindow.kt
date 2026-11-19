@@ -5,6 +5,10 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.ui.unit.dp
 
 /**
  * Call first inside a full-screen Dialog that shows an ordinary app page (settings, lists). A dialog's
@@ -52,4 +56,16 @@ fun EdgeToEdgeDarkDialogWindow() {
             }
         }
     }
+}
+
+/**
+ * The gap after a scrolling page's last line: [min], or the system bar plus a little when that bar
+ * is taller. A fixed 30 cleared a swipe bar but left the last line under a three-button bar
+ * (Oppo, 2026-11-18); many phones, Samsungs among them, use the buttons.
+ */
+@androidx.compose.runtime.Composable
+fun PageEndSpace(min: androidx.compose.ui.unit.Dp = 30.dp) {
+    val bar = androidx.compose.foundation.layout.WindowInsets.navigationBars
+        .asPaddingValues().calculateBottomPadding()
+    androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(maxOf(min, bar + 12.dp)))
 }
