@@ -1,5 +1,6 @@
 package com.fariin.app.ui.components
 
+import androidx.compose.foundation.layout.navigationBars
 import com.fariin.app.ui.components.cachedVector
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
@@ -130,7 +131,8 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
     val lean = remember { Animatable(0f) }
     val menuW = with(density) { 260.dp.toPx() }
     val margin = with(density) { 16.dp.toPx() }
-    Box(Modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInWindow() }
+    var boxH by remember { mutableIntStateOf(0) }
+    Box(Modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInWindow(); boxH = it.size.height }
         // The page dims a little under the menu, as the reference (about 10 %).
         .drawBehind { drawRect(Color.Black.copy(alpha = (if (c.dark) 0.2f else 0.1f) * grow.value.coerceIn(0f, 1f))) }
         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onDismiss() }) {
@@ -138,7 +140,11 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
         // 2026-11-10: over the button it hid the profile's Video, Mute and Search). No room under:
         // above it instead.
         val left = (src.right - origin.x - menuW).coerceAtLeast(margin)
-        val screenH = with(density) { androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp.toPx() }
+        // The room under the button is measured to the bottom of this overlay (the whole window). The
+        // configuration's screen height leaves out the status and button bars on older Android, so a
+        // menu that fitted under the button was sent above it (owner 2026-11-19, Oppo: Mute's menu
+        // opened downward on one visit and upward on the next).
+        val screenH = if (boxH > 0) boxH - androidx.compose.foundation.layout.WindowInsets.navigationBars.getBottom(density).toFloat() else with(density) { androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp.toPx() }
         val gap = with(density) { 8.dp.toPx() }
         val below = src.bottom - origin.y + gap
         val top = (if (size.height > 0 && below + size.height > screenH - margin) src.top - origin.y - gap - size.height else below)

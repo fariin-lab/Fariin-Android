@@ -193,7 +193,9 @@ fun FloatingSegments(options: List<String>, selected: Int, onSelect: (Int) -> Un
 fun FloatingTextAction(text: String, enabled: Boolean = true, modifier: Modifier = Modifier, busy: Boolean = false, onClick: () -> Unit) {
     val c = Fariin.colors
     // Busy: the ring takes the word's place inside the same capsule (iOS), the capsule keeps its width.
-    Box(modifier.padding(end = 4.dp).height(44.dp).then(if (plainBarButtons()) Modifier else Modifier.floating(CircleShape))
+    // Plain (no glass capsule, older phones): the press shade is still a pill, not a grey box
+    // (owner 2026-11-19, Oppo: "Edit" on a profile lit a grey rectangle).
+    Box(modifier.padding(end = 4.dp).height(44.dp).then(if (plainBarButtons()) Modifier.clip(CircleShape) else Modifier.floating(CircleShape))
         .clickable(enabled = enabled && !busy, onClick = onClick).padding(horizontal = 18.dp),
         contentAlignment = Alignment.Center) {
         BusyContent(busy, c.label, size = 20.dp) {
