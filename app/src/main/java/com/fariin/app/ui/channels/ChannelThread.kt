@@ -285,6 +285,8 @@ internal fun ChannelPostMenu(
     onSelect: ((Message) -> Unit)? = null,
     onEdit: ((Message) -> Unit)? = null,
     onEditHistory: ((Message) -> Unit)? = null,
+    /** Message Statistics (owner and admins, the reference's View Statistics); null = no row. */
+    onStats: ((Message) -> Unit)? = null,
     /** null: no Pin row; else whether the post is pinned now. */
     pinned: Boolean? = null,
     onPin: ((Message) -> Unit)? = null,
@@ -335,6 +337,9 @@ internal fun ChannelPostMenu(
                 })
             }
         }
+        // View Statistics (owner 2026-11-19): a real post only, just above Delete.
+        if (ch.role == Role.ADMIN && onStats != null && !m.deleted && m.sendState == null && !com.fariin.app.data.MessageRules.isServiceLine(m))
+            add(PostItem("View Statistics", ImageVector.cachedVector(R.drawable.ic_statistics)) { onDismiss(); onStats(m) })
         if (ch.role == Role.ADMIN) add(PostItem("Delete", ImageVector.cachedVector(R.drawable.ic_sf_trash), destructive = true) { onDelete(m) })
     }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {

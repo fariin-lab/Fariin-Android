@@ -67,6 +67,12 @@ object Forwarder {
             // once the real one is in (ThreadRepository.rebuild), or now when there is none.
             if (!ok) clientIds[t]?.let { com.fariin.app.data.ForwardEchoes.remove(t, it) }
         }
+        // A channel post's shares for its Message Statistics: the forwarded copy is sealed, so the
+        // server learns of it only from here (groups:notePostShare). Fire and forget.
+        if (channelJson(sourceCid) != null) {
+            val landed = targets.distinct().take(MediaRules.FORWARD_CHATS_AT_ONCE).filter { it !in failed }.take(20)
+            if (landed.isNotEmpty()) com.fariin.app.data.PostStats.noteShare(sourceCid, m.id, landed)
+        }
         failed
     }
 

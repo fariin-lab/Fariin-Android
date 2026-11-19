@@ -540,3 +540,75 @@ private fun ChannelStatsBody(s: GroupStats.ChannelData) {
         listOf(blue, orange, ChartColors.teal(dark)).take(s.stories.series.size), s.stories.days, dayText)
     if (s.recentPosts.isNotEmpty()) PostsCard("Recent Posts", s.recentPosts, dayText)
 }
+
+/**
+ * Message Statistics (owner 2026-11-19, a channel post's long-press › View Statistics, owner and
+ * admins): Overview (views, reactions, public and private shares), Interactions (views and shares
+ * by day), Reactions (by emoji, by day). `groups:postStats`, the same contract as iOS.
+ */
+@Composable
+internal fun PostStatsPage(cid: String, mid: String, onBack: () -> Unit) {
+    val c = Fariin.colors
+    val scope = rememberCoroutineScope()
+    var data by remember(cid, mid) { mutableStateOf<com.fariin.app.data.PostStats.Data?>(null) }
+    var failure by remember(cid, mid) { mutableStateOf<String?>(null) }
+    var retry by remember(cid, mid) { mutableStateOf(true) }
+    suspend fun load() {
+        try {
+            data = com.fariin.app.data.PostStats.load(cid, mid); failure = null
+        } catch (e: Exception) {
+            val code = (e as? FirebaseFunctionsException)?.code?.name
+            failure = if (code == "PERMISSION_DENIED") "Only the channel's owner and admins can see statistics."
+                else "Couldn't load statistics. Check your connection and try again."
+            retry = code != "PERMISSION_DENIED"
+        }
+    }
+    LaunchedEffect(cid, mid) { if (data == null) load() }
+    com.fariin.app.ui.components.GlassColumnPage(false, Modifier.background(c.bgSecondary), bar = {
+        Box(Modifier.fillMaxWidth().background(c.bgSecondary).statusBarsPadding()) {
+            FariinTopBar("Message Statistics", onBack = onBack, container = c.bgSecondary)
+        }
+    }) { top ->
+        androidx.compose.foundation.layout.Spacer(Modifier.height(top))
+        val d = data
+        val f = failure
+        when {
+            d != null -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) { PostStatsBody(d) }
+            f != null -> Column(Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(f, fontSize = 17.sp, color = c.secondary, textAlign = TextAlign.Center)
+                if (retry) Text("Retry", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.onAccent,
+                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(c.accent)
+                        .clickable { failure = null; scope.launch { load() } }.padding(horizontal = 14.dp, vertical = 7.dp))
+            }
+            else -> StatsSkeleton()
+        }
+    }
+}
+
+@Composable
+private fun PostStatsBody(s: com.fariin.app.data.PostStats.Data) {
+    val c = Fariin.colors
+    val dark = c.dark
+    val locale = Locale.getDefault()
+    val monthDay = remember(locale) { DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, "MMMd"), locale) }
+    val dayText: (LocalDate) -> String = { it.format(monthDay) }
+    val n = remember(locale) { GroupStats.number(locale) }
+    StatsCard("Overview") {
+        listOf(listOf("Views" to s.views, "Public Shares" to s.publicShares), listOf("Reactions" to s.reactions, "Private Shares" to s.privateShares)).forEach { pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                pair.forEach { (label, v) ->
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(n.format(v), fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = c.label, style = TextStyle(fontFeatureSettings = "tnum"))
+                        Text(label, fontSize = 13.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+        }
+    }
+    if (!s.interactions.isEmpty) DayChart("Interactions", true, s.interactions.series, listOf(ChartColors.blue, ChartColors.orange(dark)), s.interactions.days, dayText)
+    val palette = ChartColors.palette(dark)
+    if (!s.emoji.isEmpty) DayChart("Reactions", false, s.emoji.series, s.emoji.series.indices.map { palette[it % palette.size] }, s.emoji.days, dayText)
+}

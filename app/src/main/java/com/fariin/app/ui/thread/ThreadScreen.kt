@@ -364,6 +364,7 @@ private fun ThreadContent(
         }
     }
     var historyFor by remember { mutableStateOf<Message?>(null) }
+    var statsFor by remember { mutableStateOf<Message?>(null) }
     // Select mode (iOS uiMode .selection): the ticked rows by rowId; empty = not selecting.
     val selected = remember { androidx.compose.runtime.mutableStateListOf<String>() }
     val selecting = selected.isNotEmpty()
@@ -585,8 +586,16 @@ private fun ThreadContent(
             onEdit = if (MessageRules.canEdit(m, ui.me, System.currentTimeMillis().toDouble(), channel = true) && !com.fariin.app.data.CardRules.isCard(m.text))
                 ({ editing = it; replyTo = null }) else null,
             onEditHistory = { historyFor = it },
+            onStats = { statsFor = it },
             pinned = if (ui.canPin && com.fariin.app.data.PinRules.offers(m)) (m.id in ui.pinnedIds) else null,
             onPin = { if (it.id in ui.pinnedIds) actions.onUnpin(it.id) else actions.onPin(it) })
+    }
+    statsFor?.let { m ->
+        androidx.compose.ui.window.Dialog(onDismissRequest = { statsFor = null },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+            com.fariin.app.ui.components.AppPageDialogWindow()
+            com.fariin.app.ui.people.PostStatsPage(ui.cid, m.id, onBack = { statsFor = null })
+        }
     }
     deleteFor?.let { m -> DeleteDialog(m, ui, actions) { deleteFor = null } }
     infoFor?.let { m -> MessageInfoSheet(m, ui, is24h) { infoFor = null } }
