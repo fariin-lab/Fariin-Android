@@ -1,5 +1,7 @@
 package com.fariin.app.ui.settings
 
+import com.fariin.app.data.PlusStore
+
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.ui.components.frostedTopBar
@@ -156,6 +158,7 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit,
             page == PAGE_SUBSCRIPTIONS -> SubscriptionsPage(pop)
             page == PAGE_PROFILE_VISITORS -> ProfileVisitorsPage(pop)
             page == PAGE_BUBBLE_STYLE -> BubbleStylePage(onClose = pop)
+            page == PAGE_PLUS_BUBBLE -> PlusBubbleStylePage(pop)
             page == PAGE_GLOW_PROFILE -> com.fariin.app.ui.glow.GlowProfilePage(me, profile,
                 onEdit = com.fariin.app.ui.people.LocalPeopleNav.current.editProfile, onBack = pop)
             page == PAGE_SCAN -> ScanQrPage(onMyCode = { pop(); myQrOpen.value = true }, onClose = pop, onDone = pop)
@@ -470,6 +473,10 @@ private fun AppearancePage(push: (String) -> Unit, pop: () -> Unit) {
                     val bubbleName = remember(bubbleV) { com.fariin.app.data.BubbleStyles.init(ctx); com.fariin.app.data.BubbleStyles.name(com.fariin.app.data.BubbleStyles.current()) }
                     SettingsRow("Bubble Style", value = bubbleName, badge = NewBadgeSpots.APPEARANCE_BUBBLE_STYLES) { push(PAGE_BUBBLE_STYLE) }
                 }
+                // Fariin Plus: one exclusive style on my profile (only while Plus is visible, feature not off).
+                if (PlusStore.visible && PlusStore.state("bubbleStyles") != PlusStore.State.OFF)
+                    SettingsRow("Plus Bubble Style", value = com.fariin.app.data.PlusBubbles.name(com.fariin.app.data.PlusBubbles.drawn(com.fariin.app.data.PlusBubbles.mine)?.id),
+                        accessory = { PlusBadgeImage(18.dp) }) { push(PAGE_PLUS_BUBBLE) }
                 SettingsRow("App Icon", badge = NewBadgeSpots.APPEARANCE_APP_ICON) { push(PAGE_APP_ICON) }
                 val quick = remember { ctx.getSharedPreferences(CHAT_PREFS, android.content.Context.MODE_PRIVATE).getString(SettingsRules.QUICK_KEY, "❤️") ?: "❤️" }
                 SettingsRow("Quick Reaction", value = quick, last = true, badge = NewBadgeSpots.APPEARANCE_QUICK_REACTION) { push(PAGE_QUICK) }

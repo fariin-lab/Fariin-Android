@@ -78,6 +78,9 @@ class ThreadRepository(
         val otherLastActive: Double? = null,
         val otherPrivacy: Map<String, String> = emptyMap(),
         val myPrivacy: Map<String, String> = emptyMap(),
+        /** Fariin Plus bubble styles (users/{uid}.plusBubble), theirs and mine, from these same listeners. */
+        val otherPlusBubble: PlusBubble? = null,
+        val myPlusBubble: PlusBubble? = null,
         /** A group I am no longer in (removed, or left on another phone): iOS notAMember. `conv` is
          *  then its last copy with me out of `users`; the messages already here stay. */
         val former: Boolean = false,
@@ -407,14 +410,17 @@ class ThreadRepository(
             }
             val d = snap?.data ?: return@addSnapshotListener
             MsgPolicy.record(other, d)   // their own Message Requests override (admin panel)
-            _state.update { it.copy(otherPrivacy = Presence.privacyOf(d).also { p -> com.fariin.app.call.CallPrivacyIndex.record(other, p) }) }
+            val ob = PlusBubble.parse(d["plusBubble"])
+            _state.update { it.copy(otherPrivacy = Presence.privacyOf(d).also { p -> com.fariin.app.call.CallPrivacyIndex.record(other, p) }, otherPlusBubble = ob) }
             notePresence()
         }
         myReg = users.document(me).addSnapshotListener { snap, _ ->
             val d = snap?.data ?: return@addSnapshotListener
             val p = Presence.privacyOf(d)
             Presence.noteMyPrivacy(p)
-            _state.update { it.copy(myPrivacy = p) }
+            val mb = PlusBubble.parse(d["plusBubble"])
+            PlusBubbles.record(mb)
+            _state.update { it.copy(myPrivacy = p, myPlusBubble = mb) }
             notePresence()
         }
     }

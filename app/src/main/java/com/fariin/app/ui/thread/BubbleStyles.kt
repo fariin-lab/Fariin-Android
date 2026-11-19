@@ -42,10 +42,17 @@ internal class StyledBubble(val fill: Brush, val ink: Color, val glass: Boolean,
  * [stylesOff]: a channel, or a group whose owner or admin turned bubble styles off (`bubbleStylesOff`).
  */
 @Composable
-internal fun styledBubble(m: Message, stylesOff: Boolean): StyledBubble? {
-    if (!BubbleStyles.SHOWN || stylesOff) return null
+internal fun styledBubble(m: Message, stylesOff: Boolean, plus: com.fariin.app.data.PlusBubble? = null): StyledBubble? {
+    if (stylesOff) return null
     if (m.deleted || m.mediaKind != null || m.poll != null) return null
     if (CardRules.location(m.text) != null || CardRules.contact(m.text) != null) return null
+    // Fariin Plus: the sender's profile style, only when the message carries no free style of its own.
+    if (m.bubbleStyle == null || !BubbleStyles.SHOWN) {
+        val p = com.fariin.app.data.PlusBubbles.drawn(plus)
+        if (p != null) return StyledBubble(Brush.linearGradient(listOf(Color(p.from), Color(p.to)),
+            start = Offset.Zero, end = Offset.Infinite), Color(p.text), glass = false)
+        if (!BubbleStyles.SHOWN) return null
+    }
     // A picture style (BubbleArt) wins over a colour style with the same id.
     BubbleArt.find(m.bubbleStyle)?.let { a ->
         val look = BubbleArt.look(a.id, stylesOff = false)

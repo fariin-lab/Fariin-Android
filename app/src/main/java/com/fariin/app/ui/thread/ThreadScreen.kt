@@ -139,6 +139,9 @@ private const val TOP_UP_PAGES = 10
 /** Everything the chat screen draws; the same for a live chat and the debug demo. */
 data class ThreadUi(
     val title: String,
+    /** Fariin Plus bubble styles (1:1 only): theirs and mine. */
+    val otherPlusBubble: com.fariin.app.data.PlusBubble? = null,
+    val myPlusBubble: com.fariin.app.data.PlusBubble? = null,
     val subtitle: String = "",
     val photoUrl: String? = null,
     val isGroup: Boolean = false,
@@ -2088,7 +2091,8 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             return@Column
         }
         // The sender's bubble style (BubbleStyles.kt): its fill and text colour, on both sides.
-        val styled = styledBubble(m, bubbleStylesOff(ui.channel != null, ui.groupDoc, ui.isGroup))
+        val styled = styledBubble(m, bubbleStylesOff(ui.channel != null, ui.groupDoc, ui.isGroup),
+            plus = if (ui.isGroup || ui.channel != null) null else if (isMe) ui.myPlusBubble ?: com.fariin.app.data.PlusBubbles.mine else ui.otherPlusBubble)
         val art = styled?.art
         val chromeMe = isMe && styled == null
         androidx.compose.runtime.CompositionLocalProvider(LocalStyledInk provides styled?.ink) {

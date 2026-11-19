@@ -101,6 +101,7 @@ object PlusStore {
     fun refresh() { if (uid != null) fetch() }
 
     private fun clear() {
+        PlusBubbles.clear()
         accountSeq++
         lastFetchAt = 0L
         lastAskAt = 0L

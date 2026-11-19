@@ -148,6 +148,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     }
     val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
     val ui = ThreadUi(
+        otherPlusBubble = s.otherPlusBubble, myPlusBubble = s.myPlusBubble,
         title = channel?.info?.title?.ifEmpty { null } ?: guest?.preview?.title ?: conv?.displayName(me) ?: "",
         subtitle = channel?.let { com.fariin.app.channel.ChannelRules.followersLine(it.info.shownCount) }
             ?: guest?.let { com.fariin.app.data.GroupRules.memberCount(it.preview.memberCount) }
