@@ -402,6 +402,10 @@ private fun ViewerBody(
             com.fariin.app.data.MessageRules.canForward(m)) shareSheetFor = m else share()
     }
 
+    val photoForwards = page.messageId?.let { host?.message?.invoke(it) }?.let { m ->
+        host?.forwardTo != null && page.albumParent == null && page.once == null && !restricted && com.fariin.app.data.MessageRules.canForward(m)
+    } == true
+
     Box(Modifier.fillMaxSize().onSizeChanged { box = Size(it.width.toFloat(), it.height.toFloat()) }
         .graphicsLayer { alpha = if (opened) 1f else 0f }) {
         Box(Modifier.fillMaxSize().graphicsLayer { alpha = pose().bg }.background(Color.Black))
@@ -465,7 +469,9 @@ private fun ViewerBody(
                 })
                 else {
                     if (pages.size > 1) ThumbStrip(pages, pager)
-                    PhotoBar(buttons, onShare = share, onDraw = draw, onDelete = { askDelete = true },
+                    // A photo's button forwards through the same sheet as a video's (iOS 28b6f87d6);
+                    // where it cannot be forwarded, the system share as before.
+                    PhotoBar(buttons, forward = photoForwards, onShare = videoShare, onDraw = draw, onDelete = { askDelete = true },
                         onSave = { save(listOf(page)) }, onSaveAll = { save(ViewerRules.siblings(pages, page)) })
                 }
             }
@@ -603,11 +609,14 @@ private fun MenuRow(text: String, icon: Painter, destructive: Boolean = false, o
 
 /** iOS bottomBar: 48 round buttons, Share at the start, Delete (mine) or Save (theirs) at the end. */
 @Composable
-private fun PhotoBar(b: ViewerRules.Buttons, onShare: () -> Unit, onDraw: () -> Unit, onDelete: () -> Unit, onSave: () -> Unit, onSaveAll: () -> Unit) {
+private fun PhotoBar(b: ViewerRules.Buttons, forward: Boolean, onShare: () -> Unit, onDraw: () -> Unit, onDelete: () -> Unit, onSave: () -> Unit, onSaveAll: () -> Unit) {
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp).padding(bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        if (b.share) BarButton(painterResource(com.fariin.app.R.drawable.ic_link_share), "Share", onClick = onShare)
+        if (b.share) {
+            if (forward) BarButton(painterResource(R.drawable.ic_menu_forward), "Forward", onClick = onShare)
+            else BarButton(painterResource(com.fariin.app.R.drawable.ic_link_share), "Share", onClick = onShare)
+        }
         Spacer(Modifier.weight(1f))
         // iOS scribble.variable: draw on this photo and send the copy here.
         if (b.draw) {
