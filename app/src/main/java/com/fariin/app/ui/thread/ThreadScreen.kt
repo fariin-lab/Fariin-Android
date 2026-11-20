@@ -1172,8 +1172,19 @@ private fun ThreadContent(
             // not on every new list of messages: each row took the whole ThreadUi, so every update of
             // a send (shown, sent, delivered) redrew every visible bubble (Oppo A5s 2026-11-19, 47%
             // late frames on Send). A reply's quote reads the live list through LocalThreadMessages.
-            val rowKey = ui.copy(messages = emptyList(), pinned = emptyMap(), loaded = true, synced = true, loadingOlder = false)
+            // Also out of the key (2026-11-20, Oppo: every send and every typing start/stop still redrew
+            // all visible bubbles): the header line (typing, online), the bars and counts around the
+            // list, member reads (the info sheet's), and a group's whole doc, of which a bubble reads
+            // only bubbleStylesOff. The rows' copy is the live ui whenever any of what is left changes.
+            val rowKey = ui.copy(messages = emptyList(), pinned = emptyMap(), loaded = true, synced = true, loadingOlder = false,
+                subtitle = "", canLoadOlder = true, sendBlocked = null, sendBlockedByMod = false, groupGuest = null,
+                memberReads = emptyMap(), unreadAtOpen = 0, dividerAt = 0, requestBar = null, channelWaiting = false,
+                pinnedIds = emptyList(), canPin = false, muted = null,
+                // Read and delivered marks move on every send: each row gets its own tick instead (below).
+                receipts = com.fariin.app.data.Receipts(),
+                groupDoc = if (ui.groupDoc["bubbleStylesOff"] == true) mapOf("bubbleStylesOff" to true) else emptyMap())
             val rowUi = remember(rowKey) { ui }
+
             androidx.compose.runtime.CompositionLocalProvider(LocalThreadMessages provides uiMessages,
                 LocalTimerMark provides timerMark, LocalSearchTerm provides search.term,
                 LocalBubbleLinkTap provides linkTap,
@@ -1197,6 +1208,7 @@ private fun ThreadContent(
                     contentType = { _, i -> rowKind(ui.messages[i], ch != null) }) { _, i ->
                     val m = ui.messages[i]
                     val g = geometry[i]
+                    val rowTick = ThreadLogic.tick(m, ui.me, ui.receipts)
                     // A message that arrives fades in and the rows above glide up to make room;
                     // with Power Saving > Animations off it just appears. The one I just sent
                     // rises from the composer instead of fading (SendMotion.kt); one from someone else
@@ -1303,7 +1315,7 @@ private fun ThreadContent(
                                     if (m.deleted) null else com.fariin.app.channel.ChannelRules.shownViews(m.views, m.authorId, ui.me),
                             ) {
                                 Column(Modifier.fillMaxWidth().combinedClickableLong { postPreview = { MessageRow(ui, m, g, is24h, {}) {} }; postMenuFor = m }) {
-                                    MessageRow(rowUi, m, g, is24h, { failedFor = it }) { viewing = withChatGallery(it, uiNow.value.messages, uiNow.value.isGroup || uiNow.value.channel != null) }
+                                    MessageRow(rowUi, m, g, is24h, { failedFor = it }, rowTick) { viewing = withChatGallery(it, uiNow.value.messages, uiNow.value.isGroup || uiNow.value.channel != null) }
                                     // A text post carries its reactions inside the bubble; the rest under it.
                                     // A photo, video or album post draws its bar inside its bubble (MediaRow), as text posts do.
                                     // A picture, video or album post's pills sit inside its bubble (MediaRow).
@@ -1321,7 +1333,7 @@ private fun ThreadContent(
                                     Column(Modifier.fillMaxWidth()) {
                                         // No share button beside a post while ticking (iOS).
                                         androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.channels.LocalPostSelecting provides true) {
-                                            MessageRow(rowUi, m, g, is24h, {}) {}
+                                            MessageRow(rowUi, m, g, is24h, {}, rowTick) {}
                                         }
                                         ReactionChips(m, ui, m.authorId == ui.me) {}
                                     }
@@ -1343,7 +1355,7 @@ private fun ThreadContent(
                                         menuSource = lc?.let { menuSourceOf(it, m.authorId == ui.me) }
                                         menuPreview = {
                                             Column(Modifier.fillMaxWidth()) {
-                                                MessageRow(rowUi, m, g, is24h, {}) {}
+                                                MessageRow(rowUi, m, g, is24h, {}, rowTick) {}
                                                 ReactionChips(m, ui, m.authorId == ui.me) {}
                                             }
                                         }
@@ -1357,7 +1369,7 @@ private fun ThreadContent(
                                         ReactNow.set(m, next)
                                         actions.onReact(m, next)
                                     }) {
-                                    MessageRow(rowUi, m, g, is24h, { failedFor = it }) { viewing = withChatGallery(it, uiNow.value.messages, uiNow.value.isGroup || uiNow.value.channel != null) }
+                                    MessageRow(rowUi, m, g, is24h, { failedFor = it }, rowTick) { viewing = withChatGallery(it, uiNow.value.messages, uiNow.value.isGroup || uiNow.value.channel != null) }
                                     // iOS: a pill opens who reacted (channels keep their own chips).
                                     ReactionChips(ReactNow.shown(m, ui.me), ui, m.authorId == ui.me) { reactorsFor = m.rowId }
                                 }
@@ -2073,11 +2085,13 @@ private fun shortFillFor(state: androidx.compose.foundation.lazy.LazyListState):
 
 @Composable
 private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is24h: Boolean, onRetry: (Message) -> Unit,
+                       /** This row's tick, worked out by the list from the live marks; null = from [ui]. */
+                       tickIn: com.fariin.app.data.Tick? = null,
                        onView: (Viewing) -> Unit) {
     val c = Fariin.colors
     // In a channel nobody's post is "mine" on screen: every post is the channel speaking.
     val isMe = m.authorId == ui.me && ui.channel == null
-    val tick = ThreadLogic.tick(m, ui.me, ui.receipts)
+    val tick = tickIn ?: ThreadLogic.tick(m, ui.me, ui.receipts)
     val failed = tick == Tick.FAILED
     // A channel post is wide (iOS MessageRowLayout `wide`): the row less 44 for the share arrow.
     val screenW = LocalConfiguration.current.screenWidthDp.toFloat()
@@ -3655,3 +3669,4 @@ private fun Isolated(content: @Composable () -> Unit) = content()
 
 /** The chat's live list of messages, for a row whose [ThreadUi] copy is kept steady (a reply's quote). */
 internal val LocalThreadMessages = androidx.compose.runtime.staticCompositionLocalOf<androidx.compose.runtime.State<List<Message>>?> { null }
+
