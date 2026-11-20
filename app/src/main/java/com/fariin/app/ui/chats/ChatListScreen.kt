@@ -613,7 +613,7 @@ fun ChatListScreen(
                             ),
                         )
                         // Fariin Plus chat folders: the chips, only while folders are in use.
-                        if (!showArchive && com.fariin.app.data.ChatFoldersStore.active) ChatFolderBar(state.chats, me,
+                        if (!showArchive && com.fariin.app.data.ChatFoldersStore.tabsShown) ChatFolderBar(state.chats, me,
                             onEdit = { folderEdit = it }, onManage = {
                                 com.fariin.app.ui.settings.SettingsLink.request(com.fariin.app.ui.settings.PAGE_CHAT_FOLDERS)
                                 onSettings()
@@ -1220,13 +1220,19 @@ private fun OverflowMenu(
         { p: androidx.compose.ui.graphics.painter.Painter -> com.fariin.app.ui.components.GlassMenuItem(text, p, divider = divider, checked = checked, onClick = onClick) }
     // Owner 2026-11-09 (iOS Chats bar, the Android way): Select chats and Mark All Read first, then
     // the "Show" filters, then the rest.
+    val folders = com.fariin.app.data.ChatFoldersStore
     val rows = listOfNotNull(
         item("Select Chats", R.drawable.ic_sf_checkmark_circle, onClick = onSelect),
         item("Mark All Read", R.drawable.ic_mark_all_read, onClick = onMarkAllRead),
         item("All Chats", R.drawable.ic_menu_read, filter == FILTER_ALL, divider = true) { onFilter(FILTER_ALL) },
-        item("Unread", R.drawable.ic_menu_unread, filter == FILTER_UNREAD) { onFilter(FILTER_UNREAD) },
-        if (com.fariin.app.data.AppFeatures.groups) item("Groups", R.drawable.ic_gs_group_type, filter == FILTER_GROUPS) { onFilter(FILTER_GROUPS) } else null,
-        item("Channels", R.drawable.ic_sf_megaphone, filter == FILTER_CHANNELS) { onFilter(FILTER_CHANNELS) },
+        // A filter that already is a folder (by its rule) leaves the menu (iOS 2026-11-20).
+        if (!folders.hasFolderFor("unread")) item("Unread", R.drawable.ic_menu_unread, filter == FILTER_UNREAD) { onFilter(FILTER_UNREAD) } else null,
+        if (com.fariin.app.data.AppFeatures.groups && !folders.hasFolderFor("groups")) item("Groups", R.drawable.ic_gs_group_type, filter == FILTER_GROUPS) { onFilter(FILTER_GROUPS) } else null,
+        if (!folders.hasFolderFor("channels")) item("Channels", R.drawable.ic_sf_megaphone, filter == FILTER_CHANNELS) { onFilter(FILTER_CHANNELS) } else null,
+        // People with folders: the tabs can be put away and brought back.
+        if (folders.active) item(if (folders.tabsHidden) "Show Folder Tabs" else "Hide Folder Tabs", R.drawable.ic_story_folder) {
+            folders.hideTabs(!folders.tabsHidden)
+        } else null,
         // Message Requests switched off in the admin panel: no entry (unless something still waits).
         if (showRequests) item(if (requests > 0) "Message Requests ($requests)" else "Message Requests", R.drawable.ic_message_request, divider = true, onClick = onRequests) else null,
         // Hidden with the Chat Key itself (admin panel chatKeyVisible, iOS MainShell).

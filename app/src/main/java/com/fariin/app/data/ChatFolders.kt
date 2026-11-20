@@ -206,8 +206,23 @@ object ChatFoldersStore {
     val featureOn: Boolean get() = PlusStore.visible && PlusStore.state("chatFolders") == PlusStore.State.ON
     /** The chips show: the feature is on and there is more than All Chats. */
     val active: Boolean get() = featureOn && folders.size > 1
+    /** The ≡ menu's Hide Folder Tabs (iOS 2026-11-20), per account on this phone; the first folder shows them again. */
+    var tabsHidden by mutableStateOf(false); private set
+    /** The tab bar is drawn. */
+    val tabsShown: Boolean get() = active && !tabsHidden
     /** The chosen folder, null for All Chats or while folders are not in use. */
-    val current: ChatFolder? get() = if (!active) null else folders.firstOrNull { it.id == selectedId && !it.isAll }
+    val current: ChatFolder? get() = if (!tabsShown) null else folders.firstOrNull { it.id == selectedId && !it.isAll }
+
+    fun hideTabs(hidden: Boolean) {
+        if (tabsHidden == hidden) return
+        tabsHidden = hidden
+        val me = uid ?: return
+        app?.let { prefs(it).edit().putBoolean("tabsHidden.$me", hidden).apply() }
+    }
+
+    /** A menu filter that already is a folder (by its rule, not its name): "unread", "groups" or "channels". */
+    fun hasFolderFor(suggestionId: String): Boolean =
+        active && ChatFolder.SUGGESTIONS.firstOrNull { it.id == suggestionId }?.let { s -> folders.any { s.matches(it) } } == true
     val customFolders: List<ChatFolder> get() = folders.filter { !it.isAll }
     val canAddFolder: Boolean get() = featureOn && maxOf(folders.size, 1) < ChatFolder.MAX_FOLDERS
 
@@ -243,6 +258,7 @@ object ChatFoldersStore {
         dirty = cached?.dirty ?: false
         base = cached?.base ?: emptyList()
         baseAt = cached?.baseAt
+        tabsHidden = app?.let { prefs(it).getBoolean("tabsHidden.$me", false) } ?: false
     }
 
     fun select(id: String) {
@@ -258,6 +274,8 @@ object ChatFoldersStore {
         next.add(0, folders.firstOrNull { it.isAll } ?: ChatFolder.ALL)
         val capped = next.take(ChatFolder.MAX_FOLDERS)
         if (capped == folders) return
+        // The first folder brings the tabs (back) by themselves.
+        if (folders.size <= 1 && capped.size > 1) hideTabs(false)
         folders = capped
         if (folders.none { it.id == selectedId }) selectedId = ChatFolder.ALL.id
         editSeq++; dirty = true
