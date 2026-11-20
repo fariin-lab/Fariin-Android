@@ -1542,6 +1542,25 @@ private fun StoryPage(
                 }
             }
 
+            // A story made from a channel post (iOS chromeVersion 2): "View post" and "Shared from
+            // <channel>" are drawn here, not in the picture. The pill opens the post.
+            val postUrl = story.taps.firstOrNull { com.fariin.app.data.StoryPostLink.ref(it.url) != null }?.url
+                ?: if (story.postCid != null && story.postMid != null) "https://fariin.com/c/${story.postCid}/${story.postMid}" else null
+            if (postUrl != null && (story.postV >= 2 || (story.postCid == null && com.fariin.app.data.StoryPostLink.name(postUrl) != null))) {
+                val from = story.postName ?: com.fariin.app.data.StoryPostLink.name(postUrl)
+                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                    .graphicsLayer { alpha = chrome() * (2f - zoomScale).coerceIn(0f, 1f) }
+                    .padding(bottom = if (story.caption.isNotEmpty()) 60.dp else 18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(Modifier.clip(androidx.compose.foundation.shape.CircleShape).background(Color.White)
+                        .clickable(onClickLabel = "View post") { onLink(postUrl) }.padding(horizontal = 18.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text("View post", color = Color.Black, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_right), null, tint = Color.Black, modifier = Modifier.padding(start = 4.dp).size(12.dp))
+                    }
+                    if (from != null) Text("Shared from $from", color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp, start = 24.dp, end = 24.dp))
+                }
+            }
             // The caption: 16 white, 16 in from the sides and 14 off the card's bottom edge (iOS).
             if (story.caption.isNotEmpty()) {
                 // Its web addresses open on a tap (iOS StoryLinkOpener); the rest of it is the story's.

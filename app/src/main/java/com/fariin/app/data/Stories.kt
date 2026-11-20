@@ -46,6 +46,12 @@ data class Story(
     val buttonUrl: String = "",
     /** Changed after it was posted (iOS Edit Story: `editedAt` or `captionEditedAt`): "edited" after the time. */
     val edited: Boolean = false,
+    /** Made from a channel post (iOS StoryPostLink `post`): cid, mid, the channel's name; v >= 2 = the
+     *  viewer draws "View post" and "Shared from" itself. */
+    val postCid: String? = null,
+    val postMid: String? = null,
+    val postName: String? = null,
+    val postV: Int = 0,
 ) {
     /** The ring a story belongs to: its author, or "g:" + the group for a group's story. */
     val ringKey: String get() = groupId?.takeIf { it.isNotEmpty() }?.let { StoryGroup.GROUP_PREFIX + it } ?: authorUid
@@ -114,6 +120,10 @@ object StoryList {
             taps = StoryTaps.list(data["stickers"]),
             repostOf = StoryRepost.from(data["repostOf"]),
             edited = data["editedAt"] != null || data["captionEditedAt"] != null,
+            postCid = (data["post"] as? Map<*, *>)?.get("cid") as? String,
+            postMid = (data["post"] as? Map<*, *>)?.get("mid") as? String,
+            postName = ((data["post"] as? Map<*, *>)?.get("name") as? String)?.takeIf { it.isNotBlank() },
+            postV = ((data["post"] as? Map<*, *>)?.get("v") as? Number)?.toInt() ?: 0,
         )
     }
 

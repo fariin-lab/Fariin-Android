@@ -96,7 +96,9 @@ internal fun LinkShareSheet(me: String, link: String, text: String = link, onDis
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ShareWithSheet(me: String, onDismiss: () -> Unit, onSystemShare: (() -> Unit)?, idleLabel: String?,
-                            onIdle: () -> Unit, onSend: (List<String>) -> Unit) {
+                            onIdle: () -> Unit, onSend: (List<String>) -> Unit,
+                            /** A channel post: the first circle reposts it to my story (iOS repostToStory). */
+                            onRepostToStory: (() -> Unit)? = null) {
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -132,6 +134,23 @@ internal fun ShareWithSheet(me: String, onDismiss: () -> Unit, onSystemShare: ((
                 textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp))
             else LazyVerticalGrid(GridCells.Fixed(4), Modifier.fillMaxWidth().heightIn(max = 420.dp).padding(horizontal = 8.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                // iOS: "Repost to Story" first, a ring going blue to purple to pink around a dark disc with a plus.
+                if (onRepostToStory != null && query.isBlank()) item(key = "repost-story") {
+                    Column(Modifier.clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {
+                        close { onRepostToStory() }
+                    }.padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(Modifier.size(68.dp).clip(CircleShape).background(androidx.compose.ui.graphics.Brush.sweepGradient(
+                            listOf(androidx.compose.ui.graphics.Color(0xFF0A84FF), androidx.compose.ui.graphics.Color(0xFFBF5AF2),
+                                androidx.compose.ui.graphics.Color(0xFFFF375F), androidx.compose.ui.graphics.Color(0xFF0A84FF)))).padding(3.dp),
+                            contentAlignment = Alignment.Center) {
+                            Box(Modifier.matchParentSize().clip(CircleShape).background(androidx.compose.ui.graphics.Color(0xFF1C1C1E)), contentAlignment = Alignment.Center) {
+                                Icon(ImageVector.cachedVector(R.drawable.ic_plus_ios), null, tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(26.dp))
+                            }
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text("Repost to\nStory", fontSize = 13.sp, lineHeight = 15.sp, color = c.label, textAlign = TextAlign.Center)
+                    }
+                }
                 items(shown, key = { it.id }) { conv ->
                     val on = conv.id in chosen
                     // No grey box on a tap (owner 2026-11-08): the ring and tick are the feedback, as iOS.

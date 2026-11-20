@@ -67,6 +67,7 @@ import com.fariin.app.channel.ChannelInfo
 import com.fariin.app.channel.ChannelRules
 import com.fariin.app.channel.ChannelRules.Role
 import com.fariin.app.data.Message
+import kotlinx.coroutines.launch
 import com.fariin.app.ui.theme.Fariin
 
 /**
@@ -136,10 +137,14 @@ fun PostShareButton(ch: ChannelThreadUi, m: Message) {
     val ctx = LocalContext.current
     val shown = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(0f) }
     androidx.compose.runtime.LaunchedEffect(Unit) { shown.animateTo(1f, androidx.compose.animation.core.tween(180)) }
+    // iOS: the post's Share opens "Share with" (chats, Copy Link, more ways), Repost to Story first on
+    // a public channel's post (PostToStory).
+    var sheet by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    if (sheet) PostShareSheet(ch, m) { sheet = false }
     Box(
         Modifier.padding(start = 8.dp).size(32.dp).graphicsLayer { alpha = shown.value }.clip(CircleShape)
             .background(if (c.dark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f))
-            .clickable { sharePost(ctx, ch.info, m) },
+            .clickable { if (com.fariin.app.Fb.auth.currentUser == null) sharePost(ctx, ch.info, m) else sheet = true },
         contentAlignment = Alignment.Center,
     ) {
         Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_share_turn_right), contentDescription = "Share",
@@ -547,4 +552,57 @@ private fun FitPreview(maxHeight: androidx.compose.ui.unit.Dp, content: @Composa
             }
         }
     }
+}
+
+
+/** A post's "Share with" sheet (iOS SendContactSheet for a post), with Repost to Story when it may go on a story. */
+@Composable
+private fun PostShareSheet(ch: ChannelThreadUi, m: Message, onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
+    val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var draft by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.fariin.app.data.StoryMedia.Prepared?>(null) }
+    var preparing by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val link = if (ch.info.username.isEmpty()) "" else "https://fariin.com/${ch.info.username}"
+    val text = listOf(shareBody(m), link.ifEmpty { null }).filterNotNull().joinToString("\n\n")
+    draft?.let { d ->
+        com.fariin.app.ui.stories.StoryComposerDialog(me, d, com.fariin.app.data.ChatsNow.list,
+            onClose = { draft = null; onDismiss() },
+            onPosted = { draft = null; onDismiss(); com.fariin.app.ui.components.Snack.show("Posted to your story") })
+        return
+    }
+    // The sheet closes BEFORE its Repost to Story runs (ShareWithSheet closes, then acts), so the
+    // flow is ended only a frame later and only when nothing started meanwhile.
+    var showSheet by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
+    androidx.compose.runtime.LaunchedEffect(showSheet, preparing) {
+        if (!showSheet && !preparing) { androidx.compose.runtime.withFrameNanos { }; if (!preparing && draft == null) onDismiss() }
+    }
+    if (preparing || !showSheet) return
+    com.fariin.app.ui.thread.ShareWithSheet(me, onDismiss = { showSheet = false },
+        onSystemShare = { sharePost(ctx, ch.info, m) },
+        idleLabel = if (link.isNotEmpty()) "Copy Link" else null,
+        onIdle = {
+            (ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                .setPrimaryClip(android.content.ClipData.newPlainText("Link", text))
+            if (android.os.Build.VERSION.SDK_INT < 33) com.fariin.app.ui.components.Snack.show("Link copied")
+        },
+        onSend = { targets ->
+            if (text.isEmpty()) return@ShareWithSheet
+            com.fariin.app.ui.components.Snack.show(if (targets.size > 1) "Sent to ${targets.size} chats" else "Sent")
+            val crypto = com.fariin.app.data.CryptoHub.get(ctx.applicationContext)
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
+                for (t in targets) runCatching {
+                    com.fariin.app.data.ThreadRepository.openOrQuiet(t, me, crypto, this).sendForwardedText(text, forwarded = false)
+                }
+            }
+        },
+        onRepostToStory = if (PostToStory.eligible(ch.info, m)) ({
+            preparing = true
+            scope.launch {
+                val d = PostToStory.build(ctx, ch.info, m)
+                preparing = false
+                if (d == null) { com.fariin.app.ui.components.Snack.show("Couldn't prepare this post. Try again."); onDismiss() }
+                else draft = d
+            }
+        }) else null)
 }

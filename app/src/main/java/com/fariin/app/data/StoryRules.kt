@@ -144,6 +144,8 @@ object StoryRules {
             "blurThumb" to blurThumb,
             "caption" to caption,
             "stickers" to stickers.map { StoryTaps.asMap(it) },
+            // A story made from a channel post (iOS StoryPostLink): `post` comes from its link sticker.
+            *(StoryPostLink.field(stickers)?.let { arrayOf("post" to it) } ?: emptyArray()),
             "audience" to mapOf("mode" to mode, "listId" to "my-story"),
             "audienceLabel" to choice.tagLabel,
             "oneTime" to (choice == StoryAudienceChoice.ONE_TIME),

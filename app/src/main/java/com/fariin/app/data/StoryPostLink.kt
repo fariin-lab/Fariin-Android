@@ -27,4 +27,22 @@ object StoryPostLink {
         if (!segmentOK(cid) || !segmentOK(mid) || NUMBER.matches(mid)) return null
         return cid to mid
     }
+
+    /** iOS chromeVersion: the picture holds only the card; the viewer draws "View post" and "Shared from". */
+    const val CHROME_VERSION = 2
+
+    /** The channel's name a link carries as `?n=` (iOS Ref.name). */
+    fun name(url: String?): String? = runCatching {
+        java.net.URI(url ?: return null).rawQuery?.split('&')?.firstOrNull { it.startsWith("n=") }
+            ?.removePrefix("n=")?.let { java.net.URLDecoder.decode(it, "UTF-8") }?.takeIf { it.isNotBlank() }
+    }.getOrNull()
+
+    /** `post` for the story document, derived from the first sticker that links to a channel post (iOS ref(in:)). */
+    fun field(stickers: List<StoryTapTarget>): Map<String, Any>? {
+        val t = stickers.firstOrNull { ref(it.url) != null } ?: return null
+        val (cid, mid) = ref(t.url) ?: return null
+        val out = hashMapOf<String, Any>("cid" to cid, "mid" to mid, "v" to CHROME_VERSION)
+        name(t.url)?.let { out["name"] = it }
+        return out
+    }
 }
