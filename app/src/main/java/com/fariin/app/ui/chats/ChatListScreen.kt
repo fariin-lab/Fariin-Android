@@ -732,10 +732,7 @@ fun ChatListScreen(
                             (-(listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "search" }?.offset ?: 0)).toFloat().coerceAtLeast(0f)
                         }) { searching = true }
                     }
-                    // A voice message playing on after its chat was left (iOS VoiceNoteBar, under the header).
-                    if (!searching) item(key = "voicebar", contentType = "voicebar") {
-                        com.fariin.app.ui.thread.VoiceNoteBar(null, me) { cid -> (state.chats + state.archived).firstOrNull { it.id == cid }?.let { if (!selecting) onOpen(it) } }
-                    }
+                    // The voice message bar left this list for the bottom of every tab (MainShell, iOS 40a1005cd).
                     if (!showArchive && !searching && filter == FILTER_ALL && folder == null && state.requests.isNotEmpty()) item(key = "requests", contentType = "requests") {
                         ListRow("Message Requests", fi(R.drawable.ic_message_request), trailing = "${state.requests.size}", badge = true,
                             subtitle = state.requests.joinToString(", ") { it.displayName(me) }, onClick = people.requests)

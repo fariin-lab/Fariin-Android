@@ -42,6 +42,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -271,7 +273,16 @@ fun MainShell(
     }
 
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val inset = BarHeight + BarMargin * 2 + navBottom
+    val barInset = BarHeight + BarMargin * 2 + navBottom
+    // The voice message bar sits on top of the tab bar: while it shows, every tab's lists and
+    // buttons (New Chat, New Call) clear it too, as iOS reserves its room.
+    // Only whether it shows: the player's position ticks many times a second and must not rebuild the shell.
+    val voiceShown by remember {
+        com.fariin.app.media.VoicePlayer.state.map { it.id != null && it.cid != null }.distinctUntilChanged()
+    }.collectAsState(false)
+    // One step, not animated: the inset is a static local, so each animation frame would rebuild every tab.
+    val voiceRoom = if (voiceShown) 54.dp else 0.dp
+    val inset = barInset + voiceRoom
     val haze = remember { HazeState() }
     // Android 13+ with glass allowed: real liquid glass (lens refraction at the rim, colour vibrancy,
     // a specular edge) from the backdrop library; Android 12 keeps the frosted blur; below, solid.
@@ -333,6 +344,12 @@ fun MainShell(
                 tab = tab, unread = unread, missed = missed, myPhoto = myPhoto, glass = glass, haze = haze, backdrop = if (liquid) backdrop else null, animate = power.animations, onSelect = select,
                 modifier = Modifier.navigationBarsPadding().padding(horizontal = BarSide, vertical = BarMargin),
             )
+        }
+        // A voice message playing on after its chat was left (iOS VoiceNoteBar, story-seg-1115
+        // 40a1005cd): at the bottom, just above the tab bar, on every tab; a tap opens its chat.
+        if (!TabBarVisibility.hidden) {
+            val nav = com.fariin.app.ui.people.LocalPeopleNav.current
+            com.fariin.app.ui.thread.VoiceNoteBar(null, me, Modifier.align(Alignment.BottomCenter).padding(bottom = barInset + 2.dp)) { cid -> nav.chat(cid) }
         }
         // Full-screen pages drawn over everything, the tab bar included, in the activity's own window
         // (no Dialog: its system dim and rise played before any code could stop them; owner's Pixel
