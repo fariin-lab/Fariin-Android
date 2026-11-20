@@ -2288,6 +2288,8 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 linkInk = if (m.deleted) null else styled?.ink ?: if (isMe) Color.White else c.blue,
                 // The author's own links (Format > Link), only over the words they were made for.
                 ownLinks = if (m.deleted || m.links.isEmpty() || body != m.text) emptyList() else m.links,
+                // A channel post's #tags and $tags open Tag Search.
+                tags = ui.channel != null && !m.deleted,
             )
             }
             quoteId?.let { q ->
@@ -2680,17 +2682,18 @@ private fun tickDescription(t: Tick) = when (t) {
  */
 @Composable
 private fun TextWithMeta(text: String, style: TextStyle, bold: List<IntRange> = emptyList(), fmtBold: List<IntRange> = emptyList(),
-                         linkInk: Color? = null, ownLinks: List<com.fariin.app.data.TextFormat.Link> = emptyList(), meta: @Composable () -> Unit) {
+                         linkInk: Color? = null, ownLinks: List<com.fariin.app.data.TextFormat.Link> = emptyList(), tags: Boolean = false,
+                         meta: @Composable () -> Unit) {
     val layoutRef = remember { arrayOfNulls<TextLayoutResult>(1) }
     Layout(content = {
         // In-chat search: the matched terms marked in yellow, never the whole bubble (iOS BubbleText).
         val term = LocalSearchTerm.current
         // Outside the list (the long-press menu's copy) the links are drawn but take no taps.
         val tap = LocalBubbleLinkTap.current ?: NoLinkTap
-        Text(remember(text, term, bold, fmtBold, linkInk, tap, ownLinks) {
+        Text(remember(text, term, bold, fmtBold, linkInk, tap, ownLinks, tags) {
             // The post's own bold in the bold weight, same size; the mentions keep their semibold.
             val marked = mentionMarked(searchMarked(text, term), bold).let { if (fmtBold.isEmpty()) it else boldMarked(it, fmtBold) }
-            if (linkInk == null) marked else linkMarked(marked, bold, linkInk, tap, ownLinks)
+            if (linkInk == null) marked else linkMarked(marked, bold, linkInk, tap, ownLinks, tags)
         }, style = style, onTextLayout = { layoutRef[0] = it })
         // Exactly one node whatever meta() draws: the measure reads [0] and [1] by position.
         androidx.compose.foundation.layout.Box { meta() }

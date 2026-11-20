@@ -11,7 +11,7 @@ package com.fariin.app.data
  * inside a word, so "abc@def.com" is an email and not the username "@def".
  */
 object TextLinks {
-    enum class Kind { WEB, HANDLE, EMAIL, PHONE }
+    enum class Kind { WEB, HANDLE, EMAIL, PHONE, TAG }
 
     /** [start] inclusive, [end] exclusive, in the text's UTF-16 indices. [target]: the url to open,
      *  the username without "@", the address, or the number as typed. */

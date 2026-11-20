@@ -43,6 +43,8 @@ internal val NoLinkTap: (TextLinks.Span) -> Unit = {}
 internal fun linkMarked(
     s: AnnotatedString, bold: List<IntRange>, color: Color, tap: (TextLinks.Span) -> Unit,
     own: List<com.fariin.app.data.TextFormat.Link> = emptyList(),
+    /** A channel post: its #tags and $tags open Tag Search (iOS 2026-11-20). */
+    tags: Boolean = false,
 ): AnnotatedString {
     val text = s.text
     // The author's own links (Format > Link) first; a found address or @name inside them yields (iOS).
@@ -57,16 +59,20 @@ internal fun linkMarked(
         }
     }
     // A quick skip only for text that cannot hold a link: a bare domain ("x.so") needs a dot.
-    if (mine.isEmpty() && !text.contains('.') && !text.contains('@') && text.count { it.isDigit() } < 7) return s
-    val spans = mine + TextLinks.find(text).filter { sp ->
+    val tagRuns = if (tags) com.fariin.app.data.TagSearch.find(text) else emptyList()
+    if (mine.isEmpty() && tagRuns.isEmpty() && !text.contains('.') && !text.contains('@') && text.count { it.isDigit() } < 7) return s
+    val found = mine + TextLinks.find(text).filter { sp ->
         (sp.kind != TextLinks.Kind.HANDLE || bold.none { it.first < sp.end && sp.start <= it.last }) &&
             mine.none { it.start < sp.end && sp.start < it.end }
     }
+    // Tags last, only where nothing else sits (an address with #part, a linked word, a mention keep theirs).
+    val spans = found + tagRuns.filter { t -> found.none { it.start < t.end && t.start < it.end } &&
+        bold.none { it.first < t.end && t.start <= it.last } }
     if (spans.isEmpty()) return s
     return AnnotatedString.Builder(s).apply {
         for (sp in spans) {
             val style = SpanStyle(color = color,
-                textDecoration = if (sp.kind == TextLinks.Kind.HANDLE) null else TextDecoration.Underline)
+                textDecoration = if (sp.kind == TextLinks.Kind.HANDLE || sp.kind == TextLinks.Kind.TAG) null else TextDecoration.Underline)
             addLink(LinkAnnotation.Clickable(sp.kind.name, TextLinkStyles(style)) { tap(sp) }, sp.start, sp.end)
         }
     }.toAnnotatedString()
@@ -107,6 +113,12 @@ internal fun rememberBubbleLinkTap(ui: ThreadUi, onNotice: (String) -> Unit): (T
         onOpenChat = { nav.chat(it) }, onOpenChannel = { channelNav.open(it) }) }
     storyOpen?.let { g -> com.fariin.app.ui.stories.StoryViewerDialog(now.me, listOf(g), 0,
         com.fariin.app.data.ChatsNow.list, onClose = { storyOpen = null }) }
+    // Tag Search (free for everyone): the sheet over the chat; a post opens its channel.
+    var tagOpen by remember { mutableStateOf<String?>(null) }
+    tagOpen?.let { t ->
+        com.fariin.app.ui.channels.TagSearchSheet(t, startFollowing = now.channel?.info?.isPublic == false,
+            onClose = { tagOpen = null }, onOpenChannel = { cid -> tagOpen = null; channelNav.open(cid) })
+    }
     // An author's link whose words are not the address: the address first (iOS "Open This Link?").
     var askOpen by remember { mutableStateOf<TextLinks.Span?>(null) }
     val route = remember { arrayOfNulls<(TextLinks.Span) -> Unit>(1) }
@@ -153,6 +165,7 @@ internal fun rememberBubbleLinkTap(ui: ThreadUi, onNotice: (String) -> Unit): (T
         val tap: (TextLinks.Span) -> Unit = tap@{ sp ->
             if (sp.ask) { askOpen = sp; return@tap }
             when (sp.kind) {
+                TextLinks.Kind.TAG -> tagOpen = sp.target
                 TextLinks.Kind.HANDLE -> handle(sp.target)
                 TextLinks.Kind.EMAIL -> start(ctx, Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:" + sp.target))) { notice("No app here can send email") }
                 TextLinks.Kind.PHONE -> start(ctx, Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + sp.target.filter { it.isDigit() || it == '+' }))) { notice("No app here can make calls") }
