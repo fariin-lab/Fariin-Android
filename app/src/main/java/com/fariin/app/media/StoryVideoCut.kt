@@ -47,6 +47,9 @@ object StoryVideoCut {
         val canvasW: Int,
         val canvasH: Int,
         val overlay: android.graphics.Bitmap?,
+        /** When set (with a canvas): the clip is cut to this box's shape and laid in it (canvas
+         *  pixels), under [overlay], which leaves the box open. Repost to Story's card. */
+        val place: android.graphics.RectF? = null,
     )
 
     suspend fun cut(context: Context, uri: Uri, out: File, range: LongRange): Boolean =
@@ -110,6 +113,22 @@ object StoryVideoCut {
                 )
             }
             val video = ArrayList<androidx.media3.common.Effect>()
+            val box = spec.place
+            if (box != null && onCanvas && srcW > 0 && srcH > 0) {
+                // Cut the clip to the box's shape round its middle (-1..1, y up)...
+                val a = srcW.toFloat() / srcH; val t = box.width() / box.height()
+                video += if (a < t) { val k = a / t; Crop(-1f, 1f, -k, k) } else { val k = t / a; Crop(-k, k, -1f, 1f) }
+                // ...fit it across the canvas, then shrink and move it onto the box.
+                video += Presentation.createForWidthAndHeight(spec.canvasW, spec.canvasH, Presentation.LAYOUT_SCALE_TO_FIT)
+                val fitW = minOf(spec.canvasW.toFloat(), spec.canvasH * t)
+                val k = box.width() / fitW
+                val tx = 2f * box.centerX() / spec.canvasW - 1f
+                val ty = 1f - 2f * box.centerY() / spec.canvasH
+                video += androidx.media3.effect.MatrixTransformation { _ ->
+                    android.graphics.Matrix().apply { postScale(k, k); postTranslate(tx, ty) }
+                }
+                spec.overlay?.let { bmp -> video += OverlayEffect(listOf<TextureOverlay>(BitmapOverlay.createStaticBitmapOverlay(bmp))) }
+            } else {
             // Crop works in the frame's own -1..1 space, y up.
             spec.crop?.let { c -> video += Crop(2f * c.left - 1f, 2f * c.right - 1f, 1f - 2f * c.bottom, 1f - 2f * c.top) }
             // A big shrink in halves, so detail survives the bilinear GPU scale (iOS uses Lanczos).
@@ -119,6 +138,7 @@ object StoryVideoCut {
             else Presentation.createForShortSide(outShort.coerceAtLeast(2) / 2 * 2)
             // Drawn at its own pixel size over the frame, which is why it is made canvasW x canvasH.
             spec.overlay?.let { bmp -> video += OverlayEffect(listOf<TextureOverlay>(BitmapOverlay.createStaticBitmapOverlay(bmp))) }
+            }
             val item = EditedMediaItem.Builder(builder.build())
                 .setRemoveAudio(spec.mute)
                 .setEffects(Effects(emptyList(), video))

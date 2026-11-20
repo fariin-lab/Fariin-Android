@@ -52,6 +52,8 @@ object PostToStory {
 
     private const val W = 1080
     private const val H = 1920
+    /** iOS: a reposted video plays at most this long. */
+    private const val CLIP_MS = 60_000L
 
     /** The story picture and its tap target, or null when the post's picture could not be read. */
     suspend fun build(ctx: Context, info: ChannelInfo, m: Message): StoryMedia.Prepared? = withContext(Dispatchers.IO) {
@@ -84,7 +86,8 @@ object PostToStory {
         val pad = 36f
         val head = 112f
         val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt(); textSize = 42f }
-        val words = m.bodyText.trim()
+        // A media post's own caption only, never the "Photo"/"Video" stand-in word.
+        val words = (if (pic != null) m.text else m.bodyText).trim()
         val layout = if (words.isEmpty()) null else StaticLayout.Builder.obtain(words, 0, words.length, textPaint, (cw - pad * 2).toInt())
             .setMaxLines(6).setEllipsize(TextUtils.TruncateAt.END).setAlignment(Layout.Alignment.ALIGN_NORMAL).setLineSpacing(6f, 1f).build()
         val picH = pic?.let { minOf((cw * it.height / it.width), H * 0.5f) } ?: 0f
@@ -95,8 +98,8 @@ object PostToStory {
         paint.color = 0xF018181C.toInt()
         c.drawRoundRect(card, 72f, 72f, paint)
         c.save()
-        val clip = android.graphics.Path().apply { addRoundRect(card, 72f, 72f, android.graphics.Path.Direction.CW) }
-        c.clipPath(clip)
+        val cardPath = android.graphics.Path().apply { addRoundRect(card, 72f, 72f, android.graphics.Path.Direction.CW) }
+        c.clipPath(cardPath)
         // Header: the channel's photo (rounded square), its name, the tick.
         val ph = RectF(left + pad, top + 26f, left + pad + 60f, top + 86f)
         if (avatar != null) {
@@ -132,6 +135,35 @@ object PostToStory {
         }
         layout?.let { c.save(); c.translate(left + pad, top + head + picH + pad); it.draw(c); c.restore() }
         c.restore()
+        // A video post plays inside the card (iOS v2): the clip (up to 60 s, its sound kept) laid in
+        // the picture's box under this same drawing with that box cut open. The drawing above, with
+        // the poster and play mark, is the story's still picture.
+        val clip: StoryMedia.Video? = if (m.type == "video" && pic != null && !m.videoUrl.isNullOrEmpty()) runCatching {
+            val media = com.fariin.app.media.ChatMedia(app, info.cid, com.fariin.app.data.CryptoHub.get(app))
+            val src = media.cached(m.videoUrl!!) ?: media.file(m.videoUrl!!, m.enc, video = true) ?: return@runCatching null
+            val box = RectF(left, top + head, left + cw, top + head + picH)
+            val over = out.copy(Bitmap.Config.ARGB_8888, true)
+            Canvas(over).apply {
+                save(); clipPath(cardPath)
+                drawRect(box, Paint().apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR) })
+                restore()
+            }
+            val srcUri = android.net.Uri.fromFile(src)
+            val ms = runCatching {
+                android.media.MediaMetadataRetriever().run {
+                    try { setDataSource(app, srcUri); extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() } finally { release() }
+                }
+            }.getOrNull() ?: ((m.duration ?: 0.0) * 1000).toLong()
+            val end = minOf(ms, CLIP_MS)
+            val dir = java.io.File(app.cacheDir, "story-repost").apply { mkdirs() }
+            val file = java.io.File(dir, "post-${System.currentTimeMillis()}.mp4")
+            val ok = com.fariin.app.media.StoryVideoCut.edit(app, srcUri, file,
+                com.fariin.app.media.StoryVideoCut.Edit(if (end > 0) 0L..end else null, mute = false, crop = null,
+                    canvasW = W, canvasH = H, overlay = over, place = box))
+            over.recycle()
+            if (!ok) null else StoryMedia.Video(android.net.Uri.fromFile(file),
+                com.fariin.app.data.StoryRules.VideoInfo(end / 1000.0, W, H, file.length()))
+        }.getOrNull() else null
         val jpeg = java.io.ByteArrayOutputStream().also { out.compress(Bitmap.CompressFormat.JPEG, 90, it) }.toByteArray()
         val blur = runCatching {
             val t = Bitmap.createScaledBitmap(out, 24, 42, true)
@@ -140,6 +172,6 @@ object PostToStory {
         // The tap target over the card: centre and size as fractions of the picture (StoryTaps).
         val tap = StoryTapTarget(x = card.centerX() / W.toDouble(), y = card.centerY() / H.toDouble(),
             w = card.width() / W.toDouble(), h = card.height() / H.toDouble(), rotation = 0.0, url = link(info, m), aspect = W / H.toDouble())
-        StoryMedia.Prepared(jpeg, blur, null, W, H, listOf(tap))
+        StoryMedia.Prepared(jpeg, blur, clip, W, H, listOf(tap))
     }
 }
