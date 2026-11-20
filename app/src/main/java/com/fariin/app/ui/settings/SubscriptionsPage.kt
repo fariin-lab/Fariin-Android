@@ -116,6 +116,7 @@ internal fun SubscriptionsPage(pop: () -> Unit) {
                     last = i == shown.lastIndex) { opened = f.id }
             }
         }
+        PlusBuySections()
         Spacer(Modifier.height(24.dp))
     }
     opened?.let { start -> PlusFeatureSheet(shown, start) { opened = null } }
@@ -183,6 +184,7 @@ fun PlusPageSheet(onDismiss: () -> Unit) {
                             last = i == shown.lastIndex) { opened = f.id }
                     }
                 }
+                PlusBuySections()
                 Spacer(Modifier.height(32.dp))
             }
             Box(Modifier.fillMaxWidth().height(28.dp).sheetDrag(motion))
@@ -240,4 +242,105 @@ private fun PlusFeatureSheet(features: List<PlusFeature>, start: String, onDismi
             }
         }
     }
+}
+
+
+/**
+ * Buying Fariin Plus on Android (Google Play, PlusBilling; iOS PlusView's buy sections): the plans,
+ * Subscribe, the renewal terms and the Terms / Privacy links appear ONLY while the server's purchases
+ * switch is on for this account. A Play subscription running now shows Manage Subscription instead;
+ * one bought on an iPhone says where it is managed.
+ */
+@Composable
+internal fun PlusBuySections() {
+    val c = Fariin.colors
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val billing = com.fariin.app.data.PlusBilling
+    val sub = PlusStore.subscription
+    val paidActive = PlusStore.isPlus && sub != null && (sub.untilMs == null || sub.untilMs > System.currentTimeMillis())
+    LaunchedEffect(PlusStore.purchasesOn) { if (PlusStore.purchasesOn && !billing.loaded) billing.loadPlans(ctx) }
+    billing.notice?.let { n ->
+        com.fariin.app.ui.components.GlassAlert(onDismissRequest = { billing.notice = null }, title = { Text("Fariin Plus") }, text = { Text(n) },
+            confirmButton = { androidx.compose.material3.TextButton({ billing.notice = null }) { Text("OK", color = c.accent) } }, containerColor = c.card)
+    }
+    when {
+        paidActive && sub?.source == "play" -> SettingsSection(footer = renewLine(sub)) {
+            SettingsRow("Manage Subscription", last = true, trailing = Trailing.OUT_LINK) {
+                runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse(billing.manageUrl(ctx.packageName)))) }
+            }
+        }
+        paidActive && sub?.source == "appstore" -> SettingsSection(footer = "Your Fariin Plus subscription is managed in the App Store on your iPhone.") {}
+        PlusStore.purchasesOn -> {
+            var plan by remember { mutableStateOf("yearly") }
+            val plans = billing.plans
+            val picked = plans.firstOrNull { it.basePlanId == plan } ?: plans.firstOrNull()
+            SettingsSection(header = "Choose a plan") {
+                if (plans.isEmpty()) Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
+                    if (billing.loaded) Text("Subscriptions are not available right now.", color = c.secondary)
+                    else com.fariin.app.ui.components.FariinSpinner(size = 24.dp, stroke = 2.5.dp, color = c.secondary)
+                } else plans.forEachIndexed { i, p ->
+                    val on = picked?.basePlanId == p.basePlanId
+                    Row(Modifier.fillMaxWidth().clickable { plan = p.basePlanId }.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Icon(ImageVector.cachedVector(if (on) R.drawable.ic_sf_checkmark_circle_fill else R.drawable.ic_sf_circle), null,
+                            tint = if (on) PlusBlue else c.secondary, modifier = Modifier.size(24.dp))
+                        Spacer(Modifier.size(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(if (p.basePlanId == "yearly") "Yearly" else "Monthly", fontSize = 17.sp, color = c.label)
+                            Text("${p.price} ${per(p.period)}", fontSize = 13.sp, color = c.secondary)
+                        }
+                        saving(p, plans)?.let { Text("Save $it%", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = PlusBlue) }
+                    }
+                    if (i < plans.lastIndex) Box(Modifier.fillMaxWidth().padding(start = 52.dp).height(0.5.dp).background(c.separator))
+                }
+            }
+            val activity = ctx as? android.app.Activity ?: (ctx as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
+            Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).height(52.dp).clip(CircleShape)
+                .background(if (picked != null && !billing.busy) PlusBlue else PlusBlue.copy(alpha = 0.5f))
+                .clickable(enabled = picked != null && !billing.busy && activity != null) { if (picked != null && activity != null) billing.buy(activity, picked) },
+                contentAlignment = Alignment.Center) {
+                if (billing.busy) com.fariin.app.ui.components.FariinSpinner(size = 22.dp, stroke = 2.5.dp, color = Color.White)
+                else Text(picked?.let { "Subscribe for ${it.price} ${per(it.period)}" } ?: "Subscribe", fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold, color = Color.White)
+            }
+            Text("Payment is charged to your Google Play account when you confirm. The subscription renews automatically at the same price and for the same period until you cancel it. You can manage or cancel it any time in Google Play under Payments & subscriptions.",
+                fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 32.dp, vertical = 6.dp))
+            Row(Modifier.padding(horizontal = 32.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                listOf("Terms of Use" to "https://fariin.com/terms", "Privacy Policy" to "https://fariin.com/privacy").forEach { (t, u) ->
+                    Text(t, fontSize = 13.sp, color = c.accent, modifier = Modifier.clickable {
+                        runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(u))) }
+                    })
+                }
+            }
+        }
+    }
+}
+
+private fun renewLine(sub: PlusStore.Subscription?): String {
+    val end = sub?.untilMs ?: PlusStore.untilMs ?: return "Your subscription is active."
+    val day = DateFormat.getDateInstance(DateFormat.LONG).format(Date(end))
+    return when {
+        sub?.status == "grace" -> "There is a problem with your payment. Update it in Google Play before $day to keep Fariin Plus."
+        sub?.autoRenew == false -> "Your subscription ends on $day and will not renew."
+        else -> "Renews on $day."
+    }
+}
+
+/** "a month", "a year", from Play's ISO period (P1M, P1Y, P3M...). */
+private fun per(iso: String): String {
+    val m = Regex("P(\\d+)([DWMY])").find(iso) ?: return ""
+    val n = m.groupValues[1].toIntOrNull() ?: return ""
+    val unit = when (m.groupValues[2]) { "D" -> "day"; "W" -> "week"; "M" -> "month"; else -> "year" }
+    return if (n == 1) "a $unit" else "every $n ${unit}s"
+}
+
+/** The yearly plan's saving against twelve monthly payments, from Play's own prices (5% or more). */
+private fun saving(p: com.fariin.app.data.PlusBilling.Plan, all: List<com.fariin.app.data.PlusBilling.Plan>): Int? {
+    if (p.basePlanId != "yearly") return null
+    val m = all.firstOrNull { it.basePlanId == "monthly" } ?: return null
+    val full = m.micros * 12
+    if (full <= 0 || p.micros >= full) return null
+    val pct = ((full - p.micros) * 100 / full).toInt()
+    return pct.takeIf { it >= 5 }
 }

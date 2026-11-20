@@ -228,6 +228,8 @@ class MainActivity : ComponentActivity() {
                     com.fariin.app.ui.settings.AppIcons.enforce(applicationContext)
                     // Chat folders follow each real Plus answer (at start and on coming back to the app).
                     com.fariin.app.data.ChatFoldersStore.refresh(applicationContext)
+                    // Every Play subscription still listed goes to the server once a run (never unlocked here).
+                    com.fariin.app.data.PlusBilling.checkOwned(applicationContext)
                 }
                 com.fariin.app.data.PlusStore.start(me)
             }

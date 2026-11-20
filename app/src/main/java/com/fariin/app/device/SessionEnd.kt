@@ -217,6 +217,7 @@ object SessionEnd {
         com.fariin.app.data.AvatarVideoIndex.clear(c)  // who has a moving profile picture, and the clips
         com.fariin.app.data.SharedWallpapers.wipe(c)   // 1:1 shared wallpapers and this phone's opt-outs
         com.fariin.app.data.ChatFoldersStore.clear(c)   // every account's chat folders kept on this phone
+        com.fariin.app.data.PlusBilling.clear()          // loaded plans and this run's purchase check
         com.fariin.app.data.OfficialChannel.wipe(c)    // the official row kept for launch (personal notices too)
         com.fariin.app.data.OfficialStories.reset(c)
         com.fariin.app.data.ChannelStories.stop()

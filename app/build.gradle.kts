@@ -177,6 +177,8 @@ dependencies {
     implementation(libs.media3.ui)
     // Chat video send: 540p H.264 like iOS VideoTranscoder (media worker).
     implementation("androidx.media3:media3-transformer:1.8.0")
+    // Fariin Plus subscriptions (Google Play Billing; shown only while the server opens purchases).
+    implementation("com.android.billingclient:billing-ktx:7.1.1")
     implementation("androidx.media3:media3-effect:1.8.0")
     // Story camera (ui/stories/StoryCamera.kt): CameraX preview, photo and video capture.
     implementation("androidx.camera:camera-camera2:1.4.2")
