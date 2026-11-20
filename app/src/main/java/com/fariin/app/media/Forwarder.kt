@@ -181,7 +181,7 @@ object Forwarder {
             is Payload.Doc -> registered { sender.file((payload as Payload.Doc).prep, fwd, clientId, ts) }
             Payload.Text -> ThreadRepository(target, me, crypto, CoroutineScope(SupervisorJob() + Dispatchers.IO))
                 .sendForwardedText(m.text, fwd, fwdChannelJson, source,
-                    fmt = com.fariin.app.data.TextFormat.serialize(m.bold, m.text.length), clientId = clientId, quote = m.quoteId)
+                    fmt = com.fariin.app.data.TextFormat.serialize(m.bold, m.text.length, m.links), clientId = clientId, quote = m.quoteId)
             is Payload.Sticker -> ThreadRepository(target, me, crypto, CoroutineScope(SupervisorJob() + Dispatchers.IO))
                 .sendSticker((payload as Payload.Sticker).ref, null)
             is Payload.Gif -> ThreadRepository(target, me, crypto, CoroutineScope(SupervisorJob() + Dispatchers.IO))

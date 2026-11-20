@@ -15,7 +15,9 @@ object TextLinks {
 
     /** [start] inclusive, [end] exclusive, in the text's UTF-16 indices. [target]: the url to open,
      *  the username without "@", the address, or the number as typed. */
-    data class Span(val start: Int, val end: Int, val kind: Kind, val target: String)
+    data class Span(val start: Int, val end: Int, val kind: Kind, val target: String,
+                    /** The author's own link whose words are not the address: "Open This Link?" first (iOS). */
+                    val ask: Boolean = false)
 
     private val WEB = Regex("""(?i)(?:https?://|www\.|fariin\.com/)[^\s<>"]+""")
     /**

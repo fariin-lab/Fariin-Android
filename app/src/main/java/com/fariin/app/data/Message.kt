@@ -121,6 +121,8 @@ data class Message(
     val bubbleDecor: Boolean = false,
     /** A channel post's bold runs (TextFormat), from `fmt` opened like the text; empty = all regular. */
     val bold: List<TextFormat.Span> = emptyList(),
+    /** The author's own links (Format > Link, TextFormat.Link), from the same `fmt`; empty = none. */
+    val links: List<TextFormat.Link> = emptyList(),
     /** iOS Message.fwdChannel: the channel a forwarded post came from (sealed JSON on the wire). */
     val fwdChannel: FwdChannel? = null,
     /** iOS Message.forwardSource (`fwd`, owner 2026-11-10): the group or channel it was forwarded from. */
@@ -312,6 +314,12 @@ data class Message(
                     (lp["imageUrl"] as? String)?.ifEmpty { null }, EncMeta.fromMap(lp["imageEnc"] as? Map<*, *>))
             }
             val sticker = type == "sticker"
+            // A 1:1 takes bold and links only when both it and the words are sealed (iOS bold-everywhere):
+            // runs stored in the clear would tell the server where the bold words are. Opened once for both.
+            val fmtOpen = if (sticker || data["deleted"] == true) null
+                else if (!Wire.isGroupCid(cid) && (!raw.startsWith(Wire.ENC1) ||
+                    (data["fmt"] as? String)?.startsWith(Wire.ENC1) != true)) null
+                else openOptional("fmt")
             return Message(
                 id = id,
                 authorId = author,
@@ -346,12 +354,8 @@ data class Message(
                 bubbleStyle = BubbleStyles.parseId(data["bs"]),
                 fx = (data["fx"] as? String)?.takeIf { it in SendEffects.IDS },
                 bubbleDecor = BubbleStyles.parseDecor(data["bsd"]),
-                // A 1:1 takes bold only when both it and the words are sealed (iOS bold-everywhere):
-                // runs stored in the clear would tell the server where the bold words are.
-                bold = if (sticker || data["deleted"] == true) emptyList()
-                    else if (!Wire.isGroupCid(cid) && (!raw.startsWith(Wire.ENC1) ||
-                        (data["fmt"] as? String)?.startsWith(Wire.ENC1) != true)) emptyList()
-                    else TextFormat.parse(openOptional("fmt"), text.length),
+                bold = TextFormat.parse(fmtOpen, text.length),
+                links = TextFormat.parseLinks(fmtOpen, text.length),
                 storyMention = (data["storyMention"] as? Map<*, *>)?.let { sm ->
                     (sm["id"] as? String)?.takeIf { it.isNotEmpty() }?.let { StoryMentionRef(it, sm["thumb"] as? String ?: "") }
                 },

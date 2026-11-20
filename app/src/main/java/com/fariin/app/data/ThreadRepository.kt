@@ -942,6 +942,7 @@ class ThreadRepository(
             mentions = e.mentions, bubbleStyle = style.first, bubbleDecor = style.second,   // from the first frame
             fx = e.fx,
             bold = TextFormat.parse(e.fmt, e.text.length),
+            links = TextFormat.parseLinks(e.fmt, e.text.length),
         )
         rebuild()
         return on.launch {
@@ -1046,7 +1047,7 @@ class ThreadRepository(
         // iOS resend: the same clientId (dropped if the first try did land after all), with its
         // quoted reply, its mentions and its bold. It used to go as a new plain message.
         val tap = maxOf(System.currentTimeMillis().toDouble(), lastTap + 1).also { lastTap = it }
-        val fmt = TextFormat.serialize(m.bold, m.text.length)
+        val fmt = TextFormat.serialize(m.bold, m.text.length, m.links)
         val e = SendQueue.Entry(id, cid, m.text, tap, m.replyTo?.id, m.replyTo?.authorId, m.replyTo?.text, m.mentions, fmt = fmt, fx = m.fx)
         drive(e, checkFirst = true, sendScope, save = true)
     }
@@ -1456,6 +1457,7 @@ class ThreadRepository(
             id = clientId, authorId = me, text = t, createdAtMillis = ts, hasServerTime = false,
             clientTs = ts, clientId = clientId, sendState = Message.SendState.SENDING, mentions = mentions, quoteId = qid,
             bold = TextFormat.parse(fmt, t.length),
+            links = TextFormat.parseLinks(fmt, t.length),
         )
         rebuild()
         sendScope.launch {

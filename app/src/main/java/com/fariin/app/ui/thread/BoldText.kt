@@ -25,15 +25,26 @@ internal fun boldMarked(s: AnnotatedString, bold: List<IntRange>): AnnotatedStri
     }.toAnnotatedString()
 }
 
-/** The composer draws its bold runs where they are; the text and the cursor positions are unchanged. */
-internal data class BoldRunsTransformation(val spans: List<TextFormat.Span>) : VisualTransformation {
+/** The composer draws its bold runs and its links (in [linkColor]) where they are; the text and the cursor positions are unchanged. */
+internal data class BoldRunsTransformation(
+    val spans: List<TextFormat.Span>,
+    val links: List<TextFormat.Link> = emptyList(),
+    val linkColor: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.Unspecified,
+) : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
         val runs = TextFormat.ranges(TextFormat.normalize(spans, text.length))
-        return TransformedText(boldMarked(text, runs), OffsetMapping.Identity)
+        val bolded = boldMarked(text, runs)
+        val ls = TextFormat.normalizeLinks(links, text.length)
+        if (ls.isEmpty()) return TransformedText(bolded, OffsetMapping.Identity)
+        val out = AnnotatedString.Builder(bolded).apply {
+            for (l in ls) addStyle(SpanStyle(color = linkColor), l.start, l.end)
+        }.toAnnotatedString()
+        return TransformedText(out, OffsetMapping.Identity)
     }
 }
 
 private object BoldMenuKey
+private object LinkMenuKey
 
 /**
  * "Bold" in the text field's own menu, after Cut/Copy/Paste. Compose 1.9 (the version this app
@@ -45,11 +56,14 @@ internal fun androidx.compose.ui.Modifier.boldMenuItem(
     enabled: Boolean,
     hasSelection: () -> Boolean,
     onBold: () -> Unit,
+    onLink: (() -> Unit)? = null,
 ): androidx.compose.ui.Modifier = if (!enabled) this else
     appendTextContextMenuComponents {
         if (hasSelection()) {
             separator()
             item(BoldMenuKey, "Bold") { onBold(); close() }
+            // iOS Format > Link (2026-11-16).
+            if (onLink != null) item(LinkMenuKey, "Link") { onLink(); close() }
         }
     }
 
@@ -61,6 +75,8 @@ internal fun androidx.compose.ui.Modifier.boldMenuItem(
 internal class BoldTextToolbar(private val view: View) : TextToolbar {
     /** Set by the composer on every pass: bolds or un-bolds the current selection. */
     var onBold: () -> Unit = {}
+    /** Set by the composer: opens Add Link / Edit Link for the selection (null: no Link item). */
+    var onLink: (() -> Unit)? = null
 
     private var mode: ActionMode? = null
     private var rect: Rect = Rect.Zero
@@ -101,7 +117,8 @@ internal class BoldTextToolbar(private val view: View) : TextToolbar {
         copy?.let { menu.add(0, ID_COPY, order++, android.R.string.copy).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS) }
         paste?.let { menu.add(0, ID_PASTE, order++, android.R.string.paste).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS) }
         selectAll?.let { menu.add(0, ID_SELECT_ALL, order++, android.R.string.selectAll).setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM) }
-        if (copy != null) menu.add(0, ID_BOLD, order, "Bold").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+        if (copy != null) menu.add(0, ID_BOLD, order++, "Bold").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+        if (copy != null && onLink != null) menu.add(0, ID_LINK, order, "Link").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
     }
 
     private val callback = object : ActionMode.Callback2() {
@@ -114,6 +131,7 @@ internal class BoldTextToolbar(private val view: View) : TextToolbar {
                 ID_CUT -> cut?.invoke()
                 ID_SELECT_ALL -> selectAll?.invoke()
                 ID_BOLD -> onBold()
+                ID_LINK -> onLink?.invoke()
                 else -> return false
             }
             // Select All keeps the menu up (Compose shows it again for the new selection).
@@ -134,5 +152,6 @@ internal class BoldTextToolbar(private val view: View) : TextToolbar {
         const val ID_CUT = 3
         const val ID_SELECT_ALL = 4
         const val ID_BOLD = 5
+        const val ID_LINK = 6
     }
 }

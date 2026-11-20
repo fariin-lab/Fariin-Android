@@ -72,7 +72,7 @@ object WireBody {
         m.quoteId?.let { put("quote", mapOf("qid" to it)) }
         put("bs", m.bubbleStyle); put("bsd", m.bubbleDecor)
         m.storyMention?.let { put("storyMention", mapOf("id" to it.id, "thumb" to it.thumbUrl)) }
-        put("fmt", com.fariin.app.data.TextFormat.serialize(m.bold, m.text.length))
+        put("fmt", com.fariin.app.data.TextFormat.serialize(m.bold, m.text.length, m.links))
         put("stickerPack", m.stickerPack); put("stickerId", m.stickerId); put("emoji", m.stickerEmoji); put("animated", m.stickerAnimated)
         put("callerUid", m.callerUid); put("callOutcome", m.callOutcome); put("callVideo", m.callVideo)
         put("callDuration", m.callDuration); put("joinedUids", m.callJoinedUids); put("rungUids", m.callRungUids)

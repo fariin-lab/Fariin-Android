@@ -15,6 +15,69 @@ object TextFormat {
     }
 
     private const val BOLD = "b"
+    private const val LINK = "l"
+
+    /**
+     * Format > Link (iOS f09ef437c, 2026-11-16): the author's own address on [start, end), UTF-16
+     * units of the sent text, like a bold run. On the wire `[location, length, "l", url]`, in the
+     * same array as the bold runs.
+     */
+    data class Link(val start: Int, val end: Int, val url: String)
+
+    /**
+     * The address as the wire may carry it: http/https with a dotted host, mailto:, tel:, fariin:,
+     * kulan:; a bare "fariin.com" or "www.x.com" gets https:// in front. At most 2048 characters, no
+     * spaces. Anything else (javascript:, file:, ...) is null.
+     */
+    fun cleanUrl(raw: String): String? {
+        val t = raw.trim()
+        if (t.isEmpty() || t.length > 2048 || t.any { it.isWhitespace() }) return null
+        val low = t.lowercase()
+        for (p in listOf("mailto:", "tel:", "fariin:", "kulan:")) if (low.startsWith(p)) return if (t.length > p.length) t else null
+        val withScheme = if (low.startsWith("http://") || low.startsWith("https://")) t
+            else if (Regex("""^[a-z][a-z0-9+.-]*:""").containsMatchIn(low)) return null
+            else "https://$t"
+        val host = withScheme.substringAfter("://").substringBefore('/').substringBefore('?').substringBefore('#').substringAfterLast('@')
+        if (!host.contains('.') || host.startsWith('.') || host.endsWith('.')) return null
+        return if (withScheme.length > 2048) null else withScheme
+    }
+
+    /** The links in `fmt`, in text order: bad addresses, runs outside the text and later overlaps dropped. */
+    fun parseLinks(json: String?, textLength: Int): List<Link> {
+        if (json.isNullOrEmpty() || textLength <= 0 || !json.contains("\"l\"")) return emptyList()
+        val a = runCatching { JSONArray(json) }.getOrNull() ?: return emptyList()
+        val found = ArrayList<Link>()
+        for (i in 0 until a.length()) {
+            val r = a.optJSONArray(i) ?: continue
+            if (r.length() < 4 || r.optString(2) != LINK) continue
+            val loc = (r.opt(0) as? Number)?.toInt() ?: continue
+            val len = (r.opt(1) as? Number)?.toInt() ?: continue
+            if (loc < 0 || len <= 0 || loc.toLong() + len > textLength) continue
+            val url = cleanUrl(r.optString(3)) ?: continue
+            found.add(Link(loc, loc + len, url))
+        }
+        return normalizeLinks(found, textLength)
+    }
+
+    /** Clamped, sorted, empty runs dropped; of two that overlap, the earlier one stays. */
+    fun normalizeLinks(links: List<Link>, textLength: Int): List<Link> {
+        val out = ArrayList<Link>()
+        for (l in links.sortedBy { it.start }) {
+            val a = l.start.coerceIn(0, textLength)
+            val b = l.end.coerceIn(0, textLength)
+            if (b <= a) continue
+            if (out.any { a < it.end && it.start < b }) continue
+            out.add(Link(a, b, l.url))
+        }
+        return out
+    }
+
+    /** The words are the address itself ("fariin.com" linked to https://fariin.com/): no question before opening. */
+    fun wordsAreAddress(words: String, url: String): Boolean {
+        fun bare(x: String) = x.trim().lowercase().removePrefix("https://").removePrefix("http://")
+            .removePrefix("mailto:").removePrefix("tel:").removePrefix("www.").trimEnd('/')
+        return bare(words) == bare(url)
+    }
 
     /** Sorted, clamped to [0, textLength], empty runs dropped, touching or overlapping runs joined. */
     fun normalize(spans: List<Span>, textLength: Int): List<Span> {
@@ -33,12 +96,14 @@ object TextFormat {
         return out
     }
 
-    /** The wire JSON for [text]'s bold runs; null when there is none (nothing is written). */
-    fun serialize(spans: List<Span>, textLength: Int): String? {
+    /** The wire JSON for [text]'s bold runs and links; null when there is neither (nothing is written). */
+    fun serialize(spans: List<Span>, textLength: Int, links: List<Link> = emptyList()): String? {
         val n = normalize(spans, textLength)
-        if (n.isEmpty()) return null
+        val l = normalizeLinks(links, textLength)
+        if (n.isEmpty() && l.isEmpty()) return null
         val a = JSONArray()
         for (s in n) a.put(JSONArray().put(s.start).put(s.length).put(BOLD))
+        for (k in l) a.put(JSONArray().put(k.start).put(k.end - k.start).put(LINK).put(k.url))
         return a.toString()
     }
 
@@ -114,6 +179,54 @@ object TextFormat {
         val lead = raw.length - raw.trimStart().length
         val t = raw.trim()
         return normalize(spans.map { Span(it.start - lead, it.end - lead) }, t.length)
+    }
+
+    /**
+     * The composer's links kept in step with a change from [old] to [new] (iOS): typing inside a link
+     * grows it, typing right after it (or right before it) does not; a link whose words are all
+     * deleted goes.
+     */
+    fun adjustLinks(links: List<Link>, old: String, new: String): List<Link> {
+        if (links.isEmpty() || old == new) return normalizeLinks(links, new.length)
+        var p = 0
+        val maxP = minOf(old.length, new.length)
+        while (p < maxP && old[p] == new[p]) p++
+        var s = 0
+        while (s < old.length - p && s < new.length - p && old[old.length - 1 - s] == new[new.length - 1 - s]) s++
+        val removedEnd = old.length - s
+        val delta = new.length - old.length
+        val ins = new.length - s - p
+        val out = ArrayList<Link>()
+        for (l in links) {
+            when {
+                l.end <= p -> out.add(l)
+                l.start >= removedEnd -> out.add(Link(l.start + delta, l.end + delta, l.url))
+                else -> {
+                    val a = if (l.start < p) l.start else p + ins
+                    val b = if (l.end > removedEnd) l.end + delta else p
+                    if (b > a) out.add(Link(a, b, l.url))
+                }
+            }
+        }
+        return normalizeLinks(out, new.length)
+    }
+
+    /** The link on [start, end) set to [url] (null removes the links there); others it touches give way. */
+    fun setLink(links: List<Link>, start: Int, end: Int, url: String?, textLength: Int): List<Link> {
+        val a = minOf(start, end).coerceIn(0, textLength)
+        val b = maxOf(start, end).coerceIn(0, textLength)
+        val kept = links.filter { it.end <= a || it.start >= b }
+        return normalizeLinks(if (url == null || b <= a) kept else kept + Link(a, b, url), textLength)
+    }
+
+    /** The link a selection sits in (Edit Link), if one covers all of it. */
+    fun linkAt(links: List<Link>, start: Int, end: Int): Link? =
+        links.firstOrNull { it.start <= minOf(start, end) && it.end >= maxOf(start, end) && (it.end > it.start) }
+
+    /** The links for [raw].trim(), as [forTrimmed] does for bold. */
+    fun linksForTrimmed(links: List<Link>, raw: String): List<Link> {
+        val lead = raw.length - raw.trimStart().length
+        return normalizeLinks(links.map { Link(it.start - lead, it.end - lead, it.url) }, raw.trim().length)
     }
 
     /** As inclusive ranges, for the bubble's text drawing. */

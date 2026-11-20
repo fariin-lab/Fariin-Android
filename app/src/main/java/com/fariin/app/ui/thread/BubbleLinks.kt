@@ -42,12 +42,25 @@ internal val NoLinkTap: (TextLinks.Span) -> Unit = {}
  */
 internal fun linkMarked(
     s: AnnotatedString, bold: List<IntRange>, color: Color, tap: (TextLinks.Span) -> Unit,
+    own: List<com.fariin.app.data.TextFormat.Link> = emptyList(),
 ): AnnotatedString {
     val text = s.text
+    // The author's own links (Format > Link) first; a found address or @name inside them yields (iOS).
+    val mine = com.fariin.app.data.TextFormat.normalizeLinks(own, text.length).map { l ->
+        val low = l.url.lowercase()
+        val words = text.substring(l.start, l.end)
+        val ask = !com.fariin.app.data.TextFormat.wordsAreAddress(words, l.url)
+        when {
+            low.startsWith("mailto:") -> TextLinks.Span(l.start, l.end, TextLinks.Kind.EMAIL, l.url.substring(7), ask)
+            low.startsWith("tel:") -> TextLinks.Span(l.start, l.end, TextLinks.Kind.PHONE, l.url.substring(4), ask)
+            else -> TextLinks.Span(l.start, l.end, TextLinks.Kind.WEB, l.url, ask)
+        }
+    }
     // A quick skip only for text that cannot hold a link: a bare domain ("x.so") needs a dot.
-    if (!text.contains('.') && !text.contains('@') && text.count { it.isDigit() } < 7) return s
-    val spans = TextLinks.find(text).filter { sp ->
-        sp.kind != TextLinks.Kind.HANDLE || bold.none { it.first < sp.end && sp.start <= it.last }
+    if (mine.isEmpty() && !text.contains('.') && !text.contains('@') && text.count { it.isDigit() } < 7) return s
+    val spans = mine + TextLinks.find(text).filter { sp ->
+        (sp.kind != TextLinks.Kind.HANDLE || bold.none { it.first < sp.end && sp.start <= it.last }) &&
+            mine.none { it.start < sp.end && sp.start < it.end }
     }
     if (spans.isEmpty()) return s
     return AnnotatedString.Builder(s).apply {
@@ -94,6 +107,19 @@ internal fun rememberBubbleLinkTap(ui: ThreadUi, onNotice: (String) -> Unit): (T
         onOpenChat = { nav.chat(it) }, onOpenChannel = { channelNav.open(it) }) }
     storyOpen?.let { g -> com.fariin.app.ui.stories.StoryViewerDialog(now.me, listOf(g), 0,
         com.fariin.app.data.ChatsNow.list, onClose = { storyOpen = null }) }
+    // An author's link whose words are not the address: the address first (iOS "Open This Link?").
+    var askOpen by remember { mutableStateOf<TextLinks.Span?>(null) }
+    val route = remember { arrayOfNulls<(TextLinks.Span) -> Unit>(1) }
+    askOpen?.let { sp ->
+        val shown = when (sp.kind) { TextLinks.Kind.EMAIL -> "mailto:" + sp.target; TextLinks.Kind.PHONE -> "tel:" + sp.target; else -> sp.target }
+        GlassAlert(
+            onDismissRequest = { askOpen = null },
+            title = { Text("Open This Link?") },
+            text = { Text(shown) },
+            confirmButton = { TextButton(onClick = { askOpen = null; route[0]?.invoke(sp.copy(ask = false)) }) { Text("Open") } },
+            dismissButton = { TextButton(onClick = { askOpen = null }) { Text("Cancel") } },
+        )
+    }
     if (notFound) GlassAlert(
         onDismissRequest = { notFound = false },
         title = { Text("Sorry, this user doesn't seem to exist.") },
@@ -124,7 +150,8 @@ internal fun rememberBubbleLinkTap(ui: ThreadUi, onNotice: (String) -> Unit): (T
                 } finally { opening = null }
             }
         }
-        val tap: (TextLinks.Span) -> Unit = { sp ->
+        val tap: (TextLinks.Span) -> Unit = tap@{ sp ->
+            if (sp.ask) { askOpen = sp; return@tap }
             when (sp.kind) {
                 TextLinks.Kind.HANDLE -> handle(sp.target)
                 TextLinks.Kind.EMAIL -> start(ctx, Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:" + sp.target))) { notice("No app here can send email") }
@@ -154,11 +181,15 @@ internal fun rememberBubbleLinkTap(ui: ThreadUi, onNotice: (String) -> Unit): (T
                         }
                         call != null -> nav.joinLink(call.text, com.fariin.app.call.CallLinkKey.linkSaysVideo(sp.target))
                         h != null -> handle(h)
+                        // An author's fariin: or kulan: link: whatever app takes the address.
+                        !sp.target.startsWith("http", ignoreCase = true) ->
+                            start(ctx, Intent(Intent.ACTION_VIEW, Uri.parse(sp.target))) { notice("No app here can open this link") }
                         else -> openWeb(ctx, sp.target) { notice("No app here can open this link") }
                     }
                 }
             }
         }
+        route[0] = tap
         tap
     }
 }

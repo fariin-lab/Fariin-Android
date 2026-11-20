@@ -1612,7 +1612,7 @@ private fun ThreadContent(
                         e != null -> {
                             editing = null
                             // A change of bold alone is an edit too.
-                            if (t.trim() != e.text.trim() || fmt != com.fariin.app.data.TextFormat.serialize(e.bold, e.text.length)) actions.onEdit(e, t, fmt)
+                            if (t.trim() != e.text.trim() || fmt != com.fariin.app.data.TextFormat.serialize(e.bold, e.text.length, e.links)) actions.onEdit(e, t, fmt)
                         }
                         // My words with the quote: one message carrying only the quote's id (iOS sendQuote).
                         q != null -> {
@@ -1708,7 +1708,7 @@ private fun ThreadContent(
                             sendMotion.arm(SendMotion.Kind.VOICE, ui.messages, sendAnim)
                             onSendVoice(r)
                         }
-                    }, prefill = editing?.let { it.id to it.text }, prefillBold = editing?.bold ?: emptyList(), banner = banner, voiceKey = ui.cid,
+                    }, prefill = editing?.let { it.id to it.text }, prefillBold = editing?.bold ?: emptyList(), prefillLinks = editing?.links ?: emptyList(), banner = banner, voiceKey = ui.cid,
                     // Bold in the selection menu (iOS Format > Bold): 1:1s, groups and channel posts
                     // (owner 2026-11-11); a follower of a channel has no composer at all.
                     boldable = true,
@@ -2255,6 +2255,8 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 },
                 // iOS BubbleText: links, @usernames, emails and numbers tappable (BubbleLinks.kt).
                 linkInk = if (m.deleted) null else styled?.ink ?: if (isMe) Color.White else c.blue,
+                // The author's own links (Format > Link), only over the words they were made for.
+                ownLinks = if (m.deleted || m.links.isEmpty() || body != m.text) emptyList() else m.links,
             )
             }
             quoteId?.let { q ->
@@ -2647,17 +2649,17 @@ private fun tickDescription(t: Tick) = when (t) {
  */
 @Composable
 private fun TextWithMeta(text: String, style: TextStyle, bold: List<IntRange> = emptyList(), fmtBold: List<IntRange> = emptyList(),
-                         linkInk: Color? = null, meta: @Composable () -> Unit) {
+                         linkInk: Color? = null, ownLinks: List<com.fariin.app.data.TextFormat.Link> = emptyList(), meta: @Composable () -> Unit) {
     val layoutRef = remember { arrayOfNulls<TextLayoutResult>(1) }
     Layout(content = {
         // In-chat search: the matched terms marked in yellow, never the whole bubble (iOS BubbleText).
         val term = LocalSearchTerm.current
         // Outside the list (the long-press menu's copy) the links are drawn but take no taps.
         val tap = LocalBubbleLinkTap.current ?: NoLinkTap
-        Text(remember(text, term, bold, fmtBold, linkInk, tap) {
+        Text(remember(text, term, bold, fmtBold, linkInk, tap, ownLinks) {
             // The post's own bold in the bold weight, same size; the mentions keep their semibold.
             val marked = mentionMarked(searchMarked(text, term), bold).let { if (fmtBold.isEmpty()) it else boldMarked(it, fmtBold) }
-            if (linkInk == null) marked else linkMarked(marked, bold, linkInk, tap)
+            if (linkInk == null) marked else linkMarked(marked, bold, linkInk, tap, ownLinks)
         }, style = style, onTextLayout = { layoutRef[0] = it })
         // Exactly one node whatever meta() draws: the measure reads [0] and [1] by position.
         androidx.compose.foundation.layout.Box { meta() }
@@ -2733,6 +2735,8 @@ private fun Composer(
     prefill: Pair<String, String>? = null,
     /** The edited post's bold runs, put in the field with its words. */
     prefillBold: List<com.fariin.app.data.TextFormat.Span> = emptyList(),
+    /** The edited message's own links (Format > Link), put in the field with its words. */
+    prefillLinks: List<com.fariin.app.data.TextFormat.Link> = emptyList(),
     /** Reply / edit / quote: drawn at the top of the message box, a hairline under it (iOS). */
     banner: (@Composable () -> Unit)? = null,
     /** The chat's id: a locked or paused voice note left unsent is kept for it (VoiceDrafts). */
@@ -2782,10 +2786,15 @@ private fun Composer(
     var picks by remember { mutableStateOf(emptyMap<String, List<String>>()) }
     // The field's bold runs (TextFormat), kept in step with every change to its words.
     var boxBold by remember { mutableStateOf(emptyList<com.fariin.app.data.TextFormat.Span>()) }
+    // ...and its links (iOS Format > Link), the same way.
+    var boxLinks by remember { mutableStateOf(emptyList<com.fariin.app.data.TextFormat.Link>()) }
+    // Add Link / Edit Link: the selection it is for, while the dialog is up.
+    var linkFor by remember { mutableStateOf<IntRange?>(null) }
     // Edit puts the message's words in the field (keyed by message id, so it happens once).
     LaunchedEffect(prefill?.first) {
-        if (prefill != null) { draft = prefill.second; wasEditing = true; picks = emptyMap(); boxBold = if (boldable) prefillBold else emptyList() }
-        else if (wasEditing) { draft = kept; wasEditing = false; boxBold = emptyList() }
+        if (prefill != null) { draft = prefill.second; wasEditing = true; picks = emptyMap(); boxBold = if (boldable) prefillBold else emptyList()
+            boxLinks = if (boldable) prefillLinks else emptyList() }
+        else if (wasEditing) { draft = kept; wasEditing = false; boxBold = emptyList(); boxLinks = emptyList() }
     }
     // The box's text with its cursor. Words put in from outside (an edit, the draft coming back,
     // a clear after send) get the cursor at their end; before, an edit started with the cursor in
@@ -3004,6 +3013,17 @@ private fun Composer(
                         val sel = boxValue.selection
                         boxBold = com.fariin.app.data.TextFormat.toggle(boxBold, sel.min, sel.max, boxValue.text.length)
                     }
+                    val openLink = { val sel = boxValue.selection; if (!sel.collapsed) linkFor = sel.min until sel.max }
+                    boldBar.onLink = openLink
+                    linkFor?.let { r ->
+                        val words = boxValue.text.substring(r.first.coerceIn(0, boxValue.text.length), (r.last + 1).coerceIn(0, boxValue.text.length))
+                        LinkDialog(words, com.fariin.app.data.TextFormat.linkAt(boxLinks, r.first, r.last + 1)?.url,
+                            onDone = { url ->
+                                boxLinks = com.fariin.app.data.TextFormat.setLink(boxLinks, r.first, r.last + 1, url, boxValue.text.length)
+                                linkFor = null
+                            },
+                            onDismiss = { linkFor = null })
+                    }
                     androidx.compose.runtime.CompositionLocalProvider(
                         androidx.compose.ui.platform.LocalTextToolbar provides (if (boldable) boldBar else androidx.compose.ui.platform.LocalTextToolbar.current),
                     ) {
@@ -3019,11 +3039,12 @@ private fun Composer(
                             // What is typed or pasted starts regular, even next to bold.
                             if (boldable) boxBold = com.fariin.app.data.TextFormat.adjust(boxBold, boxValue.text, fv.text)
                                 .let { b -> val got = BoldClip.pasted(context, boxValue.text, fv.text); if (got.isEmpty()) b else com.fariin.app.data.TextFormat.normalize(b + got, fv.text.length) }
+                            if (boldable && boxLinks.isNotEmpty()) boxLinks = com.fariin.app.data.TextFormat.adjustLinks(boxLinks, boxValue.text, fv.text)
                             boxValue = fv
                             draft = fv.text
                         },
                         textStyle = fieldText.copy(color = c.label),
-                        visualTransformation = if (boldable && boxBold.isNotEmpty()) BoldRunsTransformation(boxBold)
+                        visualTransformation = if (boldable && (boxBold.isNotEmpty() || boxLinks.isNotEmpty())) BoldRunsTransformation(boxBold, boxLinks, c.blue)
                             else androidx.compose.ui.text.input.VisualTransformation.None,
                         cursorBrush = SolidColor(c.accent),
                         maxLines = 6,
@@ -3031,7 +3052,7 @@ private fun Composer(
                             // A tap on the box while the GIF/sticker panel is up: the box already has focus, so
                             // the keyboard rose over the panel and both stood stacked (owner 2026-11-08). Close it.
                             .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial); if (emojiOpen) { panelToKeys = true; emojiOpen = false } } }
-                            .boldMenuItem(boldable, hasSelection = { !boxValue.selection.collapsed }, onBold = boldBar.onBold)
+                            .boldMenuItem(boldable, hasSelection = { !boxValue.selection.collapsed }, onBold = boldBar.onBold, onLink = openLink)
                             // Screen readers: the placeholder is a separate Text, so the field names itself.
                             .semantics { contentDescription = placeholder },
                     )
@@ -3079,9 +3100,11 @@ private fun Composer(
                         val ids = mentions?.let { com.fariin.app.data.MentionRules.forSend(t.trim(), picks, it.members) } ?: emptyList()
                         // The runs measured on the words as sent (trimmed), as iOS does.
                         val fmt = if (boldable) com.fariin.app.data.TextFormat.serialize(
-                            com.fariin.app.data.TextFormat.forTrimmed(boxBold, t), t.trim().length) else null
+                            com.fariin.app.data.TextFormat.forTrimmed(boxBold, t), t.trim().length,
+                            com.fariin.app.data.TextFormat.linksForTrimmed(boxLinks, t)) else null
                         picks = emptyMap()
                         boxBold = emptyList()
+                        boxLinks = emptyList()
                         draft = ""
                         onSend(t, ids, fmt)
                 }
