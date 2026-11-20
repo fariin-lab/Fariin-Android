@@ -317,7 +317,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
         // header (owner 2026-10-11, "I don't need it"); the camera on My Story's row posts.
         Box(Modifier.zIndex(1f).fillMaxWidth().then(Modifier.frostedTopBar(storiesHaze, c.bg, frost))
             .statusBarsPadding().height(48.dp).padding(horizontal = 16.dp)) {
-            Text(com.fariin.app.ui.chats.rememberConnectionTitle("Stories"), fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+            Text("Stories", fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
                 color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.align(Alignment.Center).padding(horizontal = 56.dp))
             androidx.compose.animation.AnimatedVisibility(searchGone && query.isEmpty(), Modifier.align(Alignment.CenterEnd),

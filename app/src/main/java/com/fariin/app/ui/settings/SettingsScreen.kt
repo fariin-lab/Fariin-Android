@@ -299,7 +299,7 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
             // The title and Search step aside while my photo is open (the viewer's bar is there).
             Box(Modifier.fillMaxWidth().height(barH).padding(horizontal = 8.dp)
                 .graphicsLayer { alpha = if (photo.chromeHidden) 0f else 1f }) {
-                Text(com.fariin.app.ui.chats.rememberConnectionTitle("Settings"), fontSize = 18.sp,
+                Text("Settings", fontSize = 18.sp,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = c.label,
                     modifier = Modifier.align(Alignment.Center))
                 com.fariin.app.ui.components.FloatingIcon(ImageVector.cachedVector(R.drawable.ic_search_ios), "Search settings",
