@@ -1567,7 +1567,14 @@ private fun ThreadContent(
                         color = if (r.authorId == ui.me) null else senderColor(r.authorId),
                         icon = replyIcon(r)) { replyTo = null } }
                 }
-                editing?.let { e -> banner = { ComposerBanner("Edit message", e.text) { editing = null } } }
+                // iOS edit-thumb-1115: a photo or video's caption edit shows its small picture, as the
+                // reply bar does; text keeps the pencil.
+                editing?.let { e -> banner = {
+                    val pic = hasReplyThumb(e)
+                    ComposerBanner("Edit message", e.text.ifEmpty { replyLine(e, e.bodyText) },
+                        thumb = if (pic) ({ ReplyThumb(e, 36.dp) }) else null,
+                        icon = if (pic) null else R.drawable.ic_sf_pencil) { editing = null }
+                } }
                 // A channel post quoted into this chat (iOS .quote banner): waits above the composer
                 // for my words; closing it cancels the quote.
                 var quoting by remember(ui.cid) { mutableStateOf<com.fariin.app.data.QuoteStore.Draft?>(null) }
