@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.ui.draw.clipToBounds
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
@@ -462,6 +463,10 @@ private fun VideoEditorBody(uri: Uri, caption: String, onCaption: (String) -> Un
                     }
                     QualityHint(hd)
                 }
+            }
+            // The strip stays built while typing, folded to nothing (iOS 29992d6c6): removed, it was
+            // rebuilt (filmstrip, handles) the moment the keyboard started down, and the close lagged.
+            Box(if (imeUp) Modifier.height(0.dp).clipToBounds().graphicsLayer { alpha = 0f } else Modifier) {
                 // The strip's place is kept while the filmstrip loads, so the clip does not refit.
                 if (s.thumbs.isNotEmpty() && s.durationMs > 0) VideoTrimStrip(s, Modifier.padding(horizontal = 16.dp))
                 else Spacer(Modifier.height(50.dp))

@@ -1,5 +1,7 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.fariin.app.ui.components.cachedVector
 import android.graphics.Bitmap
@@ -214,8 +216,11 @@ private fun PagerBody(
             // iOS: with the keyboard up only the caption and Send stay.
             // A video page: its trimmer sits right above the tools (iOS).
             val trim = current?.takeIf { it in videos }?.let { trims[it] }
-            if (!imeUp && trim != null && trim.thumbs.isNotEmpty() && trim.durationMs > 0) {
-                VideoTrimStrip(trim, Modifier.padding(horizontal = 20.dp))
+            // Kept built while typing, folded to nothing (iOS 29992d6c6), so closing the keyboard rebuilds nothing.
+            if (trim != null && trim.thumbs.isNotEmpty() && trim.durationMs > 0) {
+                Box(if (imeUp) Modifier.height(0.dp).clipToBounds().graphicsLayer { alpha = 0f } else Modifier) {
+                    VideoTrimStrip(trim, Modifier.padding(horizontal = 20.dp))
+                }
             }
             if (!imeUp) Box(Modifier.padding(horizontal = 16.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Bottom) {
