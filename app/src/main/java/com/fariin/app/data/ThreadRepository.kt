@@ -2043,16 +2043,19 @@ class ThreadRepository(
                 val strip = hashMapOf<String, Any>("deleted" to true, "text" to "", "type" to "text", "enc" to FieldValue.delete())
                 for (k in TOMBSTONE_STRIP) strip[k] = FieldValue.delete()
                 if (data["authorId"] as? String != me) strip["deletedBy"] = me
-                // A 1:1's newest message: the chat list line changes in the SAME write. Done after
+                // The newest message (1:1 or group): the chat list line changes in the SAME write. Done after
                 // the server's ack only, an app killed offline (or before the ack) kept the deleted
                 // words as the line for good (Oppo 2026-11-20). The full rewrite below still runs.
                 val batch = db.batch().update(ref, strip)
-                if (!Wire.isGroupCid(cid) && !isChannelChat() && !isChannel() && isNewestShown(m.id)) {
+                if (!isChannelChat() && !isChannel() && isNewestShown(m.id)) {
                     batch.update(convRef, hashMapOf<String, Any>("lastMessage" to "This message was deleted",
                         "lastSender" to (data["authorId"] as? String ?: me),
                         "lastImageUrl" to FieldValue.delete(), "lastImageEnc" to FieldValue.delete(), "lastImages" to FieldValue.delete()))
                 }
-                marked = try { batch.commit().await(); true } catch (_: Exception) { false }
+                // Refused with the line (a group's rules), the tombstone alone, as before.
+                marked = try { batch.commit().await(); true } catch (_: Exception) {
+                    try { ref.update(strip).await(); true } catch (_: Exception) { false }
+                }
             }
             for (u in blobs) try { FirebaseStorage.getInstance().getReferenceFromUrl(u).delete().await() } catch (_: Exception) {}
             // R2 files (iOS): removed through mediaSign's delete, author only, while the doc still names them.
