@@ -389,7 +389,12 @@ class ThreadRepository(
             if (me in ((data["users"] as? List<*>) ?: emptyList<Any>())) wasMember = true
             if (wasMember && !snap.metadata.isFromCache && FormerGroups.isFormer(cid, data, me)) { becomeFormer(data); return@run }
             val startBefore = if (Wire.isGroupCid(cid)) GroupManage.historyStart(_state.value.conv, me) else null
-            _state.update { it.copy(receipts = Receipts.from(data, me, cid), conv = data) }
+            val receipts = Receipts.from(data, me, cid)
+            // Only the chat list's summary moved (a send, the other side's counts, my own typing):
+            // the open chat keeps its copy, so the whole chat does not rebuild for it.
+            if (ThreadConvRules.onlySummaryChanged(_state.value.conv, data, me, group = Wire.isGroupCid(cid))) {
+                if (receipts != _state.value.receipts) _state.update { it.copy(receipts = receipts) }
+            } else _state.update { it.copy(receipts = receipts, conv = data) }
             // Chat History for new members changed (or my join time arrived): the list is cut again.
             if (Wire.isGroupCid(cid) && msgReg != null && GroupManage.historyStart(data, me) != startBefore) rebuild()
             if (data["e2ee"] == false) CryptoHub.notePlainGroup(cid)

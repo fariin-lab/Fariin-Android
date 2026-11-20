@@ -303,11 +303,30 @@ private val LITE_SHIFT_DP = 48.dp
  * messages read) is never held, so the first content always comes at once.
  */
 @Composable
-fun <T> kotlinx.coroutines.flow.StateFlow<T>.collectSettled(ready: (T) -> Boolean = { true }): androidx.compose.runtime.State<T> {
+fun <T> kotlinx.coroutines.flow.StateFlow<T>.collectSettled(ready: (T) -> Boolean = { true }, throttleMs: Long = 0): androidx.compose.runtime.State<T> {
     val out = androidx.compose.runtime.remember(this) { androidx.compose.runtime.mutableStateOf(value) }
     androidx.compose.runtime.LaunchedEffect(this) {
+        // [throttleMs]: an update after a quiet spell shows at once; the ones that follow within the
+        // window land together at its end (the newest wins), one rebuild instead of several.
+        var lastAt = 0L
+        var held: T? = null
+        var flush: kotlinx.coroutines.Job? = null
         kotlinx.coroutines.flow.combine(this@collectSettled, androidx.compose.runtime.snapshotFlow { PageMotion.e >= 1f }) { v, landed -> v to landed }
-            .collect { (v, landed) -> if (landed || !ready(out.value)) out.value = v }
+            .collect { (v, landed) ->
+                if (!(landed || !ready(out.value))) return@collect
+                val now = android.os.SystemClock.uptimeMillis()
+                if (throttleMs <= 0 || !ready(out.value) || now - lastAt >= throttleMs) {
+                    flush?.cancel(); flush = null; held = null
+                    out.value = v; lastAt = now
+                } else {
+                    held = v
+                    if (flush == null) flush = launch {
+                        kotlinx.coroutines.delay(throttleMs - (now - lastAt))
+                        @Suppress("UNCHECKED_CAST") (held as T).let { out.value = it }
+                        held = null; flush = null; lastAt = android.os.SystemClock.uptimeMillis()
+                    }
+                }
+            }
     }
     return out
 }

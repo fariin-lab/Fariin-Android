@@ -53,7 +53,10 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     val vm: ThreadViewModel = viewModel(key = "thread-$cid") { ThreadViewModel(cid, me, crypto, app) }
     // Held while a page slides: each answer (server page, synced, pins) used to rebuild the whole
     // chat mid-slide, 4 to 6 times in the first second on a cheap phone; they land together after.
-    val s by vm.repo.state.collectSettled { it.loaded }
+    // A send brings about ten updates (the bubble, the local write, the ack, the chat doc, delivered,
+    // read...), each a rebuild of the whole chat: 35 in three sends on the Pixel trace 2026-11-20, a
+    // late frame each on the Oppo. The first shows at once; the rest within 120 ms land as one.
+    val s by vm.repo.state.collectSettled(ready = { it.loaded }, throttleMs = 120)
     val pinnedMsgs by vm.repo.pinned.collectSettled()
     val keys by CryptoHub.keysEpoch.collectAsState()
     val listed = remember(s.conv, keys) { CryptoHub.listedConversation(cid) }
