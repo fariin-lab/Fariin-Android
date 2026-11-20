@@ -42,6 +42,13 @@ import com.fariin.app.ui.components.GlassDropdown
 import com.fariin.app.ui.components.Snack
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import com.fariin.app.ui.components.floating
 
 /** What a chip's badge and menu need, counted once per change of the list or the folders. */
 private class FolderStats(var unread: Int = 0, var readable: Int = 0, var total: Int = 0, var muted: Int = 0)
@@ -77,54 +84,95 @@ internal fun ChatFolderBar(chats: List<Conversation>, me: String, onEdit: (ChatF
         val now = System.currentTimeMillis().toDouble()
         return chats.filter { !it.isCleared(me) && !it.isArchived(me) && f.contains(it, me, now) }
     }
-    val row = rememberLazyListState()
-    LaunchedEffect(selected) { folders.indexOfFirst { it.id == selected }.takeIf { it >= 0 }?.let { row.animateScrollToItem(maxOf(0, it - 1)) } }
-    LazyRow(Modifier.fillMaxWidth(), state = row, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(folders, key = { it.id }) { f ->
-            val on = f.id == selected
-            val s = stats[f.id] ?: FolderStats()
-            var menu by remember { mutableStateOf(false) }
-            var muteMenu by remember { mutableStateOf(false) }
-            Box {
-                Row(Modifier.height(34.dp).clip(CircleShape).background(if (on) c.fieldFill else c.card)
-                    .combinedClickable(onClick = { ChatFoldersStore.select(f.id) },
-                        onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); menu = true })
-                    .padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(f.name, fontSize = 15.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
-                        color = if (on) c.label else c.secondary, maxLines = 1)
-                    if (s.unread > 0) {
-                        Spacer(Modifier.width(6.dp))
-                        Box(Modifier.defaultMinSize(minWidth = 18.dp, minHeight = 18.dp).clip(CircleShape)
-                            .background(if (on) c.accent else c.secondary).padding(horizontal = 5.dp), contentAlignment = Alignment.Center) {
-                            Text(if (s.unread > 99) "99+" else "${s.unread}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
-                                color = if (on) c.onAccent else c.bg)
+    // ONE glass capsule with plain-text tabs (iOS 2026-11-20): the chosen tab is a lens that slides,
+    // its two edges on different springs so it stretches a little on the way; drag along the bar to
+    // pick. Equal-ish widths when everything fits (the spare room shared), else the bar scrolls.
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val bounds = remember { androidx.compose.runtime.mutableStateMapOf<String, Pair<Float, Float>>() }
+    val scroll = androidx.compose.foundation.rememberScrollState()
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+        val avail = with(density) { maxWidth.toPx() } - with(density) { 8.dp.toPx() }
+        val natural = folders.map { f ->
+            val w = measurer.measure(f.name, androidx.compose.ui.text.TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)).size.width
+            val badge = (stats[f.id]?.unread ?: 0).let { if (it > 0) with(density) { 24.dp.toPx() } else 0f }
+            w + badge + with(density) { 28.dp.toPx() }
+        }
+        val fits = natural.sum() <= avail
+        val widths = if (fits && natural.isNotEmpty()) { val spare = (avail - natural.sum()) / natural.size; natural.map { it + spare } } else natural
+        val sel = bounds[selected]
+        val left by androidx.compose.animation.core.animateFloatAsState(sel?.first ?: 0f,
+            androidx.compose.animation.core.spring(dampingRatio = 0.78f, stiffness = 520f), label = "lensL")
+        val right by androidx.compose.animation.core.animateFloatAsState((sel?.first ?: 0f) + (sel?.second ?: 0f),
+            androidx.compose.animation.core.spring(dampingRatio = 0.78f, stiffness = 380f), label = "lensR")
+        LaunchedEffect(selected, sel) {
+            if (!fits && sel != null) {
+                val target = (sel.first - avail / 2 + sel.second / 2).toInt().coerceIn(0, scroll.maxValue)
+                scroll.animateScrollTo(target)
+            }
+        }
+        fun pickAt(x: Float) {
+            val px = x + scroll.value
+            bounds.entries.firstOrNull { (_, b) -> px >= b.first && px <= b.first + b.second }?.key?.let { id ->
+                if (id != ChatFoldersStore.selectedId) { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); ChatFoldersStore.select(id) }
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(42.dp).floating(CircleShape).clip(CircleShape)
+            .pointerInput(fits) {
+                if (fits) detectHorizontalDragGestures(onDragStart = { pickAt(it.x) }) { change, _ -> pickAt(change.position.x) }
+            }) {
+            Box(Modifier.fillMaxWidth().height(42.dp).then(if (fits) Modifier else Modifier.horizontalScroll(scroll)).padding(4.dp)) {
+                // The lens under the chosen tab's words.
+                if (sel != null) Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(left.toInt(), 0) }
+                    .width(with(density) { (right - left).coerceAtLeast(0f).toDp() }).height(34.dp).clip(CircleShape).background(c.fieldFill))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    folders.forEachIndexed { i, f ->
+                        val on = f.id == selected
+                        val s = stats[f.id] ?: FolderStats()
+                        var menu by remember { mutableStateOf(false) }
+                        var muteMenu by remember { mutableStateOf(false) }
+                        Box(Modifier.onGloballyPositioned { lc -> bounds[f.id] = lc.positionInParent().x to lc.size.width.toFloat() }) {
+                            Row(Modifier.width(with(density) { widths[i].toDp() }).height(34.dp).clip(CircleShape)
+                                .combinedClickable(onClick = { ChatFoldersStore.select(f.id) },
+                                    onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); menu = true }),
+                                horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                                Text(f.name, fontSize = 15.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
+                                    color = if (on) c.label else c.secondary, maxLines = 1)
+                                if (s.unread > 0) {
+                                    Spacer(Modifier.width(6.dp))
+                                    Box(Modifier.defaultMinSize(minWidth = 18.dp, minHeight = 18.dp).clip(CircleShape)
+                                        .background(c.accent).padding(horizontal = 5.dp), contentAlignment = Alignment.Center) {
+                                        Text(if (s.unread > 99) "99+" else "${s.unread}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.onAccent)
+                                    }
+                                }
+                            }
+                            GlassDropdown(menu, onDismissRequest = { menu = false }, shape = FariinMenu.shape, border = FariinMenu.border, containerColor = c.card) {
+                                if (s.readable > 0) DropdownMenuItem(text = { Text("Mark All as Read") }, onClick = {
+                                    menu = false
+                                    val list = chatsOf(f).filter { !it.isBlockedByMe(me) && it.hasUnreadMark(me) }
+                                    scope.launch { list.forEach { ChatListActions.setUnread(me, it, false) } }
+                                })
+                                if (s.total > 0) {
+                                    if (s.muted == s.total) DropdownMenuItem(text = { Text("Unmute All") }, onClick = {
+                                        menu = false
+                                        val now = System.currentTimeMillis().toDouble()
+                                        val list = chatsOf(f).filter { it.isMuted(me, now) }
+                                        scope.launch { list.forEach { ChatListActions.setMute(me, it, 0.0) }; Snack.show("Unmuted") }
+                                    }) else DropdownMenuItem(text = { Text("Mute All") }, onClick = { menu = false; muteMenu = true })
+                                }
+                                if (f.isAll) DropdownMenuItem(text = { Text("Folder Settings") }, onClick = { menu = false; onManage() })
+                                else DropdownMenuItem(text = { Text("Edit Folder") }, onClick = { menu = false; onEdit(f) })
+                            }
+                            MuteForMenu(muteMenu, onDismiss = { muteMenu = false }) { label, until ->
+                                val now = System.currentTimeMillis().toDouble()
+                                val list = chatsOf(f).filter { !it.isMuted(me, now) }
+                                scope.launch { list.forEach { ChatListActions.setMute(me, it, until) }; Snack.show(MuteFor.doneWord(label)) }
+                            }
                         }
                     }
-                }
-                GlassDropdown(menu, onDismissRequest = { menu = false }, shape = FariinMenu.shape, border = FariinMenu.border, containerColor = c.card) {
-                    if (s.readable > 0) DropdownMenuItem(text = { Text("Mark All as Read") }, onClick = {
-                        menu = false
-                        val list = chatsOf(f).filter { !it.isBlockedByMe(me) && it.hasUnreadMark(me) }
-                        scope.launch { list.forEach { ChatListActions.setUnread(me, it, false) } }
-                    })
-                    if (s.total > 0) {
-                        if (s.muted == s.total) DropdownMenuItem(text = { Text("Unmute All") }, onClick = {
-                            menu = false
-                            val now = System.currentTimeMillis().toDouble()
-                            val list = chatsOf(f).filter { it.isMuted(me, now) }
-                            scope.launch { list.forEach { ChatListActions.setMute(me, it, 0.0) }; Snack.show("Unmuted") }
-                        }) else DropdownMenuItem(text = { Text("Mute All") }, onClick = { menu = false; muteMenu = true })
-                    }
-                    if (f.isAll) DropdownMenuItem(text = { Text("Folder Settings") }, onClick = { menu = false; onManage() })
-                    else DropdownMenuItem(text = { Text("Edit Folder") }, onClick = { menu = false; onEdit(f) })
-                }
-                MuteForMenu(muteMenu, onDismiss = { muteMenu = false }) { label, until ->
-                    val now = System.currentTimeMillis().toDouble()
-                    val list = chatsOf(f).filter { !it.isMuted(me, now) }
-                    scope.launch { list.forEach { ChatListActions.setMute(me, it, until) }; Snack.show(MuteFor.doneWord(label)) }
                 }
             }
         }
     }
 }
+
