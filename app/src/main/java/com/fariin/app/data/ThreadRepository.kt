@@ -1142,7 +1142,11 @@ class ThreadRepository(
                                 height = v.height.toDouble(), duration = v.duration, thumb = v.poster.thumbB64)
                         }
                         rebuild()
-                        val work: suspend () -> Unit = { sender.video(v, words, false, clientId, ts) }
+                        // Written down before the upload, as a photo is (PhotoOutbox): the clip and poster are on the phone.
+                        com.fariin.app.local.PhotoOutbox.add(me, com.fariin.app.local.PhotoOutbox.Entry(cid, clientId, ts,
+                            v.file.absolutePath, v.width, v.height, null, v.poster.thumbB64, words, false,
+                            kind = "video", poster = poster.absolutePath, duration = v.duration))
+                        val work: suspend () -> Unit = { sender.video(v, words, false, clientId, ts); com.fariin.app.local.PhotoOutbox.remove(me, clientId) }
                         retryMedia[clientId] = work
                         work()
                     } else if (chunk.size == 1) {
@@ -1629,12 +1633,15 @@ class ThreadRepository(
             if (e.cid != cid || pending.containsKey(e.clientId)) continue
             val f = File(e.path)
             if (!f.exists() || f.length() == 0L) { com.fariin.app.local.PhotoOutbox.remove(me, e.clientId); continue }
+            val video = e.kind == "video"
+            if (video && e.poster?.let { File(it).exists() } != true) { com.fariin.app.local.PhotoOutbox.remove(me, e.clientId); continue }
             pending[e.clientId] = Message(
-                id = e.clientId, authorId = me, text = e.caption, type = "image", createdAtMillis = e.ts, hasServerTime = false,
+                id = e.clientId, authorId = me, text = e.caption, type = if (video) "video" else "image", createdAtMillis = e.ts, hasServerTime = false,
                 clientTs = e.ts, clientId = e.clientId, sendState = Message.SendState.SENDING, viewOnce = e.viewOnce,
-                width = e.width.toDouble(), height = e.height.toDouble(), thumb = if (e.viewOnce) null else e.thumb, localPath = e.path,
+                width = e.width.toDouble(), height = e.height.toDouble(), thumb = if (e.viewOnce) null else e.thumb,
+                localPath = if (video) e.poster else e.path, duration = if (video) e.duration else null,
             )
-            localFiles[e.clientId] = e.path
+            localFiles[e.clientId] = if (video) e.poster!! else e.path
             rebuild()
             // Already going (the start-up drain's quiet copy of this chat): the bubble only; it goes
             // when that send lands and the server's copy comes in.
@@ -1644,7 +1651,12 @@ class ThreadRepository(
                     val q = convRef.collection("messages").whereEqualTo("clientId", e.clientId).limit(1)
                     !q.get(Source.CACHE).await().isEmpty || !q.get(Source.SERVER).await().isEmpty
                 } catch (_: Exception) { false }
-                if (!landed) {
+                // A clip whose message went out before the kill (its upload unfinished) is not sent twice;
+                // that one is the stuck-send case, not this queue's.
+                if (!landed && video) {
+                    val v = com.fariin.app.media.VideoPrep.describe(f, File(e.poster!!).readBytes()) ?: error("clip not readable")
+                    sender.video(v, e.caption, false, e.clientId, e.ts)
+                } else if (!landed) {
                     val prep = PhotoPrep(f.readBytes(), e.width, e.height, e.blurhash, e.thumb)
                     sender.image(prep, e.caption, e.viewOnce, false, e.clientId, e.ts)
                 }
