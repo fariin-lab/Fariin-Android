@@ -17,6 +17,10 @@ import com.fariin.app.crypto.Wire
  * and story mentions, forwarded-from-channel, delete-for-me.
  * Contact and location cards are sealed text markers, read by CardRules.
  */
+// Read-only once built (every field a val, lists never changed after): Compose may compare two messages
+// by their contents, so a bubble whose message did not change skips when the list is rebuilt (Oppo
+// Send trace 2026-11-20: rebuilt messages are new objects, which defeated the skip).
+@androidx.compose.runtime.Immutable
 data class Message(
     val id: String,
     val authorId: String,
