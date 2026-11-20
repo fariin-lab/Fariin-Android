@@ -1745,7 +1745,8 @@ private fun ThreadContent(
                         actions.onNotice(if (on) "Followers will get your posts without sound." else "Followers will get your posts with sound.")
                     },
                     // A quote may go with no words (owner 2026-11-06, iOS sendsWithoutText).
-                    sendsWithoutText = quoting != null && editing == null,
+                    // ...and a photo/video's caption edit may clear the words (iOS c0ee63879).
+                    sendsWithoutText = (quoting != null && editing == null) || editing?.let { com.fariin.app.data.MessageRules.captionable(it) } == true,
                     // iOS beginReply / Edit: "you're about to type", so the keyboard opens for those too.
                     focusKey = quoting?.let { com.fariin.app.data.QuoteRules.draftKey(it) }
                         ?: replyTo?.let { "reply:" + it.rowId } ?: editing?.let { "edit:" + it.rowId },

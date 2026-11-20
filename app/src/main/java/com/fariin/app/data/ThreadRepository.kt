@@ -1985,10 +1985,12 @@ class ThreadRepository(
     /** ChatService.editMessage: re-sealed, the replaced text appended to `edits` (at most 10). */
     suspend fun editMessage(m: Message, newText: String, fmt: String? = null): Boolean {
         val t = newText.trim()
-        if (t.isEmpty()) return false
+        // A photo/video's caption may be cleared (iOS c0ee63879): stored as "" unsealed, like a caption-less send.
+        val media = MessageRules.captionable(m)
+        if (t.isEmpty() && !media) return false
         return try {
             val members = if (Wire.isGroupCid(cid)) freshMembers() else null
-            val cipher = seal(t, members)
+            val cipher = if (t.isEmpty()) "" else seal(t, members)
             val ref = msgRef(m.id)
             val data = ref.get().await().data ?: return false
             if (data["deleted"] == true) return false
@@ -2014,10 +2016,11 @@ class ThreadRepository(
             val sum = hashMapOf<String, Any>("lastMessage" to cipher)
             if (Wire.isGroupCid(cid) && !cipher.startsWith("enc")) sum["lastPlainTag"] = Conversation.plainTag(cipher)
             val batch = db.batch().update(ref, update)
-            val shownNewest = isNewestShown(m.id) && !isChannelChat() && !isChannel()   // a channel line is the server's
+            // A media caption edit leaves the line alone: it shows the media's label, never the caption.
+            val shownNewest = !media && isNewestShown(m.id) && !isChannelChat() && !isChannel()   // a channel line is the server's
             if (shownNewest) batch.update(convRef, sum)
             batch.commit().await()
-            if (!shownNewest) {
+            if (!shownNewest && !media) {
                 val newest = convRef.collection("messages").orderBy("createdAt", Query.Direction.DESCENDING).limit(1).get().await()
                 if (newest.documents.firstOrNull()?.id == m.id) try { convRef.update(sum).await() } catch (_: Exception) {}
             }
