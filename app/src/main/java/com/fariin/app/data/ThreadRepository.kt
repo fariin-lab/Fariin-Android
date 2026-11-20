@@ -192,13 +192,17 @@ class ThreadRepository(
             // A forward just sent here is in the first frame too, under the saved rows.
             val echoes = ForwardEchoes.of(cid).filter { e -> saved.none { it.rowId == e.rowId } }
             savedRows = saved.associate { it.id to it.createdAtMillis.toLong() }
+            // The "messages from before you signed in" line as the last open drew it (owner's Oppo
+            // 2026-11-20: it came a beat after the chat opened, once the server answered).
+            val keysLine = KeysNoticeMemo.get(me, cid)?.takeIf { (at, _) -> saved.any { it.createdAtMillis <= at } || saved.isEmpty() }
+                ?.let { (at, text) -> Message(id = KEYS_NOTICE_ID, authorId = "", text = text, type = "system", createdAtMillis = at, hasServerTime = true) }
             if (saved.isNotEmpty() || echoes.isNotEmpty()) {
                 // Owner's Pixel 2026-11-09: a first open after launch slid in empty and the rows came
                 // a beat later, a second open was full at once. The saved rows now draw on the first
                 // frame always (as iOS ThreadMessageCache paints before the push); rows the list knows
                 // are newer arrive from the listener at the bottom, as a message arriving would.
                 if (saved.isNotEmpty()) seeded = true
-                _state.update { it.copy(messages = order.sort(saved + echoes), loaded = saved.isNotEmpty() || it.loaded) }
+                _state.update { it.copy(messages = order.sort(saved + listOfNotNull(keysLine) + echoes), loaded = saved.isNotEmpty() || it.loaded) }
             }
         }
         // A forward that fails here takes its bubble away; one that lands is swapped in by rebuild.
@@ -704,8 +708,15 @@ class ThreadRepository(
             // Older messages this phone can open still show above the line (owner 2026-11-19, kreak's
             // chat: a video from before it read as "aren't available"), so then it says "Some".
             val olderShown = all.values.any { !it.isSystem && it.createdAtMillis < n.createdAtMillis }
-            all[KEYS_NOTICE_ID] = Message(id = KEYS_NOTICE_ID, authorId = "", text = if (olderShown) KEYS_NOTICE_SOME else KEYS_NOTICE, type = "system",
+            val text = if (olderShown) KEYS_NOTICE_SOME else KEYS_NOTICE
+            all[KEYS_NOTICE_ID] = Message(id = KEYS_NOTICE_ID, authorId = "", text = text, type = "system",
                 createdAtMillis = n.createdAtMillis, hasServerTime = true)
+            KeysNoticeMemo.set(me, cid, n.createdAtMillis, text)
+        }
+        // None in a server window that reaches back past the remembered one: it is gone for good.
+        if (newestUnopened == null && liveDocs.isNotEmpty()) KeysNoticeMemo.get(me, cid)?.let { (at, _) ->
+            val oldest = all.values.filter { !it.isSystem }.minOfOrNull { it.createdAtMillis }
+            if (oldest != null && oldest <= at) KeysNoticeMemo.clear(me, cid)
         }
         // "You blocked / unblocked this person" (iOS blockNotices): from my own block list, for my
         // eyes only, never written to the chat. 1:1 only, and only inside the loaded history.
@@ -2603,3 +2614,24 @@ class ThreadRepository(
 
 /** Sends that must outlive the chat screen (media uploads and their attach): the app's lifetime. */
 internal val SendScope: CoroutineScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+
+/** The keys notice's place and words per chat, so a chat opens with it already drawn (see the seed above). */
+internal object KeysNoticeMemo {
+    private val mem = java.util.concurrent.ConcurrentHashMap<String, Pair<Double, String>>()
+    @Volatile private var prefs: android.content.SharedPreferences? = null
+    private fun p(): android.content.SharedPreferences? = prefs ?: runCatching {
+        com.google.firebase.FirebaseApp.getInstance().applicationContext.getSharedPreferences("keys_notice", android.content.Context.MODE_PRIVATE)
+    }.getOrNull()?.also { prefs = it }
+    private fun k(me: String, cid: String) = "$me|$cid"
+    fun get(me: String, cid: String): Pair<Double, String>? = mem[k(me, cid)] ?: p()?.getString(k(me, cid), null)?.let { raw ->
+        val at = raw.substringBefore('|').toDoubleOrNull() ?: return null
+        (at to raw.substringAfter('|')).also { mem[k(me, cid)] = it }
+    }
+    fun set(me: String, cid: String, at: Double, text: String) {
+        val v = at to text
+        if (get(me, cid) == v) return
+        mem[k(me, cid)] = v
+        p()?.edit()?.putString(k(me, cid), "$at|$text")?.apply()
+    }
+    fun clear(me: String, cid: String) { mem.remove(k(me, cid)); p()?.edit()?.remove(k(me, cid))?.apply() }
+}
