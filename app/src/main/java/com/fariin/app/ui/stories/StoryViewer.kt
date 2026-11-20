@@ -278,8 +278,30 @@ fun StoryViewer(
     // Repost (iOS beginRepost): the original drawn as a card, then the story composer with the credit.
     val reposting = remember { mutableStateOf(false) }
     var repostDraft by remember { mutableStateOf<StoryMedia.Prepared?>(null) }
+    var editDraft by remember { mutableStateOf<Pair<Story, StoryMedia.Prepared>?>(null) }
     val repostCtx = androidx.compose.ui.platform.LocalContext.current
     val repostScope = rememberCoroutineScope()
+    val openEdit: (Story) -> Unit = { st ->
+        reposting.value = true
+        repostScope.launch {
+            val draft = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    val f = java.io.File(repostCtx.cacheDir, "edit-${st.id}.jpg")
+                    val c = java.net.URL(st.mediaUrl).openConnection() as java.net.HttpURLConnection
+                    try {
+                        if (c.responseCode != 200) return@runCatching null
+                        c.inputStream.use { i -> f.outputStream().use { i.copyTo(it) } }
+                    } finally { c.disconnect() }
+                    StoryMedia.preparePhoto(repostCtx, android.net.Uri.fromFile(f))?.let { p ->
+                        // Its tap areas and repost credit stay with it while the picture is untouched.
+                        StoryMedia.Prepared(p.jpeg, st.blurThumb.ifEmpty { p.blurThumb }, null, p.width, p.height, st.taps, st.repostOf)
+                    }
+                }.getOrNull()
+            }
+            if (draft == null) { reposting.value = false; com.fariin.app.ui.components.Snack.show("Could not load that story") }
+            else editDraft = st to draft
+        }
+    }
     fun startRepost(st: Story, g: StoryGroup) {
         if (reposting.value) return
         reposting.value = true
@@ -319,6 +341,12 @@ fun StoryViewer(
             if (draft == null) { reposting.value = false; com.fariin.app.ui.components.Snack.show("Could not load that story") }
             else repostDraft = draft
         }
+    }
+    // Edit Story (iOS 2026-11-20): my photo story, opened in the editor as its flat picture.
+    editDraft?.let { (st, d) ->
+        StoryComposerDialog(me, d, conversations, editing = st,
+            onClose = { editDraft = null; reposting.value = false },
+            onPosted = { editDraft = null; reposting.value = false; com.fariin.app.ui.components.Snack.show("Story saved") })
     }
     repostDraft?.let { d ->
         StoryComposerDialog(me, d, conversations,
@@ -929,6 +957,7 @@ fun StoryViewer(
                                 name = if (st.groupId == null) groups.firstOrNull { it.key == st.ringKey }?.name else null,
                                 personUid = st.authorUid, storyId = st.id))
                             "viewers" -> editViewersFor = st
+                            "edit" -> openEdit(st)
                         }
                     },
                     onNotify = { uid, name ->
@@ -1479,6 +1508,8 @@ private fun StoryPage(
                                 // My own story (iOS): Save, Edit viewers, and Share when it went to Everyone.
                                 if (mine) {
                                     item("Save", ImageVector.cachedVector(R.drawable.ic_save_down), null, "save")
+                                    // Edit Story (iOS 2026-11-20): photo stories for now; a clip keeps its picture.
+                                    if (!story.isVideo && story.groupId == null) item("Edit Story", ImageVector.cachedVector(R.drawable.ic_sf_pencil), null, "edit")
                                     if (com.fariin.app.data.PostedStoriesRules.canEditViewers(story)) item("Edit Viewers", ImageVector.cachedVector(com.fariin.app.R.drawable.ic_gs_members), null, "viewers")
                                     if (com.fariin.app.data.PostedStoriesRules.canShare(story)) item("Share", ImageVector.cachedVector(R.drawable.ic_link_share), null, "share")
                                 }

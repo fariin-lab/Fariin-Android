@@ -369,10 +369,12 @@ fun StoryComposerDialog(
     onAddMore: (() -> Unit)? = null,
     /** Built under a picture still flying in from the library: drawn once it lands ([hidden] false). */
     hidden: Boolean = false,
+    /** Edit Story (iOS 2026-11-20): my posted story, changed in place; DONE saves instead of Next. */
+    editing: com.fariin.app.data.Story? = null,
 ) {
     // One picture, one item: the repost and anything else that posts a single story.
-    val items = remember(media) { androidx.compose.runtime.mutableStateListOf(StoryItemState(media, null)) }
-    StoryComposerDialog(me, items, conversations, onClose, onPosted, textStory, flyHome, onFlightStart, onAddMore, hidden)
+    val items = remember(media) { androidx.compose.runtime.mutableStateListOf(StoryItemState(media, null).also { it.caption = editing?.caption ?: "" }) }
+    StoryComposerDialog(me, items, conversations, onClose, onPosted, textStory, flyHome, onFlightStart, onAddMore, hidden, editing)
 }
 
 /**
@@ -392,6 +394,7 @@ internal fun StoryComposerDialog(
     onFlightStart: () -> Unit = {},
     onAddMore: (() -> Unit)? = null,
     hidden: Boolean = false,
+    editing: com.fariin.app.data.Story? = null,
 ) {
     // ⛔ NO PLATFORM WINDOW ANIMATION (owner 2026-11-10, video): closing played the phone maker's
     // dialog zoom-out, which shrank the whole editor toward the lower grid. The window has none
@@ -410,7 +413,7 @@ internal fun StoryComposerDialog(
         androidx.compose.runtime.SideEffect { (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window?.setWindowAnimations(0) }
         com.fariin.app.ui.components.EdgeToEdgeDarkDialogWindow()
         Box(Modifier.fillMaxSize().graphicsLayer { alpha = leaving.value }) {
-            StoryComposer(me, items, conversations, fadeClose, onPosted, textStory, flyHome, onFlightStart, onAddMore, hidden)
+            StoryComposer(me, items, conversations, fadeClose, onPosted, textStory, flyHome, onFlightStart, onAddMore, hidden, editing)
         }
     }
 }
@@ -560,7 +563,7 @@ private fun StripThumb(item: StoryItemState, current: Boolean, onTap: () -> Unit
 private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.SnapshotStateList<StoryItemState>, conversations: List<Conversation>,
                           onClose: () -> Unit, onPosted: () -> Unit, textStory: Boolean = false,
                           flyHome: Boolean = false, onFlightStart: () -> Unit = {}, onAddMore: (() -> Unit)? = null,
-                          hidden: Boolean = false) {
+                          hidden: Boolean = false, editing: com.fariin.app.data.Story? = null) {
     if (items.isEmpty()) return
     // ARRIVING FROM THE LIBRARY (owner's video 2026-11-08: the bare picture sat ~170 ms, then every
     // control popped in at once). The editor is built while the picture flies, unseen; when it lands
@@ -641,6 +644,8 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
     var askDiscardPen by remember { mutableStateOf(false) }
     var askDiscard by remember { mutableStateOf(false) }
     var baking by remember { mutableStateOf(false) }
+    // Edit Story's "Saving... N%" while the new picture goes up (null when not saving).
+    var savingPct by remember { mutableStateOf<Float?>(null) }
     // The post's flight home: the picture, where it starts, its corners. Null until Post Story.
     var flight by remember { mutableStateOf<Triple<androidx.compose.ui.graphics.ImageBitmap, Rect, Float>?>(null) }
     // The editor's black and the share sheet leave as the flight starts (iOS: black 0.15 s, sheet 0.3 s).
@@ -1061,13 +1066,31 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
                         val out = kotlinx.coroutines.withContext(Dispatchers.Default) {
                             all.map { item -> runCatching { renderItem(item, c, textStory) }.getOrNull() }
                         }
+                        if (editing != null) {
+                            // Edit Story: the picture only when something on it changed (the render hands
+                            // the same picture back when nothing did); the caption on its own otherwise.
+                            val item = all.first()
+                            // Untouched = nothing placed or drawn and never zoomed or moved: then only the caption.
+                            val touched = !item.edits.isEmpty || item.zoomSet != 0f || item.pan != Offset.Zero
+                            val changed = if (touched) out.firstOrNull()?.first else null
+                            try {
+                                savingPct = 0f
+                                com.fariin.app.data.StoryEdit.save(editing, changed, item.caption) { savingPct = it }
+                                savingPct = null; baking = false
+                                onPosted()
+                            } catch (e: Exception) {
+                                savingPct = null; baking = false
+                                android.widget.Toast.makeText(ctx, e.message ?: "Couldn't save the story. Try again.", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                            return@launch
+                        }
                         baking = false
                         if (out.all { it != null }) { prepared = out.filterNotNull(); audience = true }
                     }
                 }.padding(horizontal = 20.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("NEXT", color = Color.Black, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(if (editing != null) "DONE" else "NEXT", color = Color.Black, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_right), contentDescription = null, tint = Color.Black, modifier = Modifier.size(22.dp))
                 }
             }
@@ -1087,7 +1110,10 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
             var slow by remember { mutableStateOf(false) }
             LaunchedEffect(Unit) { kotlinx.coroutines.delay(300); slow = true }
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (slow) 0.3f else 0f)).clickable {}, contentAlignment = Alignment.Center) {
-                if (slow) com.fariin.app.ui.components.FariinSpinner(size = 44.dp, stroke = 5.dp, color = Color.White)
+                if (slow) Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    com.fariin.app.ui.components.FariinSpinner(size = 44.dp, stroke = 5.dp, color = Color.White)
+                    savingPct?.let { p -> Text("Saving… ${(p * 100).toInt()}%", color = Color.White, fontSize = 15.sp, modifier = Modifier.padding(top = 12.dp)) }
+                }
             }
         }
         if (audience) Box(Modifier.fillMaxSize().graphicsLayer { translationY = leaveSheet.value * box.height }) {
