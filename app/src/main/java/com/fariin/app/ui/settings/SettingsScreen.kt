@@ -159,6 +159,7 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit,
             page == PAGE_PROFILE_VISITORS -> ProfileVisitorsPage(pop)
             page == PAGE_BUBBLE_STYLE -> BubbleStylePage(onClose = pop)
             page == PAGE_PLUS_BUBBLE -> PlusBubbleStylePage(pop)
+            page == PAGE_CHAT_FOLDERS -> ChatFoldersPage(pop)
             page == PAGE_GLOW_PROFILE -> com.fariin.app.ui.glow.GlowProfilePage(me, profile,
                 onEdit = com.fariin.app.ui.people.LocalPeopleNav.current.editProfile, onBack = pop)
             page == PAGE_SCAN -> ScanQrPage(onMyCode = { pop(); myQrOpen.value = true }, onClose = pop, onDone = pop)

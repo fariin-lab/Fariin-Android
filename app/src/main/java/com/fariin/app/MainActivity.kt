@@ -224,7 +224,11 @@ class MainActivity : ComponentActivity() {
                 com.fariin.app.data.AppConfig.start(me)   // getAppConfig: this account's settings and limits
                 com.fariin.app.data.MsgPolicy.start(me)
                 com.fariin.app.data.Glow.start(applicationContext, me)
-                com.fariin.app.data.PlusStore.onRealAnswer = { com.fariin.app.ui.settings.AppIcons.enforce(applicationContext) }
+                com.fariin.app.data.PlusStore.onRealAnswer = {
+                    com.fariin.app.ui.settings.AppIcons.enforce(applicationContext)
+                    // Chat folders follow each real Plus answer (at start and on coming back to the app).
+                    com.fariin.app.data.ChatFoldersStore.refresh(applicationContext)
+                }
                 com.fariin.app.data.PlusStore.start(me)
             }
             onDispose {

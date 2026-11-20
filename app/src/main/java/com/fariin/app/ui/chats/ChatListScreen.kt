@@ -21,6 +21,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -195,6 +196,11 @@ fun ChatListScreen(
     var searching by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     var showArchive by rememberSaveable { mutableStateOf(false) }
+    // Fariin Plus chat folders: the folder being edited from a chip, a new folder for one chat, and
+    // the Add to Folder list for the chat picked.
+    var folderEdit by remember { mutableStateOf<com.fariin.app.data.ChatFolder?>(null) }
+    var folderNewFor by remember { mutableStateOf<String?>(null) }
+    var folderAddFor by remember { mutableStateOf<Conversation?>(null) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     // A second tap on Chats: out of Archived or search first, then to the top.
     com.fariin.app.ui.shell.OnTabReselect {
@@ -241,10 +247,14 @@ fun ChatListScreen(
         closeArchive = { showArchive = false })
 
     val source = if (showArchive) state.archived else state.chats
+    // Fariin Plus chat folders: the chosen folder (null for All Chats, or for everyone without them).
+    // It takes the place of the menu's filter; the archive keeps its own list.
+    val folder = if (showArchive) null else com.fariin.app.data.ChatFoldersStore.current
     // Kept until the list, the filter or the page changes: these were rebuilt on every recomposition
     // (each scroll-driven or badge change), a cost a 2-core phone felt on every tab.
-    val filtered = remember(source, filter, showArchive, me) {
-        if (filter == FILTER_ALL) source else source.filter {
+    val filtered = remember(source, filter, showArchive, me, folder) {
+        if (folder != null) { val now = System.currentTimeMillis().toDouble(); source.filter { folder.contains(it, me, now) } }
+        else if (filter == FILTER_ALL) source else source.filter {
             when (filter) {
                 FILTER_UNREAD -> !showArchive && it.hasUnreadMark(me)
                 FILTER_GROUPS -> !showArchive && it.isGroup && !it.isChannel
@@ -308,7 +318,7 @@ fun ChatListScreen(
     // Archived, it lives in the Archived list; pinned, it heads the Pinned section.
     val officialArchived = official.state.archived
     val officialShown = showArchive == officialArchived && official.latest != null &&
-        (filter == FILTER_ALL || (filter == FILTER_UNREAD && official.unread > 0)) &&
+        folder == null && (filter == FILTER_ALL || (filter == FILTER_UNREAD && official.unread > 0)) &&
         (query.isBlank() || com.fariin.app.data.OfficialChannel.NAME.contains(query.trim(), ignoreCase = true))
     val officialAt = official.latest?.sortAt ?: 0.0
     val officialPinned = officialShown && !showArchive && official.state.pinned
@@ -317,7 +327,7 @@ fun ChatListScreen(
     // its latest time; pinnable (kept on this phone). Not in the Archive or a filtered list.
     val activity by com.fariin.app.data.ActivityFeed.summary.collectAsState()
     val activityPin by com.fariin.app.data.ActivityFeed.pinned.collectAsState()
-    val activityShown = !showArchive && filter == FILTER_ALL && activity?.let { it.at > 0 } == true
+    val activityShown = !showArchive && filter == FILTER_ALL && folder == null && activity?.let { it.at > 0 } == true
     val activityPinned = activityShown && activityPin
     val activityMuted by com.fariin.app.data.ActivityFeed.muted.collectAsState()
     // "Activity" is found by the chat search like a chat title.
@@ -495,6 +505,15 @@ fun ChatListScreen(
                             act(if (unread) "Marked as unread" else "Marked as read") { ChatListActions.setUnread(me, it, unread) }
                         },
                         onSelectAll = { selected = shown.map { it.id }.toSet() },
+                        folderAdd = selectedConvs.singleOrNull()?.takeIf { com.fariin.app.data.ChatFoldersStore.featureOn }?.let { one ->
+                            { selected = emptySet(); selectMode = false; folderAddFor = one }
+                        },
+                        folderRemove = selectedConvs.singleOrNull()?.takeIf { one -> folder?.covers(one, me) == true }?.let { one ->
+                            {
+                                selected = emptySet(); selectMode = false
+                                folder?.let { f -> com.fariin.app.data.ChatFoldersStore.remove(one, f.id, me)?.let { Snack.show(it) } }
+                            }
+                        },
                         single = selectedConvs.singleOrNull()?.let { one ->
                             val person = !one.isGroup && !one.isChannel
                             SingleChatActions(
@@ -592,6 +611,12 @@ fun ChatListScreen(
                                 titleContentColor = c.label, actionIconContentColor = c.label, navigationIconContentColor = c.label,
                             ),
                         )
+                        // Fariin Plus chat folders: the chips, only while folders are in use.
+                        if (!showArchive && com.fariin.app.data.ChatFoldersStore.active) ChatFolderBar(state.chats, me,
+                            onEdit = { folderEdit = it }, onManage = {
+                                com.fariin.app.ui.settings.SettingsLink.request(com.fariin.app.ui.settings.PAGE_CHAT_FOLDERS)
+                                onSettings()
+                            })
                         }
                     }
                 }
@@ -666,6 +691,15 @@ fun ChatListScreen(
                 shown.isEmpty() && !officialShown && !activitySearchHit && !activityShown && newPeople.isEmpty() && groupHits.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { when {
                     query.isNotBlank() -> Centered(null, "No results", null)
                     showArchive -> Centered(fi(R.drawable.ic_archive), "Nothing archived", "Chats you archive and stories you hide will show here.")
+                    folder != null -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        Text("Nothing here right now", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label)
+                        Spacer(Modifier.height(16.dp))
+                        Text("Edit Folder", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.accent,
+                            modifier = Modifier.clip(CircleShape).clickable { folderEdit = folder }.padding(horizontal = 16.dp, vertical = 10.dp))
+                        Text("Show All Chats", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.accent,
+                            modifier = Modifier.clip(CircleShape).clickable { com.fariin.app.data.ChatFoldersStore.select(com.fariin.app.data.ChatFolder.ALL.id) }
+                                .padding(horizontal = 16.dp, vertical = 10.dp))
+                    }
                     filter == FILTER_UNREAD -> Centered(ImageVector.cachedVector(R.drawable.ic_sf_checkmark_circle), "No unread chats", "You're all caught up.")
                     filter == FILTER_GROUPS -> Centered(fi(R.drawable.ic_gs_group_type), "No groups yet", "Groups you join will appear here.",
                         "New Group" to people.newGroup)
@@ -702,12 +736,12 @@ fun ChatListScreen(
                     if (!searching) item(key = "voicebar", contentType = "voicebar") {
                         com.fariin.app.ui.thread.VoiceNoteBar(null, me) { cid -> (state.chats + state.archived).firstOrNull { it.id == cid }?.let { if (!selecting) onOpen(it) } }
                     }
-                    if (!showArchive && !searching && filter == FILTER_ALL && state.requests.isNotEmpty()) item(key = "requests", contentType = "requests") {
+                    if (!showArchive && !searching && filter == FILTER_ALL && folder == null && state.requests.isNotEmpty()) item(key = "requests", contentType = "requests") {
                         ListRow("Message Requests", fi(R.drawable.ic_message_request), trailing = "${state.requests.size}", badge = true,
                             subtitle = state.requests.joinToString(", ") { it.displayName(me) }, onClick = people.requests)
                     }
                     val archivedCount = state.archived.size + if (officialArchived && official.latest != null) 1 else 0
-                    if (!showArchive && !searching && filter == FILTER_ALL && archivedCount > 0) {
+                    if (!showArchive && !searching && filter == FILTER_ALL && folder == null && archivedCount > 0) {
                         item(key = "archive") {
                             ListRow("Archived", fi(R.drawable.ic_archive), trailing = "$archivedCount") { showArchive = true }
                         }
@@ -903,12 +937,12 @@ fun ChatListScreen(
         }
         // iOS getStartedLayer: Things you can do, for a new account with a short list.
         val gsVersion = GetStartedStore.version.intValue
-        val gsShown = !state.loading && state.error == null && !searching && !selecting && !showArchive && filter == FILTER_ALL &&
+        val gsShown = !state.loading && state.error == null && !searching && !selecting && !showArchive && filter == FILTER_ALL && folder == null &&
             GetStartedStore.accountIsNew() && state.chats.count { !it.isChannel } < GetStartedStore.CHAT_LIMIT
         // After Skip on the restore screen, Restore leads the card (owner 2026-11-12), for any
         // account: the card then shows even when it was closed or the account is not new.
         val restoreLater by com.fariin.app.crypto.KeyBackup.later.collectAsState()
-        val listQuiet = !state.loading && !searching && !selecting && !showArchive && filter == FILTER_ALL
+        val listQuiet = !state.loading && !searching && !selecting && !showArchive && filter == FILTER_ALL && folder == null
         // Chat backup's second chances (both apps): Restore after a skipped restore, Back Up a week after Not Now.
         val backupRestore = listQuiet && com.fariin.app.backup.ChatBackup.ENABLED && com.fariin.app.backup.ChatBackup.restoreWaiting(appCtx, me)
         val backupAsk = listQuiet && com.fariin.app.backup.ChatBackup.backUpCircle(appCtx, me)
@@ -1015,6 +1049,38 @@ fun ChatListScreen(
             )))
     }
     com.fariin.app.ui.components.GlassMenu(moreOpen, moreAnchor, moreItems, backdrop = glassLayer, onDismiss = { moreOpen = false })
+    folderAddFor?.let { conv ->
+        AddToFolderSheet(conv, me, onDismiss = { folderAddFor = null }, onNew = { folderAddFor = null; folderNewFor = conv.id })
+    }
+    if (folderEdit != null || folderNewFor != null) Box(Modifier.fillMaxSize().background(c.bgSecondary)
+        .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } }) {
+        com.fariin.app.ui.settings.ChatFolderEditor(folderEdit, prefill = listOfNotNull(folderNewFor),
+            onClose = { folderEdit = null; folderNewFor = null })
+    }
+    }
+}
+
+/** Add to Folder (Fariin Plus): the custom folders, ticked where the chat already is, then New Folder. */
+@Composable
+private fun AddToFolderSheet(conv: Conversation, me: String, onDismiss: () -> Unit, onNew: () -> Unit) {
+    val c = Fariin.colors
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Column(Modifier.width(300.dp).clip(RoundedCornerShape(28.dp)).background(c.card).padding(vertical = 12.dp)) {
+            Text("Add to Folder", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.label,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+            com.fariin.app.data.ChatFoldersStore.customFolders.forEach { f ->
+                val inIt = f.covers(conv, me)
+                Row(Modifier.fillMaxWidth().clickable {
+                    com.fariin.app.data.ChatFoldersStore.add(conv, f.id, me)?.let { Snack.show(it) }
+                    onDismiss()
+                }.padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(f.name, fontSize = 17.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    if (inIt) Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), "In this folder", tint = c.accent, modifier = Modifier.size(20.dp))
+                }
+            }
+            if (com.fariin.app.data.ChatFoldersStore.canAddFolder) Text("New Folder\u2026", fontSize = 17.sp, color = c.accent,
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onNew).padding(horizontal = 20.dp, vertical = 12.dp))
+        }
     }
 }
 
@@ -1032,6 +1098,9 @@ private fun SelectionBar(
     onArchive: () -> Unit, onDelete: () -> Unit,
     onReadToggle: () -> Unit, onSelectAll: () -> Unit,
     single: SingleChatActions? = null,
+    /** Fariin Plus chat folders, one chat picked: Add to Folder, and inside a folder Remove from This Folder. */
+    folderAdd: (() -> Unit)? = null,
+    folderRemove: (() -> Unit)? = null,
 ) {
     var more by remember { mutableStateOf(false) }
     var muteOpen by remember { mutableStateOf(false) }
@@ -1067,6 +1136,14 @@ private fun SelectionBar(
                     single?.let { s ->
                         DropdownMenuItem(text = { Text(s.infoLabel) }, leadingIcon = { Icon(ImageVector.cachedVector(R.drawable.ic_sf_info_circle), null) },
                             onClick = { more = false; s.onInfo() })
+                    }
+                    folderAdd?.let { f ->
+                        DropdownMenuItem(text = { Text("Add to Folder") }, leadingIcon = { Icon(ImageVector.cachedVector(R.drawable.ic_album), null) },
+                            onClick = { more = false; f() })
+                    }
+                    folderRemove?.let { f ->
+                        DropdownMenuItem(text = { Text("Remove from This Folder") }, leadingIcon = { Icon(ImageVector.cachedVector(R.drawable.ic_sf_minus), null) },
+                            onClick = { more = false; f() })
                     }
                 }
             }
