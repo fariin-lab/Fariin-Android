@@ -5,6 +5,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -100,7 +104,12 @@ internal fun ProfileVisitorsPage(pop: () -> Unit) {
         }
     }
     suspend fun load() {
-        try { apply(PlusVisitors.list(null), append = false); PlusVisitors.markSeen() }
+        try {
+            val first = PlusVisitors.list(null)
+            apply(first, append = false); PlusVisitors.markSeen()
+            // The Settings button's faces take this page (newest first; none unless on).
+            PlusVisitors.noteLatest(if (first["state"] == "on") first["rows"] else null)
+        }
         catch (e: FirebaseFunctionsException) {
             if (e.code == FirebaseFunctionsException.Code.NOT_FOUND) phase = VisitPhase.Off
             else if (!(phase == VisitPhase.On && rows.isNotEmpty())) phase = VisitPhase.Failed
@@ -208,9 +217,24 @@ private fun lockedTitle(n: Int) = when (n) {
 @Composable
 internal fun ProfileVisitorsButton(modifier: Modifier, onClick: () -> Unit) {
     if (!PlusVisitors.shows) return
-    LaunchedEffect(Unit) { PlusVisitors.refreshCount() }
+    LaunchedEffect(Unit) { PlusVisitors.refreshCount(); PlusVisitors.refreshFaces() }
+    val faces = PlusVisitors.faces
     Box(modifier) {
-        com.fariin.app.ui.components.FloatingIcon(ImageVector.cachedVector(R.drawable.ic_views), "Profile Visitors", onClick = onClick)
+        // Owner 2026-11-20: his closed eye with lashes; with visitors, their latest faces instead, in
+        // the same glass capsule (the way the reference app stacks a short video's viewers).
+        if (faces.isEmpty()) com.fariin.app.ui.components.FloatingIcon(ImageVector.cachedVector(R.drawable.ic_eye_closed_lashes), "Profile Visitors", onClick = onClick)
+        else Box(Modifier.height(44.dp).clip(CircleShape).then(com.fariin.app.ui.components.barGlass())
+            .clickable(onClickLabel = "Profile Visitors", onClick = onClick).padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
+            val ring = com.fariin.app.ui.theme.Fariin.colors.bg
+            Row {
+                faces.take(3).forEachIndexed { i, f ->
+                    Box(Modifier.offset(x = (-8 * i).dp).zIndex((3 - i).toFloat()).size(25.dp).clip(CircleShape).background(ring),
+                        contentAlignment = Alignment.Center) {
+                        com.fariin.app.ui.components.Avatar(f.photoUrl, 22.dp)
+                    }
+                }
+            }
+        }
         val n = PlusVisitors.newCount
         if (n > 0) Box(Modifier.align(Alignment.TopEnd).heightIn(min = 18.dp).clip(CircleShape).background(PlusBlue)
             .padding(horizontal = 5.dp), contentAlignment = Alignment.Center) {

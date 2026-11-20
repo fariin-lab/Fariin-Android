@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The owner's closed eye with lashes (iOS ic_eye_closed_lashes, 2026-11-20): Settings' visitors button. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="18"
+    android:viewportHeight="18">
+    <path
+        android:pathData="M1.859,7.27c1.815,1.851 4.344,3 7.141,3s5.326,-1.148 7.141,-3"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M4.021,8.942L2.75,11.019M7.3,10.126L6.823,12.5M13.979,8.942L15.25,11.019M10.7,10.126L11.177,12.5"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>
