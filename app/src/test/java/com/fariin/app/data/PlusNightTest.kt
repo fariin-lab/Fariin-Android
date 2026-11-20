@@ -22,6 +22,8 @@ class PlusNightTest {
         // Never more code points than the server takes, however few characters that is.
         val long = ChatFolder.cleanName("👨‍👩‍👧".repeat(40))
         assertTrue(long.codePointCount(0, long.length) <= ChatFolder.NAME_RAW_MAX)
+        // ...and only whole family emoji, never a broken one.
+        assertTrue(long.isNotEmpty() && long == "👨‍👩‍👧".repeat(long.length / "👨‍👩‍👧".length))
     }
 
     @Test fun oldKindsReadAsWhatTheyMeant() {

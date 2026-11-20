@@ -147,7 +147,12 @@ data class ChatFolder(
             var end = 0; var n = 0
             while (n < NAME_MAX) { val next = it.next(); if (next == java.text.BreakIterator.DONE) { end = collapsed.length; break }; end = next; n++ }
             var out = collapsed.substring(0, end)
-            while (out.codePointCount(0, out.length) > NAME_RAW_MAX) out = out.substring(0, out.offsetByCodePoints(0, out.codePointCount(0, out.length) - 1))
+            // Over the server's code-point cap: whole characters come off the end (as iOS), never
+            // half an emoji.
+            while (out.isNotEmpty() && out.codePointCount(0, out.length) > NAME_RAW_MAX) {
+                val b = java.text.BreakIterator.getCharacterInstance().apply { setText(out) }
+                out = out.substring(0, b.preceding(out.length).coerceAtLeast(0))
+            }
             return out.trim()
         }
 
