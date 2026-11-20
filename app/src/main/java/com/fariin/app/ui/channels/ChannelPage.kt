@@ -274,11 +274,14 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
             }
             return
         }
-        // At the tap (iOS 2026-11-08): the page closes at once and the server call runs behind it.
-        // If it fails the follow is still there, so the channel stays in the list, and a note says so.
-        com.fariin.app.data.LeaveUndo.hideWhile(info.cid, "Couldn't leave the channel. Check your connection and try again.") {
-            ChannelService.unfollow(info.cid)
-        }
+        // At the tap (iOS 2026-11-08): the page closes at once. The chat list's leave (iOS 2026-11-19,
+        // explore-leave): gone from the lists, "You left the channel." with Undo for a few seconds on
+        // whatever page this lands on (Explore when it was opened from there), then the real leave.
+        // If that fails the follow is still there, so the channel comes back and a note says so.
+        com.fariin.app.data.LeaveUndo.start(info.cid, info.title.ifEmpty { "the channel" },
+            "Couldn't leave the channel. Check your connection and try again.") { ChannelService.unfollow(info.cid) }
+        com.fariin.app.ui.components.Snack.undo("You left the channel.", info.avatarUrl, true,
+            com.fariin.app.data.LeaveUndo.WINDOW_MS) { com.fariin.app.data.LeaveUndo.undo() }
         onLeft()
     }
     fun tap(a: Action, dimmed: Boolean) {
