@@ -1049,7 +1049,8 @@ class ThreadRepository(
         SendQueue.remove(me, id)
         pending.remove(id)
         retryPhoto.remove(id)?.let { sendPreparedPhoto(it); return }
-        retryVoice.remove(id)?.let { sendVoice(it); return }
+        // A new send under a new id: the old written-down entry goes, or a restart would send it twice.
+        retryVoice.remove(id)?.let { com.fariin.app.local.PhotoOutbox.remove(me, id); sendVoice(it); return }
         retryMedia.remove(id)?.let { work ->
             pending[id]?.let { pending[id] = it.copy(sendState = Message.SendState.SENDING) }
             rebuild()
@@ -1634,12 +1635,14 @@ class ThreadRepository(
             val f = File(e.path)
             if (!f.exists() || f.length() == 0L) { com.fariin.app.local.PhotoOutbox.remove(me, e.clientId); continue }
             val video = e.kind == "video"
+            val voice = e.kind == "voice"
             if (video && e.poster?.let { File(it).exists() } != true) { com.fariin.app.local.PhotoOutbox.remove(me, e.clientId); continue }
             pending[e.clientId] = Message(
-                id = e.clientId, authorId = me, text = e.caption, type = if (video) "video" else "image", createdAtMillis = e.ts, hasServerTime = false,
+                id = e.clientId, authorId = me, text = e.caption, type = if (voice) "audio" else if (video) "video" else "image", createdAtMillis = e.ts, hasServerTime = false,
                 clientTs = e.ts, clientId = e.clientId, sendState = Message.SendState.SENDING, viewOnce = e.viewOnce,
                 width = e.width.toDouble(), height = e.height.toDouble(), thumb = if (e.viewOnce) null else e.thumb,
-                localPath = if (video) e.poster else e.path, duration = if (video) e.duration else null,
+                localPath = if (video) e.poster else e.path, duration = if (video || voice) e.duration else null,
+                waveform = if (voice && !e.viewOnce) e.wave else emptyList(),
             )
             localFiles[e.clientId] = if (video) e.poster!! else e.path
             rebuild()
@@ -1653,7 +1656,9 @@ class ThreadRepository(
                 } catch (_: Exception) { false }
                 // A clip whose message went out before the kill (its upload unfinished) is not sent twice;
                 // that one is the stuck-send case, not this queue's.
-                if (!landed && video) {
+                if (!landed && voice) {
+                    voiceNow(com.fariin.app.media.VoiceRecorder.Result(f, e.duration, e.wave, e.viewOnce), e.clientId, e.ts)
+                } else if (!landed && video) {
                     val v = com.fariin.app.media.VideoPrep.describe(f, File(e.poster!!).readBytes()) ?: error("clip not readable")
                     sender.video(v, e.caption, false, e.clientId, e.ts)
                 } else if (!landed) {
@@ -1734,10 +1739,15 @@ class ThreadRepository(
             viewOnce = r.viewOnce,
         )
         rebuild()
+        // Written down first, so a kill (offline, say) cannot lose the note (PhotoOutbox).
+        com.fariin.app.local.PhotoOutbox.add(me, com.fariin.app.local.PhotoOutbox.Entry(cid, clientId, tap, r.file.absolutePath,
+            0, 0, null, null, "", r.viewOnce, kind = "voice", duration = r.duration, wave = r.waveform))
         scope.launch(Dispatchers.IO) {
             try {
                 voiceNow(r, clientId, tap)
+                com.fariin.app.local.PhotoOutbox.remove(me, clientId)
             } catch (e: Exception) {
+                if (SendQueue.isPermanent(e)) com.fariin.app.local.PhotoOutbox.remove(me, clientId)
                 retryVoice[clientId] = r
                 pending[clientId]?.let { pending[clientId] = it.copy(sendState = Message.SendState.FAILED) }
                 rebuild()

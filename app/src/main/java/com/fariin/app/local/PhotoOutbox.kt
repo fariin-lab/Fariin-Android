@@ -18,6 +18,8 @@ object PhotoOutbox {
         val caption: String, val viewOnce: Boolean,
         /** "photo" or "video" (a single clip: [path] is the converted clip, [poster] its picture). */
         val kind: String = "photo", val poster: String? = null, val duration: Double = 0.0,
+        /** A voice note's bars ("voice": [path] is the recording). */
+        val wave: List<Int> = emptyList(),
     )
 
     private const val PREFS = "photo_outbox"
@@ -37,7 +39,8 @@ object PhotoOutbox {
                 Entry(o.getString("cid"), o.getString("id"), o.getDouble("ts"), o.getString("path"),
                     o.optInt("w"), o.optInt("h"), o.optString("blur").ifEmpty { null }, o.optString("thumb").ifEmpty { null },
                     o.optString("cap"), o.optBoolean("once"), o.optString("kind").ifEmpty { "photo" },
-                    o.optString("poster").ifEmpty { null }, o.optDouble("dur", 0.0))
+                    o.optString("poster").ifEmpty { null }, o.optDouble("dur", 0.0),
+                    o.optString("wave").split(',').mapNotNull { it.trim().toIntOrNull() })
             }.toMutableList()
         }.getOrDefault(mutableListOf())
     }
@@ -46,7 +49,7 @@ object PhotoOutbox {
         val a = JSONArray()
         for (e in list) a.put(JSONObject().put("cid", e.cid).put("id", e.clientId).put("ts", e.ts).put("path", e.path)
             .put("w", e.width).put("h", e.height).put("blur", e.blurhash ?: "").put("thumb", e.thumb ?: "")
-            .put("cap", e.caption).put("once", e.viewOnce).put("kind", e.kind).put("poster", e.poster ?: "").put("dur", e.duration))
+            .put("cap", e.caption).put("once", e.viewOnce).put("kind", e.kind).put("poster", e.poster ?: "").put("dur", e.duration).put("wave", e.wave.joinToString(",")))
         prefs?.edit()?.apply { if (list.isEmpty()) remove(uid) else putString(uid, a.toString()) }?.apply()
     }
 
