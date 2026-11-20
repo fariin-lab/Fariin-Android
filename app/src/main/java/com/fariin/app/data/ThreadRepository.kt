@@ -216,6 +216,8 @@ class ThreadRepository(
         }
         // Texts still owed from before a kill or an outage: drawn as sending, and driven again.
         for (e in SendQueue.pending(me, cid)) resend(e)
+        // ...and photos the app was closed on (PhotoOutbox): their bubbles, and the send if none runs.
+        resumeOutbox()
         startListeners()
         startChannelSync()
     }
@@ -1140,7 +1142,10 @@ class ThreadRepository(
                                 height = prep.height.toDouble(), thumb = if (once) null else prep.thumbB64)
                         }
                         rebuild()
-                        val work: suspend () -> Unit = { sender.image(prep, words, once, false, clientId, ts) }
+                        // Written down before the upload, so a kill (offline, say) cannot lose it (PhotoOutbox).
+                        com.fariin.app.local.PhotoOutbox.add(me, com.fariin.app.local.PhotoOutbox.Entry(cid, clientId, ts,
+                            local.absolutePath, prep.width, prep.height, prep.blurhash, prep.thumbB64, words, once))
+                        val work: suspend () -> Unit = { sender.image(prep, words, once, false, clientId, ts); com.fariin.app.local.PhotoOutbox.remove(me, clientId) }
                         retryMedia[clientId] = work
                         work()
                     } else {
@@ -1322,7 +1327,9 @@ class ThreadRepository(
                 com.fariin.app.media.MediaSend.clearItems(clientId)
                 com.fariin.app.media.MediaSend.finish(clientId)
             } catch (e: Exception) {
-                if (mediaSendEnded(clientId, e)) return@launch
+                if (mediaSendEnded(clientId, e)) { com.fariin.app.local.PhotoOutbox.remove(me, clientId); return@launch }
+                // Refused for good: no resend at the next start either.
+                if (SendQueue.isPermanent(e)) com.fariin.app.local.PhotoOutbox.remove(me, clientId)
                 if (!retryMedia.containsKey(clientId)) retryMedia[clientId] = work
                 com.fariin.app.media.UploadProgress.done(clientId)
                 pending[clientId]?.let { pending[clientId] = it.copy(sendState = Message.SendState.FAILED) }
@@ -1368,6 +1375,7 @@ class ThreadRepository(
         if (announced != null) scope.launch(Dispatchers.IO) { cancelAnnounced(announced) }
         com.fariin.app.media.UploadProgress.done(clientId)
         retryMedia.remove(clientId); retryPhoto.remove(clientId)
+        com.fariin.app.local.PhotoOutbox.remove(me, clientId)
         send.clearItems(clientId)
         pending.remove(clientId)
         rebuild()
@@ -1600,6 +1608,40 @@ class ThreadRepository(
     // ------------------------------------------------------------------ media (ChatService.sendImage / sendAudio)
 
     /** A photo from the system picker: made ready like iOS (sendJPEG), then sent. */
+    /**
+     * Photos of this chat written down by [com.fariin.app.local.PhotoOutbox] and not sent yet (the app
+     * was closed before they went): sent again under the same clientId, unless the server or
+     * Firestore's own queue already has a message with it.
+     */
+    fun resumeOutbox() {
+        for (e in com.fariin.app.local.PhotoOutbox.all(me)) {
+            if (e.cid != cid || pending.containsKey(e.clientId)) continue
+            val f = File(e.path)
+            if (!f.exists() || f.length() == 0L) { com.fariin.app.local.PhotoOutbox.remove(me, e.clientId); continue }
+            pending[e.clientId] = Message(
+                id = e.clientId, authorId = me, text = e.caption, type = "image", createdAtMillis = e.ts, hasServerTime = false,
+                clientTs = e.ts, clientId = e.clientId, sendState = Message.SendState.SENDING, viewOnce = e.viewOnce,
+                width = e.width.toDouble(), height = e.height.toDouble(), thumb = if (e.viewOnce) null else e.thumb, localPath = e.path,
+            )
+            localFiles[e.clientId] = e.path
+            rebuild()
+            // Already going (the start-up drain's quiet copy of this chat): the bubble only; it goes
+            // when that send lands and the server's copy comes in.
+            if (com.fariin.app.media.MediaSend.isInFlight(e.clientId)) continue
+            runMediaSend(e.clientId) {
+                val landed = try {
+                    val q = convRef.collection("messages").whereEqualTo("clientId", e.clientId).limit(1)
+                    !q.get(Source.CACHE).await().isEmpty || !q.get(Source.SERVER).await().isEmpty
+                } catch (_: Exception) { false }
+                if (!landed) {
+                    val prep = PhotoPrep(f.readBytes(), e.width, e.height, e.blurhash, e.thumb)
+                    sender.image(prep, e.caption, e.viewOnce, false, e.clientId, e.ts)
+                }
+                com.fariin.app.local.PhotoOutbox.remove(me, e.clientId)
+            }
+        }
+    }
+
     fun sendPhoto(context: Context, uri: Uri) {
         scope.launch(Dispatchers.IO) {
             val prep = PhotoPrep.fromUri(context, uri, com.fariin.app.media.SentQuality.photo(context, uri)) ?: return@launch
@@ -2281,7 +2323,7 @@ class ThreadRepository(
         // An unsent one also leaves the send queue and drops what it was waiting to resend (iOS
         // deleteForMe on a failed message: queue entry, upload and bubble all go).
         m.clientId?.let { pending.remove(it); retryPhoto.remove(it); retryVoice.remove(it)
-            if (m.sendState != null && !SendQueue.isInFlight(it)) { SendQueue.remove(me, it); retryMedia.remove(it) } }
+            if (m.sendState != null && !SendQueue.isInFlight(it)) { SendQueue.remove(me, it); retryMedia.remove(it); com.fariin.app.local.PhotoOutbox.remove(me, it) } }
         // The chat's newest message: the chat list shows the one before it from now on (HiddenLast).
         val shown = _state.value.messages.filter { !it.isSystem && !HiddenMessages.isHidden(it.id) }
         if (shown.maxByOrNull { it.createdAtMillis }?.id == m.id) {
@@ -2531,6 +2573,9 @@ class ThreadRepository(
                 val repo = open[cid] ?: ThreadRepository(cid, me, crypto, scope)
                 for (e in list) if (!SendQueue.isInFlight(e.clientId)) repo.resend(e)
             }
+            // Photos the app was closed on before they went (PhotoOutbox).
+            for (cid in com.fariin.app.local.PhotoOutbox.all(me).map { it.cid }.distinct())
+                (open[cid] ?: ThreadRepository(cid, me, crypto, scope)).resumeOutbox()
         }
 
         /** The chat's repository on screen, or a quiet one (no listeners) for work from outside it. */

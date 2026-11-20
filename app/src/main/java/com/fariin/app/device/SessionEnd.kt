@@ -185,6 +185,7 @@ object SessionEnd {
         NotificationPoster.clearAll(c)
         com.fariin.app.system.FariinWidget.clear(c)
         com.fariin.app.data.LastSeenLine.clear(c)
+        com.fariin.app.local.PhotoOutbox.wipe(c)
         Push.clearAccount(c)
         // The token outlives the account, so the Fariin chat's topics are left by hand.
         com.fariin.app.push.OfficialPushTopics.sync(c, muted = false, signedIn = false)

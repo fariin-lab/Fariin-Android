@@ -70,6 +70,7 @@ object AppFeatures {
         prefs = c.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
         UploadedEmoji.init(c)
         ChatCardsStore.init(c)
+        com.fariin.app.local.PhotoOutbox.init(c)
         HiddenLooks.init(c)
     }
 
