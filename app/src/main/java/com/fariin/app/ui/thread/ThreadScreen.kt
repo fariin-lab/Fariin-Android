@@ -1137,8 +1137,14 @@ private fun ThreadContent(
                 }
             }
             if (!ui.loaded) {
-                // iOS ThreadSkeleton: bubble shapes while the first page comes.
-                com.fariin.app.ui.components.ThreadSkeleton()
+                // iOS ThreadSkeleton: bubble shapes while the first page comes. A channel shows its post
+                // cards instead, and a chat whose kind is not known yet shows none (iOS 2026-11-20, D2).
+                val listed = com.fariin.app.data.CryptoHub.listedConversation(ui.cid)
+                when {
+                    ui.channel != null || listed?.isChannel == true -> com.fariin.app.ui.components.ChannelSkeleton()
+                    listed == null && ui.title.isEmpty() -> {}
+                    else -> com.fariin.app.ui.components.ThreadSkeleton()
+                }
             } else if (ui.groupGuest != null && ui.messages.isEmpty()) {
                 com.fariin.app.ui.people.GroupGuestEmpty(ui.groupGuest, Modifier.align(Alignment.Center))
             } else if (ui.messages.isEmpty() && ui.loadError != null && !ui.notAMember) {
