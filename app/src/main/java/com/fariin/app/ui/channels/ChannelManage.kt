@@ -47,6 +47,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.tasks.await
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -427,10 +428,24 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: (
                     SettingsRow("Invite via Link", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_link)),
                         trailing = Trailing.NONE, last = true) { shareLink() }
                 }
+                // Admins show their @username too, as follower rows do (iOS c333cbf63): the cached profile
+                // first, the server's when there is none.
+                var adminHandles by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+                LaunchedEffect(admins) {
+                    val got = HashMap<String, String>()
+                    for (uid in admins) {
+                        val ref = com.fariin.app.Fb.db.collection("users").document(uid)
+                        var h: String? = runCatching { ref.get(com.google.firebase.firestore.Source.CACHE).await().getString("handle") }.getOrNull()
+                        if (h.isNullOrEmpty()) h = runCatching { ref.get().await().getString("handle") }.getOrNull()
+                        if (!h.isNullOrEmpty()) got[uid] = h
+                    }
+                    adminHandles = got
+                }
                 SettingsSection(header = ChannelRules.followersLine(shown), footer = ChannelAdmins.FOLLOWERS_FOOTER) {
                     admins.forEach { uid ->
                         PersonLine(team.photos[uid], if (uid == me) "You" else team.names[uid] ?: "",
-                            onClick = if (uid == me) null else ({ card = ChannelService.Follower(uid, team.names[uid] ?: "", team.photos[uid]) })) {
+                            onClick = if (uid == me) null else ({ card = ChannelService.Follower(uid, team.names[uid] ?: "", team.photos[uid]) }),
+                            username = adminHandles[uid] ?: "") {
                             Text(if (uid == team.owner) "Owner" else "Admin", fontSize = 14.sp, color = c.secondary)
                         }
                     }
