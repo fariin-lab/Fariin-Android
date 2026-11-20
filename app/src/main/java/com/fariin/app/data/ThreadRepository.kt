@@ -1048,7 +1048,7 @@ class ThreadRepository(
         if (SendQueue.isInFlight(id)) return
         SendQueue.remove(me, id)
         pending.remove(id)
-        retryPhoto.remove(id)?.let { sendPreparedPhoto(it); return }
+        retryPhoto.remove(id)?.let { com.fariin.app.local.PhotoOutbox.remove(me, id); sendPreparedPhoto(it); return }
         // A new send under a new id: the old written-down entry goes, or a restart would send it twice.
         retryVoice.remove(id)?.let { com.fariin.app.local.PhotoOutbox.remove(me, id); sendVoice(it); return }
         retryMedia.remove(id)?.let { work ->
@@ -1691,13 +1691,18 @@ class ThreadRepository(
             localPath = local.absolutePath,
         )
         rebuild()
+        // Written down first, so a kill cannot lose it (PhotoOutbox; sent again as a picked photo is).
+        com.fariin.app.local.PhotoOutbox.add(me, com.fariin.app.local.PhotoOutbox.Entry(cid, clientId, tap, local.absolutePath,
+            prep.width, prep.height, prep.blurhash, prep.thumbB64, "", false))
         val job = scope.launch(Dispatchers.IO, start = kotlinx.coroutines.CoroutineStart.LAZY) {
             sendingStart(clientId)
             try {
                 photoNow(prep, clientId, tap)
+                com.fariin.app.local.PhotoOutbox.remove(me, clientId)
                 com.fariin.app.media.MediaSend.finish(clientId)
             } catch (e: Exception) {
-                if (mediaSendEnded(clientId, e)) return@launch
+                if (mediaSendEnded(clientId, e)) { com.fariin.app.local.PhotoOutbox.remove(me, clientId); return@launch }
+                if (SendQueue.isPermanent(e)) com.fariin.app.local.PhotoOutbox.remove(me, clientId)
                 retryPhoto[clientId] = prep
                 pending[clientId]?.let { pending[clientId] = it.copy(sendState = Message.SendState.FAILED) }
                 rebuild()
