@@ -362,6 +362,11 @@ object StoryPrivacyStore {
             runCatching {
                 d.reference.update("recipientUids", FieldValue.arrayRemove(StoryAudienceToken.token(uid), uid)).await()
             }
+            // ...and the public copy refuses them too (its hiddenTokens, iOS 2026-11-20).
+            runCatching {
+                db.collection("users").document(me).collection("publicStories").document(d.id)
+                    .update("hiddenTokens", FieldValue.arrayUnion(StoryAudienceToken.token(uid))).await()
+            }
         }
     }
 }

@@ -287,6 +287,8 @@ class StoryService(
                         *(media.repostOf?.let { arrayOf("repostOf" to it.asMap()) } ?: emptyArray()),
                         "caption" to caption.trim(), "duration" to (media.video?.info?.durationSec ?: 0.0),
                         "allowsReplies" to replies, "captureProtected" to capture,
+                        // People my stories are hidden from: the rules refuse them this copy (iOS 2026-11-20).
+                        "hiddenTokens" to hiddenFrom.map { StoryAudienceToken.token(it) },
                     )).await()
                 }
             }
@@ -364,6 +366,7 @@ class StoryService(
                 "stickers" to story.taps.map { StoryTaps.asMap(it) }, "type" to if (story.isVideo) "video" else "image",
                 "caption" to story.caption, "duration" to story.durationSec,
                 "allowsReplies" to replies, "captureProtected" to story.captureProtected,
+                "hiddenTokens" to hiddenFrom.map { StoryAudienceToken.token(it) },
             )).await()
         }
     }

@@ -331,6 +331,34 @@ object Glow {
     /** Somebody's live stories from the public mirror `users/{uid}/publicStories`, newest first. */
     suspend fun postedStories(uid: String): GlowLoad<List<PostedStory>> {
         if (uid.isEmpty()) return GlowLoad.Loaded(emptyList())
+        val me = com.fariin.app.Fb.auth.currentUser?.uid
+        // Somebody else's are listed by the server (publicStoriesList, iOS 2026-11-20): rules cannot
+        // filter a list per document, so a direct list showed a person the author hid stories from
+        // (or blocked) those stories. A failed call is Failed, never the unfiltered list.
+        if (uid != me) return try {
+            val d = com.google.firebase.functions.FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION)
+                .getHttpsCallable("publicStoriesList").call(mapOf("uid" to uid)).await().getData() as? Map<*, *>
+            val rows = d?.get("stories") as? List<*> ?: return GlowLoad.Failed
+            val now = System.currentTimeMillis()
+            GlowLoad.Loaded(rows.mapNotNull { r ->
+                val m = r as? Map<*, *> ?: return@mapNotNull null
+                val id = (m["id"] as? String)?.takeIf { it.isNotEmpty() && '/' !in it } ?: return@mapNotNull null
+                val media = m["mediaUrl"] as? String ?: ""
+                val exp = (m["expiresAtMs"] as? Number)?.toLong() ?: now
+                if (exp <= now) return@mapNotNull null
+                PostedStory(
+                    id = id,
+                    thumbUrl = (m["thumbUrl"] as? String)?.takeIf { it.isNotEmpty() } ?: media,
+                    mediaUrl = media,
+                    blurThumb = m["blurThumb"] as? String ?: "",
+                    createdAtMs = (m["createdAtMs"] as? Number)?.toLong() ?: now,
+                    expiresAtMs = exp,
+                    isVideo = m["type"] == "video",
+                    views = ViewCounts.get(id),
+                    audience = m["audience"] as? String ?: "everyone",
+                )
+            }.sortedByDescending { it.expiresAtMs })
+        } catch (_: Exception) { GlowLoad.Failed }
         return try {
             val snap = db.collection("users").document(uid).collection("publicStories")
                 .whereGreaterThan("expiresAt", Timestamp.now())
