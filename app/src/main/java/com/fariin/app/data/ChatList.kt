@@ -228,6 +228,10 @@ object ChatList {
             val heart = c.lastReactionBy != me && c.lastReactionToAuthor == me
             return reactionParts(c, line, heart)
         }
+        // A blank server line on a chat with messages: the last line this phone saw (iOS 44d1d83c3).
+        if (c.lastMessageCipher.isEmpty() && c.lastSender.isNotEmpty() && c.lastImageUrl.isNullOrEmpty()) {
+            LastSeenLine.get(c.id)?.let { saved -> return rowPreview(c.copy(lastMessageCipher = saved), me, decryptor, senderName) }
+        } else LastSeenLine.note(c.id, c.lastMessageCipher)
         // A forward's clear marker carries the arrow mark: read off here, drawn by the row.
         val rawSplit = ForwardMark.split(c.lastMessageCipher)
         val raw = rawSplit.text
