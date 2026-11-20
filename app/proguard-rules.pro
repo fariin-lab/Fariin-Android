@@ -56,3 +56,11 @@
 
 # ---- CoroutineSafety: found by kotlinx.coroutines through META-INF/services ----
 -keep class com.fariin.app.CoroutineSafety { <init>(); *; }
+
+# ---- Media3: classes holding an API 31 LogSessionId are never merged ----
+# R8 merged media3's DefaultAssetLoaderFactory into an unrelated class; the merged field read then
+# needed android.media.metrics.LogSessionId (Android 12) resolved, so every chat video export threw
+# NoClassDefFoundError on Android 9-11 (and 8.1) and took the app down (2026-11-20, Oppo + an
+# Android 10 emulator; the unminified build was fine). Kept as their own classes, the field's type
+# is never resolved on those versions.
+-keepclasseswithmembers,allowobfuscation,allowshrinking class androidx.media3.** { android.media.metrics.LogSessionId *; }
