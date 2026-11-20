@@ -64,3 +64,7 @@
 # Android 10 emulator; the unminified build was fine). Kept as their own classes, the field's type
 # is never resolved on those versions.
 -keepclasseswithmembers,allowobfuscation,allowshrinking class androidx.media3.** { android.media.metrics.LogSessionId *; }
+# The same for the other API 31 types R8 moved between classes in this build (mapping check
+# 2026-11-20): media3's metrics events and the glass library's RenderEffect.
+-keepclasseswithmembers,allowobfuscation,allowshrinking class androidx.media3.** { android.media.metrics.** *; }
+-keepclasseswithmembers,allowobfuscation,allowshrinking class com.kyant.backdrop.** { android.graphics.RenderEffect *; }
