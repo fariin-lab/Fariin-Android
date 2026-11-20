@@ -96,6 +96,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusProperties
@@ -1565,12 +1567,22 @@ private fun StoryMedia(
     onPlayTap: () -> Unit,
 ) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        // Never black while it loads (iOS 2026-11-20, E4): its own tiny blurred picture under
+        // everything, stretched to the card, and a spinner over it until the real one is in.
+        val blur = remember(story.blurThumb) {
+            story.blurThumb.takeIf { it.isNotEmpty() }?.let { b ->
+                runCatching { android.util.Base64.decode(b, android.util.Base64.DEFAULT).let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) } }.getOrNull()
+            }?.asImageBitmap()
+        }
+        if (blur != null) androidx.compose.foundation.Image(blur, null, contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize().blur(24.dp))
         if (!story.isVideo) {
             // The row's thumbnail until the photo is in (iOS shows the preview first), so a story
             // the viewers row lands on is never an empty card while its photo loads.
             var shown by remember(story.id) { mutableStateOf(false) }
             if (!shown && story.thumbUrl.isNotEmpty()) StoryPhoto(story.thumbUrl)
             StoryPhoto(story.mediaUrl, onLoaded = { shown = true; onLoaded() })
+            if (!shown && story.thumbUrl.isEmpty()) com.fariin.app.ui.components.FariinSpinner(size = 30.dp, stroke = 3.dp, color = Color.White)
             return@Box
         }
         AsyncImage(story.thumbUrl.ifEmpty { null }, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
