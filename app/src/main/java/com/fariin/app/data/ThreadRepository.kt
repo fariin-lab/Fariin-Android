@@ -2006,13 +2006,18 @@ class ThreadRepository(
             // Not in a channel post (owner 2026-11-06): every follower reads the post, so the old
             // versions stay off it; the server keeps them for the owner and admins.
             if (size() <= 700_000 && !isChannel()) update["edits"] = edits
-            ref.update(update).await()
-            // The list still shows the old words when this was the newest message.
-            val newest = convRef.collection("messages").orderBy("createdAt", Query.Direction.DESCENDING).limit(1).get().await()
-            if (newest.documents.firstOrNull()?.id == m.id) {
-                val sum = hashMapOf<String, Any>("lastMessage" to cipher)
-                if (Wire.isGroupCid(cid) && !cipher.startsWith("enc")) sum["lastPlainTag"] = Conversation.plainTag(cipher)
-                try { convRef.update(sum).await() } catch (_: Exception) {}
+            // The list still shows the old words when this was the newest message: the line goes in
+            // the SAME write, so an edit made offline and the app killed cannot leave the old words
+            // there (it was a second write after the server's ack; Oppo 2026-11-20, as Delete).
+            val sum = hashMapOf<String, Any>("lastMessage" to cipher)
+            if (Wire.isGroupCid(cid) && !cipher.startsWith("enc")) sum["lastPlainTag"] = Conversation.plainTag(cipher)
+            val batch = db.batch().update(ref, update)
+            val shownNewest = isNewestShown(m.id) && !isChannelChat() && !isChannel()   // a channel line is the server's
+            if (shownNewest) batch.update(convRef, sum)
+            batch.commit().await()
+            if (!shownNewest) {
+                val newest = convRef.collection("messages").orderBy("createdAt", Query.Direction.DESCENDING).limit(1).get().await()
+                if (newest.documents.firstOrNull()?.id == m.id) try { convRef.update(sum).await() } catch (_: Exception) {}
             }
             true
         } catch (_: Exception) { false }
