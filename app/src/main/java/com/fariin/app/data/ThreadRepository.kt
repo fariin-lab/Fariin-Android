@@ -2112,8 +2112,11 @@ class ThreadRepository(
                     val te = m["enc"] as? Map<*, *> ?: return@mapNotNull null
                     mapOf("imageUrl" to tu, "enc" to te)
                 }.orEmpty()
-                val u = if (gone) null else (d["imageUrl"] as? String ?: tiles.firstOrNull()?.get("imageUrl") as? String)
-                val e = if (d["imageUrl"] is String) d["enc"] else tiles.firstOrNull()?.get("enc")
+                // A video's picture is its poster (thumbUrl/thumbEnc), never imageUrl (iOS final-check 7).
+                val video = kind == "video"
+                val u = if (gone) null else if (video) d["thumbUrl"] as? String
+                    else (d["imageUrl"] as? String ?: tiles.firstOrNull()?.get("imageUrl") as? String)
+                val e = if (video) d["thumbEnc"] else if (d["imageUrl"] is String) d["enc"] else tiles.firstOrNull()?.get("enc")
                 if (u != null && e is Map<*, *> && d["viewOnce"] != true) { update["lastImageUrl"] = u; update["lastImageEnc"] = e }
                 else { update["lastImageUrl"] = FieldValue.delete(); update["lastImageEnc"] = FieldValue.delete() }
                 if (tiles.isNotEmpty()) update["lastImages"] = tiles.take(3) else update["lastImages"] = FieldValue.delete()
@@ -2131,7 +2134,8 @@ class ThreadRepository(
         return when (type) {
             "image" -> if (once) "View-once photo" else "📷 Photo"
             "album" -> ((d["album"] as? List<*>)?.size ?: 0).let { if (it > 1) "📷 $it Photos" else "📷 Photo" }
-            "video" -> "🎥 Video"
+            // As the send writes it (iOS final-check 7): the length when the message has one.
+            "video" -> ((d["duration"] as? Number)?.toDouble() ?: 0.0).let { if (it > 0) com.fariin.app.media.MediaRules.videoPreview(it) else "🎥 Video" }
             "audio" -> if (once) "🎤 One-time voice message" else "🎤 Voice message"
             "file" -> "📄 File"
             "gif" -> "GIF"
