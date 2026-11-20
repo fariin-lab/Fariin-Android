@@ -521,11 +521,19 @@ object CallManager {
             else {
                 answerApplied = true
                 main.launch {
+                    // The path may already be up on an answer from an ICE restart during the ring
+                    // (the callee's ring-time path failed and was restarted); the accept's answer then
+                    // arrives late, and applying it on a stable connection failed and ended a call that
+                    // was working (Oppo -> Pixel 2026-11-20: connected, then cut 2 s later).
+                    if (engine?.hasRemoteAnswer == true) { step("answer skipped: path already answered"); return@launch }
                     try {
                         engine?.setRemote(SessionDescription.Type.ANSWER, sdp)
                         flushPendingRemote()
                         step("answer applied")
-                    } catch (x: Exception) { Log.w(TAG, "answer apply failed", x); finish(EndReason.FAILED, true, false) }
+                    } catch (x: Exception) {
+                        if (engine?.hasRemoteAnswer == true) step("answer skipped late: path already answered")
+                        else { Log.w(TAG, "answer apply failed", x); finish(EndReason.FAILED, true, false) }
+                    }
                 }
                 // An answer sent during the ring (early1) is not a pick-up: applied so the path comes
                 // up while it rings; "Ringing…", the ringback and the no-answer timer stay until the
@@ -555,7 +563,10 @@ object CallManager {
             d.restartAnswer?.let { ra ->
                 if (ra.version == negotiationVersion && ra.version > appliedRestart) sealer.open(cid, ra.enc)?.let { sdp ->
                     appliedRestart = ra.version
-                    main.launch { try { engine?.setRemote(SessionDescription.Type.ANSWER, sdp); flushPendingRemote() } catch (_: Exception) {} }
+                    main.launch {
+                        try { engine?.setRemote(SessionDescription.Type.ANSWER, sdp); flushPendingRemote(); answerApplied = true; step("restart answer applied") }
+                        catch (_: Exception) {}
+                    }
                 }
             }
         }

@@ -146,6 +146,10 @@ class RtcEngine(
     suspend fun setLocal(type: SessionDescription.Type, sdp: String) = setCall { o -> pc!!.setLocalDescription(o, SessionDescription(type, sdp)) }
     suspend fun setRemote(type: SessionDescription.Type, sdp: String) = setCall { o -> pc!!.setRemoteDescription(o, SessionDescription(type, sdp)) }
     val remoteSdp: String? get() = pc?.remoteDescription?.description
+    /** An answer is already in place (stable with a remote answer): another one would fail to apply. */
+    val hasRemoteAnswer: Boolean get() = pc?.let {
+        it.signalingState() == PeerConnection.SignalingState.STABLE && it.remoteDescription?.type == SessionDescription.Type.ANSWER
+    } == true
 
     fun restartIce() { pc?.restartIce() }
 
