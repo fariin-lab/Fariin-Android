@@ -1818,6 +1818,10 @@ private fun noticeText(m: Message): String = when {
  */
 private fun youNotice(m: Message, ui: ThreadUi): String {
     val t = noticeText(m)
+    // The shared wallpaper notice (iOS 4df24f5a5): "You ..." for the setter, else the contact's name here.
+    if (m.isSystem) for (suffix in listOf(com.fariin.app.data.SharedWallpapers.SET_SUFFIX, com.fariin.app.data.SharedWallpapers.REMOVED_SUFFIX)) {
+        if (t.endsWith(suffix)) return (if (m.authorId == ui.me) "You" else ui.names[m.authorId]?.takeIf { it.isNotEmpty() } ?: ui.title) + suffix
+    }
     if (!m.isSystem || m.authorId.isEmpty() || m.authorId != ui.me) return t
     for (name in listOf(ui.names[ui.me].orEmpty(), "Someone")) {
         if (name.isNotEmpty() && t.startsWith("$name ")) return "You" + t.substring(name.length)

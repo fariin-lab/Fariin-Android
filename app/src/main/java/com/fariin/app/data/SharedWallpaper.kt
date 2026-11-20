@@ -127,9 +127,9 @@ object SharedWallpapers {
     /** Why it was refused, said plainly; PLUS_REQUIRED opens the Plus page instead (the caller checks [plusRequired]). */
     class Refused(message: String, val plusRequired: Boolean) : Exception(message)
 
-    private suspend fun call(data: Map<String, Any>) {
+    private suspend fun call(data: Map<String, Any>): Map<*, *>? {
         try {
-            FirebaseFunctions.getInstance(PlusStore.REGION).getHttpsCallable("plusSharedWallpaper").call(data).await()
+            return FirebaseFunctions.getInstance(PlusStore.REGION).getHttpsCallable("plusSharedWallpaper").call(data).await().getData() as? Map<*, *>
         } catch (e: FirebaseFunctionsException) {
             val code = PlusStore.detailsCode(e)
             throw when {
@@ -143,8 +143,32 @@ object SharedWallpapers {
 
     /** A theme, colour or moving wallpaper for both of us. */
     suspend fun setForBoth(c: Context, cid: String, w: ChatWallpaper) {
-        if (w is ChatWallpaper.Photo) { setPhotoForBoth(c, cid, ChatLookStore.libraryFile(c, w.id)); return }
+        val before = value(c, cid)?.w
+        if (w is ChatWallpaper.Photo) { setPhotoForBoth(c, cid, ChatLookStore.libraryFile(c, w.id)); notice(cid, SET_SUFFIX, "Wallpaper changed"); return }
         call(mapOf("cid" to cid, "wallpaper" to w.stored))
+        if (before != w.stored) notice(cid, SET_SUFFIX, "Wallpaper changed")
+    }
+
+    // ---- The notice in the chat (iOS wallpaper-note-1120 4df24f5a5) ----
+
+    const val SET_SUFFIX = " set a new wallpaper for this chat"
+    const val REMOVED_SUFFIX = " removed the chat wallpaper"
+
+    /** "<my name> set a new wallpaper for this chat" as a system line, and the chat list's own words. */
+    private suspend fun notice(cid: String, suffix: String, line: String) {
+        val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
+        val db = com.fariin.app.Fb.db
+        runCatching {
+            val u = db.collection("users").document(me)
+            val name = (runCatching { u.get(com.google.firebase.firestore.Source.CACHE).await().getString("name") }.getOrNull()
+                ?: runCatching { u.get().await().getString("name") }.getOrNull()).orEmpty().ifEmpty { "Someone" }
+            val ref = db.collection("conversations").document(cid)
+            val b = db.batch()
+            b.set(ref.collection("messages").document(), mapOf("text" to name + suffix, "authorId" to me, "type" to "system",
+                "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()))
+            b.update(ref, mapOf("lastMessage" to line, "lastSender" to me, "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()))
+            b.commit().await()
+        }
     }
 
     /** A photo: about 2000 px JPEG, sealed like a chat photo, then named to the server. */
@@ -166,7 +190,10 @@ object SharedWallpapers {
     }
 
     /** Remove for Both (the setter only; the server checks). */
-    suspend fun removeForBoth(cid: String) = call(mapOf("cid" to cid, "remove" to true))
+    suspend fun removeForBoth(cid: String) {
+        val d = call(mapOf("cid" to cid, "remove" to true))
+        if (d?.get("removed") == true) notice(cid, REMOVED_SUFFIX, "Wallpaper removed")
+    }
 
     fun wipe(c: Context) { prefs(c).edit().clear().apply(); synchronized(synced) { synced.clear() }; ChatLookStore.changed() }
 }

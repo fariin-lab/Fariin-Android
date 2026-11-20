@@ -2175,6 +2175,9 @@ class ThreadRepository(
         val text = d["text"] as? String ?: ""
         val type = d["type"] as? String ?: ""
         val once = d["viewOnce"] == true
+        // The shared wallpaper notice reads as its short line in the list (iOS 4df24f5a5).
+        if (type == "system" && text.endsWith(SharedWallpapers.SET_SUFFIX)) return "Wallpaper changed"
+        if (type == "system" && text.endsWith(SharedWallpapers.REMOVED_SUFFIX)) return "Wallpaper removed"
         if (text.isNotEmpty() && (!once || type == "text" || type.isEmpty())) return text
         return when (type) {
             "image" -> if (once) "View-once photo" else "📷 Photo"

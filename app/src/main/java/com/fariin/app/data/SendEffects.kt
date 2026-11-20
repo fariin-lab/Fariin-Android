@@ -13,7 +13,7 @@ import kotlinx.coroutines.tasks.await
  */
 object SendEffects {
     val IDS = listOf("hearts", "confetti", "balloons", "sparkles")
-    fun title(id: String) = when (id) { "hearts" -> "Hearts"; "confetti" -> "Confetti"; "balloons" -> "Balloons"; else -> "Sparkles" }
+    fun title(id: String) = when (id) { "hearts" -> "Hearts"; "confetti" -> "Confetti"; "balloons" -> "Balloons"; else -> "Fireworks" }   // id "sparkles" stays (server FX_IDS); iOS 821f3a824 calls it Fireworks
 
     private const val PREFS = "fariin_fx"
     private const val KEEP = 400

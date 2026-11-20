@@ -23,7 +23,7 @@ import kotlin.random.Random
 /**
  * A Fariin Plus send effect: about 2.4 s of particles over the chat, drawn on one canvas and never
  * catching a touch (it has no pointer input). Hearts rise, confetti falls, balloons float up,
- * sparkles twinkle. [key] restarts it; [onDone] when it has played.
+ * "sparkles" is Fireworks (iOS 821f3a824, same id): rockets rise and burst. [key] restarts it; [onDone] when it has played.
  */
 @Composable
 internal fun SendEffectOverlay(effect: String, key: Any, onDone: () -> Unit) {
@@ -46,6 +46,7 @@ private val heartColors = listOf(Color(0xFFFF2D55), Color(0xFFFF6482), Color(0xF
 private val confettiColors = listOf(Color(0xFFFF3B30), Color(0xFFFF9500), Color(0xFFFFCC00), Color(0xFF34C759), Color(0xFF0590F7), Color(0xFFAF52DE))
 private val balloonColors = listOf(Color(0xFFFF3B30), Color(0xFF0590F7), Color(0xFFFFCC00), Color(0xFF34C759), Color(0xFFAF52DE))
 private val sparkleColors = listOf(Color(0xFFFFD60A), Color(0xFFFFFFFF), Color(0xFFFFE066))
+private val fireworkColors = listOf(Color(0xFFFF3B30), Color(0xFFFFD60A), Color(0xFF34C759), Color(0xFF0A84FF), Color(0xFFBF5AF2), Color(0xFFFF9F0A))
 
 private fun particles(effect: String): List<Particle> {
     val r = Random(System.nanoTime())
@@ -53,6 +54,7 @@ private fun particles(effect: String): List<Particle> {
         "hearts" -> 26 to heartColors
         "confetti" -> 70 to confettiColors
         "balloons" -> 12 to balloonColors
+        "sparkles" -> 7 to fireworkColors   // rockets; each bursts into sparks
         else -> 40 to sparkleColors
     }
     return List(n) {
@@ -91,6 +93,32 @@ private fun DrawScope.drawParticle(effect: String, q: Particle, p: Float) {
                 drawLine(Color.Gray.copy(alpha = alpha * 0.7f), Offset(0f, bh / 2), Offset(sin(local * 10f) * unit * 0.2f, bh * 1.4f), strokeWidth = 2f)
                 drawOval(q.color.copy(alpha = alpha), topLeft = Offset(-bw / 2, -bh / 2), size = Size(bw, bh))
                 drawOval(Color.White.copy(alpha = alpha * 0.35f), topLeft = Offset(-bw * 0.28f, -bh * 0.36f), size = Size(bw * 0.22f, bh * 0.3f))
+            }
+        }
+        "sparkles" -> {
+            // A rocket: up from the bottom for the first third, then a burst of 20 sparks that fall and fade.
+            val launchX = w * (0.12f + q.x * 0.76f)
+            val peakY = h * (0.18f + (q.sway / (2f * PI.toFloat())) * 0.32f)
+            val rise = 0.32f
+            if (local < rise) {
+                val k = local / rise
+                val y = h * 1.02f + (peakY - h * 1.02f) * (1f - (1f - k) * (1f - k))
+                drawCircle(Color.White.copy(alpha = 0.9f), radius = unit * 0.16f, center = Offset(launchX, y))
+                drawCircle(q.color.copy(alpha = 0.35f), radius = unit * 0.4f, center = Offset(launchX, y + unit * 0.5f))
+            } else {
+                val k = (local - rise) / (1f - rise)
+                val fade = (1f - k).coerceIn(0f, 1f)
+                val reach = unit * 5.5f * q.size * (1f - (1f - k) * (1f - k))
+                val drop = unit * 3f * k * k
+                // The glow at the burst's heart, gone in the first half.
+                if (k < 0.5f) drawCircle(q.color.copy(alpha = 0.28f * (1f - k * 2f)), radius = reach * 0.9f, center = Offset(launchX, peakY))
+                for (i in 0 until 20) {
+                    val a = (i / 20f) * 2f * PI.toFloat() + q.spin * 0.01f
+                    val cx = launchX + kotlin.math.cos(a) * reach
+                    val cy = peakY + sin(a) * reach + drop
+                    drawCircle(q.color.copy(alpha = fade), radius = unit * 0.18f, center = Offset(cx, cy))
+                    drawCircle(Color.White.copy(alpha = fade * 0.6f), radius = unit * 0.08f, center = Offset(cx, cy))
+                }
             }
         }
         else -> {
