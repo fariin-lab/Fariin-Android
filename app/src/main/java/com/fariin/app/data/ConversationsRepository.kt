@@ -75,6 +75,8 @@ class ConversationsRepository(
                 // photo) is ready before the chat is opened. Unchanged values cost nothing.
                 if (useDiskCache) runCatching { com.google.firebase.FirebaseApp.getInstance().applicationContext }.getOrNull()?.let { app ->
                     for (cv in convs) if (cv.isGroup) ChatLookStore.syncGroupWallpaper(app, cv.id, cv.groupWallpaper)
+                    // A 1:1's Fariin Plus shared wallpaper (and its sealed photo), ready before it opens.
+                    for ((id, d) in datas) if (!com.fariin.app.crypto.Wire.isGroupCid(id)) SharedWallpapers.sync(app, id, d["sharedWallpaper"])
                 }
                 if (useDiskCache && !snap.metadata.isFromCache && LocalCache.currentGeneration == gen) LocalCache.saveChats(uid, datas)
             }

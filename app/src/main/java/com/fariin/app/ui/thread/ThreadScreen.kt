@@ -1448,6 +1448,32 @@ private fun ThreadContent(
                 // iOS: at the composer's side margin, 10 above it, over the edge glass.
                 }, modifier = Modifier.align(Alignment.BottomEnd).zIndex(1f).padding(end = COMPOSER_SIDE, bottom = with(density) { bottomBarPx.toDp() } + 10.dp))
             }
+            // Fariin Plus sharedWallpaper: the other person set one for both of us. Said once per new
+            // `at`, centred, with the way back to my own; nothing of Plus is named.
+            if (!ui.isGroup && ui.channel == null) {
+                val wpCtx = LocalContext.current
+                com.fariin.app.data.ChatLookStore.version.intValue
+                val due = com.fariin.app.data.SharedWallpapers.noteDue(wpCtx, ui.cid, ui.me)
+                var noteAt by remember(ui.cid) { mutableStateOf<Long?>(null) }
+                LaunchedEffect(due?.at) { if (due != null) { noteAt = due.at; com.fariin.app.data.SharedWallpapers.noteSeen(wpCtx, ui.cid, due.at) } }
+                if (noteAt != null) Box(Modifier.align(Alignment.Center).zIndex(3f).padding(horizontal = 40.dp)
+                    .clip(RoundedCornerShape(20.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 18.dp, vertical = 14.dp)) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("${ui.title} set a wallpaper for both of you", fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                            color = Color.White, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        Spacer(Modifier.height(10.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Use My Own Wallpaper", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
+                                modifier = Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.22f))
+                                    .clickable { com.fariin.app.data.SharedWallpapers.optOut(wpCtx, ui.cid); noteAt = null }
+                                    .padding(horizontal = 14.dp, vertical = 8.dp))
+                            Text("OK", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
+                                modifier = Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.22f))
+                                    .clickable { noteAt = null }.padding(horizontal = 14.dp, vertical = 8.dp))
+                        }
+                    }
+                }
+            }
             // Fariin Plus send effect over the chat; it has no touch handling, so taps go through.
             fxPlaying?.let { (id, k) -> Box(Modifier.matchParentSize().zIndex(2f)) { SendEffectOverlay(id, k) { fxPlaying = null } } }
             // Receiving: others' new messages with an effect, newest 20 on open, or a live arrival

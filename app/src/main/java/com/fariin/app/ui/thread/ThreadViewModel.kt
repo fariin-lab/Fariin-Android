@@ -64,6 +64,10 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     LaunchedEffect(conv?.isGroup, conv?.groupWallpaper) {
         conv?.takeIf { it.isGroup }?.let { com.fariin.app.data.ChatLookStore.syncGroupWallpaper(app, cid, it.groupWallpaper) }
     }
+    // Fariin Plus sharedWallpaper: a 1:1's shared one as the server has it now.
+    LaunchedEffect(conv?.isGroup, s.conv["sharedWallpaper"]) {
+        if (s.conv.isNotEmpty() && conv?.isGroup == false) com.fariin.app.data.SharedWallpapers.sync(app, cid, s.conv["sharedWallpaper"])
+    }
     // Blocked by me, from the chat's old shared copy or my private list (iOS repo.iBlocked):
     // no presence, typing, ticks or read receipts, and the composer gives way to Unblock.
     val blockSnap by com.fariin.app.data.BlockList.state.collectAsState()

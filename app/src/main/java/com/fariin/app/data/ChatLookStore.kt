@@ -59,7 +59,15 @@ object ChatLookStore {
 
     // Wallpaper
 
-    fun wallpaper(c: Context, cid: String): ChatWallpaper = ChatLookRules.wallpaper(cid, reader(c), groupWallpaper(c, cid))
+    // A group's shared wallpaper, or a 1:1's Fariin Plus one (SharedWallpapers), beats this phone's own pick.
+    fun wallpaper(c: Context, cid: String): ChatWallpaper =
+        ChatLookRules.wallpaper(cid, reader(c), groupWallpaper(c, cid) ?: SharedWallpapers.resolve(c, cid))
+
+    /** Something a chat's wallpaper reads has changed (from any thread). */
+    fun changed() {
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) bump()
+        else android.os.Handler(android.os.Looper.getMainLooper()).post { bump() }
+    }
     fun defaultWallpaper(c: Context): ChatWallpaper = ChatLookRules.defaultWallpaper(reader(c))
 
     // Shared group wallpaper (iOS WallpaperStore "Shared group wallpaper"): a group's `wallpaper`
@@ -163,6 +171,8 @@ object ChatLookStore {
 
     /** iOS set(_:for:): this chat's own wallpaper (None = plain, which beats the Settings one). */
     fun setWallpaper(c: Context, cid: String, w: ChatWallpaper) {
+        // An own pick in a 1:1 (Set for Me, Reset) is the opt-out from a shared one (Fariin Plus).
+        SharedWallpapers.optOut(c, cid)
         prefs(c).edit().putString(ChatLookRules.wallKey(cid), w.stored).apply(); bump()
     }
 
@@ -171,6 +181,7 @@ object ChatLookStore {
 
     /** iOS applyToAllChats(alsoFor:): the Settings wallpaper becomes [w] and [cid] drops its own. */
     fun applyToAllChats(c: Context, w: ChatWallpaper, alsoFor: String) {
+        SharedWallpapers.optOut(c, alsoFor)
         prefs(c).edit().putString(ChatLookRules.WALL_DEFAULT, w.stored).remove(ChatLookRules.wallKey(alsoFor)).apply(); bump()
     }
 

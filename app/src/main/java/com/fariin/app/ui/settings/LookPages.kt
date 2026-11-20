@@ -169,8 +169,35 @@ private fun ChatResetButton(cid: String, shared: Boolean) {
     com.fariin.app.data.BubbleStyles.init(ctx)
     val canBubble = ChatLookStore.ownColor(ctx, cid) != null || com.fariin.app.data.BubbleStyles.forChat(cid) != null
     // A group's (shared): a plain wallpaper for the whole group (iOS resetWallpaperOnly).
-    val canWall = (shared || ChatLookStore.hasOwnWallpaper(ctx, cid)) && ChatLookStore.wallpaper(ctx, cid) != ChatWallpaper.None
+    val sharedOne = com.fariin.app.data.SharedWallpapers.active(ctx, cid)
+    val canWall = (shared || ChatLookStore.hasOwnWallpaper(ctx, cid) || sharedOne != null) && ChatLookStore.wallpaper(ctx, cid) != ChatWallpaper.None
     if (!canBubble && !canWall) return
+    // Fariin Plus: the one who set a shared wallpaper chooses "Reset for Me" or "Remove for Both".
+    val me = com.fariin.app.Fb.auth.currentUser?.uid.orEmpty()
+    var menu by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    if (sharedOne != null && sharedOne.by == me) {
+        Box {
+            com.fariin.app.ui.components.FloatingTextAction("Reset") { menu = true }
+            com.fariin.app.ui.components.GlassDropdown(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
+                border = com.fariin.app.ui.components.FariinMenu.border, containerColor = Fariin.colors.card) {
+                DropdownMenuItem(text = { Text("Reset for Me") }, onClick = {
+                    menu = false; resetChatBubble(ctx, cid); ChatLookStore.setWallpaper(ctx, cid, ChatWallpaper.None)
+                })
+                DropdownMenuItem(text = { Text("Remove for Both", color = Fariin.colors.red) }, onClick = {
+                    menu = false
+                    scope.launch {
+                        try { com.fariin.app.data.SharedWallpapers.removeForBoth(cid) }
+                        catch (e: Exception) {
+                            val why = (e as? com.fariin.app.data.SharedWallpapers.Refused)?.message?.ifEmpty { null }
+                            groupWallpaperFailed(ctx, why ?: "Couldn\u2019t remove the wallpaper. Try again.")
+                        }
+                    }
+                })
+            }
+        }
+        return
+    }
     com.fariin.app.ui.components.FloatingTextAction("Reset") {
         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
         resetChatBubble(ctx, cid)
@@ -418,7 +445,8 @@ private fun WallpaperPreview(first: ChatWallpaper, siblings: List<ChatWallpaper>
     val shown = if (inSet) siblings.getOrElse(pager.currentPage) { first } else first
     val photoBitmap = (first as? ChatWallpaper.Photo)?.let { ChatLookStore.libraryImage(ctx, it.id) }
 
-    fun apply(allChats: Boolean = cid == null) {
+    // The picked wallpaper as it will be kept (an edited photo baked into a new library picture).
+    fun finalWallpaper(): ChatWallpaper {
         var final = shown
         if (editable && photoBitmap != null && (zoom != 1f || pan != Offset.Zero || blurred)) {
             val baked = WallpaperBake.bake(photoBitmap, canvas, zoom, pan, blurred)
@@ -428,6 +456,34 @@ private fun WallpaperPreview(first: ChatWallpaper, siblings: List<ChatWallpaper>
                 final = ChatWallpaper.Photo(id)
             }
         }
+        return final
+    }
+
+    // Fariin Plus sharedWallpaper (1:1 only): "Set for Me" (Apply) and "Set for Both" while it is on or
+    // locked; off keeps the one Apply. Locked, and a server PLUS_REQUIRED, open the Plus page.
+    val bothState = if (cid != null && !shared && !com.fariin.app.crypto.Wire.isGroupCid(cid))
+        com.fariin.app.data.PlusStore.state("sharedWallpaper") else com.fariin.app.data.PlusStore.State.OFF
+    var bothBusy by remember { mutableStateOf(false) }
+    var plusPage by remember { mutableStateOf(false) }
+    if (plusPage) PlusPageSheet(onDismiss = { plusPage = false })
+    fun setForBoth() {
+        if (cid == null || bothBusy) return
+        if (bothState == com.fariin.app.data.PlusStore.State.LOCKED) { plusPage = true; return }
+        val final = finalWallpaper()
+        bothBusy = true
+        scope.launch {
+            try {
+                com.fariin.app.data.SharedWallpapers.setForBoth(ctx, cid, final)
+                scope.launch { sheet.hide() }.invokeOnCompletion { onClose(); onApplied() }
+            } catch (e: com.fariin.app.data.SharedWallpapers.Refused) {
+                if (e.plusRequired) plusPage = true else groupWallpaperFailed(ctx, e.message ?: "")
+            } catch (_: Exception) { groupWallpaperFailed(ctx, "Couldn\u2019t set the wallpaper. Try again.") }
+            bothBusy = false
+        }
+    }
+
+    fun apply(allChats: Boolean = cid == null) {
+        val final = finalWallpaper()
         // From a chat (iOS): Apply Wallpaper is this chat's; Apply For All Chats sets the Settings one
         // and this chat follows it again.
         // From Settings it reaches EVERY chat (owner, 2026-11-06): a chat's own earlier pick, or a
@@ -503,7 +559,17 @@ private fun WallpaperPreview(first: ChatWallpaper, siblings: List<ChatWallpaper>
                             Text("Blurred", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label)
                         }
                     }
-                    Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp, bottom = if (cid != null && !shared) 6.dp else 12.dp)
+                    if (bothState != com.fariin.app.data.PlusStore.State.OFF) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp)
+                        .padding(top = 10.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Box(Modifier.weight(1f).height(52.dp).floating(CircleShape).clickable { apply() }, contentAlignment = Alignment.Center) {
+                            Text("Set for Me", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label)
+                        }
+                        Box(Modifier.weight(1f).height(52.dp).clip(CircleShape).background(PlusBlue).clickable { setForBoth() },
+                            contentAlignment = Alignment.Center) {
+                            if (bothBusy) com.fariin.app.ui.components.FariinSpinner(size = 22.dp, stroke = 2.5.dp, color = Color.White)
+                            else Text("Set for Both", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                        }
+                    } else Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp, bottom = if (cid != null && !shared) 6.dp else 12.dp)
                         .then(if (cid != null && !shared) Modifier else Modifier.navigationBarsPadding())
                         .height(52.dp).floating(CircleShape).clickable { apply() }, contentAlignment = Alignment.Center) {
                         Text(if (cid != null) "Apply Wallpaper" else "Apply For All Chats", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label)
