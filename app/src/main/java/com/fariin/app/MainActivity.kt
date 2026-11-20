@@ -505,6 +505,8 @@ class MainActivity : ComponentActivity() {
                     } else Modifier)) {
             // The chat page built once off screen after launch, so the first open is not its first build.
             com.fariin.app.ui.thread.ThreadWarmUp(me)
+            // Country restrictions (iOS 394c178fb): one opaque window over everything while blocked.
+            com.fariin.app.ui.components.GeoBlockGate(me) { lifecycleScope.launch { SessionEnd.signOut(applicationContext) } }
             // The saved quote cards read off the main thread now, not in the first chat's opening frame.
             androidx.compose.runtime.LaunchedEffect(me) { if (me.isNotEmpty()) com.fariin.app.data.QuoteStore.warmInBackground() }
             Box(Modifier.fillMaxSize()

@@ -165,6 +165,7 @@ object AppConfig {
     /** At app start, before any screen: the launch snapshot for the account signed in now. */
     fun init(c: Context) {
         appCtx = c.applicationContext
+        GeoBlock.init(c)
         launchUid = com.fariin.app.Fb.auth.currentUser?.uid
         // The cache (a prefs file and a JSON parse) is read on the first value asked for, not here.
         prefs()
@@ -192,9 +193,13 @@ object AppConfig {
             knownEpoch = 0L
         }
         uid = me
+        GeoBlock.load(me)
         listen()
         fetch(null)
     }
+
+    /** The country screen's Try Again: ask now. */
+    fun askNow() { if (uid != null) fetch(null) }
 
     /** Sign-out: the next account never runs on this one's values. The cache stays, per account. */
     fun stop() {
@@ -203,6 +208,7 @@ object AppConfig {
         fetchJob?.cancel(); fetchJob = null
         seq++
         uid = null; hash = null; lastFetchAt = 0L; knownEpoch = 0L
+        GeoBlock.clear()
         synchronized(lock) { live = emptyMap(); launch = emptyMap() }
     }
 
@@ -249,6 +255,8 @@ object AppConfig {
                     .call(data).await().getData() as? Map<*, *>
             }.getOrNull() ?: return@launch
             if (mySeq != seq || uid != me) return@launch
+            // Country restrictions ride on every answer, a not-modified one too (iOS 394c178fb).
+            GeoBlock.answer(me, reply)
             lastFetchAt = System.currentTimeMillis()
             val v = (reply["v"] as? Number)?.toLong() ?: 0L
             if (reply["notReady"] == true) return@launch
