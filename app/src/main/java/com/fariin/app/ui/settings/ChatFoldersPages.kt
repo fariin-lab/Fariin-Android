@@ -246,7 +246,9 @@ internal fun ChatFolderChatPicker(title: String, showTypes: Boolean, types: Set<
     }
     Column(Modifier.fillMaxSize().background(c.bgSecondary).statusBarsPadding()) {
         Box(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 12.dp)) {
-            Text("Cancel", fontSize = 17.sp, color = c.accent, modifier = Modifier.align(Alignment.CenterStart).clip(CircleShape).clickable(onClick = onCancel).padding(10.dp))
+            // The round X, not a "Cancel" word, in a top bar (iOS 2026-11-20).
+            com.fariin.app.ui.components.FloatingIcon(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_xmark), "Cancel",
+                onClick = onCancel, circle = true, modifier = Modifier.align(Alignment.CenterStart))
             Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
             Text("Done", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.accent,
                 modifier = Modifier.align(Alignment.CenterEnd).clip(CircleShape).clickable { onDone(pickedTypes, picked) }.padding(10.dp))
