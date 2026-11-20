@@ -260,6 +260,15 @@ fun MainShell(
     }
     // System back on another tab goes to Chats first, then leaves the app (Android tab apps).
     BackToChats(tabState)
+    // The other tabs are built hidden a little after start, one at a time, so the first tap on each
+    // is as quick as every later one (the first open of Stories, Calls or Settings was a 200-300 ms
+    // frame on the low-end phone; the reference app builds its tabs ahead too). Hidden tabs run no
+    // listeners or timers (see `active`), so building one early only costs its first composition.
+    var warmTabs by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(2_500)
+        for (n in 1..3) { warmTabs = n; kotlinx.coroutines.delay(700) }
+    }
 
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val inset = BarHeight + BarMargin * 2 + navBottom
@@ -282,28 +291,28 @@ fun MainShell(
                 // Every tab stays alive once shown: coming back rebuilt it every time (Chats one
                 // 65 ms frame on the Pixel 5; Stories, Calls or Settings about 210 ms on the low-end
                 // phone). Four tabs at most, so the memory is bounded. See [KeptTab].
-                KeptTab(TAB_CHATS, tab, reselect[TAB_CHATS]) { shown ->
+                KeptTab(TAB_CHATS, tab, reselect[TAB_CHATS], warm = true) { shown ->
                     val listActive = androidx.compose.runtime.rememberUpdatedState(shown)
                     ChatListScreen(chats, me, decryptor, stories = stories, onRetry = onRetryChats,
                         onSettings = { select(TAB_SETTINGS) },
                         onNewStory = { storyRequest++; select(TAB_STORIES) },
                         active = listActive)
                 }
-                KeptTab(TAB_STORIES, tab, reselect[TAB_STORIES]) { shown ->
+                KeptTab(TAB_STORIES, tab, reselect[TAB_STORIES], warm = warmTabs >= 1) { shown ->
                     val storiesActive = androidx.compose.runtime.rememberUpdatedState(shown)
                     StoriesTab(me, heldWhileHidden(shown, chats.chats), if (demo) DemoSettings.stories() else null, storyRequest,
                         shared = if (demo) null else heldWhileHidden(shown, stories),
                         active = storiesActive)
                 }
                 // The calls list scrolls under the bar and lifts its New Call button by the inset.
-                KeptTab(TAB_CALLS, tab, reselect[TAB_CALLS]) { shown ->
+                KeptTab(TAB_CALLS, tab, reselect[TAB_CALLS], warm = warmTabs >= 2) { shown ->
                     val callsActive = androidx.compose.runtime.rememberUpdatedState(shown)
                     CallsTab(me, heldWhileHidden(shown, chats.chats), if (demo) DemoSettings.calls() else null,
                         shared = heldWhileHidden(shown, calls),
                         error = callsError, onRetry = { callsRetry++ }, active = callsActive)
                 }
                 // My Profile (Settings) reads the same feed for its Posted stories card.
-                KeptTab(TAB_SETTINGS, tab, reselect[TAB_SETTINGS]) { shown ->
+                KeptTab(TAB_SETTINGS, tab, reselect[TAB_SETTINGS], warm = warmTabs >= 3) { shown ->
                     val settingsActive = androidx.compose.runtime.rememberUpdatedState(shown)
                     com.fariin.app.ui.glow.ProvideMyStories(heldWhileHidden(shown, stories), heldWhileHidden(shown, chats.chats)) {
                         SettingsTab(me, if (demo) DemoSettings.profile else null, onSignOut, active = settingsActive)
@@ -353,16 +362,16 @@ private fun <T> heldWhileHidden(shown: Boolean, value: T): T {
 }
 
 /**
- * One tab, built the first time it opens and then kept. Behind another tab it is neither measured
+ * One tab, built the first time it opens (or earlier, hidden, once [warm]) and then kept. Behind another tab it is neither measured
  * nor drawn nor touchable; its Back handlers, even those deep in a page it has open, are tied to a
  * dispatcher nothing presses (so the open tab's Back is never taken by a hidden one); and its
  * second-tap count does not move. [content] gets whether the tab is the open one, for the work that
  * must stop while hidden (listeners, the tab bar's hiding, dialogs).
  */
 @Composable
-private fun KeptTab(id: Int, open: Int, reselect: Int, content: @Composable (shown: Boolean) -> Unit) {
+private fun KeptTab(id: Int, open: Int, reselect: Int, warm: Boolean, content: @Composable (shown: Boolean) -> Unit) {
     var born by remember { mutableStateOf(open == id) }
-    if (open == id) born = true
+    if (open == id || warm) born = true
     if (!born) return
     val shown = open == id
     val real = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current
@@ -373,8 +382,14 @@ private fun KeptTab(id: Int, open: Int, reselect: Int, content: @Composable (sho
             override val lifecycle: androidx.lifecycle.Lifecycle get() = life.lifecycle
         }
     }
+    // A warmed tab is measured once while hidden (its list builds its first rows then, not at the tap),
+    // and never again until shown.
+    val premeasured = remember { BooleanArray(1) }
     Box(Modifier.fillMaxSize().layout { m, cs ->
-        if (!shown) layout(cs.maxWidth, cs.maxHeight) {}
+        if (!shown) {
+            if (warm && !premeasured[0]) { premeasured[0] = true; m.measure(cs) }
+            layout(cs.maxWidth, cs.maxHeight) {}
+        }
         else { val p = m.measure(cs); layout(p.width, p.height) { p.place(0, 0) } }
     }) {
         if (real == null) {
