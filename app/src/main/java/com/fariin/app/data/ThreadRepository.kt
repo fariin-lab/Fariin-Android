@@ -950,7 +950,13 @@ class ThreadRepository(
                 // A long text's later bubble goes up only after the one before it (landed or
                 // failed); it is on disk first, like any send.
                 after?.join()
-                if (checkFirst && alreadySent(e.clientId)) { SendQueue.remove(me, e.clientId); return@launch }
+                if (checkFirst) when (whereIs(e.clientId)) {
+                    Held.SERVER -> { SendQueue.remove(me, e.clientId); return@launch }
+                    // Firestore's offline queue has it from an earlier run: never written twice, and the
+                    // entry stays until the server takes it, so the list keeps its clock till then.
+                    Held.LOCAL -> { awaitServer(); SendQueue.remove(me, e.clientId); return@launch }
+                    Held.NONE -> {}
+                }
                 turn.withLock {
                     if (Wire.isGroupCid(cid)) sendGroup(e.text, e.clientId, e.ts, ref, mentions = e.mentions, fmt = e.fmt) else sendDirect(e.text, e.clientId, e.ts, ref, fmt = e.fmt)
                 }
@@ -987,7 +993,11 @@ class ThreadRepository(
         if (!SendQueue.begin(e.clientId)) return QueuedResult.LATER   // another driver has it
         val ref = e.replyId?.let { Message.ReplyRef(it, e.replyAuthor ?: "", e.replyText ?: "") }
         return try {
-            if (alreadySent(e.clientId)) { SendQueue.remove(me, e.clientId); return QueuedResult.SENT }
+            when (whereIs(e.clientId)) {
+                Held.SERVER -> { SendQueue.remove(me, e.clientId); return QueuedResult.SENT }
+                Held.LOCAL -> return QueuedResult.LATER   // in Firestore's queue; the next drain waits for it
+                Held.NONE -> {}
+            }
             turn.withLock {
                 if (Wire.isGroupCid(cid)) sendGroup(e.text, e.clientId, e.ts, ref, mentions = e.mentions, fmt = e.fmt) else sendDirect(e.text, e.clientId, e.ts, ref, fmt = e.fmt)
             }
@@ -1000,12 +1010,22 @@ class ThreadRepository(
         }
     }
 
-    /** iOS SendQueue.alreadySent: the doc (id = clientId) in Firestore's offline store means its
-     *  write is already queued there; on the server means it landed before the app died. */
-    private suspend fun alreadySent(clientId: String): Boolean {
+    private enum class Held { SERVER, LOCAL, NONE }
+
+    /** iOS SendQueue.alreadySent: the doc (id = clientId) on the server means it landed before the app
+     *  died; in Firestore's offline store with a pending write means it is queued there, not sent yet. */
+    private suspend fun whereIs(clientId: String): Held {
         val ref = convRef.collection("messages").document(clientId)
-        try { if (ref.get(Source.CACHE).await().exists()) return true } catch (_: Exception) {}
-        return try { ref.get(Source.SERVER).await().exists() } catch (_: Exception) { false }
+        try {
+            val d = ref.get(Source.CACHE).await()
+            if (d.exists()) return if (d.metadata.hasPendingWrites()) Held.LOCAL else Held.SERVER
+        } catch (_: Exception) {}
+        return try { if (ref.get(Source.SERVER).await().exists()) Held.SERVER else Held.NONE } catch (_: Exception) { Held.NONE }
+    }
+
+    /** Until the server has every write this phone queued before now (Firestore's own wait). */
+    private suspend fun awaitServer() {
+        try { com.fariin.app.Fb.db.waitForPendingWrites().await() } catch (_: Exception) {}
     }
 
     /** Tap a failed bubble: send the same words again under the same clientId. */
