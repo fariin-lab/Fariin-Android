@@ -444,11 +444,12 @@ fun ChannelBottomBar(ch: ChannelThreadUi, notice: String?) {
         }
         // Follow and Mute are the same clear glass with the text colour (iOS 2026-11-08: no blue fill), so the
         // swap after following changes only the words; a group's Join keeps its blue (not here).
-        val capsule = RoundedCornerShape(25.dp)
+        // 44 tall, fully round (iOS b6dbdbf28, 2026-11-16; was 50).
+        val capsule = RoundedCornerShape(22.dp)
         Box {
             Box(
                 // Follow is solid (iOS 033b30e70): black in light mode, white in dark; Mute stays clear glass.
-                Modifier.fillMaxWidth().height(50.dp)
+                Modifier.fillMaxWidth().height(44.dp)
                     .then(if (!joined) Modifier.clip(capsule).background(c.label) else Modifier.floating(capsule).clip(capsule))
                     .combinedClickable(
                         onClick = {

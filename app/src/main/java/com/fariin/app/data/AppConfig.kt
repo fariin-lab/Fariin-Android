@@ -85,7 +85,8 @@ object AppConfig {
 
     /** The old switches that apply on the NEXT launch (all but groupCreate and groupStats). */
     val nextLaunchKeys: Set<String> = setOf(
-        "glow", "insights", "profileLinks", "myProfileCard", "twoStep", "storyList", "pollRows",
+        // profileLinks applies as soon as the config arrives (iOS b6dbdbf28, 2026-11-16).
+        "glow", "insights", "myProfileCard", "twoStep", "storyList", "pollRows",
         "stickerEdit", "chatBackup", "chatTransfer", "historyPull", "videoStream", "r2Media",
         "groups", "groupE2EE", "groupCalls", "callLinks",
     )
