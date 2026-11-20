@@ -99,6 +99,10 @@ object CallTelecom {
 
     /** My dial. False: the call goes on without Telecom (no system call, AudioManager routing). */
     fun placeOutgoing(c: Context, callId: String, name: String, video: Boolean): Boolean {
+        // Android 8.1 (the low-end test phone's ColorOS) shows its own "Call not sent" box over a
+        // self-managed outgoing call that is ringing fine (2026-11-20). Below 9 the dial goes on
+        // without Telecom, the fallback this already has; shipping builds start at Android 9.
+        if (android.os.Build.VERSION.SDK_INT < 28) return false
         if (!register(c)) return false
         val tm = telecom(c) ?: return false
         return try {
