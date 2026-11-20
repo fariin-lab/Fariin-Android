@@ -202,6 +202,7 @@ fun ChatListScreen(
     var folderNewFor by remember { mutableStateOf<String?>(null) }
     var folderAddFor by remember { mutableStateOf<Conversation?>(null) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val listCard = rememberChatCard(me)
     // A second tap on Chats: out of Archived or search first, then to the top.
     com.fariin.app.ui.shell.OnTabReselect {
         when {
@@ -733,6 +734,11 @@ fun ChatListScreen(
                         }) { searching = true }
                     }
                     // The voice message bar left this list for the bottom of every tab (MainShell, iOS 40a1005cd).
+                    // The chat list card (iOS ChatListCards, 2026-11-13): All chats only, under the search
+                    // bar. A row that scrolls with the list: a sticky row sticks to the list's very top,
+                    // behind the header, not under the search bar as iOS holds it.
+                    if (listCard != null && !showArchive && !searching && !selecting && filter == FILTER_ALL && folder == null)
+                        item(key = "card:" + listCard.id, contentType = "card") { ChatListCard(listCard, me) }
                     if (!showArchive && !searching && filter == FILTER_ALL && folder == null && state.requests.isNotEmpty()) item(key = "requests", contentType = "requests") {
                         ListRow("Message Requests", fi(R.drawable.ic_message_request), trailing = "${state.requests.size}", badge = true,
                             subtitle = state.requests.joinToString(", ") { it.displayName(me) }, onClick = people.requests)

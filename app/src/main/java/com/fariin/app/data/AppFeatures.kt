@@ -69,6 +69,7 @@ object AppFeatures {
         // taken on first use, before the listener below may overwrite the file.
         prefs = c.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
         UploadedEmoji.init(c)
+        ChatCardsStore.init(c)
         HiddenLooks.init(c)
     }
 
@@ -82,6 +83,8 @@ object AppFeatures {
                 if (snap == null) return@addSnapshotListener
                 // The Settings "New" pills are live, not next-open (a deleted doc clears them).
                 NewBadges.update(if (snap.exists()) snap.get("newBadges") else null)
+                // The chat list card's admin cards are live too (iOS LiveFeatures.chatCards).
+                ChatCardsStore.update(if (snap.exists()) snap.get("chatCards") else null)
                 if (!snap.exists()) return@addSnapshotListener
                 // Custom emoji from the admin panel are live too, as iOS.
                 UploadedEmoji.update(snap.get("customEmoji"))
