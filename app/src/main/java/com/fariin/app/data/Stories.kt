@@ -44,6 +44,8 @@ data class Story(
     /** An official story's button (iOS buttonText / buttonUrl); empty for everyone else's. */
     val buttonText: String = "",
     val buttonUrl: String = "",
+    /** Changed after it was posted (iOS Edit Story: `editedAt` or `captionEditedAt`): "edited" after the time. */
+    val edited: Boolean = false,
 ) {
     /** The ring a story belongs to: its author, or "g:" + the group for a group's story. */
     val ringKey: String get() = groupId?.takeIf { it.isNotEmpty() }?.let { StoryGroup.GROUP_PREFIX + it } ?: authorUid
@@ -111,6 +113,7 @@ object StoryList {
             recipientsLeft = (data["recipientUids"] as? List<*>)?.size ?: -1,
             taps = StoryTaps.list(data["stickers"]),
             repostOf = StoryRepost.from(data["repostOf"]),
+            edited = data["editedAt"] != null || data["captionEditedAt"] != null,
         )
     }
 

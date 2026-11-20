@@ -1417,7 +1417,8 @@ private fun StoryPage(
                             // age 13 at 70 %; my story puts the age beside the name and the audience,
                             // with its icon, under both.
                             val name = group.name.ifEmpty { if (mine) "My Story" else "Fariin user" }
-                            val age = StoryRules.timeAgo(story.createdAtMs)
+                            // "edited" after the time once the story was changed (iOS 2026-11-20).
+                            val age = StoryRules.timeAgo(story.createdAtMs) + if (story.edited) " · edited" else ""
                             if (mine) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(name, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
