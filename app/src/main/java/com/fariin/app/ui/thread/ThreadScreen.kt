@@ -1665,7 +1665,12 @@ private fun ThreadContent(
                 val doc = ui.groupDoc
                 fun held(kind: com.fariin.app.data.GroupAdmins.SendKind): String? =
                     if (ui.isGroup && doc.isNotEmpty()) com.fariin.app.data.GroupAdmins.heldBack(doc, ui.me, kind) else null
-                fun slow(): String? = if (!ui.isGroup || doc.isEmpty()) null else com.fariin.app.data.GroupAdmins.slowWait(doc, ui.me,
+                // Nothing new goes out of an open edit (iOS 2026-11-20, owner's channel): a photo picked
+                // while editing went out as a NEW post and the edit sat unsaved. The server allows an
+                // edit to change only the words, so "+", camera, GIFs and stickers say so instead.
+                // (The text send ignores this while editing: Save is the edit itself.)
+                val editHold = if (editing != null) "Finish editing first. A photo or video can't be added to a message you're editing; save or cancel the edit, then send it as a new message." else null
+                fun slow(): String? = editHold ?: if (!ui.isGroup || doc.isEmpty()) null else com.fariin.app.data.GroupAdmins.slowWait(doc, ui.me,
                     ui.messages.lastOrNull { it.authorId == ui.me && !it.isSystem }?.createdAtMillis, System.currentTimeMillis().toDouble())
                 val mediaOff = if (ui.isGroup && doc.isNotEmpty()) com.fariin.app.data.GroupAdmins.mediaOff(doc, ui.me) else null
                 val gatedSend: (String, List<String>, String?) -> Unit = { t, ids, fmt ->
@@ -1721,7 +1726,7 @@ private fun ThreadContent(
                 // newest code. A new message used to hand the composer fresh lambdas (they hold `ui`
                 // and `actions`, both new on every update), so the whole composer and its field were
                 // rebuilt in the very frame my sent bubble should start rising; now it skips.
-                Composer(steady3(gatedSend), steady0 { AttachKeyboard.holdIfTyping(); attachOpen = true }, steady1 { r: VoiceRecorder.Result ->
+                Composer(steady3(gatedSend), steady0 { if (editHold != null) actions.onNotice(editHold) else { AttachKeyboard.holdIfTyping(); attachOpen = true } }, steady1 { r: VoiceRecorder.Result ->
                         val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.VOICE)
                         if (stop != null) actions.onNotice(stop) else {
                             sendMotion.arm(SendMotion.Kind.VOICE, ui.messages, sendAnim)
@@ -1741,7 +1746,7 @@ private fun ThreadContent(
                         else com.fariin.app.data.PlusStore.state("sendEffects"),
                     onPickFx = steady1 { id: String? -> if (id == null) fxPlusPage = true else fxNext.value = id },
                     onCamera = steady0 {
-                        val stop = held(com.fariin.app.data.GroupAdmins.SendKind.PHOTOS)
+                        val stop = editHold ?: held(com.fariin.app.data.GroupAdmins.SendKind.PHOTOS)
                         if (stop != null) actions.onNotice(stop) else { attachCamera = true; attachOpen = true }
                     },
                     initialDraft = actions.draft, onDraft = steady1 { d: String -> actions.onDraft(d); linkText = d },
