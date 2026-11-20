@@ -168,5 +168,5 @@ object SharedWallpapers {
     /** Remove for Both (the setter only; the server checks). */
     suspend fun removeForBoth(cid: String) = call(mapOf("cid" to cid, "remove" to true))
 
-    fun wipe(c: Context) { prefs(c).edit().clear().apply(); synchronized(synced) { synced.clear() } }
+    fun wipe(c: Context) { prefs(c).edit().clear().apply(); synchronized(synced) { synced.clear() }; ChatLookStore.changed() }
 }

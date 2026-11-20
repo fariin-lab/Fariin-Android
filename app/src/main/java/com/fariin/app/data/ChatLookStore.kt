@@ -60,8 +60,25 @@ object ChatLookStore {
     // Wallpaper
 
     // A group's shared wallpaper, or a 1:1's Fariin Plus one (SharedWallpapers), beats this phone's own pick.
-    fun wallpaper(c: Context, cid: String): ChatWallpaper =
+    // Kept per [version]: every change bumps it, and the chat screen asked several times on every
+    // redraw (a Send profile, 2026-11-20: 5% of the frame in these reads).
+    fun wallpaper(c: Context, cid: String): ChatWallpaper = cached(wallCache, cid) {
         ChatLookRules.wallpaper(cid, reader(c), groupWallpaper(c, cid) ?: SharedWallpapers.resolve(c, cid))
+    }
+
+    private val wallCache = HashMap<String, ChatWallpaper>()
+    private val colorCache = HashMap<String, ChatColorSpec?>()
+    private var cacheVersion = -1
+    private fun <T> cached(map: HashMap<String, T>, cid: String, make: () -> T): T {
+        val v = version.intValue
+        synchronized(wallCache) {
+            if (v != cacheVersion) { wallCache.clear(); colorCache.clear(); cacheVersion = v }
+            if (map.containsKey(cid)) @Suppress("UNCHECKED_CAST") return map[cid] as T
+        }
+        val out = make()
+        synchronized(wallCache) { if (v == cacheVersion) map[cid] = out }
+        return out
+    }
 
     /** Something a chat's wallpaper reads has changed (from any thread). */
     fun changed() {
@@ -197,7 +214,7 @@ object ChatLookStore {
 
     // Chat colour
 
-    fun color(c: Context, cid: String): ChatColorSpec? = ChatLookRules.color(cid, reader(c), groupWallpaper(c, cid))
+    fun color(c: Context, cid: String): ChatColorSpec? = cached(colorCache, cid) { ChatLookRules.color(cid, reader(c), groupWallpaper(c, cid)) }
     fun globalChosen(c: Context): ChatColorSpec? = ChatLookRules.globalChosen(reader(c))
     fun globalColor(c: Context): ChatColorSpec? = ChatLookRules.globalColor(reader(c))
     fun globalAuto(c: Context): ChatColorSpec? = ChatLookRules.globalAuto(reader(c))
