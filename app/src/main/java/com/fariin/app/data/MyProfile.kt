@@ -44,6 +44,7 @@ class MyProfileRepository(
     fun listen(uid: String): Flow<MyProfile?> = callbackFlow {
         val reg = db.collection("users").document(uid).addSnapshotListener { snap, _ ->
             val data = snap?.data ?: return@addSnapshotListener
+            AvatarVideoIndex.recordRaw(uid, data["avatarVideo"])   // Plus animatedAvatar: my own
             trySend(MyProfile.fromFirestore(uid, data))
         }
         awaitClose { reg.remove() }

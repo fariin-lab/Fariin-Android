@@ -411,6 +411,7 @@ class ThreadRepository(
             val d = snap?.data ?: return@addSnapshotListener
             MsgPolicy.record(other, d)   // their own Message Requests override (admin panel)
             val ob = PlusBubble.parse(d["plusBubble"])
+            AvatarVideoIndex.recordRaw(other, d["avatarVideo"])   // Plus animatedAvatar: the header moves
             _state.update { it.copy(otherPrivacy = Presence.privacyOf(d).also { p -> com.fariin.app.call.CallPrivacyIndex.record(other, p) }, otherPlusBubble = ob) }
             notePresence()
         }
@@ -419,6 +420,7 @@ class ThreadRepository(
             val p = Presence.privacyOf(d)
             Presence.noteMyPrivacy(p)
             val mb = PlusBubble.parse(d["plusBubble"])
+            AvatarVideoIndex.recordRaw(me, d["avatarVideo"])
             PlusBubbles.record(mb)
             _state.update { it.copy(myPrivacy = p, myPlusBubble = mb) }
             notePresence()

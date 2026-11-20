@@ -331,6 +331,11 @@ private fun ProfileHeader(profile: MyProfile?, photo: com.fariin.app.ui.photo.Pr
                 .semantics { contentDescription = "Your profile photo" }) {
                 Avatar(profile?.photoUrl, 120.dp, onResolved = photo::resolved,
                     modifier = Modifier.profilePhotoSource(photo))
+                // Fariin Plus animatedAvatar: my own clip, where I see my own big picture.
+                val myId = com.fariin.app.Fb.auth.currentUser?.uid
+                com.fariin.app.data.AvatarVideoIndex.playable(myId)?.let { v ->
+                    com.fariin.app.ui.people.AvatarVideoLayer(myId, v, Modifier.size(120.dp).clip(androidx.compose.foundation.shape.CircleShape))
+                }
             }
             Spacer(Modifier.height(12.dp))
             // iOS: the picture opens the photo, the name and @username under it open Edit.

@@ -53,6 +53,13 @@ internal fun EditPhotoSheet(
     current: String?, held: ByteArray?, removed: Boolean,
     onCamera: () -> Unit, onLibrary: () -> Unit, onRemove: () -> Unit,
     onDone: () -> Unit, onCancel: () -> Unit,
+    /** Fariin Plus animatedAvatar: "Choose Video" shows unless OFF; [onVideo] picks or opens Plus. */
+    videoState: com.fariin.app.data.PlusStore.State = com.fariin.app.data.PlusStore.State.OFF,
+    onVideo: () -> Unit = {},
+    /** The clip held with [held] as its first frame, played over it. */
+    heldVideo: java.io.File? = null,
+    /** The picked video is being made into the clip. */
+    makingVideo: Boolean = false,
 ) {
     val c = Fariin.colors
     val motion = com.fariin.app.ui.components.rememberSheetMotion(onCancel)
@@ -78,6 +85,11 @@ internal fun EditPhotoSheet(
                 Box(Modifier.size(220.dp).clip(CircleShape).clickable { menu = true }, contentAlignment = Alignment.Center) {
                     if (heldBmp != null) Image(heldBmp, "Photo", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                     else Avatar(if (removed) null else current, 220.dp)
+                    if (heldVideo != null) AvatarVideoLayer(null, null, Modifier.fillMaxSize(), file = heldVideo)
+                    if (makingVideo) Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.35f)),
+                        contentAlignment = Alignment.Center) {
+                        com.fariin.app.ui.components.FariinSpinner(size = 34.dp, stroke = 3.dp, color = androidx.compose.ui.graphics.Color.White)
+                    }
                 }
                 // The minus at the circle's top right takes the photo off (asked first).
                 if (hasPhoto) Box(Modifier.align(Alignment.TopEnd).offset(x = (-8).dp, y = 8.dp).size(44.dp).floating(CircleShape)
@@ -102,6 +114,14 @@ internal fun EditPhotoSheet(
                     DropdownMenuItem(text = { Text("Photo Library", fontSize = 17.sp) },
                         leadingIcon = { Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_album), null, tint = c.label) },
                         onClick = { menu = false; onLibrary() })
+                    // Fariin Plus animatedAvatar: the small Plus line under it (iOS's approved look).
+                    if (videoState != com.fariin.app.data.PlusStore.State.OFF) DropdownMenuItem(
+                        text = { Column {
+                            Text("Choose Video", fontSize = 17.sp)
+                            Text("Fariin Plus", fontSize = 13.sp, color = c.secondary)
+                        } },
+                        leadingIcon = { Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_video_fill), null, tint = c.label) },
+                        onClick = { menu = false; onVideo() })
                 }
             }
         }

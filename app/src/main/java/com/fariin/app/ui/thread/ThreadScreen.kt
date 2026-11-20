@@ -1830,8 +1830,15 @@ private fun HeaderBody(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Uni
             // Photo and name beside it; the whole block opens the profile.
             Row(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable(onClick = onTitleClick).padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Avatar(ui.photoUrl, if (narrow) 34.dp else 40.dp, squircle = ui.channel != null,
-                    kind = com.fariin.app.ui.components.AvatarKind.of(ui.isGroup, ui.channel != null))
+                // Fariin Plus animatedAvatar: a 1:1's person's clip over their photo (never groups or channels).
+                val avPeer = if (ui.isGroup || ui.channel != null) "" else com.fariin.app.crypto.Wire.otherUid(ui.cid, ui.me)
+                val avVideo = if (avPeer.isEmpty()) null else com.fariin.app.data.AvatarVideoIndex.playable(avPeer)
+                Box(contentAlignment = Alignment.Center) {
+                    Avatar(ui.photoUrl, if (narrow) 34.dp else 40.dp, squircle = ui.channel != null,
+                        kind = com.fariin.app.ui.components.AvatarKind.of(ui.isGroup, ui.channel != null))
+                    if (avVideo != null) com.fariin.app.ui.people.AvatarVideoLayer(avPeer, avVideo,
+                        Modifier.size(if (narrow) 34.dp else 40.dp).clip(CircleShape))
+                }
                 Spacer(Modifier.width(if (narrow) 8.dp else 12.dp))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {

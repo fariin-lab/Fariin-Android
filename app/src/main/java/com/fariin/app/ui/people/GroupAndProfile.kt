@@ -162,15 +162,47 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
     var photoSheet by remember { mutableStateOf(false) }
     var sheetJpeg by remember { mutableStateOf<ByteArray?>(null) }
     var sheetRemove by remember { mutableStateOf(false) }
-    val picker = rememberCirclePhotoPicker { jpeg -> sheetJpeg = jpeg; sheetRemove = false }
+    // Fariin Plus animatedAvatar (iOS EditProfileView): the finished clip (square, at most 10 s, no
+    // sound) is held for Save like a photo; its first frame is the held photo, so the still goes the
+    // ordinary way. [sheetVideo] is the sheet's own, [stagedVideo] the page's after the check mark.
+    var stagedVideo by remember { mutableStateOf<java.io.File?>(null) }
+    var sheetVideo by remember { mutableStateOf<java.io.File?>(null) }
+    var makingVideo by remember { mutableStateOf(false) }
+    var trimFor by remember { mutableStateOf<Pair<android.net.Uri, Long>?>(null) }
+    var plusPage by remember { mutableStateOf(false) }
+    fun dropSheetVideo() { sheetVideo?.takeIf { it != stagedVideo }?.delete(); sheetVideo = null }
+    val picker = rememberCirclePhotoPicker { jpeg -> sheetJpeg = jpeg; sheetRemove = false; dropSheetVideo() }
     val pick = picker.launch
+    fun makeClip(uri: android.net.Uri, start: Long) {
+        makingVideo = true
+        scope.launch {
+            val clip = com.fariin.app.data.AvatarVideoMaker.make(appCtx, uri, start)
+            makingVideo = false
+            if (clip == null) { error = "This video can’t be used. Try another one."; return@launch }
+            dropSheetVideo()
+            sheetJpeg = clip.still; sheetRemove = false; sheetVideo = clip.file
+        }
+    }
+    val videoPicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val ms = com.fariin.app.data.AvatarVideoMaker.durationMs(appCtx, uri)
+            // Ten seconds or less is made at once; longer chooses its 10 seconds first.
+            if (ms > com.fariin.app.data.AvatarVideo.MAX_MS + 200) trimFor = uri to ms else makeClip(uri, 0)
+        }
+    }
+    trimFor?.let { (u, ms) ->
+        AvatarVideoTrimSheet(u, ms, onUse = { start -> trimFor = null; makeClip(u, start) }, onCancel = { trimFor = null })
+    }
+    if (plusPage) com.fariin.app.ui.settings.PlusPageSheet(onDismiss = { plusPage = false })
     // iOS ProfilePhotoSheet Recents: the photos I had before, tap one to use it again.
     fun useAgain(f: java.io.File) {
         if (busy) return
         scope.launch {
             busy = true
             val bytes = runCatching { f.readBytes() }.getOrNull()
-            if (bytes != null) { stagedJpeg = bytes; stagedRemove = false }
+            if (bytes != null) { stagedJpeg = bytes; stagedRemove = false; stagedVideo?.delete(); stagedVideo = null }
             busy = false
         }
     }
@@ -182,7 +214,7 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
         confirmButton = { TextButton({ error = null }) { Text("OK", color = c.accent) } }, containerColor = c.card) }
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         val changed = me != null && (name != (me?.name ?: "").trim() || about.trim() != (me?.about ?: "").trim() ||
-            stagedJpeg != null || stagedRemove)
+            stagedJpeg != null || stagedRemove || stagedVideo != null)
         val close = { if (changed) askDiscard = true else onBack() }
         androidx.activity.compose.BackHandler(onBack = close)
         // The contact page's bottom sheet; Cancel is Keep Editing.
@@ -204,6 +236,10 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
                         if (newName != null) api.checkName(newName)
                         val jpeg = stagedJpeg
                         val remove = stagedRemove && jpeg == null
+                        // A video belongs to the photo it was made with: a new photo or none takes
+                        // mine down (no Plus needed for that); a new clip replaces it.
+                        val video = stagedVideo
+                        val hadVideo = com.fariin.app.data.AvatarVideoIndex.mine() != null
                         // Without a loaded profile the bio is only empty, not cleared by anyone (iOS).
                         val newAbout = about.takeIf { me != null && about.trim() != me?.about?.trim() }
                         onBack()
@@ -216,6 +252,8 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
                                     com.fariin.app.data.ProfilePhotoHistory.record(appCtx, api.me, j)
                                 }
                                 if (remove) api.removePhoto()
+                                if (video != null) com.fariin.app.data.AvatarVideoService.publishInBackground(appCtx, video)
+                                else if (hadVideo && (jpeg != null || remove)) com.fariin.app.data.AvatarVideoService.removeInBackground()
                                 if (newAbout != null) com.fariin.app.data.ProfileWrites.saveAbout(api.me, newAbout)
                             } catch (e: kotlinx.coroutines.CancellationException) { throw e
                             } catch (e: com.fariin.app.data.LimitReached) { com.fariin.app.ui.components.Snack.show(e.message ?: "Couldn't save your profile.")
@@ -234,10 +272,12 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
             Spacer(Modifier.height(8.dp))
             // The circle shows what Save will keep: a held new photo, nothing if removal is held, else mine.
             val heldBmp = com.fariin.app.ui.components.rememberBytesImage(stagedJpeg, 120.dp)
-            Box(Modifier.size(120.dp).clip(CircleShape).clickable { sheetJpeg = stagedJpeg; sheetRemove = stagedRemove; photoSheet = true },
+            Box(Modifier.size(120.dp).clip(CircleShape).clickable { sheetJpeg = stagedJpeg; sheetRemove = stagedRemove; sheetVideo = stagedVideo; photoSheet = true },
                 contentAlignment = Alignment.Center) {
                 if (heldBmp != null) androidx.compose.foundation.Image(heldBmp, null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 else Avatar(if (stagedRemove) null else me?.photoUrl, 120.dp)
+                // The held clip moving over its own first frame, so you see what Save keeps.
+                if (stagedVideo != null) AvatarVideoLayer(null, null, Modifier.fillMaxSize(), file = stagedVideo)
                 // Only a photo being saved spins here; a name or bio save spins on Save alone (owner
                 // 2026-11-10: a second spinner blinked on the photo after saving a bio).
                 if (saving && (stagedJpeg != null || stagedRemove)) Box(Modifier.size(120.dp).background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
@@ -247,14 +287,27 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
             Spacer(Modifier.height(12.dp))
             Text("Edit Photo", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label,
                 modifier = Modifier.clip(CircleShape).background(c.card)
-                    .clickable { sheetJpeg = stagedJpeg; sheetRemove = stagedRemove; photoSheet = true }.padding(horizontal = 20.dp, vertical = 8.dp))
+                    .clickable { sheetJpeg = stagedJpeg; sheetRemove = stagedRemove; sheetVideo = stagedVideo; photoSheet = true }.padding(horizontal = 20.dp, vertical = 8.dp))
             // iOS Edit Photo: its own sheet over Edit Profile (hidden while the cropper is up).
             if (photoSheet && picker.pending == null) EditPhotoSheet(
                 current = if (sheetRemove) null else me?.photoUrl, held = sheetJpeg, removed = sheetRemove,
                 onCamera = { picker.takePhoto() }, onLibrary = { pick() },
-                onRemove = { sheetJpeg = null; sheetRemove = true },
-                onDone = { stagedJpeg = sheetJpeg; stagedRemove = sheetRemove && sheetJpeg == null; photoSheet = false },
-                onCancel = { photoSheet = false })
+                onRemove = { sheetJpeg = null; sheetRemove = true; dropSheetVideo() },
+                onDone = {
+                    if (stagedVideo != sheetVideo) stagedVideo?.delete()
+                    stagedJpeg = sheetJpeg; stagedRemove = sheetRemove && sheetJpeg == null; stagedVideo = sheetVideo; photoSheet = false
+                },
+                onCancel = { dropSheetVideo(); photoSheet = false },
+                videoState = com.fariin.app.data.PlusStore.state("animatedAvatar"),
+                onVideo = {
+                    when (com.fariin.app.data.PlusStore.state("animatedAvatar")) {
+                        com.fariin.app.data.PlusStore.State.ON -> videoPicker.launch(
+                            PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.VideoOnly))
+                        com.fariin.app.data.PlusStore.State.LOCKED -> plusPage = true
+                        else -> {}
+                    }
+                },
+                heldVideo = sheetVideo, makingVideo = makingVideo)
             if (history.isNotEmpty()) {
                 Text("Recents", fontSize = 13.sp, color = c.secondary, modifier = Modifier.fillMaxWidth().padding(start = 20.dp, top = 4.dp, bottom = 6.dp))
                 androidx.compose.foundation.lazy.LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),

@@ -392,10 +392,12 @@ private fun KeptTab(id: Int, open: Int, reselect: Int, warm: Boolean, content: @
         }
         else { val p = m.measure(cs); layout(p.width, p.height) { p.place(0, 0) } }
     }) {
+        val shownState = androidx.compose.runtime.rememberUpdatedState(shown)
         if (real == null) {
-            CompositionLocalProvider(LocalTabReselect provides reselect) { content(shown) }
-        } else {
             CompositionLocalProvider(LocalTabReselect provides reselect,
+                com.fariin.app.ui.people.LocalTabShown provides shownState) { content(shown) }
+        } else {
+            CompositionLocalProvider(LocalTabReselect provides reselect, com.fariin.app.ui.people.LocalTabShown provides shownState,
                 androidx.activity.compose.LocalOnBackPressedDispatcherOwner provides (if (shown) real else inert)) { content(shown) }
         }
     }

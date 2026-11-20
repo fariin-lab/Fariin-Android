@@ -214,6 +214,7 @@ object SessionEnd {
         com.fariin.app.data.ContactNames.clear()       // names I gave people belong to the account
         com.fariin.app.data.SearchRecents.wipe(c)      // what the account searched for
         com.fariin.app.data.SendEffects.wipe(c)        // which send effects already played here
+        com.fariin.app.data.AvatarVideoIndex.clear(c)  // who has a moving profile picture, and the clips
         com.fariin.app.data.OfficialChannel.wipe(c)    // the official row kept for launch (personal notices too)
         com.fariin.app.data.OfficialStories.reset(c)
         com.fariin.app.data.ChannelStories.stop()

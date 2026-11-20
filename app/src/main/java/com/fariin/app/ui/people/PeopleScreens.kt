@@ -673,14 +673,21 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         Column(Modifier.fillMaxSize().verticalScroll(pageScroll).padding(top = top), horizontalAlignment = Alignment.CenterHorizontally) {
             // A tap opens the photo; a hold does too, with a tick (iOS: tap = story when there is one,
             // else the photo; this page has no story ring on Android, so a tap is the photo).
-            Avatar(person?.photoUrl ?: conv?.photos?.get(uid), 100.dp, onResolved = photo::resolved,
-                modifier = Modifier.profilePhotoSource(photo).then(Modifier.profileMeltSource(melt))
-                    .then(if (photo.hasPhoto) Modifier.combinedClickable(interactionSource = null, indication = null,   // no grey flash when the photo lands back (owner 2026-11-13)
-                        onClickLabel = "View photo", onClick = { photo.show() },
-                        onLongClickLabel = "View photo", onLongClick = {
-                            haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                            photo.show()
-                        }).semantics { contentDescription = "Profile photo" } else Modifier))
+            // Fariin Plus animatedAvatar: their clip moving over the photo (nothing of Plus is said).
+            val avVideo = com.fariin.app.data.AvatarVideoIndex.playable(uid)
+            // The tap sits on the box round both, so the clip over the photo never takes it.
+            Box(contentAlignment = Alignment.Center, modifier = Modifier
+                        .then(if (photo.hasPhoto) Modifier.combinedClickable(interactionSource = null, indication = null,   // no grey flash when the photo lands back (owner 2026-11-13)
+                            onClickLabel = "View photo", onClick = { photo.show() },
+                            onLongClickLabel = "View photo", onLongClick = {
+                                haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                photo.show()
+                            }).semantics { contentDescription = "Profile photo" } else Modifier)) {
+                Avatar(person?.photoUrl ?: conv?.photos?.get(uid), 100.dp, onResolved = photo::resolved,
+                    modifier = Modifier.profilePhotoSource(photo).then(Modifier.profileMeltSource(melt)))
+                if (avVideo != null) com.fariin.app.ui.people.AvatarVideoLayer(uid, avVideo,
+                    Modifier.size(100.dp).clip(CircleShape))
+            }
             Spacer(Modifier.height(10.dp))
             // The verified seal after the name (iOS VerifiedMark, 20): it was missing on this page.
             val vCtx = androidx.compose.ui.platform.LocalContext.current

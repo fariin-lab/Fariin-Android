@@ -42,6 +42,8 @@ data class Person(
             .also { com.fariin.app.call.CallPrivacyIndex.record(uid, it.privacy) }
             // The chat list's badge follows any fresh read of this person (an admin removed one).
             .also { if (d.containsKey("name")) VerifiedPeople.note(uid, d["verification"]) }
+            // Fariin Plus animatedAvatar: whether their big pictures move (a whole document only).
+            .also { if (d.containsKey("name")) AvatarVideoIndex.recordRaw(uid, d["avatarVideo"]) }
 
         private fun fromDoc(uid: String, d: Map<String, Any?>): Person = Person(
             uid = uid,
