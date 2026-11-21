@@ -209,7 +209,14 @@ fun ChatListScreen(
     var folderEdit by remember { mutableStateOf<com.fariin.app.data.ChatFolder?>(null) }
     var folderNewFor by remember { mutableStateOf<String?>(null) }
     var folderAddFor by remember { mutableStateOf<Conversation?>(null) }
-    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // ⛔ EACH TAB KEEPS ITS OWN PLACE (owner 2026-11-21, "exactly like" the reference app): All Chats,
+    // every folder and the Archive each have their own scroll state, so a switch never carries one
+    // tab's position into another (one shared state kept its index, and even its first row by key, and
+    // the new tab opened part-way down). A tab never opened starts at its top; one opened before comes
+    // back where it was left. Kept while the app runs.
+    val tabKey = if (showArchive) "archive" else (com.fariin.app.data.ChatFoldersStore.current?.id ?: "all")
+    val tabStates = remember { HashMap<String, androidx.compose.foundation.lazy.LazyListState>() }
+    val listState = tabStates.getOrPut(tabKey) { androidx.compose.foundation.lazy.LazyListState() }
     // Video profile pictures start only while the list is still (ListAvatarClips).
     LaunchedEffect(listState) { androidx.compose.runtime.snapshotFlow { listState.isScrollInProgress }.collect { ListAvatarClips.scrolling = it } }
     val listCard = rememberChatCard(me)
@@ -228,6 +235,7 @@ fun ChatListScreen(
     var listMode by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(showArchive, searching) {
         val mode = "$showArchive/$searching"
+        // The Archive has its own state now (tabKey); a switch into it still opens at its top.
         if (listMode.isNotEmpty() && listMode != mode) listState.scrollToItem(0)
         listMode = mode
     }
@@ -400,24 +408,24 @@ fun ChatListScreen(
             0.77f to Color.Black.copy(alpha = 0.55f), 0.87f to Color.Black.copy(alpha = 0.25f),
             0.94f to Color.Black.copy(alpha = 0.08f), 1f to Color.Transparent)
     }
-    val scrolled by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 } }
+    val scrolled by remember(listState) { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 } }
     // Owner 2026-11-05: the glass only when something is under the bar, as iOS's scroll edge. It
     // fades in and out (the effect stays attached, so nothing is rebuilt and there is no hitch).
     val glassAlpha by com.fariin.app.ui.components.rememberEdgeAlpha(scrolled || selecting)
     // The bar's search button only once the field in the list has shrunk away (it showed while the
     // field was still two-thirds there: two search buttons at once).
-    val searchGone by remember { androidx.compose.runtime.derivedStateOf {
+    val searchGone by remember(listState) { androidx.compose.runtime.derivedStateOf {
         val info = listState.layoutInfo.visibleItemsInfo
         val field = info.firstOrNull { it.key == "search" }
         if (field == null) info.isNotEmpty() && info.first().index > 0 else field.offset <= -(field.size * 0.9f)
     } }
     // At the very top the bar is always shown: a second tap on Chats scrolls there without a drag,
     // and the bar stayed hidden from the scroll down.
-    val atTop by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 } }
+    val atTop by remember(listState) { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 } }
     LaunchedEffect(atTop) { if (atTop) barState.heightOffset = 0f }
     // The floating buttons step aside while the list scrolls down and come back on the way up.
     var fabShown by remember { mutableStateOf(true) }
-    val fabScroll = remember {
+    val fabScroll = remember(listState) {
         object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
             override fun onPreScroll(available: androidx.compose.ui.geometry.Offset,
                                      source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
@@ -431,7 +439,7 @@ fun ChatListScreen(
         }
     }
     // A list that cannot scroll, or one back at the top, always shows them.
-    val listScrolls by remember { androidx.compose.runtime.derivedStateOf { listState.canScrollForward || listState.canScrollBackward } }
+    val listScrolls by remember(listState) { androidx.compose.runtime.derivedStateOf { listState.canScrollForward || listState.canScrollBackward } }
     LaunchedEffect(atTop, listScrolls) { if (atTop || !listScrolls) fabShown = true }
     val anim = com.fariin.app.ui.components.animationsOn()
     // Rows glide to new places only once the list has settled (owner 2026-11-11, frame by frame on
