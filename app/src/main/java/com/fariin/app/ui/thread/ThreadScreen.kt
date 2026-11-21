@@ -2091,9 +2091,30 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             }
             val fill = if (isMe) myFill() else receivedFill()
             if (m.isSticker) StickerRow(m, isMe, shape, fill, header) { Meta(m, tick, isMe, is24h, onMedia = m.replyTo == null) }
-            else GifRow(m, shape, fill, (showSender && g.first) || m.forwarded || m.replyTo != null, header,
-                onOpen = m.imageUrl?.let { u -> { onView(Viewing.Photo(u, m.enc, msg = m)) } }) {
-                Meta(m, tick, isMe, is24h, onMedia = true)
+            else {
+                // A GIF with words under it (a caption, a quoted post's card) takes the full post width and
+                // draws them inside its bubble (iOS aa4c290ec); a bare GIF keeps its own size.
+                val gifQuote = m.quoteId?.takeIf { !m.deleted && com.fariin.app.data.QuoteRules.isQid(it) }
+                val gifCaption = m.text.takeIf { it.isNotEmpty() && !m.deleted }
+                val words: (@Composable () -> Unit)? = if (gifQuote == null && gifCaption == null) null else ({
+                    val ink = if (isMe) Color.White else Fariin.colors.label
+                    gifCaption?.let { cap ->
+                        Box(Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                            TextWithMeta(cap, LocalBubbleText.current.copy(color = ink), linkInk = if (isMe) Color.White else Fariin.colors.blue,
+                                tags = ui.channel != null) { if (gifQuote == null) Meta(m, tick, isMe, is24h) else Spacer(Modifier) }
+                        }
+                    }
+                    gifQuote?.let { q ->
+                        Box(Modifier.padding(start = 8.dp, end = 8.dp, top = if (gifCaption == null) 8.dp else 0.dp, bottom = 8.dp)) {
+                            QuoteCardBubble(q, isMe, ui.cid, hostMid = m.id, meta = { Meta(m, tick, isMe, is24h) }, compact = true)
+                        }
+                    }
+                })
+                GifRow(m, shape, fill, (showSender && g.first) || m.forwarded || m.replyTo != null, header,
+                    onOpen = m.imageUrl?.let { u -> { onView(Viewing.Photo(u, m.enc, msg = m)) } },
+                    wideDp = if (words != null) minOf(maxW.value, if (ui.channel != null) maxW.value else 350f) else null, words = words) {
+                    Meta(m, tick, isMe, is24h, onMedia = true)
+                }
             }
             return@Row
         }
@@ -2313,7 +2334,10 @@ private fun MediaRow(
     val header = (showSender && g.first) || m.forwarded || m.replyTo != null
     val ink = if (isMe) Color.White else c.label
     // A rough caption width, only so a short picture does not squeeze a caption (iOS minW).
-    val captionW = caption?.let { it.length.coerceAtMost(40) * 8.5f } ?: 0f
+    // A quoted post's card under the picture (iOS aa4c290ec, 2026-11-21): the bubble takes the full
+    // width, as a text post with a quote does, so the card's words are not cut beside a narrow picture.
+    val mediaQuote = m.quoteId?.takeIf { !m.deleted && com.fariin.app.data.QuoteRules.isQid(it) }
+    val captionW = if (mediaQuote != null) 9_999f else caption?.let { it.length.coerceAtMost(40) * 8.5f } ?: 0f
     val busy = m.sendState == Message.SendState.SENDING
     // While its picture is up in the viewer, a bare photo bubble leaves no coloured block behind.
     val lifted = caption == null && !header && MediaOrigins.hiddenKey == MediaOrigins.keyOf(m)
@@ -2401,8 +2425,14 @@ private fun MediaRow(
                 // "clip #ovntest" under a video was plain text).
                 TextWithMeta(caption, LocalBubbleText.current.copy(color = ink), linkInk = if (isMe) Color.White else c.blue,
                     tags = ui.channel != null && !m.deleted) {
-                    if (chips.isEmpty()) Meta(m, tick, isMe, is24h) else Spacer(Modifier)
+                    if (chips.isEmpty() && mediaQuote == null) Meta(m, tick, isMe, is24h) else Spacer(Modifier)
                 }
+            }
+        }
+        mediaQuote?.let { q ->
+            Box(Modifier.padding(start = 8.dp, end = 8.dp, top = if (caption == null) 8.dp else 0.dp, bottom = 8.dp)) {
+                QuoteCardBubble(q, isMe, ui.cid, hostMid = m.id,
+                    meta = if (caption != null && chips.isEmpty()) ({ Meta(m, tick, isMe, is24h) }) else null, compact = true)
             }
         }
         if (ch != null && chips.isNotEmpty()) {

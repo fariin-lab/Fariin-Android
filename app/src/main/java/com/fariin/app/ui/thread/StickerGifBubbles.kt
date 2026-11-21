@@ -252,8 +252,14 @@ private fun Modifier.semanticsLabel(text: String): Modifier =
  */
 @Composable
 internal fun GifRow(m: Message, shape: Shape, fill: Color, hasHeader: Boolean, header: @Composable () -> Unit,
-                    onOpen: (() -> Unit)? = null, meta: @Composable () -> Unit) {
-    val (w, h) = StickerGifRules.gifBox(m.width, m.height)
+                    onOpen: (() -> Unit)? = null,
+                    /** A GIF with words under it: the bubble's width (the picture fills it); null = its own size. */
+                    wideDp: Float? = null,
+                    /** The caption and / or quoted post's card, drawn under the picture inside the bubble. */
+                    words: (@Composable () -> Unit)? = null,
+                    meta: @Composable () -> Unit) {
+    val (w, h) = if (wideDp != null) com.fariin.app.media.MediaRules.wideMediaBox(m.width, m.height, wideDp)
+        else StickerGifRules.gifBox(m.width, m.height)
     // A tap opens it in the photo viewer (who sent it, when, Share, Save), as a photo opens
     // (owner 2026-11-13); the plain black page only where there is no viewer to hand it to.
     var open by remember { mutableStateOf(false) }
@@ -280,8 +286,10 @@ internal fun GifRow(m: Message, shape: Shape, fill: Color, hasHeader: Boolean, h
                 else AsyncImage(animatedRequest(m.imageUrl, autoplay()), contentDescription = "GIF", imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current),
                     contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             }
-            Box(Modifier.align(Alignment.BottomEnd).padding(6.dp)) { MetaCapsule { meta() } }
+            if (words == null) Box(Modifier.align(Alignment.BottomEnd).padding(6.dp)) { MetaCapsule { meta() } }
         }
+        // The caption and the quoted post's card under the picture; the time goes with them.
+        words?.invoke()
     }
 }
 
