@@ -624,6 +624,42 @@ class FariinCrypto(
         } catch (_: Exception) { null }
     }
 
+    /**
+     * Server-sealed forward (iOS forward-seal, 2026-11-15; server forwardMedia `seal`): a CLEAR file
+     * (a channel's or a plain group's) into a sealed chat without the phone downloading and uploading
+     * it again. A FRESH random 32-byte file key and 24-byte data nonce; the key wrapped for [dstCid]
+     * ([dstMembers] for a group) exactly as a send wraps it. Returns the new envelope and the {n, k}
+     * the server seals the bytes with. Null when [dstCid] is a plain group or a key is missing (then
+     * the old forward runs). The key is never logged or stored.
+     */
+    /** A group whose files are written in the clear (`e2ee == false`); a 1:1 never is. */
+    suspend fun isPlainGroup(cid: String): Boolean = Wire.isGroupCid(cid) && groupIsPlain(cid)
+
+    suspend fun sealForwardKey(dstCid: String, dstMembers: Collection<String>?): Pair<EncMeta, Map<String, String>>? {
+        val dstGroup = Wire.isGroupCid(dstCid)
+        if (dstGroup && groupIsPlain(dstCid)) return null
+        ensureReady()
+        val sk = mySecretKey ?: return null
+        val me = currentUid() ?: return null
+        val fileKey = wire.randomKey()
+        val n = wire.randomNonce()
+        val meta = try {
+            if (dstGroup) {
+                val members = dstMembers ?: return null
+                val wraps = LinkedHashMap<String, String>()
+                for ((uid, pub) in groupKeys(members)) wire.makeWrap(fileKey, pub, sk)?.let { wraps[uid] = it }
+                if (wraps.keys.none { it != me }) return null
+                EncMeta(v = 1, n = B64.encode(n), k = "", kn = "", w = wraps, a = me)
+            } else {
+                val pub = keyForSending(Wire.otherUid(dstCid, me)) ?: return null
+                val kn = wire.randomNonce()
+                val wrapped = nacl.boxEasy(fileKey, kn, pub, sk) ?: return null
+                EncMeta(v = 1, n = B64.encode(n), k = B64.encode(wrapped), kn = B64.encode(kn))
+            }
+        } catch (_: Exception) { null } ?: return null
+        return meta to mapOf("n" to B64.encode(n), "k" to B64.encode(fileKey))
+    }
+
     @Volatile private var keysSinceCache: Pair<String, Long?>? = null
 
     /**

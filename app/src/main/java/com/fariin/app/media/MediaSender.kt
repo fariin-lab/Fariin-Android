@@ -327,8 +327,19 @@ class MediaSender(
         // file key goes to the server (`keys`), which writes the copy in the clear; the new envelope is
         // the plain marker, as a plain group's own upload.
         val keyByUrl = HashMap<String, Map<String, String>>()
-        suspend fun re(url: String, e: EncMeta?): EncMeta {
-            e ?: throw NotInstant("key")
+        // A CLEAR file (a channel's, a plain group's) into a sealed chat (iOS forward-seal 2026-11-15):
+        // a fresh key wrapped for here, and the server seals the copy with it (`seal`); no download,
+        // no re-upload. Plain into plain stays plain (rewrapFile).
+        val sealByUrl = HashMap<String, Map<String, String>>()
+        val dstSealed = !crypto.isPlainGroup(cid)
+        suspend fun re(url: String, given: EncMeta?): EncMeta {
+            // Group and channel media written in the clear may carry no envelope: that is the plain one.
+            val e = given ?: if (Wire.isGroupCid(srcCid)) EncMeta.PLAIN else throw NotInstant("key")
+            if (e.isPlain && Wire.isGroupCid(srcCid) && dstSealed) {
+                val (meta, nk) = crypto.sealForwardKey(cid, members) ?: throw NotInstant("seal key")
+                sealByUrl[url] = nk
+                return meta
+            }
             crypto.plainForwardKey(srcCid, e, cid)?.let { k ->
                 keyByUrl[url] = mapOf("n" to e.n, "k" to com.fariin.app.crypto.B64.encode(k))
                 return EncMeta.PLAIN
@@ -357,14 +368,18 @@ class MediaSender(
             else -> mapOf(urls.first() to re(urls.first(), m.enc))
         }
         val keys: Map<String, Map<String, String>> = keyByUrl.mapKeys { pathOf.getValue(it.key) }
+        val seals: Map<String, Map<String, String>> = sealByUrl.mapKeys { pathOf.getValue(it.key) }
+        // The server refuses `keys` and `seal` in one call (mixed plain and sealed parts): the old forward.
+        if (keys.isNotEmpty() && seals.isNotEmpty()) throw NotInstant("keys and seal")
         // 3. The server copy (it reads, opens and writes the bytes when it has keys: a longer wait).
         val res = try {
             val args = hashMapOf<String, Any>("srcCid" to srcCid, "msgId" to m.id, "dstCid" to cid, "dstMsgId" to dst.id,
                 "objects" to pathOf.values.toList())
             if (keys.isNotEmpty()) args["keys"] = keys
+            if (seals.isNotEmpty()) args["seal"] = seals
             com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
                 .getHttpsCallable("forwardMedia")
-                .also { if (keys.isNotEmpty()) it.setTimeout(180, java.util.concurrent.TimeUnit.SECONDS) }
+                .also { if (keys.isNotEmpty() || seals.isNotEmpty()) it.setTimeout(180, java.util.concurrent.TimeUnit.SECONDS) }
                 .call(args).await().getData() as? Map<*, *>
         } catch (e: Exception) { throw NotInstant("forwardMedia: ${e.message}") }
         if (res?.get("ok") != true) throw NotInstant("forwardMedia refused")
@@ -372,7 +387,10 @@ class MediaSender(
         // Every part sent with a key must come back opened; an older server copies the sealed bytes
         // and ignores `keys`, and a plain marker over sealed bytes would be a file nobody can open.
         val openedPaths = answered.filter { it["opened"] == true }.mapNotNull { it["src"] as? String }.toSet()
-        if (!openedPaths.containsAll(keys.keys)) {
+        // Likewise every part sent with `seal` must come back `sealed: true`: an older server copies the
+        // clear bytes, and a sealed envelope over clear bytes is a file nobody can open.
+        val sealedPaths = answered.filter { it["sealed"] == true }.mapNotNull { it["src"] as? String }.toSet()
+        if (!openedPaths.containsAll(keys.keys) || !sealedPaths.containsAll(seals.keys)) {
             runCatching {
                 com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
                     .getHttpsCallable("forwardMedia").call(hashMapOf("undo" to true, "dstCid" to cid, "dstMsgId" to dst.id)).await()
