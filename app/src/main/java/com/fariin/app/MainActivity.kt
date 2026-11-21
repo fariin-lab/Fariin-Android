@@ -818,17 +818,25 @@ private class ShellMotion {
 private fun HeldChats(state: State<ChatsUiState>, covered: Boolean, content: @Composable (ChatsUiState) -> Unit) {
     val moving by remember { androidx.compose.runtime.derivedStateOf { com.fariin.app.ui.components.PageMotion.moving } }
     val held = remember { androidx.compose.runtime.mutableStateOf(state.value) }
-    val lastHeld = remember { longArrayOf(0L) }
+    // When the change the held copy is waiting on first came (0 = none waiting).
+    val waitingSince = remember { longArrayOf(0L) }
     // While a page covers the list (2026-11-12, owner's Pixel: every message arriving in an open
     // chat rebuilt the hidden list under it, the open chat's slow frames): at most one update a
     // second, so a flood costs one rebuild a second and the list is never more than a second
     // behind when it shows again (no row jumping into place after Back).
     val latest = state.value
-    if (!moving && !covered) held.value = latest
+    if (!moving && !covered) { held.value = latest; waitingSince[0] = 0L }
+    // 2026-11-20 trace: once a second was still a 25-45 ms frame on the Pixel (far more on the Oppo)
+    // all the while I typed or sent in the open chat (drafts and last lines move the list). Now
+    // the list waits for a quiet moment (1.5 s with no change), and in a long burst takes one
+    // update every 5 s, so it is never far behind when it shows again.
     else if (covered && !moving) LaunchedEffect(latest) {
-        val wait = 1_000L - (android.os.SystemClock.uptimeMillis() - lastHeld[0])
-        if (wait > 0) kotlinx.coroutines.delay(wait)
-        held.value = latest; lastHeld[0] = android.os.SystemClock.uptimeMillis()
+        if (held.value === latest) return@LaunchedEffect
+        val now = android.os.SystemClock.uptimeMillis()
+        if (waitingSince[0] == 0L) waitingSince[0] = now
+        val left = HELD_MAX_MS - (now - waitingSince[0])
+        if (left > 0) kotlinx.coroutines.delay(minOf(HELD_QUIET_MS, left))
+        held.value = latest; waitingSince[0] = 0L
     }
     content(held.value)
 }
@@ -847,6 +855,11 @@ private class ShellBack(private val activity: androidx.activity.ComponentActivit
     fun setOnTop(top: Boolean) { onTop = top; update() }
     private fun update() { forward.isEnabled = onTop && wanted }
 }
+
+/** The covered chat list: updated after this long with no change... */
+private const val HELD_QUIET_MS = 1_500L
+/** ...or at once when its copy is this old. */
+private const val HELD_MAX_MS = 5_000L
 
 /** How long after the first frame the start-up work the first screen does not need begins. */
 internal const val LATER_MS = 1_500L

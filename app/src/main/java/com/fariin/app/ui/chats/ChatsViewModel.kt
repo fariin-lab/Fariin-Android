@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 
 /** What the Chats tab draws. */
@@ -113,6 +114,9 @@ class ChatsViewModel(
         .combine(com.fariin.app.local.Drafts.map.map { it.keys }.distinctUntilChanged()
             .combine(LiveCallRow.live) { d, call -> LiveCallRow.cid(me, call)?.let { d + it } ?: d }) { s, k -> s to k }
         .map { (s, keep) -> sameRows(uiOf(s, keep)) }
+        // Off the main thread (2026-11-20, Oppo profile: merging, hiding, delivery marks, the rows and
+        // their comparison took ~60 ms of main-thread time per send in an open chat, each a late frame).
+        .flowOn(kotlinx.coroutines.Dispatchers.Default)
         // The first value is the phone's saved list when it is already in memory (read on its own
         // thread at app start), so the very first frame draws the chats: the list used to wait for
         // the whole screen to be built before it even asked (Pixel 2026-11-11, ~150 ms of a 0.54 s
