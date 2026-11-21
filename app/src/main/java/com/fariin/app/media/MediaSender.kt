@@ -377,9 +377,14 @@ class MediaSender(
                 "objects" to pathOf.values.toList())
             if (keys.isNotEmpty()) args["keys"] = keys
             if (seals.isNotEmpty()) args["seal"] = seals
-            com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
-                .getHttpsCallable("forwardMedia")
-                .also { if (keys.isNotEmpty() || seals.isNotEmpty()) it.setTimeout(180, java.util.concurrent.TimeUnit.SECONDS) }
+            // iOS final check 2026-11-15: a seal or an open moves the whole file through the function,
+            // so that one runs beside the bucket (us-east1, forwardMediaUs) and gets 310 s, never shorter
+            // than the server's own 300 (giving up first would undo a copy still being written). A plain
+            // copy moves no bytes: 30 s, so a stalled call falls back to the old way fast.
+            val movesBytes = keys.isNotEmpty() || seals.isNotEmpty()
+            (if (movesBytes) com.google.firebase.functions.FirebaseFunctions.getInstance("us-east1").getHttpsCallable("forwardMediaUs")
+                else com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION).getHttpsCallable("forwardMedia"))
+                .also { it.setTimeout(if (movesBytes) 310L else 30L, java.util.concurrent.TimeUnit.SECONDS) }
                 .call(args).await().getData() as? Map<*, *>
         } catch (e: Exception) { throw NotInstant("forwardMedia: ${e.message}") }
         if (res?.get("ok") != true) throw NotInstant("forwardMedia refused")
