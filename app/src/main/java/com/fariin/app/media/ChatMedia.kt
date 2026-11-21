@@ -295,6 +295,6 @@ class ChatMedia(
             return String(out).also { shaMemo.put(s, it) }
         }
         private val HEX = "0123456789abcdef".toCharArray()
-        private val shaMemo = android.util.LruCache<String, String>(2048)
+        private val shaMemo = StringMemo(2048)
     }
 }

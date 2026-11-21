@@ -86,7 +86,15 @@ object MediaOrigin {
         return runCatching { java.net.URLDecoder.decode(parts[1].replace("+", "%2B"), "UTF-8") }.getOrNull()
     }
 
-    fun keyOfUrl(url: String?): String? = storagePath(url)?.let(::key)
+    /** [key] of [url]'s path, remembered per url (asked for every media message each time it is read). */
+    fun keyOfUrl(url: String?): String? {
+        if (url == null) return null
+        keyMemo.get(url)?.let { return it.ifEmpty { null } }
+        val k = storagePath(url)?.let(::key)
+        keyMemo.put(url, k ?: "")
+        return k
+    }
+    private val keyMemo = StringMemo(4096)
 
     private fun videoSig(w: Double?, h: Double?, d: Double?) =
         "${Math.round(w ?: 0.0)}x${Math.round(h ?: 0.0)}d${Math.round(d ?: 0.0)}"
@@ -306,4 +314,13 @@ object MediaOrigin {
         if ((size ?: 0L) <= 0L) size = it.originSize
         payload(key, size)
     }
+}
+
+/** A small thread-safe least-recently-used string map (plain Java, so it also runs in JVM tests). */
+internal class StringMemo(private val max: Int) {
+    private val map = object : java.util.LinkedHashMap<String, String>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > max
+    }
+    @Synchronized fun get(k: String): String? = map[k]
+    @Synchronized fun put(k: String, v: String) { map[k] = v }
 }
