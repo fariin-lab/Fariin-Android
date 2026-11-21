@@ -145,11 +145,18 @@ internal fun ChatFolderBar(chats: List<Conversation>, me: String, onEdit: (ChatF
                                 horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                                 Text(f.name, fontSize = 15.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
                                     color = if (on) c.label else c.secondary, maxLines = 1)
-                                if (s.unread > 0) {
-                                    Spacer(Modifier.width(6.dp))
-                                    Box(Modifier.defaultMinSize(minWidth = 18.dp, minHeight = 18.dp).clip(CircleShape)
-                                        .background(c.accent).padding(horizontal = 5.dp), contentAlignment = Alignment.Center) {
-                                        Text(if (s.unread > 99) "99+" else "${s.unread}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.onAccent)
+                                // The badge fades in and out and its count rolls (iOS pops 9).
+                                val held = androidx.compose.runtime.remember { intArrayOf(s.unread) }
+                                if (s.unread > 0) held[0] = s.unread
+                                com.fariin.app.ui.components.Appear(s.unread > 0, resize = false) {
+                                    Row {
+                                        Spacer(Modifier.width(6.dp))
+                                        Box(Modifier.defaultMinSize(minWidth = 18.dp, minHeight = 18.dp).clip(CircleShape)
+                                            .background(c.accent).padding(horizontal = 5.dp), contentAlignment = Alignment.Center) {
+                                            com.fariin.app.ui.components.RollingNumber(minOf(held[0], 100)) { n ->
+                                                Text(if (n > 99) "99+" else "$n", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.onAccent)
+                                            }
+                                        }
                                     }
                                 }
                             }

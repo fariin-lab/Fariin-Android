@@ -1,5 +1,6 @@
 package com.fariin.app
 
+import coil3.request.crossfade
 import okio.Path.Companion.toOkioPath
 import coil3.ImageLoader
 import coil3.request.allowRgb565
@@ -62,6 +63,16 @@ class FariinApp : Application() {
                             .build()
                     }
                     .let { if (lowRam) it.allowRgb565(true) else it }
+                    // A picture that comes from disk or the network fades in (iOS pops 12, 17, 49, 51,
+                    // 54, 106) instead of cutting over its grey square; one already in memory (a row
+                    // scrolled back, a first paint from memory) is drawn at once. None when the system
+                    // removes animations.
+                    .let {
+                        val noMotion = runCatching {
+                            android.provider.Settings.Global.getFloat(ctx.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+                        }.getOrDefault(false)
+                        if (noMotion) it else it.crossfade(com.fariin.app.ui.components.Smooth.FADE_MS)
+                    }
                     // Faces and photos on disk, capped like iOS DiskImageCache (250 MB), wiped at sign-out.
                     .diskCache {
                         coil3.disk.DiskCache.Builder()

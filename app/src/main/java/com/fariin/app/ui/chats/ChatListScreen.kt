@@ -16,6 +16,12 @@ import com.fariin.app.data.SearchRecents
 import android.text.format.DateFormat
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import com.fariin.app.ui.components.Appear
+import com.fariin.app.ui.components.Smooth
+import com.fariin.app.ui.components.enterFade
+import com.fariin.app.ui.components.RollingNumber
+import com.fariin.app.ui.components.fadeOnChange
+import com.fariin.app.ui.components.smoothSize
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -153,6 +159,8 @@ fun ChatListScreen(
     /** Retry on the error page: the list listens again. */
     onRetry: () -> Unit = {},
 ) {
+    // The list had drawn once: an empty state that comes after it is a real change (enterFade).
+    val listSettled = com.fariin.app.ui.components.rememberSettled()
     val c = Fariin.colors
     // ⛔ LEAVING THIS SCREEN TAKES THE KEYBOARD DOWN (owner 2026-11-10): a chat, channel or Find
     // Channels opened from the search kept the search's keyboard up over it. When another page
@@ -544,17 +552,25 @@ fun ChatListScreen(
                             // The brand at rest: the Fariin mark and the name in bold (owner 2026-11-03, "ours
                             // looks weak" beside the reference apps). Status words stay plain.
                             title = {
+                                // "Fariin" and the status words ("Connecting", "Waiting for network") cross-fade,
+                                // and the filter line under it comes and goes with a fade (iOS pops 4, 11).
+                                com.fariin.app.ui.components.Swap(title, label = "listTitle") { title ->
                                 // No mark beside it (owner 2026-11-03: "remove the black round").
-                                if (title == "Fariin") Column {
+                                if (title == "Fariin") Column(Modifier.smoothSize()) {
                                     Text("Fariin", fontSize = 26.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp, color = c.label)
                                     // The filter in use, under the title (iOS, owner 2026-10-31): without it a
                                     // filtered list looked like chats had gone. A tap goes back to all chats.
                                     val filterName = when (filter) {
                                         FILTER_UNREAD -> "Unread"; FILTER_GROUPS -> "Groups"; FILTER_CHANNELS -> "Channels"; else -> null
                                     }
-                                    if (filterName != null) Text("$filterName  ×", fontSize = 13.sp, color = c.secondary,
-                                        modifier = Modifier.clickable(onClickLabel = "Show all chats") { filter = FILTER_ALL })
+                                    val heldName = remember { arrayOf("") }
+                                    if (filterName != null) heldName[0] = filterName
+                                    Appear(filterName != null) {
+                                        Text("${heldName[0]}  ×", fontSize = 13.sp, color = c.secondary,
+                                            modifier = Modifier.clickable(onClickLabel = "Show all chats") { filter = FILTER_ALL })
+                                    }
                                 } else Text(title, style = MaterialTheme.typography.titleLarge)
+                                }
                             },
                             // The bar's buttons float in their own circles, as the chat screen's back does.
                             navigationIcon = {
@@ -614,12 +630,13 @@ fun ChatListScreen(
                                 titleContentColor = c.label, actionIconContentColor = c.label, navigationIconContentColor = c.label,
                             ),
                         )
-                        // Fariin Plus chat folders: the chips, only while folders are in use.
-                        if (!showArchive && com.fariin.app.data.ChatFoldersStore.tabsShown) ChatFolderBar(state.chats, me,
+                        // Fariin Plus chat folders: the chips, only while folders are in use. They open and
+                        // close with a fade and their height (iOS pops 8), not in one frame.
+                        Appear(!showArchive && com.fariin.app.data.ChatFoldersStore.tabsShown) { ChatFolderBar(state.chats, me,
                             onEdit = { folderEdit = it }, onManage = {
                                 com.fariin.app.ui.settings.SettingsLink.request(com.fariin.app.ui.settings.PAGE_CHAT_FOLDERS)
                                 onSettings()
-                            }, card = listCard?.takeIf { !searching && !selecting && filter == FILTER_ALL })
+                            }, card = listCard?.takeIf { !searching && !selecting && filter == FILTER_ALL }) }
                         }
                     }
                 }
@@ -691,7 +708,8 @@ fun ChatListScreen(
                     }
                 // iOS wording, each with its line under it. The main list has no button (iOS: nothing
                 // else on a fresh account); Groups offers New Group, Channels Find Channels.
-                shown.isEmpty() && !officialShown && !activitySearchHit && !activityShown && newPeople.isEmpty() && groupHits.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { when {
+                // Fades in when a filter, folder or search empties the list (iOS pops 7), not on first paint.
+                shown.isEmpty() && !officialShown && !activitySearchHit && !activityShown && newPeople.isEmpty() && groupHits.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding()).enterFade(listSettled.value)) { when {
                     query.isNotBlank() -> Centered(null, "No results", null)
                     showArchive -> Centered(fi(R.drawable.ic_archive), "Nothing archived", "Chats you archive and stories you hide will show here.")
                     folder != null -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -882,13 +900,13 @@ fun ChatListScreen(
                         }
                     }
                     if (!searching && (pinned.isNotEmpty() || officialPinned || activityPinned)) {
-                        item(key = "h-pinned") { SectionHeader("Pinned") }
+                        item(key = "h-pinned") { SectionHeader("Pinned", Modifier.animateItem(fadeInSpec = Smooth.fadeSpec(), placementSpec = rowPlace, fadeOutSpec = Smooth.fadeSpec())) }
                         if (activityPinned) activityItem()
                         if (officialPinned) officialItem()
                         items(pinned, key = { it.id }, contentType = { "chat" }) {
                             Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) { row(it) }
                         }
-                        item(key = "h-chats") { SectionHeader("Chats") }
+                        item(key = "h-chats") { SectionHeader("Chats", Modifier.animateItem(fadeInSpec = Smooth.fadeSpec(), placementSpec = rowPlace, fadeOutSpec = Smooth.fadeSpec())) }
                     }
                     // A chat that gets a new message glides to its new place instead of jumping.
                     if (!searching) {
@@ -1335,10 +1353,10 @@ private fun RecentHeader(onClear: () -> Unit) {
 }
 
 @Composable
-private fun SectionHeader(text: String) {
+private fun SectionHeader(text: String, modifier: Modifier = Modifier) {
     Text(
         text, style = MaterialTheme.typography.titleSmall, color = Fariin.colors.accent,
-        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+        modifier = modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
     )
 }
 
@@ -1463,13 +1481,24 @@ internal fun ChatRow(
                 .then(if (storyKey == null) Modifier else Modifier.onPlaced { placed[0] = it }
                     .graphicsLayer { alpha = if (com.fariin.app.ui.stories.StoryOrigins.hiddenKey == storyKey) 0f else 1f }),
                 contentAlignment = Alignment.Center) {
-                Avatar(conv.displayPhoto(me), if (ring.isEmpty()) 54.dp else 48.dp, squircle = conv.isChannel,
-                    kind = com.fariin.app.ui.components.AvatarKind.of(conv.isGroup, conv.isChannel))
-                // Fariin Plus animatedAvatar: a 1:1 person's clip plays over the photo (iOS 2026-11-20).
-                if (!conv.isGroup && !conv.isChannel) com.fariin.app.crypto.Wire.otherUid(conv.id, me).takeIf { it.isNotEmpty() && it != me }
-                    ?.let { peer -> ListAvatarClip(conv.id, peer, if (ring.isEmpty()) 54.dp else 48.dp) }
+                // A story posted or gone: the ring fades in or out and the photo shrinks or grows into
+                // place on the spring (iOS pops 5, 66), not in one frame. One photo size (54) scaled,
+                // so the change asks for no new picture.
+                val hasRing = ring.isNotEmpty()
+                val heldRing = remember { arrayOf(ring) }
+                if (hasRing) heldRing[0] = ring
+                val ringIn by com.fariin.app.ui.components.smoothFloat(if (hasRing) 1f else 0f)
+                val photoScale = 1f - (1f - 48f / 54f) * ringIn
+                Box(Modifier.size(54.dp).graphicsLayer { scaleX = photoScale; scaleY = photoScale }, contentAlignment = Alignment.Center) {
+                    Avatar(conv.displayPhoto(me), 54.dp, squircle = conv.isChannel,
+                        kind = com.fariin.app.ui.components.AvatarKind.of(conv.isGroup, conv.isChannel))
+                    // Fariin Plus animatedAvatar: a 1:1 person's clip plays over the photo (iOS 2026-11-20).
+                    if (!conv.isGroup && !conv.isChannel) com.fariin.app.crypto.Wire.otherUid(conv.id, me).takeIf { it.isNotEmpty() && it != me }
+                        ?.let { peer -> ListAvatarClip(conv.id, peer, 54.dp) }
+                }
                 // LOW: the ring's arcs are drawn once into a picture, not traced again on every scroll frame.
-                if (ring.isNotEmpty()) com.fariin.app.ui.stories.StoryRing(ring, Modifier.requiredSize(56.dp)
+                if (ringIn > 0f && heldRing[0].isNotEmpty()) com.fariin.app.ui.stories.StoryRing(heldRing[0], Modifier.requiredSize(56.dp)
+                    .graphicsLayer { alpha = ringIn }
                     .then(if (cheap) Modifier.graphicsLayer(compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen) else Modifier),
                     squircle = conv.isChannel)
             }
@@ -1518,40 +1547,57 @@ internal fun ChatRow(
             Row(verticalAlignment = Alignment.Top) {
                 // Icons, thumbnails, live lines and drafts in iOS's order; two lines tall always, so
                 // every row is the same height (iOS, the hidden " \n ").
+                // The live lines (in call, recording, typing / sending) and the red Draft fade in when they
+                // come or go, not cut in (iOS pops 1); a new message's words stay as they were.
+                val lineKind = when {
+                    onCall != null -> 1
+                    recording != null -> 2
+                    typing != null -> 3
+                    !draft.isNullOrEmpty() -> 4
+                    else -> 0
+                }
                 ChatRowPreviewText(conv, me, preview, draft, onCall, recording, typing, voiceUnplayed,
-                    modifier = Modifier.weight(1f))
+                    modifier = Modifier.weight(1f).fadeOnChange(lineKind))
                 Spacer(Modifier.width(8.dp))
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(top = 1.dp),
                 ) {
-                    if (conv.isPinned(me) && unread == 0) {
+                    Appear(conv.isPinned(me) && unread == 0, resize = false) {
                         Icon(ImageVector.cachedVector(R.drawable.ic_sf_pin_fill), contentDescription = "Pinned", tint = c.tertiary, modifier = Modifier.size(16.dp))
                     }
                     // Never beside a call: it is a record, not a message with a sent / read state (iOS).
                     if (conv.lastIsMine(me) && !conv.isChannel && !ChatList.lastIsCall(conv)) Ticks(conv, me)
                     // Someone reacted to my message: one grey heart, never the emoji itself (iOS).
-                    if (preview.heart) {
+                    Appear(preview.heart, resize = false) {
                         Icon(ImageVector.cachedVector(R.drawable.ic_sf_heart_fill), contentDescription = "Reaction", tint = c.secondary, modifier = Modifier.size(15.dp))
                     }
-                    if (conv.hasUnreadReply(me)) {
+                    Appear(conv.hasUnreadReply(me), resize = false) {
                         Box(Modifier.size(20.dp).background(c.accent, CircleShape), contentAlignment = Alignment.Center) {
                             Icon(ImageVector.cachedVector(R.drawable.ic_menu_reply), contentDescription = "Someone replied to you",
                                 tint = c.onAccent, modifier = Modifier.size(12.dp))
                         }
                     }
-                    if (unread > 0) {
+                    // The count rolls when it changes; the badge and the manual-unread dot fade in and out.
+                    // The last count is kept while the badge fades out, so it never shows 0.
+                    val shownUnread = remember { intArrayOf(unread) }
+                    if (unread > 0) shownUnread[0] = unread
+                    Appear(unread > 0, resize = false) {
                         Box(
                             // A drawn capsule, not a clip: no extra layer per badge.
                             Modifier.height(20.dp).defaultMinSize(minWidth = 20.dp)
-                                .background(if (muted) c.secondary else c.accent, CircleShape).padding(horizontal = 5.dp),
+                                .background(if (muted) c.secondary else c.accent, CircleShape).padding(horizontal = 5.dp)
+                                .smoothSize(),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Text(if (unread > 99) "99+" else "$unread", fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold, color = c.onAccent, maxLines = 1)
+                            RollingNumber(minOf(shownUnread[0], 100)) { n ->
+                                Text(if (n > 99) "99+" else "$n", fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold, color = c.onAccent, maxLines = 1)
+                            }
                         }
-                    } else if (conv.manuallyUnread(me)) {
+                    }
+                    Appear(unread == 0 && conv.manuallyUnread(me), resize = false) {
                         Box(Modifier.size(12.dp).background(c.accent, CircleShape))
                     }
                 }
@@ -1571,8 +1617,9 @@ private fun Ticks(conv: Conversation, me: String) {
     }
     val read = conv.lastReadByOther(me)
     val delivered = read || conv.lastDeliveredToOther(me)
-    // The bubbles' own drawn marks (iOS BubbleTicks), at their drawn size, not stretched.
-    Icon(
+    // The bubbles' own drawn marks (iOS BubbleTicks), at their drawn size, not stretched. A new mark
+    // fades in (iOS pops 10) instead of swapping in one frame.
+    Icon(modifier = Modifier.fadeOnChange(if (read) 2 else if (delivered) 1 else 0), painter =
         androidx.compose.ui.res.painterResource(if (delivered) R.drawable.ic_tick_double else R.drawable.ic_tick_single),
         contentDescription = if (read) "Read" else if (delivered) "Delivered" else "Sent",
         tint = if (read) c.blue else c.secondary,   // iOS: read is blue (0A84FF) in the list
