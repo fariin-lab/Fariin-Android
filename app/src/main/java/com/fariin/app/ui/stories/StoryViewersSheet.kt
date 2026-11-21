@@ -610,16 +610,26 @@ internal fun ViewersSheet(
                 }
                 val list = people
                 val hidden by StoryPrivacyStore.hidden.collectAsState()
-                when {
-                    showingReplies -> RepliesList(story, me, replies, query, who, convs, Modifier.weight(1f).nestedScroll(listPull),
+                // Skeleton, empty words, the list and the tabs cross-fade (iOS pops 64, 71).
+                val sheetKind = when {
+                    showingReplies -> 0
+                    list == null && !failed && knownViews != 0 -> 1
+                    list == null || list.isEmpty() -> 2
+                    else -> 3 + tab
+                }
+                Box(Modifier.fillMaxWidth().weight(1f)) {
+                androidx.compose.animation.AnimatedContent(sheetKind, Modifier.fillMaxSize(),
+                    transitionSpec = com.fariin.app.ui.components.Smooth.crossfade(), label = "viewersSheet") { sheetKind ->
+                when (sheetKind) {
+                    0 -> RepliesList(story, me, replies, query, who, convs, Modifier.fillMaxSize().nestedScroll(listPull),
                         onOpenPerson = onOpenPerson,
                         onDelete = { r ->
                             // Off the list at once; the listener confirms it, or brings it back on a refusal.
                             replies = replies.filter { it.id != r.id }
                             loadScope.launch { runCatching { com.fariin.app.data.GroupStoryReplies.delete(storyId, r.id) } }
                         })
-                    list == null && !failed && knownViews != 0 -> Box(Modifier.fillMaxWidth().weight(1f).then(sheetDrag)) { ViewersSkeleton(knownViews ?: 6) }
-                    list == null || list.isEmpty() -> Box(Modifier.fillMaxWidth().weight(1f).then(sheetDrag).padding(horizontal = 24.dp)) {
+                    1 -> Box(Modifier.fillMaxSize().then(sheetDrag)) { ViewersSkeleton(knownViews ?: 6) }
+                    2 -> Box(Modifier.fillMaxSize().then(sheetDrag).padding(horizontal = 24.dp)) {
                         Text(
                             when {
                                 failed -> buildAnnotatedString { append("Couldn't load viewers. Trying again…") }
@@ -635,11 +645,13 @@ internal fun ViewersSheet(
                         )
                     }
                     else -> {
-                        val rows = StorySheetRows.order(list, query, if (tab == 1) friendUids else null)
-                        LazyColumn(Modifier.fillMaxWidth().weight(1f).nestedScroll(listPull)) {
+                        val rows = StorySheetRows.order(list.orEmpty(), query, if (tab == 1) friendUids else null)
+                        LazyColumn(Modifier.fillMaxSize().nestedScroll(listPull)) {
                             items(rows.size, key = { rows[it].uid }) { i ->
                                 val v = rows[i]
-                                ViewerRow(v, readOnly, isHidden = v.uid in hidden, again = again[v.uid] ?: 0,
+                                // A viewer who watches while the sheet is open fades in as a new top row (iOS pops 64).
+                                ViewerRow(v, readOnly, modifier = Modifier.animateItem(fadeInSpec = com.fariin.app.ui.components.Smooth.fadeSpec(),
+                                    placementSpec = com.fariin.app.ui.components.Smooth.soft(), fadeOutSpec = com.fariin.app.ui.components.Smooth.fadeSpec()), isHidden = v.uid in hidden, again = again[v.uid] ?: 0,
                                     onOpen = { onOpenPerson(v.uid) },
                                     onSendMessage = { onSendMessage(v) },
                                     onToggleHidden = { StoryPrivacyStore.setHidden(setOf(v.uid), v.uid !in hidden) },
@@ -647,6 +659,8 @@ internal fun ViewersSheet(
                             }
                         }
                     }
+                }
+                }
                 }
             }
         }
@@ -675,10 +689,11 @@ private fun SheetTab(title: String, selected: Boolean, enabled: Boolean, onClick
 private fun ViewerRow(
     v: StoryViewer, readOnly: Boolean, isHidden: Boolean, again: Int = 0,
     onOpen: () -> Unit, onSendMessage: () -> Unit, onToggleHidden: () -> Unit, onBlock: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var menu by remember { mutableStateOf(false) }
     Row(
-        Modifier.fillMaxWidth().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onOpen() }
+        modifier.fillMaxWidth().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onOpen() }
             .padding(horizontal = 16.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

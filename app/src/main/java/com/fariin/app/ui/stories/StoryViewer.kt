@@ -1751,7 +1751,10 @@ private fun OwnerBar(story: Story, summary: StoryViewSummary?, onViews: () -> Un
                 Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_views), contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
             }
             Spacer(Modifier.width(8.dp))
-            Text(StoryRules.viewsLabel(count, full), color = Color.White, fontSize = 15.sp, maxLines = 1)
+            // The real count cross-fades in over the cached one (iOS pops 63).
+            com.fariin.app.ui.components.Swap(StoryRules.viewsLabel(count, full), label = "views") { l ->
+                Text(l, color = Color.White, fontSize = 15.sp, maxLines = 1)
+            }
             if ((summary?.repostCount ?: 0) > 0) {
                 Spacer(Modifier.width(18.dp))
                 Text("Reposts ${summary!!.repostCount}", color = Color.White, fontSize = 15.sp)
@@ -1801,7 +1804,8 @@ private fun ReplyBar(
         else if (focused && imeSeen) { imeSeen = false; focus.clearFocus() }
     }
     Column(Modifier.fillMaxWidth()) {
-        if (canReply && focused && text.isEmpty()) {
+        // The react bar fades and folds away at the first letter typed, and back (iOS pops 65, 102).
+        com.fariin.app.ui.components.Appear(canReply && focused && text.isEmpty(), resize = true) {
             Column(
                 Modifier.padding(start = 16.dp, end = 44.dp, bottom = 4.dp).fillMaxWidth().height(62.dp)
                     .clip(RoundedCornerShape(24.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 14.dp),

@@ -362,9 +362,14 @@ fun StoryEditCanvas(
 /** The bin, only while a text is in the hand; red and larger with the finger on it (iOS trash). */
 @Composable
 fun StoryTrash(hot: Boolean, modifier: Modifier) {
+    // Over the bin it grows and turns red on the spring, not in one frame.
+    val grow by androidx.compose.animation.core.animateFloatAsState(if (hot) 1.25f else 1f,
+        com.fariin.app.ui.components.Smooth.soft(), label = "binGrow")
+    val fill by androidx.compose.animation.animateColorAsState(if (hot) Color.Red else Color.Black.copy(alpha = 0.5f),
+        com.fariin.app.ui.components.Smooth.fadeSpec(), label = "binFill")
     Box(
-        modifier.scale(if (hot) 1.25f else 1f).size(52.dp).clip(CircleShape)
-            .background(if (hot) Color.Red else Color.Black.copy(alpha = 0.5f)),
+        modifier.scale(grow).size(52.dp).clip(CircleShape)
+            .background(fill),
         contentAlignment = Alignment.Center,
     ) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_trash), contentDescription = "Delete", tint = Color.White) }
 }

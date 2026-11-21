@@ -939,14 +939,19 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
         ) }
         }
         }
-        val chrome = !drawing && !dragging && editingId < 0 && flight == null && dragY == 0f && !leaving && !trimming
+        val chromeTarget = !drawing && !dragging && editingId < 0 && flight == null && dragY == 0f && !leaving && !trimming
+        // A drag of a caption or sticker, and the pen, fade the chrome out and back in (iOS pops 61,
+        // 62); it stays drawn only while it fades. Everything else still hides it at once.
+        val chromeFade by androidx.compose.animation.core.animateFloatAsState(if (chromeTarget) 1f else 0f,
+            com.fariin.app.ui.components.Smooth.fadeSpec(), label = "chrome")
+        val chrome = chromeTarget || (chromeFade > 0.01f && (dragging || drawing) && editingId < 0 && flight == null && !leaving && !trimming)
         // Close inside the frame's top corner (iOS).
-        if (chrome) Box(Modifier.graphicsLayer { alpha = chromeIn.value }.statusBarsPadding().padding(12.dp).size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.35f))
+        if (chrome) Box(Modifier.graphicsLayer { alpha = chromeIn.value * chromeFade }.statusBarsPadding().padding(12.dp).size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.35f))
             .clickable { close() }, contentAlignment = Alignment.Center) {
             Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = Color.White)
         }
         // A clip's sound, beside the X (iOS keeps it at the top: it only flips a state).
-        if (chrome && isVideo && !audience) Box(Modifier.statusBarsPadding().padding(start = 64.dp, top = 12.dp).size(44.dp).clip(CircleShape)
+        if (chrome && isVideo && !audience) Box(Modifier.graphicsLayer { alpha = chromeFade }.statusBarsPadding().padding(start = 64.dp, top = 12.dp).size(44.dp).clip(CircleShape)
             .background(Color.Black.copy(alpha = 0.35f)).clickable { cur.muted = !cur.muted }, contentAlignment = Alignment.Center) {
             Icon(if (cur.muted) ImageVector.cachedVector(R.drawable.ic_speaker_off) else ImageVector.cachedVector(R.drawable.ic_speaker_on),
                 contentDescription = if (cur.muted) "Sound off" else "Sound on", tint = Color.White)
@@ -962,17 +967,22 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
                 },
                 modifier = Modifier.align(Alignment.BottomCenter))
         }
-        if (drawing && !stroking && editingId < 0) {
-            StoryPenTopBar(edits, onClearAll = { askClearAll = true }, modifier = Modifier.align(Alignment.TopCenter))
+        // The pen's bars fade in and out with the pen (iOS pops 62).
+        val penBars = drawing && !stroking && editingId < 0
+        com.fariin.app.ui.components.Appear(penBars, Modifier.align(Alignment.TopCenter), resize = false) {
+            StoryPenTopBar(edits, onClearAll = { askClearAll = true }, modifier = Modifier)
+        }
+        com.fariin.app.ui.components.Appear(penBars, Modifier.align(Alignment.BottomCenter), resize = false) {
             StoryPenBar(
                 penHue, { penHue = it }, highlighter, { highlighter = it }, penWidth, { penWidth = StoryEditRules.nextPenWidth(penWidth) },
-                onCancel = { cancelPen() }, onDone = { closePen(false) }, modifier = Modifier.align(Alignment.BottomCenter),
+                onCancel = { cancelPen() }, onDone = { closePen(false) }, modifier = Modifier,
             )
         }
-        if (dragging) StoryTrash(trashHot, Modifier.align(Alignment.TopStart).offset {
+        // The bin fades in under a drag (iOS pops 61).
+        com.fariin.app.ui.components.Appear(dragging, Modifier.align(Alignment.TopStart).offset {
             val half = 26.dp.roundToPx()
             androidx.compose.ui.unit.IntOffset(bin.x.toInt() - half, bin.y.toInt() - half)
-        })
+        }, resize = false) { StoryTrash(trashHot, Modifier) }
         // Gone while the audience page shows: a caption field left behind kept the keyboard up
         // over Post Story.
         if (chrome && !audience) {
@@ -984,7 +994,7 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
             if (imeDp > 0.dp) Box(Modifier.fillMaxSize().pointerInput(Unit) {
                 detectTapGestures { focus.clearFocus(force = true); keyboard?.hide(); captionArmed = false }
             })
-            Column(Modifier.align(Alignment.BottomCenter).graphicsLayer { alpha = chromeIn.value }.padding(bottom = lift).fillMaxWidth()) {
+            Column(Modifier.align(Alignment.BottomCenter).graphicsLayer { alpha = chromeIn.value * chromeFade }.padding(bottom = lift).fillMaxWidth()) {
             // The strip (iOS itemStrip): only with more than one item, right-aligned over the caption,
             // gone while the caption is being typed.
             if (items.size > 1 && !captionFocused) Row(
@@ -1053,7 +1063,7 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
             }
             // The bar on black under the frame: Aa, stickers and the pen in one capsule, NEXT on the right.
             Row(
-                Modifier.align(Alignment.BottomCenter).graphicsLayer { alpha = chromeIn.value }.navigationBarsPadding().height(EDIT_BAR).fillMaxWidth().padding(horizontal = 14.dp),
+                Modifier.align(Alignment.BottomCenter).graphicsLayer { alpha = chromeIn.value * chromeFade }.navigationBarsPadding().height(EDIT_BAR).fillMaxWidth().padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (canEdit) Row(Modifier.height(52.dp).clip(RoundedCornerShape(26.dp)).background(Color.White.copy(alpha = 0.12f)).padding(horizontal = 6.dp),

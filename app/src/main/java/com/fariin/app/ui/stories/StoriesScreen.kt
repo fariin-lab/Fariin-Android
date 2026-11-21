@@ -1,5 +1,6 @@
 package com.fariin.app.ui.stories
 
+import com.fariin.app.ui.components.fadeOnChange
 import com.fariin.app.ui.components.glassMenuAnchor
 import com.fariin.app.ui.components.frostedTopBar
 import androidx.compose.foundation.layout.statusBars
@@ -388,6 +389,9 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                     is StoryUploads.State.Failed -> if (retryWaiting) com.fariin.app.data.StoryOutbox.RETRY_LINE else u.message
                     null -> if (retryWaiting) com.fariin.app.data.StoryOutbox.RETRY_LINE else null
                 }
+                // My Story <-> Uploading… <-> Add Story fade into each other (iOS pops 67).
+                val myRowKind = if (upload == StoryUploads.State.Uploading) 0 else if (mine != null && newest != null) 1 else 2
+                Box(Modifier.fadeOnChange(myRowKind)) {
                 if (upload == StoryUploads.State.Uploading) {
                     // iOS: while it uploads, My Story shows the picture going up and the ring turns
                     // round my face; the post's flight lands on this card (StoryPostFlight).
@@ -415,11 +419,13 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                         onClick = { if (retryWaiting) retryNow() else addStory() }, onCamera = addStory, menu = myMenu,
                     )
                 }
+                }
                 pickError?.let { Text(it, color = c.red, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 20.dp)) }
             }
             if (recent.isNotEmpty()) {
                 item(key = "recentHeading", contentType = "heading") { Heading("Recent Stories") }
-                items(recent, key = { "r" + it.key }, contentType = { "friend" }) { g -> FriendRow(g, now, friendMenu(g)) { openRing(g) } }
+                // Rows fade out (Hide Stories) and the ones below glide up (iOS pops 68).
+                items(recent, key = { "r" + it.key }, contentType = { "friend" }) { g -> Box(Modifier.animateItem(fadeInSpec = com.fariin.app.ui.components.Smooth.fadeSpec(), placementSpec = com.fariin.app.ui.components.Smooth.soft(), fadeOutSpec = com.fariin.app.ui.components.Smooth.fadeSpec())) { FriendRow(g, now, friendMenu(g)) { openRing(g) } } }
             }
             if (viewed.isNotEmpty()) {
                 item(key = "viewedHeading", contentType = "foldHeading") {
@@ -440,7 +446,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                         )
                     }
                 }
-                if (!viewedCollapsed) items(viewed, key = { "v" + it.key }, contentType = { "friend" }) { g -> FriendRow(g, now, friendMenu(g)) { openRing(g) } }
+                if (!viewedCollapsed) items(viewed, key = { "v" + it.key }, contentType = { "friend" }) { g -> Box(Modifier.animateItem(fadeInSpec = com.fariin.app.ui.components.Smooth.fadeSpec(), placementSpec = com.fariin.app.ui.components.Smooth.soft(), fadeOutSpec = com.fariin.app.ui.components.Smooth.fadeSpec())) { FriendRow(g, now, friendMenu(g)) { openRing(g) } } }
             }
             // iOS Hidden Stories: only while there is one, dimmed, folding like Viewed Stories.
             if (hidden.isNotEmpty()) {
@@ -463,7 +469,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                     }
                 }
                 if (!hiddenCollapsed) items(hidden, key = { "h" + it.key }, contentType = { "hiddenFriend" }) { g ->
-                    Box(Modifier.alpha(0.45f)) { FriendRow(g, now, hiddenMenu(g)) { openHidden(g) } }
+                    Box(Modifier.animateItem(fadeInSpec = com.fariin.app.ui.components.Smooth.fadeSpec(), placementSpec = com.fariin.app.ui.components.Smooth.soft(), fadeOutSpec = com.fariin.app.ui.components.Smooth.fadeSpec()).alpha(0.45f)) { FriendRow(g, now, hiddenMenu(g)) { openHidden(g) } }
                 }
             }
             // Glowing (iOS glowSection): under Friends, never mixed into it; hidden with Glow.
