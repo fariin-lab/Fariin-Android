@@ -1586,21 +1586,40 @@ private fun Ticks(conv: Conversation, me: String) {
 /** iOS ChatRow.timeStr: time today, "Yesterday", weekday this week, then "Mar 4" / "Mar 4, 2025". */
 fun timeLabel(ms: Double, is24h: Boolean, nowMs: Long = System.currentTimeMillis()): String {
     if (ms <= 0) return ""
-    val d = Date(ms.toLong())
-    val then = Calendar.getInstance().apply { time = d }
-    val now = Calendar.getInstance().apply { timeInMillis = nowMs }
-    val startOfToday = (now.clone() as Calendar).apply {
-        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-    }
-    val dayMs = 24L * 60 * 60 * 1000
+    // Oppo profile 2026-11-21: three Calendars per row on every scroll frame a row came in (~65 ms
+    // over a few flings). Today's start and the year are worked out once a minute; each label is
+    // kept until the day, the clock style, the language or the time zone changes.
+    val day = TimeLabelDay.of(nowMs)
     val loc = Locale.getDefault()
-    return when {
-        d.time >= startOfToday.timeInMillis ->
-            formatDate(if (is24h) "HH:mm" else "h:mm a", loc, d)
-        d.time >= startOfToday.timeInMillis - dayMs -> "Yesterday"
+    val key = "${ms.toLong()}|$is24h|${day.start}|$loc"
+    TimeLabelDay.labels.get(key)?.let { return it }
+    val d = Date(ms.toLong())
+    val dayMs = 24L * 60 * 60 * 1000
+    val label = when {
+        d.time >= day.start -> formatDate(if (is24h) "HH:mm" else "h:mm a", loc, d)
+        d.time >= day.start - dayMs -> "Yesterday"
         nowMs - d.time < 7 * dayMs -> formatDate("EEE", loc, d)
-        then.get(Calendar.YEAR) != now.get(Calendar.YEAR) -> formatDate("MMM d, yyyy", loc, d)
+        d.time < day.yearStart -> formatDate("MMM d, yyyy", loc, d)
         else -> formatDate("MMM d", loc, d)
+    }
+    TimeLabelDay.labels.put(key, label)
+    return label
+}
+
+/** Today's start and this year's start for [timeLabel], made at most once a minute (and per time zone). */
+private object TimeLabelDay {
+    class Day(val minute: Long, val tz: String, val start: Long, val yearStart: Long)
+    @Volatile private var cur: Day? = null
+    val labels = android.util.LruCache<String, String>(512)
+    fun of(nowMs: Long): Day {
+        val tz = java.util.TimeZone.getDefault().id
+        cur?.let { if (it.minute == nowMs / 60_000 && it.tz == tz) return it }
+        val c = Calendar.getInstance().apply {
+            timeInMillis = nowMs; set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }
+        val start = c.timeInMillis
+        c.set(Calendar.DAY_OF_YEAR, 1)
+        return Day(nowMs / 60_000, tz, start, c.timeInMillis).also { cur = it }
     }
 }
 
