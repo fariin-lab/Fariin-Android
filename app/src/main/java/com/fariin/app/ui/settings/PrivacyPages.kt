@@ -572,7 +572,9 @@ internal fun ChatKeyPage(pop: () -> Unit) {
         val plusKey = com.fariin.app.data.PlusStore.state("chatKey")
         if (!rolling && plusKey != com.fariin.app.data.PlusStore.State.OFF)
             SettingsSection(footer = "Fariin makes a random 6-digit key for you, different from everyone else's.") {
-                SettingsRow("Choose Your Own Key", last = true, accessory = { PlusTag() }) {
+                // Locked: the Plus star (iOS PlusGate 2026-11-20, no "Fariin Plus" tag); a member sees none.
+                SettingsRow("Choose Your Own Key", last = true, accessory = if (plusKey == com.fariin.app.data.PlusStore.State.LOCKED) {
+                    { PlusBadgeImage(18.dp) } } else null) {
                     if (plusKey == com.fariin.app.data.PlusStore.State.ON) ownKey = true else plusPage = true
                 }
             }
@@ -707,15 +709,6 @@ private fun KeyPill(label: String, icon: Int, modifier: Modifier = Modifier, onC
         Spacer(Modifier.width(6.dp))
         Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label)
     }
-}
-
-/** The grey "Fariin Plus" tag at the end of a row whose feature comes with Plus. */
-@Composable
-internal fun PlusTag() {
-    val c = Fariin.colors
-    Text("Fariin Plus", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.secondary,
-        modifier = Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
-            .background(c.secondary.copy(alpha = 0.15f)).padding(horizontal = 7.dp, vertical = 3.dp))
 }
 
 /** Plus "Choose Your Own Key" rules, as the server checks them: 4 to 6 ASCII digits, not one digit

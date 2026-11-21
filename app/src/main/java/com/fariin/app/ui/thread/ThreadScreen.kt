@@ -3049,7 +3049,9 @@ private fun Composer(
                                     onClick = { fxMenu = false; onPickFx(id); sendNow() })
                             }
                         } else androidx.compose.material3.DropdownMenuItem(
-                            text = { Column { Text("Send with Effect"); Text("Fariin Plus", fontSize = 12.sp, color = Fariin.colors.secondary) } },
+                            // Locked: the Plus star after the words (iOS PlusGate, no "Fariin Plus" tag).
+                            text = { Row(verticalAlignment = Alignment.CenterVertically) { Text("Send with Effect")
+                                com.fariin.app.ui.settings.PlusBadgeImage(16.dp, Modifier.padding(start = 6.dp)) } },
                             onClick = { fxMenu = false; onPickFx(null) })
                     }
                     // iOS: a tick while editing (the change is saved, not sent), the arrow otherwise.

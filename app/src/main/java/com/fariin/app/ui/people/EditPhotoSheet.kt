@@ -114,11 +114,13 @@ internal fun EditPhotoSheet(
                     DropdownMenuItem(text = { Text("Photo Library", fontSize = 17.sp) },
                         leadingIcon = { Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_album), null, tint = c.label) },
                         onClick = { menu = false; onLibrary() })
-                    // Fariin Plus animatedAvatar: the small Plus line under it (iOS's approved look).
+                    // Fariin Plus animatedAvatar (iOS PlusGate 2026-11-20): locked = the Plus star after the
+                    // words, no "Fariin Plus" tag; a member sees the plain row.
                     if (videoState != com.fariin.app.data.PlusStore.State.OFF) DropdownMenuItem(
-                        text = { Column {
+                        text = { Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("Choose Video", fontSize = 17.sp)
-                            Text("Fariin Plus", fontSize = 13.sp, color = c.secondary)
+                            if (videoState == com.fariin.app.data.PlusStore.State.LOCKED)
+                                com.fariin.app.ui.settings.PlusBadgeImage(16.dp, Modifier.padding(start = 6.dp))
                         } },
                         leadingIcon = { Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_video_fill), null, tint = c.label) },
                         onClick = { menu = false; onVideo() })
