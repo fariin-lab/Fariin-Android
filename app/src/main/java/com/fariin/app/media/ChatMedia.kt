@@ -31,7 +31,9 @@ class ChatMedia(
     private val cid: String,
     private val crypto: FariinCrypto?,
 ) {
-    private val dir: File get() = File(context.cacheDir, "chat-media").also { it.mkdirs() }
+    /** The folder; made only where something is written (a bubble's look-up asked the disk to make it). */
+    private val dir: File = File(context.cacheDir, "chat-media")
+    private fun dirMade(): File = dir.also { it.mkdirs() }
 
     /** Where my own outgoing files wait (cleared with the cache, as iOS's temp folder is). */
     fun localDir(): File = File(context.cacheDir, "outgoing").also { it.mkdirs() }
@@ -41,8 +43,11 @@ class ChatMedia(
         ?.also { it.setLastModified(System.currentTimeMillis()) }
 
     /** [url]'s own file, else its alias copy (MediaOrigin: the same file from another message). */
-    private fun showable(url: String): File? = key(url).takeIf { it.exists() && it.length() > 0 }
-        ?: alias(url).takeIf { it.exists() && it.length() > 0 }
+    private fun showable(url: String): File? {
+        val h = sha(url)
+        return File(dir, h).takeIf { it.exists() && it.length() > 0 }
+            ?: File(dir, "a-$h").takeIf { it.exists() && it.length() > 0 }
+    }
 
     /** The byte count of [url]'s OWN cached file (never an alias), or null: what a forward claims. */
     fun ownBytes(url: String): Long? = if (isLocal(url)) null else key(url).length().takeIf { it > 0 }
@@ -124,11 +129,12 @@ class ChatMedia(
         } ?: return null
         val src = key(other)
         // A plain clip watched through the stream cache: copied out to its own file first.
+        dirMade()
         if (!src.exists() || src.length() == 0L) VideoStream.copyCached(context, other, src)
         if (!src.exists() || src.length() != size) return null
         val out = alias(url)
         return runCatching {
-            val tmp = File(dir, out.name + ".tmp" + System.nanoTime())
+            val tmp = File(dirMade(), out.name + ".tmp" + System.nanoTime())
             src.copyTo(tmp, overwrite = true)
             if (!tmp.renameTo(out)) { out.delete(); tmp.renameTo(out) }
             out.takeIf { it.exists() && it.length() == size }
@@ -144,6 +150,7 @@ class ChatMedia(
     }
 
     private suspend fun download(url: String, enc: EncMeta?): File? {
+        dirMade()
         // A plain clip already watched to the end through the stream cache: copied out, not fetched again.
         if ((enc == null || enc.isPlain) && Wire.isGroupCid(cid) && url.startsWith("https://")) {
             val f = key(url)
@@ -174,7 +181,7 @@ class ChatMedia(
 
     /** The sealed bytes through a file task, so the bubble's ring fills by bytes and its X stops it. */
     private suspend fun fetchWithProgress(ref: com.google.firebase.storage.StorageReference, url: String): ByteArray? {
-        val part = File(dir, "dl-" + sha(url) + ".part")
+        val part = File(dirMade(), "dl-" + sha(url) + ".part")
         val task = ref.getFile(part)
         task.addOnProgressListener { s ->
             if (s.totalByteCount > MediaRules.MAX_DOWNLOAD) task.cancel()
@@ -222,7 +229,7 @@ class ChatMedia(
 
     private fun assetFile(url: String): File? {
         val path = url.removePrefix(ASSET)
-        val f = File(dir, "asset-" + path.replace('/', '_'))
+        val f = File(dirMade(), "asset-" + path.replace('/', '_'))
         if (f.exists()) return f
         return runCatching {
             context.assets.open(path).use { atomicWrite(f, it.readBytes()) }
@@ -235,6 +242,7 @@ class ChatMedia(
     private fun alias(url: String): File = File(dir, "a-" + sha(url))
 
     private fun atomicWrite(f: File, b: ByteArray) {
+        f.parentFile?.mkdirs()
         val tmp = File(f.parentFile, f.name + ".tmp" + System.nanoTime())
         tmp.writeBytes(b)
         if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
@@ -271,7 +279,22 @@ class ChatMedia(
         fun isFetching(url: String): Boolean = inflight.containsKey(url)
 
         fun isLocal(url: String) = url.startsWith(ASSET) || url.startsWith("/")
-        fun sha(s: String): String = MessageDigest.getInstance("SHA-256").digest(s.toByteArray())
-            .joinToString("") { "%02x".format(it) }
+        /**
+         * The cache name of [s]: SHA-256 in hex. Remembered per string, and hex by table: a chat's
+         * first frame asks it for every picture, and a String.format per byte made it ~2 ms a call on
+         * the Oppo (chat open profile 2026-11-21).
+         */
+        fun sha(s: String): String {
+            shaMemo.get(s)?.let { return it }
+            val d = MessageDigest.getInstance("SHA-256").digest(s.toByteArray())
+            val out = CharArray(d.size * 2)
+            for (i in d.indices) {
+                val v = d[i].toInt() and 0xff
+                out[i * 2] = HEX[v ushr 4]; out[i * 2 + 1] = HEX[v and 0x0f]
+            }
+            return String(out).also { shaMemo.put(s, it) }
+        }
+        private val HEX = "0123456789abcdef".toCharArray()
+        private val shaMemo = android.util.LruCache<String, String>(2048)
     }
 }
