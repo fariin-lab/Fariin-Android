@@ -157,6 +157,7 @@ fun StoryCameraDialog(
     /** A finished TEXT story, already drawn to the picture that posts (iOS onTextStory). */
     onTextStory: (com.fariin.app.data.StoryMedia.Prepared) -> Unit = {},
 ) {
+    com.fariin.app.ui.components.AppOrientation.KeepUpright()   // built upright (iOS: full screen stays upright)
     // The camera rises from the bottom as one sheet and goes back down the same way (iOS full-screen
     // cover; owner 2026-11-08: it faded in and out with its buttons hanging over the Stories list).
     val density = androidx.compose.ui.platform.LocalDensity.current

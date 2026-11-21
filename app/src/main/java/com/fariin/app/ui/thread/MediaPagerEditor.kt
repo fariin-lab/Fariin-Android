@@ -101,6 +101,7 @@ internal fun MediaPagerEditor(
     onClose: () -> Unit,
     onSend: (List<Uri>, String) -> Unit,
 ) {
+    com.fariin.app.ui.components.AppOrientation.KeepUpright()   // built upright (iOS: full screen stays upright)
     var back by remember { mutableStateOf<() -> Unit>({ onClose() }) }
     Dialog(
         onDismissRequest = { back() },

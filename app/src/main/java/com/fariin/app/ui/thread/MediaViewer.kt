@@ -185,6 +185,7 @@ private const val BACK_STIFFNESS = 1260f
 
 @Composable
 internal fun MediaViewer(v: Viewing, host: ViewerHost? = null, onClose: () -> Unit) {
+    com.fariin.app.ui.components.AppOrientation.KeepUpright()   // built upright (iOS: full screen stays upright)
     val (pages, start) = remember(v) { viewerPages(v) }
     // Opened from a chat bubble: the picture zooms out of the bubble and back (MediaOrigins). All
     // Media has no bubbles on screen, so it keeps the plain window fade.

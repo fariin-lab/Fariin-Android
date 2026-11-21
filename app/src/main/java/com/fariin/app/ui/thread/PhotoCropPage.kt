@@ -82,6 +82,7 @@ private val Glass = Color.Black.copy(alpha = 0.45f)
  */
 @Composable
 internal fun PhotoCropPage(source: Bitmap, onCancel: () -> Unit, onDone: (Bitmap) -> Unit) {
+    com.fariin.app.ui.components.AppOrientation.KeepUpright()   // built upright (iOS: full screen stays upright)
     val density = LocalDensity.current
     var img by remember { mutableStateOf(source) }
     val picture = remember(img) { img.asImageBitmap() }

@@ -129,6 +129,8 @@ class MainActivity : ComponentActivity() {
         }
         StartClock.mark("activity.beforeContent")
         setContent {
+            // The list, chats and Settings turn with the phone; full-screen layers keep it upright (AppOrientation).
+            com.fariin.app.ui.components.AppOrientation.Follow(this)
             FariinTheme {
               androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
                 // Debug builds only: `--es authPage <name>` draws one sign-in page with made-up state (ui/auth/AuthDemo.kt).

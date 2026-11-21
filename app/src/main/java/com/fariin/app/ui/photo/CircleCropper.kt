@@ -75,6 +75,7 @@ import kotlin.math.roundToInt
  */
 @Composable
 fun CircleCropper(uri: Uri, title: String, subtitle: String, onDone: (ByteArray) -> Unit, onCancel: () -> Unit) {
+    com.fariin.app.ui.components.AppOrientation.KeepUpright()   // built upright (iOS: full screen stays upright)
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var source by remember(uri) { mutableStateOf<Bitmap?>(null) }

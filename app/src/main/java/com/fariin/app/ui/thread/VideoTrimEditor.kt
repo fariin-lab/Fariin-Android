@@ -394,6 +394,7 @@ internal fun clock(ms: Long): String { val t = ((ms + 500) / 1000).toInt(); retu
  */
 @Composable
 internal fun VideoEditor(uri: Uri, caption: String, onCaption: (String) -> Unit, onClose: () -> Unit, onSend: (String) -> Unit) {
+    com.fariin.app.ui.components.AppOrientation.KeepUpright()   // built upright (iOS: full screen stays upright)
     Dialog(
         onDismissRequest = onClose,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),

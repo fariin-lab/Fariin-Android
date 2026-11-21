@@ -262,6 +262,7 @@ fun StoryViewer(
     /** See [StoryViewerDialog]: the tapped card when it is not the ring's own slot. */
     origin: StoryOrigin? = null,
 ) {
+    com.fariin.app.ui.components.AppOrientation.KeepUpright()   // built upright (iOS: full screen stays upright)
     val service = remember(me) { StoryService(me) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()

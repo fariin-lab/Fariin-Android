@@ -54,6 +54,8 @@ object AppFeatures {
     /** Plain group and channel videos play while they come down (VideoStream); off = the whole
      *  file first, as before. */
     val videoStream: Boolean get() = offOnly("videoStream", true)
+    /** The main screen turns with the phone (iOS OrientationLock.phoneTurns, 2026-11-16). */
+    val phoneLandscape: Boolean get() = offOnly("phoneLandscape", true)
 
     /** getAppConfig's value for this account first ([AppConfig], next-launch keys from its launch
      *  snapshot), then config/features as of this launch, then the shipped default. */

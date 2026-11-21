@@ -564,6 +564,7 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
                           onClose: () -> Unit, onPosted: () -> Unit, textStory: Boolean = false,
                           flyHome: Boolean = false, onFlightStart: () -> Unit = {}, onAddMore: (() -> Unit)? = null,
                           hidden: Boolean = false, editing: com.fariin.app.data.Story? = null) {
+    com.fariin.app.ui.components.AppOrientation.KeepUpright()   // built upright (iOS: full screen stays upright)
     if (items.isEmpty()) return
     // ARRIVING FROM THE LIBRARY (owner's video 2026-11-08: the bare picture sat ~170 ms, then every
     // control popped in at once). The editor is built while the picture flies, unseen; when it lands

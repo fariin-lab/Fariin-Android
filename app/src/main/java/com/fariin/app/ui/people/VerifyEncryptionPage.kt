@@ -178,6 +178,7 @@ internal fun VerifyEncryptionPage(cid: String, peerName: String, peerPhoto: Stri
 /** The camera for the other phone's verification code (iOS VerifyScanSheet). */
 @Composable
 private fun VerifyScanner(onClose: () -> Unit, onCode: (String) -> Unit) {
+    com.fariin.app.ui.components.AppOrientation.KeepUpright()   // built upright (iOS: full screen stays upright)
     val ctx = LocalContext.current
     val owner = LocalLifecycleOwner.current
     var hasCamera by remember { mutableStateOf(ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }

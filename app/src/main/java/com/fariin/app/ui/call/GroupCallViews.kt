@@ -107,6 +107,7 @@ private val Card = Color(0xFF1C1C1E)
  */
 @Composable
 fun IncomingGroupCallScreen(invite: GroupInvite, onIgnore: () -> Unit, onJoin: (muted: Boolean) -> Unit) {
+    com.fariin.app.ui.components.AppOrientation.KeepUpright()   // built upright (iOS: full screen stays upright)
     var muted by remember { mutableStateOf(false) }
     val starter = invite.faces.firstOrNull()
     Box(Modifier.fillMaxSize().background(Color.Black)) {
@@ -188,6 +189,7 @@ private fun FacePlate(invite: GroupInvite) {
  */
 @Composable
 fun CallLobbyScreen(keyText: String, videoFromPath: Boolean, g: GroupCallUi, onLeave: () -> Unit, onJoin: (video: Boolean, mic: Boolean) -> Unit) {
+    com.fariin.app.ui.components.AppOrientation.KeepUpright()   // built upright (iOS: full screen stays upright)
     val ctx = LocalContext.current
     val key = remember(keyText) { CallLinkKey.ofText(keyText) }
     var title by remember { mutableStateOf(CallLinkDefaults.NAME) }

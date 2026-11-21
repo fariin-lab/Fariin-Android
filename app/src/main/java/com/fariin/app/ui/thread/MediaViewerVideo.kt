@@ -338,12 +338,12 @@ internal fun VideoFullScreen(ctl: VideoCtl) {
     val portrait = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
     // Leaving the viewer always puts portrait back, whatever state it was in.
     DisposableEffect(activity) {
-        onDispose { ctl.fullScreen = false; activity?.requestedOrientation = portrait }
+        onDispose { ctl.fullScreen = false; com.fariin.app.ui.components.AppOrientation.special = null }
     }
     DisposableEffect(ctl.fullScreen, activity) {
         val a = activity ?: return@DisposableEffect onDispose {}
-        if (!ctl.fullScreen) { a.requestedOrientation = portrait; return@DisposableEffect onDispose {} }
-        a.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        if (!ctl.fullScreen) { com.fariin.app.ui.components.AppOrientation.special = null; return@DisposableEffect onDispose {} }
+        com.fariin.app.ui.components.AppOrientation.special = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         // Upright again after it has been on its side: back to portrait.
         var sideways = false
         val listener = object : android.view.OrientationEventListener(a) {
