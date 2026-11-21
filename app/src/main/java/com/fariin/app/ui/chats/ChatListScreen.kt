@@ -1392,10 +1392,10 @@ internal fun ChatRow(
     val preview = cachedPreview ?: openedPreview ?: ChatList.RowPreview("")
     // Live lines from the chat's own `typing` field (no extra read), self-clearing after 15 s
     // unless the sender refreshes it (iOS activityExpired).
-    var activityExpired by remember(conv.id) { mutableStateOf(false) }
-    LaunchedEffect(conv.typingRawKey) {
-        activityExpired = false
-        if (conv.typing.isEmpty() && conv.recording.isEmpty() && conv.sending.isEmpty()) return@LaunchedEffect
+    // A new typing key starts fresh; the timer runs only while there is a live line (most rows
+    // have none, and no longer start a coroutine as they scroll in).
+    var activityExpired by remember(conv.id, conv.typingRawKey) { mutableStateOf(false) }
+    if (conv.typing.isNotEmpty() || conv.recording.isNotEmpty() || conv.sending.isNotEmpty()) LaunchedEffect(conv.typingRawKey) {
         kotlinx.coroutines.delay(com.fariin.app.data.MessageRules.TYPING_EXPIRY_MS)
         activityExpired = true
     }
