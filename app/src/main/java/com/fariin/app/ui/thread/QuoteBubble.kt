@@ -1,5 +1,7 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import com.fariin.app.ui.components.cachedVector
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Arrangement
@@ -346,17 +348,21 @@ internal fun QuoteMediaOnly(qid: String, openCid: String?, hostMid: String?): Bo
     val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    // The post itself: the chip, and the viewer's "From <Channel>" capsule.
+    val openPost = {
+        val notice = QuoteRules.tapNotice(card)
+        if (notice != null) com.fariin.app.ui.components.Snack.show(notice)
+        else if (card.cid.isNotEmpty()) {
+            if (card.mid.isNotEmpty()) QuoteStore.pendingJump.value = QuoteStore.Jump(card.cid, card.mid)
+            if (!QuoteRules.jumpsInPlace(card, openCid)) { keyboard?.hide(); focus.clearFocus(); channelNav.open(card.cid) }
+        }
+    }
+    // A tap on the picture opens it full screen (iOS 671707b42); the chip opens the post.
+    var viewing by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    if (viewing) QuoteMediaViewer(qid, card, url, onClose = { viewing = false }, onOpenPost = { viewing = false; openPost() })
     Box(Modifier.fillMaxWidth().height(220.dp).padding(bottom = 6.dp).clip(RoundedCornerShape(12.dp))
         .background(Fariin.colors.secondary.copy(alpha = 0.18f))
-        .clickable {
-            val notice = QuoteRules.tapNotice(card)
-            if (notice != null) { com.fariin.app.ui.components.Snack.show(notice); return@clickable }
-            if (card.cid.isEmpty()) return@clickable
-            if (card.mid.isNotEmpty()) QuoteStore.pendingJump.value = QuoteStore.Jump(card.cid, card.mid)
-            if (QuoteRules.jumpsInPlace(card, openCid)) return@clickable
-            keyboard?.hide(); focus.clearFocus()
-            channelNav.open(card.cid)
-        }) {
+        .clickable { viewing = true }) {
         coil3.compose.AsyncImage(rememberQuotePicture(card, QuoteStore.picture(qid) ?: url), contentDescription = QuoteRules.body(card.copy(text = "")),
             contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
         if (card.kind == "video") Box(Modifier.align(Alignment.Center).size(44.dp).clip(androidx.compose.foundation.shape.CircleShape)
@@ -364,9 +370,9 @@ internal fun QuoteMediaOnly(qid: String, openCid: String?, hostMid: String?): Bo
             androidx.compose.material3.Icon(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_play_fill),
                 null, tint = Color.White, modifier = Modifier.size(24.dp))
         }
-        // The channel's chip: its picture and name, on the picture's lower left.
+        // The channel's chip: its picture and name, on the picture's lower left; a tap opens the post.
         Row(Modifier.align(Alignment.BottomStart).padding(8.dp).clip(RoundedCornerShape(50))
-            .background(Color.Black.copy(alpha = 0.5f)).padding(start = 3.dp, end = 9.dp, top = 3.dp, bottom = 3.dp),
+            .background(Color.Black.copy(alpha = 0.5f)).clickable { openPost() }.padding(start = 3.dp, end = 9.dp, top = 3.dp, bottom = 3.dp),
             verticalAlignment = Alignment.CenterVertically) {
             com.fariin.app.ui.components.Avatar(card.photoUrl.ifEmpty { null }, 20.dp, squircle = true,
                 kind = com.fariin.app.ui.components.AvatarKind.CHANNEL)
@@ -395,4 +401,42 @@ internal fun rememberQuotePicture(card: QuoteCard, raw: Any?): Any? {
         value = runCatching { com.fariin.app.media.ChatMedia(ctx.applicationContext, card.cid, null).file(r2, null) }.getOrNull()
     }
     return file
+}
+
+/**
+ * A hidden-text quote's picture full screen (iOS 671707b42): fitted on black, a round X, and a glass
+ * "From <Channel>" capsule at the foot that closes this and opens the post. Nothing to delete or
+ * forward here: it is the channel's picture, not this chat's file. A quoted video shows its poster
+ * with "Open original" (Android carries no clip in the quote copy).
+ */
+@Composable
+private fun QuoteMediaViewer(qid: String, card: QuoteCard, url: String, onClose: () -> Unit, onOpenPost: () -> Unit) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onClose,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        Box(Modifier.fillMaxSize().background(Color.Black)) {
+            coil3.compose.AsyncImage(rememberQuotePicture(card, QuoteStore.picture(qid) ?: url), contentDescription = QuoteRules.body(card.copy(text = "")),
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit, modifier = Modifier.fillMaxSize())
+            Box(Modifier.align(Alignment.TopStart).statusBarsPadding().padding(12.dp).size(44.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                .background(Color.White.copy(alpha = 0.18f)).clickable(onClickLabel = "Close", onClick = onClose), contentAlignment = Alignment.Center) {
+                androidx.compose.material3.Icon(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_xmark),
+                    "Close", tint = Color.White, modifier = Modifier.size(18.dp))
+            }
+            androidx.compose.foundation.layout.Column(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                if (card.kind == "video") {
+                    Text("Open original", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
+                        modifier = Modifier.padding(bottom = 12.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.18f))
+                            .clickable(onClick = onOpenPost).padding(horizontal = 16.dp, vertical = 9.dp))
+                }
+                Row(Modifier.clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.18f)).clickable(onClick = onOpenPost)
+                    .padding(start = 5.dp, end = 14.dp, top = 5.dp, bottom = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    com.fariin.app.ui.components.Avatar(card.photoUrl.ifEmpty { null }, 26.dp, squircle = true,
+                        kind = com.fariin.app.ui.components.AvatarKind.CHANNEL)
+                    Spacer(Modifier.width(8.dp))
+                    Text("From ${card.title}", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 240.dp))
+                }
+            }
+        }
+    }
 }
