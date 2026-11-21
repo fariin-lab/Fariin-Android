@@ -66,36 +66,65 @@ internal const val PAGE_SUBSCRIPTIONS = "settings:subscriptions"
 /** The one Plus colour (owner): Fariin blue. */
 val PlusBlue = Color(0xFF0590F7)
 
-private class PlusFeature(val id: String, val icon: Int, val title: String, val detail: String)
+/** A Plus feature as the page lists it: a short [title], a grey one/two-line [subtitle] under it in
+ *  the list, and the sheet's longer [detail] (iOS PlusView.all, same words). */
+private class PlusFeature(val id: String, val icon: Int, val title: String, val subtitle: String, val detail: String)
 
 private val plusFeatures = listOf(
-    PlusFeature("badge", R.drawable.ic_plus_badge, "Plus badge next to your name",
+    PlusFeature("badge", R.drawable.ic_plus_badge, "Plus Badge",
+        "A star next to your name in chats, lists and your profile.",
         "A star next to your name in chats, lists and your profile, so people know you have Plus."),
-    PlusFeature("storyExpiry", R.drawable.ic_sf_clock, "Choose how long a story stays",
-        "Choose how many hours your story stays up, instead of always one day."),
-    PlusFeature("appIcons", R.drawable.ic_sf_square_grid, "Custom app icons",
-        "Pick a different Fariin icon for your home screen."),
-    PlusFeature("morePins", R.drawable.ic_pin_menu, "More pinned chats",
+    PlusFeature("storyExpiry", R.drawable.ic_sf_clock, "Story Length",
+        "Keep a story up for 6, 12, 24 or 48 hours.",
+        "Pick how long your story stays up: 6, 12, 24 or 48 hours. Without Plus, stories stay 24 hours."),
+    PlusFeature("appIcons", R.drawable.ic_sf_square_grid, "App Icons",
+        "Pick a different Fariin icon for your home screen.",
+        "Pick one of the Plus icons for Fariin on your home screen."),
+    PlusFeature("morePins", R.drawable.ic_pin_menu, "More Pinned Chats",
+        "Pin more chats to the top of your chat list.",
         "Pin more chats to the top of your chat list."),
-    PlusFeature("profileVisitors", R.drawable.ic_views, "See who visited your profile",
-        "See who opened your profile lately, from the eye button at the top of Settings."),
-    PlusFeature("animatedAvatar", R.drawable.ic_sf_person_crop_circle_fill, "Animated profile pictures",
+    PlusFeature("profileVisitors", R.drawable.ic_views, "Profile Visitors",
+        "See who looked at your profile in the last 30 days.",
+        "See who opened your profile in the last 30 days, from the eye button at the top of Settings."),
+    PlusFeature("animatedAvatar", R.drawable.ic_sf_person_crop_circle_fill, "Animated Profile Picture",
+        "Use a short video as your profile picture.",
         "Use a short video as your profile picture. It plays in chats and on your profile."),
-    PlusFeature("storyRewatch", R.drawable.ic_sf_arrow_clockwise, "See when someone watches your story again",
+    PlusFeature("storyRewatch", R.drawable.ic_sf_arrow_clockwise, "Story Rewatches",
+        "See when someone watches your story again.",
         "In your story's viewers list, a small number shows who came back and how many times."),
-    PlusFeature("bubbleStyles", R.drawable.ic_settings_chats, "Exclusive chat bubble styles",
-        "Give your chat bubbles a look that only Plus members have."),
-    PlusFeature("sharedWallpaper", R.drawable.ic_wallpaper, "Chat wallpaper both sides see",
-        "Set one wallpaper for a chat, and the other person sees it too."),
-    PlusFeature("sendEffects", R.drawable.ic_sf_sparkles, "Message send effects",
-        "Send a message with a short animation, like hearts or confetti."),
-    PlusFeature("chatKey", R.drawable.ic_chat_key, "Choose your own Chat Key",
+    PlusFeature("pictureBubbles", R.drawable.ic_settings_chats, "Bubble Styles",
+        "Picture bubbles like Anime, Gen Z and Cute for your chats.",
+        "Dress your messages in picture bubbles from the Anime, Gen Z, Cute, Careers, Sport and Everyday packs. The other person sees them too."),
+    PlusFeature("sharedWallpaper", R.drawable.ic_wallpaper, "Shared Wallpaper",
+        "Set a chat wallpaper both of you see.",
+        "Pick a wallpaper and tap Set for Both: the chat changes for you and for them, and you both see a note that it changed."),
+    PlusFeature("sendEffects", R.drawable.ic_sf_sparkles, "Send Effects",
+        "Send messages with hearts, confetti, balloons or fireworks.",
+        "Send a message with a short animation: hearts, confetti, balloons or fireworks."),
+    PlusFeature("chatKey", R.drawable.ic_chat_key, "Own Chat Key",
+        "Choose your own Chat Key instead of a random one.",
         "Pick your own Chat Key instead of the random 6-digit one Fariin makes for you."),
-    PlusFeature("gifts", R.drawable.ic_gift, "Gift Fariin Plus",
+    PlusFeature("gifts", R.drawable.ic_gift, "Gift Plus",
+        "Give Fariin Plus to a friend.",
         "Give Fariin Plus to a friend from their profile."),
     PlusFeature("chatFolders", R.drawable.ic_story_folder, "Chat Folders",
+        "Sort chats into folders at the top of your list.",
         "Sort your chats into folders and switch between them at the top of your chat list."),
+    PlusFeature("tagSearch", R.drawable.ic_sf_number, "Tag Search",
+        "Tap a #tag to see posts from every channel that uses it.",
+        "With Fariin Plus, a tap on a tag shows the posts from all channels that use it."),
 )
+
+/** The grey line under a feature, with the real pinned-chat limit when there is one (iOS subtitle). */
+private fun subtitleOf(f: PlusFeature): String =
+    if (f.id == "morePins") PlusStore.pinnedChats?.let { "Pin up to $it chats at the top of your chat list." } ?: f.subtitle else f.subtitle
+
+/** This account has Plus now, or a store subscription whose end is still ahead (iOS `subscribed`). */
+private fun plusSubscribed(): Boolean =
+    PlusStore.isPlus || (PlusStore.subscription?.untilMs?.let { it > System.currentTimeMillis() } == true)
+
+/** The plans and buying: only while the server sells to this account and it has no Plus yet. */
+private fun plusSelling(): Boolean = PlusStore.purchasesOn && !plusSubscribed()
 
 @Composable
 internal fun SubscriptionsPage(pop: () -> Unit) {
@@ -103,41 +132,127 @@ internal fun SubscriptionsPage(pop: () -> Unit) {
     val popNow by rememberUpdatedState(pop)
     LaunchedEffect(PlusStore.visible) { if (!PlusStore.visible) popNow() }
     var opened by remember { mutableStateOf<String?>(null) }
+    var plan by remember { mutableStateOf("yearly") }
     val shown = plusFeatures.filter { PlusStore.state(it.id) != PlusStore.State.OFF }
-    ScrollPage("Fariin Plus", pop) {
-        PlusHeader()
-        if (shown.isNotEmpty()) SettingsSection(header = "Features",
-            footer = if (!PlusStore.purchasesOn) "Buying Fariin Plus in the app is coming later." else null) {
-            shown.forEachIndexed { i, f ->
-                val on = PlusStore.state(f.id) == PlusStore.State.ON
-                SettingsRow(f.title, painterResource(f.icon), value = if (on) "On" else null,
-                    subtitle = if (f.id == "morePins") PlusStore.pinnedChats?.let { "Up to $it pinned chats" } else null,
-                    iconTint = if (f.id == "badge") PlusBlue else null,
-                    last = i == shown.lastIndex) { opened = f.id }
-            }
+    Box(Modifier.fillMaxSize()) {
+        ScrollPage("Fariin Plus", pop) {
+            PlusPageBody(shown, plan, { plan = it }) { opened = it }
+            // Room for the floating Subscribe button, so the last rows scroll up above it.
+            Spacer(Modifier.height(if (plusSubscribed()) 24.dp else 96.dp))
         }
-        PlusBuySections()
-        Spacer(Modifier.height(24.dp))
+        if (!plusSubscribed()) PlusSubscribeButton(plan, Modifier.align(Alignment.BottomCenter)
+            .padding(bottom = com.fariin.app.ui.shell.bottomBarInset()))
     }
     opened?.let { start -> PlusFeatureSheet(shown, start) { opened = null } }
 }
 
-/** The page's top: the star, the name and where this account stands. */
+/** The page's rows, the same on the page and in the sheet (iOS PlusView's List). */
+@Composable
+private fun PlusPageBody(shown: List<PlusFeature>, plan: String, onPlan: (String) -> Unit, onOpen: (String) -> Unit) {
+    PlusHeader()
+    if (plusSelling()) PlusPlansSection(plan, onPlan)
+    PlusManageSection()
+    if (shown.isNotEmpty()) SettingsSection(header = "What's Included") {
+        shown.forEachIndexed { i, f ->
+            val on = PlusStore.state(f.id) == PlusStore.State.ON
+            SettingsRow(f.title, painterResource(f.icon), value = if (on) "On" else null, subtitle = subtitleOf(f),
+                iconTint = if (f.id == "badge") PlusBlue else null,
+                last = i == shown.lastIndex) { onOpen(f.id) }
+        }
+    }
+    PlusAboutSection()
+}
+
+/** The page's top: the star, the name, where this account stands, and a line for someone without Plus. */
 @Composable
 private fun PlusHeader() {
     val c = Fariin.colors
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 12.dp, bottom = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        PlusBadgeImage(72.dp)
+    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 4.dp, bottom = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        PlusBadgeImage(64.dp)
         Text("Fariin Plus", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = c.label)
-        val until = PlusStore.untilMs
-        val line = when {
-            PlusStore.isPlus && until != null -> "Active until " + DateFormat.getDateInstance(DateFormat.LONG).format(Date(until))
-            PlusStore.isPlus -> "Active"
-            else -> "Not active"
-        }
-        Text(line, fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center)
+        Text(statusLine(), fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center)
+        if (!plusSubscribed()) Text("Unlock exclusive features and support Fariin with Fariin Plus.",
+            fontSize = 15.sp, color = c.label, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 2.dp))
     }
+}
+
+/** iOS statusLine: Renews <date> for a renewing store plan, else Active until <date>, Active, Not active. */
+private fun statusLine(): String {
+    if (!plusSubscribed()) return "Not active"
+    val sub = PlusStore.subscription
+    val fmt = DateFormat.getDateInstance(DateFormat.LONG)
+    val renewEnd = sub?.untilMs ?: PlusStore.untilMs
+    if (sub?.autoRenew == true && sub.status != "grace" && renewEnd != null) return "Renews " + fmt.format(Date(renewEnd))
+    val end = PlusStore.untilMs ?: sub?.untilMs
+    return if (end != null) "Active until " + fmt.format(Date(end)) else "Active"
+}
+
+/** About Fariin Plus, under the features (iOS aboutSection): what Plus is for, then the footnote. */
+@Composable
+private fun PlusAboutSection() {
+    val c = Fariin.colors
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val subscribed = plusSubscribed()
+    SettingsSection(header = "About Fariin Plus") {
+        Text(if (subscribed) "Thank you for supporting Fariin. All your Plus features are unlocked, and your support helps keep Fariin free for everyone."
+            else "Fariin is free, and it stays free. Fariin Plus adds extras on top for people who want more, and it helps pay for the servers that keep Fariin running for everyone.",
+            fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp))
+    }
+    val play = subscribed && PlusStore.subscription?.source == "play"
+    if (play) Text("You can change or cancel your plan any time in Google Play under Payments & subscriptions.",
+        fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 32.dp))
+    else if (!subscribed && !plusSelling()) Column(Modifier.padding(horizontal = 32.dp)) {
+        Text("By subscribing to Fariin Plus you agree to the Terms of Use and Privacy Policy.", fontSize = 13.sp, color = c.secondary)
+        PlusLegalLinks(ctx)
+    }
+}
+
+@Composable
+private fun PlusLegalLinks(ctx: android.content.Context) {
+    val c = Fariin.colors
+    Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        listOf("Terms of Use" to "https://fariin.com/terms", "Privacy Policy" to "https://fariin.com/privacy").forEach { (t, u) ->
+            Text(t, fontSize = 13.sp, color = c.accent, modifier = Modifier.clickable {
+                runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(u))) }
+            })
+        }
+    }
+}
+
+/**
+ * The capsule at the bottom for someone without Plus (iOS subscribeButton, owner 2026-11-20: always
+ * there). While payments are closed to this account a tap says buying is coming soon; while they are
+ * open it buys the picked plan, and a tap with no plans in hand loads them again.
+ */
+@Composable
+private fun PlusSubscribeButton(plan: String, modifier: Modifier = Modifier) {
+    val c = Fariin.colors
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val billing = com.fariin.app.data.PlusBilling
+    var notOnSale by remember { mutableStateOf(false) }
+    val plans = billing.plans
+    val picked = plans.firstOrNull { it.basePlanId == plan } ?: plans.firstOrNull()
+    val waiting = billing.busy || (PlusStore.purchasesOn && picked == null && !billing.loaded)
+    val title = picked?.let { "Subscribe for ${it.price} / ${if (it.period.endsWith("Y")) "year" else "month"}" } ?: "Subscribe"
+    val activity = ctx as? android.app.Activity ?: (ctx as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
+    Box(modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp).height(54.dp).clip(CircleShape)
+        .background(PlusBlue).clickable(enabled = !waiting) {
+            when {
+                !PlusStore.purchasesOn -> notOnSale = true
+                !plusSelling() -> {}
+                picked == null -> billing.loadPlans(ctx)
+                activity != null -> billing.buy(activity, picked)
+            }
+        }.semantics { contentDescription = if (billing.busy) "Subscribing" else title },
+        contentAlignment = Alignment.Center) {
+        if (waiting) com.fariin.app.ui.components.FariinSpinner(size = 22.dp, stroke = 2.5.dp, color = Color.White)
+        else Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1)
+    }
+    if (notOnSale) com.fariin.app.ui.components.GlassAlert(onDismissRequest = { notOnSale = false },
+        title = { Text("Not Available Yet") }, text = { Text("Buying Fariin Plus in the app is coming soon.") },
+        confirmButton = { androidx.compose.material3.TextButton({ notOnSale = false }) { Text("OK", color = c.accent) } },
+        containerColor = c.card)
 }
 
 /** The star alone, in the Plus colour, whatever the uid (the Plus page, sheets). */
@@ -168,29 +283,20 @@ fun PlusPageSheet(onDismiss: () -> Unit) {
     val motion = rememberSheetMotion { onDismiss() }
     LaunchedEffect(PlusStore.visible) { if (!PlusStore.visible) motion.close() }
     var opened by remember { mutableStateOf<String?>(null) }
+    var plan by remember { mutableStateOf("yearly") }
     FariinSheetDialog(motion, fill = c.bgSecondary) { _ ->
         Box(Modifier.fillMaxSize()) {
             val shown = plusFeatures.filter { PlusStore.state(it.id) != PlusStore.State.OFF }
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 Spacer(Modifier.height(44.dp))
-                PlusHeader()
-                if (shown.isNotEmpty()) SettingsSection(header = "Features",
-                    footer = if (!PlusStore.purchasesOn) "Buying Fariin Plus in the app is coming later." else null) {
-                    shown.forEachIndexed { i, f ->
-                        val on = PlusStore.state(f.id) == PlusStore.State.ON
-                        SettingsRow(f.title, painterResource(f.icon), value = if (on) "On" else null,
-                            subtitle = if (f.id == "morePins") PlusStore.pinnedChats?.let { "Up to $it pinned chats" } else null,
-                            iconTint = if (f.id == "badge") PlusBlue else null,
-                            last = i == shown.lastIndex) { opened = f.id }
-                    }
-                }
-                PlusBuySections()
-                Spacer(Modifier.height(32.dp))
+                PlusPageBody(shown, plan, { plan = it }) { opened = it }
+                Spacer(Modifier.height(if (plusSubscribed()) 32.dp else 96.dp))
             }
             Box(Modifier.fillMaxWidth().height(28.dp).sheetDrag(motion))
             Text("Done", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.accent,
                 modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).clip(CircleShape)
                     .clickable { motion.close() }.padding(horizontal = 8.dp, vertical = 4.dp))
+            if (!plusSubscribed()) PlusSubscribeButton(plan, Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp))
             opened?.let { start -> PlusFeatureSheet(shown, start) { opened = null } }
         }
     }
@@ -210,8 +316,10 @@ private fun PlusFeatureSheet(features: List<PlusFeature>, start: String, onDismi
     val pager = rememberPagerState(initialPage = features.indexOfFirst { it.id == start }.coerceAtLeast(0)) { features.size }
     FariinSheetDialog(motion, fill = c.bgSecondary) { _ ->
         Column(Modifier.fillMaxWidth().height(500.dp)) {
-            Box(Modifier.fillMaxWidth().height(28.dp).sheetDrag(motion), contentAlignment = Alignment.Center) {
-                Box(Modifier.size(36.dp, 5.dp).clip(CircleShape).background(c.secondary.copy(alpha = 0.4f)))
+            Box(Modifier.fillMaxWidth().height(56.dp).sheetDrag(motion)) {
+                // iOS: a round X at the top left closes it.
+                com.fariin.app.ui.components.FloatingIcon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Close",
+                    onClick = { motion.close() }, circle = true, modifier = Modifier.align(Alignment.CenterStart).padding(start = 12.dp))
             }
             HorizontalPager(pager, Modifier.fillMaxWidth().weight(1f)) { i ->
                 val f = features[i]
@@ -235,7 +343,8 @@ private fun PlusFeatureSheet(features: List<PlusFeature>, start: String, onDismi
                 }
             }
             val cur = features.getOrNull(pager.currentPage)
-            val label = if (cur != null && PlusStore.state(cur.id) == PlusStore.State.ON) "OK" else "Included in Fariin Plus"
+            @Suppress("UNUSED_VARIABLE") val shownNow = cur
+            val label = "Got It"
             Box(Modifier.padding(horizontal = 20.dp).padding(bottom = 12.dp).fillMaxWidth().height(50.dp).clip(CircleShape)
                 .background(PlusBlue).clickable { motion.close() }, contentAlignment = Alignment.Center) {
                 Text(label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
@@ -246,74 +355,61 @@ private fun PlusFeatureSheet(features: List<PlusFeature>, start: String, onDismi
 
 
 /**
- * Buying Fariin Plus on Android (Google Play, PlusBilling; iOS PlusView's buy sections): the plans,
- * Subscribe, the renewal terms and the Terms / Privacy links appear ONLY while the server's purchases
- * switch is on for this account. A Play subscription running now shows Manage Subscription instead;
- * one bought on an iPhone says where it is managed.
+ * Buying Fariin Plus on Android (Google Play, PlusBilling; iOS PlusView's plansSection): the plans,
+ * only while the server sells to this account and it has no Plus. The floating Subscribe button buys
+ * the picked one; the renewal terms and the links sit under the plans.
  */
 @Composable
-internal fun PlusBuySections() {
+private fun PlusPlansSection(plan: String, onPlan: (String) -> Unit) {
     val c = Fariin.colors
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val billing = com.fariin.app.data.PlusBilling
-    val sub = PlusStore.subscription
-    val paidActive = PlusStore.isPlus && sub != null && (sub.untilMs == null || sub.untilMs > System.currentTimeMillis())
     LaunchedEffect(PlusStore.purchasesOn) { if (PlusStore.purchasesOn && !billing.loaded) billing.loadPlans(ctx) }
     billing.notice?.let { n ->
         com.fariin.app.ui.components.GlassAlert(onDismissRequest = { billing.notice = null }, title = { Text("Fariin Plus") }, text = { Text(n) },
             confirmButton = { androidx.compose.material3.TextButton({ billing.notice = null }) { Text("OK", color = c.accent) } }, containerColor = c.card)
     }
+    val plans = billing.plans
+    val picked = plans.firstOrNull { it.basePlanId == plan } ?: plans.firstOrNull()
+    SettingsSection(header = "Choose a plan") {
+        if (plans.isEmpty()) Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
+            if (billing.loaded) Text("Subscriptions are not available right now.", color = c.secondary)
+            else com.fariin.app.ui.components.FariinSpinner(size = 24.dp, stroke = 2.5.dp, color = c.secondary)
+        } else plans.forEachIndexed { i, p ->
+            val on = picked?.basePlanId == p.basePlanId
+            Row(Modifier.fillMaxWidth().clickable { onPlan(p.basePlanId) }.padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Icon(ImageVector.cachedVector(if (on) R.drawable.ic_sf_checkmark_circle_fill else R.drawable.ic_sf_circle), null,
+                    tint = if (on) PlusBlue else c.secondary, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.size(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(if (p.basePlanId == "yearly") "Yearly" else "Monthly", fontSize = 17.sp, color = c.label)
+                    Text("${p.price} ${per(p.period)}", fontSize = 13.sp, color = c.secondary)
+                }
+                saving(p, plans)?.let { Text("Save $it%", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = PlusBlue) }
+            }
+            if (i < plans.lastIndex) Box(Modifier.fillMaxWidth().padding(start = 52.dp).height(0.5.dp).background(c.separator))
+        }
+    }
+    Text("Payment is charged to your Google Play account when you confirm. The subscription renews automatically at the same price and for the same period until you cancel it. You can manage or cancel it any time in Google Play under Payments & subscriptions.",
+        fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 32.dp, vertical = 6.dp))
+    Box(Modifier.padding(horizontal = 32.dp)) { PlusLegalLinks(ctx) }
+}
+
+/** A paid store subscription running now: Manage Subscription for a Play one; a word about an App Store one. */
+@Composable
+private fun PlusManageSection() {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val sub = PlusStore.subscription
+    val paidRunning = sub != null && (sub.untilMs?.let { it > System.currentTimeMillis() } ?: PlusStore.isPlus)
     when {
-        paidActive && sub?.source == "play" -> SettingsSection(footer = renewLine(sub)) {
+        paidRunning && sub?.source == "play" -> SettingsSection(footer = renewLine(sub)) {
             SettingsRow("Manage Subscription", last = true, trailing = Trailing.OUT_LINK) {
                 runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
-                    android.net.Uri.parse(billing.manageUrl(ctx.packageName)))) }
+                    android.net.Uri.parse(com.fariin.app.data.PlusBilling.manageUrl(ctx.packageName)))) }
             }
         }
-        paidActive && sub?.source == "appstore" -> SettingsSection(footer = "Your Fariin Plus subscription is managed in the App Store on your iPhone.") {}
-        PlusStore.purchasesOn -> {
-            var plan by remember { mutableStateOf("yearly") }
-            val plans = billing.plans
-            val picked = plans.firstOrNull { it.basePlanId == plan } ?: plans.firstOrNull()
-            SettingsSection(header = "Choose a plan") {
-                if (plans.isEmpty()) Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
-                    if (billing.loaded) Text("Subscriptions are not available right now.", color = c.secondary)
-                    else com.fariin.app.ui.components.FariinSpinner(size = 24.dp, stroke = 2.5.dp, color = c.secondary)
-                } else plans.forEachIndexed { i, p ->
-                    val on = picked?.basePlanId == p.basePlanId
-                    Row(Modifier.fillMaxWidth().clickable { plan = p.basePlanId }.padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Icon(ImageVector.cachedVector(if (on) R.drawable.ic_sf_checkmark_circle_fill else R.drawable.ic_sf_circle), null,
-                            tint = if (on) PlusBlue else c.secondary, modifier = Modifier.size(24.dp))
-                        Spacer(Modifier.size(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(if (p.basePlanId == "yearly") "Yearly" else "Monthly", fontSize = 17.sp, color = c.label)
-                            Text("${p.price} ${per(p.period)}", fontSize = 13.sp, color = c.secondary)
-                        }
-                        saving(p, plans)?.let { Text("Save $it%", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = PlusBlue) }
-                    }
-                    if (i < plans.lastIndex) Box(Modifier.fillMaxWidth().padding(start = 52.dp).height(0.5.dp).background(c.separator))
-                }
-            }
-            val activity = ctx as? android.app.Activity ?: (ctx as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
-            Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).height(52.dp).clip(CircleShape)
-                .background(if (picked != null && !billing.busy) PlusBlue else PlusBlue.copy(alpha = 0.5f))
-                .clickable(enabled = picked != null && !billing.busy && activity != null) { if (picked != null && activity != null) billing.buy(activity, picked) },
-                contentAlignment = Alignment.Center) {
-                if (billing.busy) com.fariin.app.ui.components.FariinSpinner(size = 22.dp, stroke = 2.5.dp, color = Color.White)
-                else Text(picked?.let { "Subscribe for ${it.price} ${per(it.period)}" } ?: "Subscribe", fontSize = 17.sp,
-                    fontWeight = FontWeight.SemiBold, color = Color.White)
-            }
-            Text("Payment is charged to your Google Play account when you confirm. The subscription renews automatically at the same price and for the same period until you cancel it. You can manage or cancel it any time in Google Play under Payments & subscriptions.",
-                fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 32.dp, vertical = 6.dp))
-            Row(Modifier.padding(horizontal = 32.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                listOf("Terms of Use" to "https://fariin.com/terms", "Privacy Policy" to "https://fariin.com/privacy").forEach { (t, u) ->
-                    Text(t, fontSize = 13.sp, color = c.accent, modifier = Modifier.clickable {
-                        runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(u))) }
-                    })
-                }
-            }
-        }
+        paidRunning && sub?.source == "appstore" -> SettingsSection(footer = "Your Fariin Plus subscription is managed in the App Store on your iPhone.") {}
     }
 }
 
