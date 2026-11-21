@@ -1,5 +1,6 @@
 package com.fariin.app.ui.channels
 
+import com.fariin.app.ui.components.enterFade
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
@@ -178,9 +179,11 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
                 Text(it, fontSize = 13.sp, color = c.secondary, textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 8.dp))
             }
+            // Normal <-> Custom: the grid fades in rather than swapping in one frame (iOS pops 107).
+            val gridSettled = com.fariin.app.ui.components.rememberSettled()
             if (showsCustom && customTab) com.fariin.app.ui.thread.CustomEmojiGrid(onPick = { tapped(it) },
-                modifier = Modifier.weight(1f), picked = { ReactionPicks.isPicked(list, it) }, onNote = { note = it })
-            else LazyVerticalGrid(GridCells.Adaptive(52.dp), Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp)) {
+                modifier = Modifier.weight(1f).enterFade(gridSettled.value), picked = { ReactionPicks.isPicked(list, it) }, onNote = { note = it })
+            else LazyVerticalGrid(GridCells.Adaptive(52.dp), Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp).enterFade(gridSettled.value)) {
                 items(offer) { e ->
                     Box(Modifier.size(52.dp).clip(CircleShape).clickable { tapped(e) }, contentAlignment = Alignment.Center) {
                         Text(e, fontSize = 30.sp)

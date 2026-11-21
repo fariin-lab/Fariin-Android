@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.enterFade
 import com.fariin.app.ui.components.isNew
 import com.fariin.app.ui.components.NewCornerPill
 import com.fariin.app.data.NewBadgeSpots
@@ -343,13 +344,17 @@ internal fun AttachSheet(
             androidx.compose.runtime.CompositionLocalProvider(
                 com.fariin.app.ui.components.LocalLiquidBackdrop provides (if (attachLiquid) attachBackdrop else null),
                 com.fariin.app.ui.components.LocalGlassWindow provides androidx.compose.ui.platform.LocalView.current) {
+            // Ticking the first photo: the caption + Send bar fades in where the sources were, and back
+            // (iOS pops 97); never on the sheet's first frame.
+            val barsSettled = com.fariin.app.ui.components.rememberSettled()
             if (page == SheetPage.FILES) {
                 // The Files page has its own bar; no sources, no caption.
             } else if (picked.isEmpty()) {
                 val sourceGlass = if (attachLiquid) attachBackdrop else null
                 // iOS sourceBar: the round album button LEFT (a back arrow once a list is open), the
                 // sources in one capsule RIGHT: GIF, Files, Location, Poll (groups only).
-                Row(Modifier.align(Alignment.BottomCenter).then(lift).then(barsPad).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                Row(Modifier.align(Alignment.BottomCenter).then(lift).then(barsPad).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
+                    .enterFade(barsSettled.value),
                     verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(60.dp).sheetGlass(CircleShape, sourceGlass).clickable(onClick = albumButton), contentAlignment = Alignment.Center) {
                         if (backShown) Icon(ImageVector.cachedVector(R.drawable.ic_back_arrow), "Back", tint = c.label, modifier = Modifier.size(26.dp))
@@ -367,7 +372,8 @@ internal fun AttachSheet(
                     }
                 }
             } else {
-                Row(Modifier.align(Alignment.BottomCenter).then(lift).then(barsPad).fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.align(Alignment.BottomCenter).then(lift).then(barsPad).fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)
+                    .enterFade(barsSettled.value), verticalAlignment = Alignment.CenterVertically) {
                     // iOS (owner 2026-11-08): the caption field with the one-time "1" inside it at the end,
                     // then the round blue Send with the up arrow (was a forward arrow, a count, and the
                     // "1" as its own button on the left).
@@ -493,7 +499,7 @@ private fun AlbumRow(a: RecentMedia.Album, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)).background(c.secondary.copy(alpha = 0.12f))) {
-            bmp?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+            bmp?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().enterFade(true)) }
         }
         Spacer(Modifier.width(14.dp))
         Column {
@@ -550,6 +556,8 @@ private fun RecentTile(item: RecentMedia.Item, number: Int, onToggle: () -> Unit
     val bmp by produceState(AttachWarm.thumbs.get(uri), uri) {
         if (value == null) value = withContext(Dispatchers.IO) { attachThumb(context, uri, item.isVideo, 256)?.also { AttachWarm.thumbs.put(uri, it) } }
     }
+    // A thumbnail not cached yet fades in over its grey square (iOS pops 106).
+    val late = remember(uri) { AttachWarm.thumbs.get(uri) == null }
     val chosen = number > 0
     Box(Modifier.aspectRatio(1f).background(c.secondary.copy(alpha = 0.12f)).clickable(onClickLabel = "Edit", onClick = onOpen)
         .semantics { contentDescription = if (item.isVideo) "Video" else "Photo" }) {
@@ -557,7 +565,7 @@ private fun RecentTile(item: RecentMedia.Item, number: Int, onToggle: () -> Unit
             Image(it, null, contentScale = ContentScale.Crop,
                 // A chosen picture stays full size; the numbered circle is the answer (owner 2026-11-14:
                 // it shrank with a gap round it, iOS does not).
-                modifier = Modifier.fillMaxSize())
+                modifier = Modifier.fillMaxSize().enterFade(late))
         }
         if (item.isVideo) {
             Row(Modifier.align(Alignment.BottomStart).padding(6.dp).clip(RoundedCornerShape(50))

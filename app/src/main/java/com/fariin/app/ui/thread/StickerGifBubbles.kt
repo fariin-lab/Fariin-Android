@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.fadeOnChange
 import coil3.gif.repeatCount
 import android.os.Build
 import androidx.compose.foundation.Image
@@ -405,15 +406,17 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit, hide: () -> 
         LazyVerticalGrid(GridCells.Adaptive(70.dp), state = grid, modifier = Modifier.fillMaxSize().gridTopClip(hide),
             contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = TOP_BAND.dp, bottom = 84.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            // A shelf that comes (the first favourite) or a sticker that goes fades, and everything after
+            // it glides to its new place (iOS pops 99).
             for (shelf in shelves) {
                 item(key = "h:${shelf.id}", span = { GridItemSpan(maxLineSpan) }) {
                     // A pack's name opens its sheet (Add to / Remove from my stickers).
                     val isPack = shelf.id != "recent" && shelf.id != "favorites"
                     Text(shelf.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.secondary,
-                        modifier = Modifier.height(24.dp).then(if (isPack) Modifier.clickable { packOpen = shelf } else Modifier).padding(top = 6.dp))
+                        modifier = Modifier.animateItem(fadeInSpec = com.fariin.app.ui.components.Smooth.fadeSpec(), placementSpec = com.fariin.app.ui.components.Smooth.soft(), fadeOutSpec = com.fariin.app.ui.components.Smooth.fadeSpec()).height(24.dp).then(if (isPack) Modifier.clickable { packOpen = shelf } else Modifier).padding(top = 6.dp))
                 }
                 if (shelf.id == "favorites") item(key = "create") {
-                    Box(Modifier.size(70.dp).clip(RoundedCornerShape(10.dp)).background(c.label.copy(alpha = 0.06f)).clickable {
+                    Box(Modifier.animateItem(fadeInSpec = com.fariin.app.ui.components.Smooth.fadeSpec(), placementSpec = com.fariin.app.ui.components.Smooth.soft(), fadeOutSpec = com.fariin.app.ui.components.Smooth.fadeSpec()).size(70.dp).clip(RoundedCornerShape(10.dp)).background(c.label.copy(alpha = 0.06f)).clickable {
                         pick.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
                     }.semanticsLabel("Create Sticker"), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -425,7 +428,7 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit, hide: () -> 
                 val preview = shelf.id != "recent" && shelf.id != "favorites" && shelf.id !in added && shelf.stickers.size > 2 * cols
                 val shown = if (preview) shelf.stickers.take(2 * cols - 1) else shelf.stickers
                 for (s in shown) item(key = "${shelf.id}:${s.key}") {
-                    Box(Modifier.size(70.dp).clip(RoundedCornerShape(10.dp)).clickable {
+                    Box(Modifier.animateItem(fadeInSpec = com.fariin.app.ui.components.Smooth.fadeSpec(), placementSpec = com.fariin.app.ui.components.Smooth.soft(), fadeOutSpec = com.fariin.app.ui.components.Smooth.fadeSpec()).size(70.dp).clip(RoundedCornerShape(10.dp)).clickable {
                         StickerCatalog.noteUsed(ctx, me, s)
                         onSticker(s)
                         recents = StickerCatalog.recents(ctx, me)
@@ -438,7 +441,7 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit, hide: () -> 
                 // The second row's last place: "+N", the pack's stickers not shown; a tap opens the pack.
                 if (preview) item(key = "more:${shelf.id}") {
                     val more = shelf.stickers.size - shown.size
-                    Box(Modifier.size(70.dp).clickable { packOpen = shelf }.semanticsLabel("$more more stickers in ${shelf.title}"),
+                    Box(Modifier.animateItem(fadeInSpec = com.fariin.app.ui.components.Smooth.fadeSpec(), placementSpec = com.fariin.app.ui.components.Smooth.soft(), fadeOutSpec = com.fariin.app.ui.components.Smooth.fadeSpec()).size(70.dp).clickable { packOpen = shelf }.semanticsLabel("$more more stickers in ${shelf.title}"),
                         contentAlignment = Alignment.Center) {
                         Box(Modifier.size(58.dp).clip(CircleShape).background(c.label.copy(alpha = 0.06f)), contentAlignment = Alignment.Center) {
                             Text("+$more", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.secondary)
@@ -525,7 +528,8 @@ internal fun GifTab(
         // The GIFs stop under the mood row (and a little under the panel's top edge once the row has
         // slid away): scrolled up, they ran under the half-hidden row and up into the rounded rim,
         // cut off against the message bar (owner 2026-11-10, "bug space").
-        Box(Modifier.fillMaxSize().gridTopClip(hide)) {
+        // Another shelf (Recent, Favorites, Trending, a mood): its GIFs fade in (iOS pops 100).
+        Box(Modifier.fillMaxSize().gridTopClip(hide).fadeOnChange(category)) {
         when (category) {
             GifCategory.FAVORITES -> GifGrid(local, pad, me = me, onRecentTab = false, onGif = send, state = grid,
                 emptyTitle = "No favourites yet", emptyText = "Hold a GIF and choose Add to Favourites.")
@@ -605,7 +609,8 @@ private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, qu
             // Square tiles, cropped (iOS b5232314d: w x w), not each GIF at its own shape.
             val ratio = 1f
             var menu by remember { mutableStateOf(false) }
-            Box {
+            // Removed (Favorites / Recent): it fades and the later tiles glide back a place (iOS pops 101).
+            Box(Modifier.animateItem(fadeInSpec = com.fariin.app.ui.components.Smooth.fadeSpec(), placementSpec = com.fariin.app.ui.components.Smooth.soft(), fadeOutSpec = com.fariin.app.ui.components.Smooth.fadeSpec())) {
                 // Its first frame under it, kept in memory (an animated GIF never is): the panel
                 // opened again showed grey tiles for ~0.5 s while every GIF was decoded from disk
                 // again (owner's Pixel 2026-11-10). The moving one draws over it once it is ready.

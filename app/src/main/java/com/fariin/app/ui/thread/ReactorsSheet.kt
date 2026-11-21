@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.fadeOnChange
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -75,7 +76,9 @@ internal fun ReactorsSheet(m: Message, ui: ThreadUi, onRemoveMine: () -> Unit, o
             Tab(null, "All ${reactions.count { it.value.isNotEmpty() }}", active == null) { picked = null }
             tabs.forEach { (e, n) -> Tab(e, "$n", active == e) { picked = e } }
         }
-        LazyColumn(Modifier.fillMaxWidth().heightIn(min = 120.dp).navigationBarsPadding().padding(bottom = 12.dp)) {
+        // Another tab: its people fade in (iOS pops 105).
+        LazyColumn(Modifier.fillMaxWidth().heightIn(min = 120.dp).navigationBarsPadding().padding(bottom = 12.dp)
+            .fadeOnChange(active)) {
             if (rows.isEmpty()) item {
                 Text("No reactions yet", fontSize = 15.sp, color = c.secondary,
                     modifier = Modifier.fillMaxWidth().padding(24.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
@@ -103,8 +106,11 @@ internal fun ReactorsSheet(m: Message, ui: ThreadUi, onRemoveMine: () -> Unit, o
 @Composable
 private fun Tab(emoji: String?, label: String, on: Boolean, onClick: () -> Unit) {
     val c = Fariin.colors
+    // The grey capsule fades from the old tab to the new one (iOS pops 105).
+    val fill by androidx.compose.animation.animateColorAsState(if (on) c.secondary.copy(alpha = 0.22f) else c.secondary.copy(alpha = 0f),
+        com.fariin.app.ui.components.Smooth.fadeSpec(), label = "reactTab")
     Row(
-        Modifier.clip(CircleShape).background(if (on) c.secondary.copy(alpha = 0.22f) else androidx.compose.ui.graphics.Color.Transparent)
+        Modifier.clip(CircleShape).background(fill)
             .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
