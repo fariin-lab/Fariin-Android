@@ -619,7 +619,7 @@ fun ChatListScreen(
                             onEdit = { folderEdit = it }, onManage = {
                                 com.fariin.app.ui.settings.SettingsLink.request(com.fariin.app.ui.settings.PAGE_CHAT_FOLDERS)
                                 onSettings()
-                            })
+                            }, card = listCard?.takeIf { !searching && !selecting && filter == FILTER_ALL })
                         }
                     }
                 }
@@ -739,7 +739,9 @@ fun ChatListScreen(
                     // The chat list card (iOS ChatListCards, 2026-11-13): All chats only, under the search
                     // bar. A row that scrolls with the list: a sticky row sticks to the list's very top,
                     // behind the header, not under the search bar as iOS holds it.
-                    if (listCard != null && !showArchive && !searching && !selecting && filter == FILTER_ALL && folder == null)
+                    // With the folder tabs showing, the card is in their panel instead (ChatFolderBar).
+                    if (listCard != null && !showArchive && !searching && !selecting && filter == FILTER_ALL && folder == null &&
+                        !com.fariin.app.data.ChatFoldersStore.tabsShown)
                         item(key = "card:" + listCard.id, contentType = "card") { ChatListCard(listCard, me) }
                     if (!showArchive && !searching && filter == FILTER_ALL && folder == null && state.requests.isNotEmpty()) item(key = "requests", contentType = "requests") {
                         ListRow("Message Requests", fi(R.drawable.ic_message_request), trailing = "${state.requests.size}", badge = true,

@@ -1,5 +1,6 @@
 package com.fariin.app.ui.chats
 
+import com.fariin.app.data.ChatCard
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -61,7 +62,9 @@ private class FolderStats(var unread: Int = 0, var readable: Int = 0, var total:
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun ChatFolderBar(chats: List<Conversation>, me: String, onEdit: (ChatFolder) -> Unit, onManage: () -> Unit) {
+internal fun ChatFolderBar(chats: List<Conversation>, me: String, onEdit: (ChatFolder) -> Unit, onManage: () -> Unit,
+                           /** The chat list card, drawn under the tabs in the same panel (iOS 2026-11-20). */
+                           card: ChatCard? = null) {
     val c = Fariin.colors
     val folders = ChatFoldersStore.folders
     val selected = ChatFoldersStore.selectedId
@@ -117,7 +120,11 @@ internal fun ChatFolderBar(chats: List<Conversation>, me: String, onEdit: (ChatF
                 if (id != ChatFoldersStore.selectedId) { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); ChatFoldersStore.select(id) }
             }
         }
-        Box(Modifier.fillMaxWidth().height(42.dp).floating(CircleShape).clip(CircleShape)
+        // One panel (iOS ChatFolderBar.card): a capsule for the tabs alone, 20 corners with the card
+        // under them after a hairline.
+        val panel = if (card == null) CircleShape else androidx.compose.foundation.shape.RoundedCornerShape(20.dp)
+        androidx.compose.foundation.layout.Column(Modifier.fillMaxWidth().floating(panel).clip(panel)) {
+        Box(Modifier.fillMaxWidth().height(42.dp)
             .pointerInput(fits) {
                 if (fits) detectHorizontalDragGestures(onDragStart = { pickAt(it.x) }) { change, _ -> pickAt(change.position.x) }
             }) {
@@ -172,6 +179,11 @@ internal fun ChatFolderBar(chats: List<Conversation>, me: String, onEdit: (ChatF
                     }
                 }
             }
+        }
+        if (card != null) {
+            Box(Modifier.fillMaxWidth().height(0.5.dp).background(c.separator))
+            ChatCardContent(card, me)
+        }
         }
     }
 }
