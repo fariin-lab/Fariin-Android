@@ -13,6 +13,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,6 +51,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -468,7 +470,7 @@ internal fun ViewersSheet(
     // Fariin Plus storyRewatch: on MY OWN story only (not a group's read-only list, not Fariin's own),
     // how many times each viewer came back. Asked when the list loads, then every 20 s while open;
     // memory only. Any answer but {state:"on"} draws nothing.
-    var again by remember(storyId) { mutableStateOf<Map<String, Int>>(emptyMap()) }
+    var again by remember(storyId) { mutableStateOf(RewatchCache.counts[storyId].orEmpty()) }
     val rewatchOn = com.fariin.app.data.PlusStore.state("storyRewatch") == com.fariin.app.data.PlusStore.State.ON &&
         !readOnly && story.authorUid == me && !com.fariin.app.data.OfficialStories.isOfficial(story)
     LaunchedEffect(storyId, rewatchOn) {
@@ -478,10 +480,13 @@ internal fun ViewersSheet(
                 com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.PlusStore.REGION)
                     .getHttpsCallable("plusStoryRewatch").call(mapOf("storyId" to storyId)).await().getData() as? Map<*, *>
             } catch (_: Exception) { null }
-            if (d != null) again = if (d["state"] == "on") (d["counts"] as? Map<*, *>).orEmpty().mapNotNull { (k, v) ->
-                val n = (v as? Number)?.toInt() ?: 0
-                if (k is String && n >= 1) k to n else null
-            }.toMap() else emptyMap()
+            if (d != null) {
+                again = if (d["state"] == "on") (d["counts"] as? Map<*, *>).orEmpty().mapNotNull { (k, v) ->
+                    val n = (v as? Number)?.toInt() ?: 0
+                    if (k is String && n >= 1) k to n else null
+                }.toMap() else emptyMap()
+                RewatchCache.counts[storyId] = again
+            }
             delay(20_000)
         }
     }
@@ -696,15 +701,26 @@ private fun ViewerRow(
             Text(v.name, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(viewedAgo(v.viewedAtMs), color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
-        // Plus: watched again N times, a small Plus-blue capsule before the "…" button.
-        if (again >= 1) Row(Modifier.padding(start = 8.dp).clip(CircleShape).background(com.fariin.app.ui.settings.PlusBlue.copy(alpha = 0.18f))
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-            .semantics(mergeDescendants = true) { contentDescription = if (again == 1) "Watched again once" else "Watched again $again times" },
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            Icon(ImageVector.cachedVector(R.drawable.ic_sf_arrow_clockwise), contentDescription = null,
-                tint = com.fariin.app.ui.settings.PlusBlue, modifier = Modifier.size(12.dp))
-            Text("$again", color = com.fariin.app.ui.settings.PlusBlue, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum"))
+        // Plus: watched again N times (owner 2026-11-20, iOS): a black icon and number on a solid grey
+        // capsule before the "…" button. A tap explains it in a small bubble instead of opening the profile.
+        if (again >= 1) Box(Modifier.padding(start = 8.dp)) {
+            var tip by remember { mutableStateOf(false) }
+            Row(Modifier.clip(CircleShape).background(Color(0xFFCCCCCC)).clickable { tip = true }
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .semantics(mergeDescendants = true) { contentDescription = if (again == 1) "Watched again once" else "Watched again $again times" },
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_arrow_clockwise), contentDescription = null,
+                    tint = Color.Black, modifier = Modifier.size(12.dp))
+                Text("${minOf(again, 999)}", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                    style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum"))
+            }
+            if (tip) androidx.compose.ui.window.Popup(alignment = Alignment.TopEnd, offset = androidx.compose.ui.unit.IntOffset(0, with(androidx.compose.ui.platform.LocalDensity.current) { 30.dp.roundToPx() }),
+                onDismissRequest = { tip = false }, properties = androidx.compose.ui.window.PopupProperties(focusable = true)) {
+                Text(if (again == 1) "${v.name} watched your story again." else "${v.name} watched your story $again more times.",
+                    color = Color.White, fontSize = 13.sp,
+                    modifier = Modifier.widthIn(max = 240.dp).shadow(8.dp, RoundedCornerShape(12.dp)).clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF2C2C2E)).padding(horizontal = 14.dp, vertical = 10.dp))
+            }
         }
         if (!readOnly) {
             Box {
@@ -882,4 +898,10 @@ internal object StorySheetRows {
             .sortedWith(compareByDescending<StoryViewer> { !it.reaction.isNullOrEmpty() }.thenByDescending { it.viewedAtMs })
             .toList()
     }
+}
+
+/** Rewatch counts per story, kept while the app runs so the chips are there the moment the panel
+ *  opens again (iOS caches them); refreshed by the panel's own asks. Memory only. */
+internal object RewatchCache {
+    val counts = java.util.concurrent.ConcurrentHashMap<String, Map<String, Int>>()
 }
