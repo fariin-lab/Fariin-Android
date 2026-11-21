@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.components.fadeOnChange
 import com.fariin.app.ui.components.ProfileMeltTitle
 import com.fariin.app.ui.components.profileMeltBarGround
 import androidx.compose.foundation.layout.widthIn
@@ -962,9 +963,11 @@ internal fun ActionTile(text: String, icon: androidx.compose.ui.graphics.vector.
         "Unmute" -> com.fariin.app.R.drawable.ic_bell
         else -> null
     }
-    if (own != null) com.fariin.app.ui.components.GlassActionCircle(text, androidx.compose.ui.res.painterResource(own), modifier,
+    // Mute <-> Unmute (the real state read a moment later) fades instead of flipping (iOS pops 75).
+    val m = modifier
+    if (own != null) com.fariin.app.ui.components.GlassActionCircle(text, androidx.compose.ui.res.painterResource(own), m.fadeOnChange(text),
         dimmed = dimmed, onClick = onClick)
-    else com.fariin.app.ui.components.GlassActionCircle(text, icon, modifier, dimmed = dimmed, onClick = onClick)
+    else com.fariin.app.ui.components.GlassActionCircle(text, icon, m.fadeOnChange(text), dimmed = dimmed, onClick = onClick)
 }
 
 /**

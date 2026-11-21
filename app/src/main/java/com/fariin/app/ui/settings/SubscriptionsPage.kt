@@ -1,5 +1,7 @@
 package com.fariin.app.ui.settings
 
+import com.fariin.app.ui.components.fadeOnChange
+import com.fariin.app.ui.components.smoothSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -155,8 +157,10 @@ internal fun SubscriptionsPage(pop: () -> Unit, push: (String) -> Unit = {}) {
 @Composable
 private fun PlusPageBody(shown: List<PlusFeature>, plan: String, onPlan: (String) -> Unit, onOpen: (String) -> Unit) {
     PlusHeader()
-    if (plusSelling()) PlusPlansSection(plan, onPlan)
-    PlusManageSection()
+    // A purchase or restore takes the plans away and brings Manage Subscription: they fold and open
+    // with a fade instead of the page rearranging in one frame (iOS pops 81).
+    com.fariin.app.ui.components.Appear(plusSelling()) { Column { PlusPlansSection(plan, onPlan) } }
+    Column(Modifier.fillMaxWidth().smoothSize()) { PlusManageSection() }
     if (shown.isNotEmpty()) SettingsSection(header = "What's Included") {
         shown.forEachIndexed { i, f ->
             val on = PlusStore.state(f.id) == PlusStore.State.ON
@@ -426,6 +430,8 @@ private fun PlusPlansSection(plan: String, onPlan: (String) -> Unit) {
     val plans = billing.plans
     val picked = plans.firstOrNull { it.basePlanId == plan } ?: plans.firstOrNull()
     SettingsSection(header = "Choose a plan") {
+        // The card grows from the spinner to the plan rows on the spring (iOS pops 80).
+        Column(Modifier.fillMaxWidth().smoothSize()) {
         if (plans.isEmpty()) Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
             if (billing.loaded) Text("Subscriptions are not available right now.", color = c.secondary)
             else com.fariin.app.ui.components.FariinSpinner(size = 24.dp, stroke = 2.5.dp, color = c.secondary)
@@ -433,8 +439,9 @@ private fun PlusPlansSection(plan: String, onPlan: (String) -> Unit) {
             val on = picked?.basePlanId == p.basePlanId
             Row(Modifier.fillMaxWidth().clickable { onPlan(p.basePlanId) }.padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically) {
+                // The check fades between the rows (iOS pops 79).
                 Icon(ImageVector.cachedVector(if (on) R.drawable.ic_sf_checkmark_circle_fill else R.drawable.ic_sf_circle), null,
-                    tint = if (on) PlusBlue else c.secondary, modifier = Modifier.size(24.dp))
+                    tint = if (on) PlusBlue else c.secondary, modifier = Modifier.size(24.dp).fadeOnChange(on))
                 Spacer(Modifier.size(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(if (p.basePlanId == "yearly") "Yearly" else "Monthly", fontSize = 17.sp, color = c.label)
@@ -443,6 +450,7 @@ private fun PlusPlansSection(plan: String, onPlan: (String) -> Unit) {
                 saving(p, plans)?.let { Text("Save $it%", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = PlusBlue) }
             }
             if (i < plans.lastIndex) Box(Modifier.fillMaxWidth().padding(start = 52.dp).height(0.5.dp).background(c.separator))
+        }
         }
     }
     Text("Payment is charged to your Google Play account when you confirm. The subscription renews automatically at the same price and for the same period until you cancel it. You can manage or cancel it any time in Google Play under Payments & subscriptions.",

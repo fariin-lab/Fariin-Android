@@ -1,5 +1,6 @@
 package com.fariin.app.ui.settings
 
+import com.fariin.app.ui.components.fadeOnChange
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -126,6 +127,8 @@ internal fun ProfileVisitorsPage(pop: () -> Unit) {
     LaunchedEffect(com.fariin.app.data.PlusStore.visible) { if (!com.fariin.app.data.PlusStore.visible) pop() }
 
     ScrollPage("Profile Visitors", pop) {
+        // Spinner, failure and the list fade into each other (iOS pops 82).
+        Column(Modifier.fadeOnChange(phase.javaClass)) {
         when (val p = phase) {
             VisitPhase.Loading -> Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
                 com.fariin.app.ui.components.FariinSpinner(size = 24.dp)
@@ -203,6 +206,7 @@ internal fun ProfileVisitorsPage(pop: () -> Unit) {
                 }
             }
         }
+        }
     }
     if (plusPage) com.fariin.app.ui.settings.PlusGateSheet("profileVisitors") { plusPage = false }
 }
@@ -222,7 +226,9 @@ internal fun ProfileVisitorsButton(modifier: Modifier, onClick: () -> Unit) {
     Box(modifier) {
         // Owner 2026-11-20: his closed eye with lashes; with visitors, their latest faces instead, in
         // the same glass capsule (the way the reference app stacks a short video's viewers).
-        if (faces.isEmpty()) com.fariin.app.ui.components.FloatingIcon(ImageVector.cachedVector(R.drawable.ic_eye_closed_lashes), "Profile Visitors", onClick = onClick)
+        // Eye <-> faces cross-fade and the capsule widens on the spring (iOS pops 73).
+        com.fariin.app.ui.components.Swap(faces.isEmpty(), label = "visitorsButton") { none ->
+        if (none) com.fariin.app.ui.components.FloatingIcon(ImageVector.cachedVector(R.drawable.ic_eye_closed_lashes), "Profile Visitors", onClick = onClick)
         else Box(Modifier.height(44.dp).clip(CircleShape).then(com.fariin.app.ui.components.barGlass())
             .clickable(onClickLabel = "Profile Visitors", onClick = onClick).padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
             val ring = com.fariin.app.ui.theme.Fariin.colors.bg
@@ -235,11 +241,19 @@ internal fun ProfileVisitorsButton(modifier: Modifier, onClick: () -> Unit) {
                 }
             }
         }
+        }
+        // The new-visitors badge fades in and out; its count rolls.
         val n = PlusVisitors.newCount
-        if (n > 0) Box(Modifier.align(Alignment.TopEnd).heightIn(min = 18.dp).clip(CircleShape).background(PlusBlue)
-            .padding(horizontal = 5.dp), contentAlignment = Alignment.Center) {
-            Text(if (n > 99) "99+" else "$n", fontSize = 11.sp, color = androidx.compose.ui.graphics.Color.White,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+        val heldN = androidx.compose.runtime.remember { intArrayOf(n) }
+        if (n > 0) heldN[0] = n
+        com.fariin.app.ui.components.Appear(n > 0, Modifier.align(Alignment.TopEnd), resize = false) {
+            Box(Modifier.heightIn(min = 18.dp).clip(CircleShape).background(PlusBlue)
+                .padding(horizontal = 5.dp), contentAlignment = Alignment.Center) {
+                com.fariin.app.ui.components.RollingNumber(minOf(heldN[0], 100)) { k ->
+                    Text(if (k > 99) "99+" else "$k", fontSize = 11.sp, color = androidx.compose.ui.graphics.Color.White,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                }
+            }
         }
     }
 }

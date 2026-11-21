@@ -1532,7 +1532,12 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
                 Box(Modifier.fillMaxWidth().padding(start = 16.dp).height(0.5.dp).background(c.separator))
                 DescriptionField(desc, descFocus) { desc = GroupRules.oneParagraph(it) }
             }
-            error?.let { Text(it, fontSize = 15.sp, color = c.red, modifier = Modifier.padding(horizontal = 32.dp, vertical = 4.dp)) }
+            // The red line folds in and out with a fade, the rows above it not jumping (iOS pops 84, 96).
+            val heldError = remember { arrayOf(error) }
+            if (error != null) heldError[0] = error
+            com.fariin.app.ui.components.Appear(error != null) {
+                Text(heldError[0].orEmpty(), fontSize = 15.sp, color = c.red, modifier = Modifier.padding(horizontal = 32.dp, vertical = 4.dp))
+            }
     }
     if (sheet != null) {
         // The sheet's own bar (as Edit Profile's): X to close, the title, Save; a drag on it pulls the sheet.

@@ -143,6 +143,13 @@ private fun viewingOf(item: SharedMedia.Item, all: List<SharedMedia.Item>): View
  */
 @Composable
 internal fun SharedMediaCard(cid: String, state: SharedMediaState, inset: androidx.compose.ui.unit.Dp = 16.dp, onSeeAll: () -> Unit) {
+    // Media read after the page opened: the card opens with a fade and its height instead of pushing
+    // everything under it down in one frame (iOS pops 76).
+    com.fariin.app.ui.components.Appear(state.lists.media.isNotEmpty()) { SharedMediaCardBody(cid, state, inset, onSeeAll) }
+}
+
+@Composable
+private fun SharedMediaCardBody(cid: String, state: SharedMediaState, inset: androidx.compose.ui.unit.Dp, onSeeAll: () -> Unit) {
     val strip = state.lists.media.take(SharedMedia.STRIP)
     if (strip.isEmpty()) return
     val c = Fariin.colors
