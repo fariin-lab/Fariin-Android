@@ -1187,7 +1187,17 @@ class ThreadRepository(
                             })
                         }
                         rebuild()
-                        val work: suspend () -> Unit = { sender.album(parts, words, false, clientId, ts) }
+                        // Written down before the upload, as a single photo is (PhotoOutbox): every
+                        // tile's picture (and clip) is on the phone now.
+                        val items = parts.mapIndexed { i, part ->
+                            val pp = when (part) { is MediaSender.AlbumPart.Photo -> part.prep; is MediaSender.AlbumPart.Video -> part.prep.poster }
+                            val vid = (part as? MediaSender.AlbumPart.Video)?.prep
+                            com.fariin.app.local.PhotoOutbox.Item(File(m.localDir(), "tile-$clientId-$i.jpg").absolutePath, pp.width, pp.height,
+                                pp.blurhash, pp.thumbB64, vid?.file?.absolutePath, vid?.duration ?: 0.0)
+                        }
+                        com.fariin.app.local.PhotoOutbox.add(me, com.fariin.app.local.PhotoOutbox.Entry(cid, clientId, ts,
+                            items[0].path, items[0].width, items[0].height, null, null, words, false, kind = "album", items = items))
+                        val work: suspend () -> Unit = { sender.album(parts, words, false, clientId, ts); com.fariin.app.local.PhotoOutbox.remove(me, clientId) }
                         retryMedia[clientId] = work
                         work()
                     }
@@ -1641,6 +1651,7 @@ class ThreadRepository(
             if (!f.exists() || f.length() == 0L) { com.fariin.app.local.PhotoOutbox.remove(me, e.clientId); continue }
             val video = e.kind == "video"
             val voice = e.kind == "voice"
+            if (e.kind == "album") { resumeAlbum(e); continue }
             if (video && e.poster?.let { File(it).exists() } != true) { com.fariin.app.local.PhotoOutbox.remove(me, e.clientId); continue }
             pending[e.clientId] = Message(
                 id = e.clientId, authorId = me, text = e.caption, type = if (voice) "audio" else if (video) "video" else "image", createdAtMillis = e.ts, hasServerTime = false,
@@ -1672,6 +1683,39 @@ class ThreadRepository(
                 }
                 com.fariin.app.local.PhotoOutbox.remove(me, e.clientId)
             }
+        }
+    }
+
+    /** An album from [com.fariin.app.local.PhotoOutbox]: its tiles drawn again and sent under the same clientId. */
+    private fun resumeAlbum(e: com.fariin.app.local.PhotoOutbox.Entry) {
+        val ok = e.items.size >= 2 && e.items.all { t -> File(t.path).length() > 0 && (t.clip == null || File(t.clip).length() > 0) }
+        if (!ok) { com.fariin.app.local.PhotoOutbox.remove(me, e.clientId); return }
+        pending[e.clientId] = Message(
+            id = e.clientId, authorId = me, text = e.caption, type = "album", createdAtMillis = e.ts, hasServerTime = false,
+            clientTs = e.ts, clientId = e.clientId, sendState = Message.SendState.SENDING,
+            album = e.items.map { t ->
+                Message.AlbumItem(t.path, null, t.width.toDouble(), t.height.toDouble(), videoUrl = t.clip,
+                    duration = if (t.clip != null) t.duration else null, localVideo = t.clip != null)
+            },
+        )
+        rebuild()
+        if (com.fariin.app.media.MediaSend.isInFlight(e.clientId)) return
+        runMediaSend(e.clientId) {
+            val landed = try {
+                val q = convRef.collection("messages").whereEqualTo("clientId", e.clientId).limit(1)
+                !q.get(Source.CACHE).await().isEmpty || !q.get(Source.SERVER).await().isEmpty
+            } catch (_: Exception) { false }
+            if (!landed) {
+                val parts = e.items.map { t ->
+                    val pic = PhotoPrep(File(t.path).readBytes(), t.width, t.height, t.blurhash, t.thumb)
+                    if (t.clip != null) MediaSender.AlbumPart.Video(com.fariin.app.media.VideoPrep.describe(File(t.clip), pic.jpeg) ?: error("clip not readable"))
+                    else MediaSender.AlbumPart.Photo(pic)
+                }
+                val work: suspend () -> Unit = { sender.album(parts, e.caption, false, e.clientId, e.ts); com.fariin.app.local.PhotoOutbox.remove(me, e.clientId) }
+                retryMedia[e.clientId] = work
+                work()
+            }
+            com.fariin.app.local.PhotoOutbox.remove(me, e.clientId)
         }
     }
 
