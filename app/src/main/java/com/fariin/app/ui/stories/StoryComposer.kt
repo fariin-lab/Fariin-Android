@@ -201,11 +201,25 @@ object StoryUploads {
                 // every later part waiting on disk, so Try Again (or the reconnect) sends the rest.
                 var result: State? = null
                 var waitingFrom = -1
-                for ((i, range) in pieces.withIndex()) {
-                    val file = java.io.File(app.cacheDir, "story-part-${System.nanoTime()}.mp4")
+                // iOS story-seg-1115: part N+1 is cut while part N uploads (at most two cut parts wait),
+                // instead of cut, upload, cut, upload. Uploads stay in order; a part that fails to cut
+                // ends the run as before.
+                kotlinx.coroutines.coroutineScope {
+                val ready = kotlinx.coroutines.channels.Channel<Triple<Int, java.io.File, StoryMedia.Prepared?>>(capacity = 1)
+                val maker = launch {
+                    for ((j, range) in pieces.withIndex()) {
+                        val f = java.io.File(app.cacheDir, "story-part-${System.nanoTime()}.mp4")
+                        val p = try {
+                            if (com.fariin.app.media.StoryVideoCut.cut(app, video.file, f, range)) StoryMedia.prepareVideo(app, Uri.fromFile(f)) else null
+                        } catch (e: kotlinx.coroutines.CancellationException) { f.delete(); throw e } catch (_: Exception) { null }
+                        ready.send(Triple(j, f, p))
+                        if (p == null) break
+                    }
+                    ready.close()
+                }
+                try {
+                for ((i, file, part) in ready) {
                     try {
-                        val part = if (com.fariin.app.media.StoryVideoCut.cut(app, video.file, file, range))
-                            StoryMedia.prepareVideo(app, Uri.fromFile(file)) else null
                         if (part == null) {
                             if (waitingFrom < 0) result = State.Failed(if (i == 0) "Couldn't prepare this video for your story."
                                 else "Only the first $i parts of this video were posted. The rest couldn't be prepared.")
@@ -235,6 +249,12 @@ object StoryUploads {
                     } finally {
                         file.delete()   // the outbox keeps its own copy
                     }
+                }
+                } finally {
+                    // Stopped early (a failure, Cancel Upload): parts cut ahead are not kept.
+                    maker.cancel()
+                    while (true) { val left = ready.tryReceive().getOrNull() ?: break; left.second.delete() }
+                }
                 }
                 result
             }
