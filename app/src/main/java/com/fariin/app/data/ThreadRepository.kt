@@ -289,6 +289,7 @@ class ThreadRepository(
             .addSnapshotListener(listenExec, com.google.firebase.firestore.MetadataChanges.INCLUDE) { snap, err ->
                 if (snap == null) {
                     msgFailed = true
+                    com.fariin.app.CrashReports.refusal(err, "chat:" + cid.takeLast(6))
                     _state.update { it.copy(loaded = true, synced = true, error = LoadFailure.of(err)) }
                     return@addSnapshotListener
                 }

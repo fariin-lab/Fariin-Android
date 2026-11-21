@@ -34,6 +34,25 @@ object CrashReports {
         com.fariin.app.Fb.auth.addAuthStateListener { a -> crash.setUserId(hashUid(a.currentUser?.uid ?: "")) }
     }
 
+    /**
+     * A listener the server refused (iOS SessionRecovery.noteRefusal + Telemetry.event, 2026-11-20 F4):
+     * a non-fatal report with its code and [where] ("chat:" + the last 6 of the cid, never the whole
+     * id or anything said in it). Only while signed in: one refused on its way out at sign-out is not
+     * an app error. Only refusals (permission denied, unauthenticated); a missing answer is not one.
+     */
+    fun refusal(error: Throwable?, where: String) {
+        val e = error as? com.google.firebase.firestore.FirebaseFirestoreException ?: return
+        if (com.fariin.app.Fb.auth.currentUser == null) return
+        val code = e.code
+        if (code != com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED &&
+            code != com.google.firebase.firestore.FirebaseFirestoreException.Code.UNAUTHENTICATED) return
+        runCatching {
+            val crash = FirebaseCrashlytics.getInstance()
+            crash.setCustomKey("where", where)
+            crash.recordException(RuntimeException("firestore_${code.value()} at $where"))
+        }
+    }
+
     /** iOS Telemetry.hashUid: the first 10 bytes of sha256("kulan.telemetry.v1:" + uid), hex. */
     fun hashUid(uid: String): String {
         if (uid.isEmpty()) return ""
