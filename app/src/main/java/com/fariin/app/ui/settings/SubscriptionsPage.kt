@@ -127,7 +127,7 @@ private fun plusSubscribed(): Boolean =
 private fun plusSelling(): Boolean = PlusStore.purchasesOn && !plusSubscribed()
 
 @Composable
-internal fun SubscriptionsPage(pop: () -> Unit) {
+internal fun SubscriptionsPage(pop: () -> Unit, push: (String) -> Unit = {}) {
     // Plus went away for this account while the page was open: so does the page.
     val popNow by rememberUpdatedState(pop)
     LaunchedEffect(PlusStore.visible) { if (!PlusStore.visible) popNow() }
@@ -136,7 +136,10 @@ internal fun SubscriptionsPage(pop: () -> Unit) {
     val shown = plusFeatures.filter { PlusStore.state(it.id) != PlusStore.State.OFF }
     Box(Modifier.fillMaxSize()) {
         ScrollPage("Fariin Plus", pop) {
-            PlusPageBody(shown, plan, { plan = it }) { opened = it }
+            PlusPageBody(shown, plan, { plan = it }) { id ->
+                // iOS: Bubble Styles, when on, opens the bubble style page itself (with its back button).
+                if (id == "pictureBubbles" && PlusStore.state(id) == PlusStore.State.ON) push(PAGE_BUBBLE_STYLE) else opened = id
+            }
             // Room for the floating Subscribe button, so the last rows scroll up above it.
             Spacer(Modifier.height(if (plusSubscribed()) 24.dp else 96.dp))
         }

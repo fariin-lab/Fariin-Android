@@ -155,7 +155,7 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit,
             lookRoute(page, push, pop) -> Unit
             page == PAGE_SETTINGS_SEARCH -> SettingsSearchPage(push, pop)
             page == PAGE_APP_ICON -> AppIconPage(pop)
-            page == PAGE_SUBSCRIPTIONS -> SubscriptionsPage(pop)
+            page == PAGE_SUBSCRIPTIONS -> SubscriptionsPage(pop, push)
             page == PAGE_PROFILE_VISITORS -> ProfileVisitorsPage(pop)
             page == PAGE_BUBBLE_STYLE -> BubbleStylePage(onClose = pop)
             page == PAGE_PLUS_BUBBLE -> PlusBubbleStylePage(pop)
