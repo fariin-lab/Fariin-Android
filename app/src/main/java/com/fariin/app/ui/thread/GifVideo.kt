@@ -132,10 +132,13 @@ internal fun GifMp4(gifUrl: String?, play: Boolean, modifier: Modifier, paused: 
             androidx.compose.runtime.LaunchedEffect(player, alive, paused) { player?.playWhenReady = alive && !paused }
             val p = player
             val vs = video
+            // The first frame fades in over the grey box instead of appearing at once (iOS pops 55).
+            val shownAlpha by androidx.compose.animation.core.animateFloatAsState(if (shown) 1f else 0f,
+                com.fariin.app.ui.components.Smooth.fadeSpec(), label = "gifIn")
             if (p != null) AndroidView({ c -> TextureView(c).apply {
                 // Cropped to the box, as the picture was (ContentScale.Crop), whenever it is laid out again.
                 addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ -> (v.tag as? Pair<*, *>)?.let { crop(v as TextureView, it) } }
-            } }, Modifier.fillMaxSize().alpha(if (shown) 1f else 0f),
+            } }, Modifier.fillMaxSize().alpha(shownAlpha),
                 update = { tv -> p.setVideoTextureView(tv); tv.tag = vs; if (vs != null) crop(tv, vs) })
         }
     }

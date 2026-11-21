@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.enterFade
 import com.fariin.app.ui.components.GlassDropdown
 import android.content.Intent
 import android.text.format.DateFormat
@@ -673,10 +674,12 @@ private fun ThumbStrip(pages: List<ViewerRules.Page>, pager: PagerState) {
             val side by animateDpAsState(if (on) 38.dp else 32.dp, tween(200, easing = IosEaseInOut), label = "thumb")
             val shape = RoundedCornerShape(8.dp)
             val bmp = rememberBitmap(rememberPlainFile(p.posterUrl ?: p.url, if (p.posterUrl != null) p.posterEnc else p.enc), 120)
+            // Each thumbnail fades in as it loads, not flickering in tile by tile (iOS pops 60).
+            val thumbLate = remember { bmp == null }
             Box(Modifier.size(side).clip(shape).background(Color.White.copy(alpha = 0.15f))
                 .then(if (on) Modifier.border(1.5.dp, Color.White, shape) else Modifier)
                 .clickable { scope.launch { pager.animateScrollToPage(i, animationSpec = tween(200, easing = IosEaseInOut)) } }) {
-                if (bmp != null) Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                if (bmp != null) Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().enterFade(thumbLate))
             }
         }
     }
@@ -707,6 +710,8 @@ private fun PhotoPage(p: ViewerRules.Page, current: Boolean, onTap: () -> Unit, 
     val longPx = ctx.resources.displayMetrics.let { maxOf(it.widthPixels, it.heightPixels) }
     val cap = com.fariin.app.media.LowEnd.viewerSide(longPx * 2, com.fariin.app.media.LowEnd.isLowRam(ctx))
     val bmp = rememberBitmap(file, cap, maxLongPx = cap)
+    // A photo not in memory yet fades in over the spinner when it lands (iOS pops 50).
+    val bornWaiting = remember { bmp == null }
     // iOS: a view-once photo is spent the moment the picture is in hand (ViewedOnce.mark, then the
     // server burn); the plain copy this phone opened is removed when the viewer closes.
     val once = p.once
@@ -728,7 +733,7 @@ private fun PhotoPage(p: ViewerRules.Page, current: Boolean, onTap: () -> Unit, 
         } else {
             Image(
                 bmp, "Photo", contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize().enterFade(bornWaiting)
                     .pointerInput(Unit) {
                         detectTapGestures(onTap = { tap() }, onDoubleTap = {
                             if (scale > 1f) { scale = 1f; offset = Offset.Zero } else scale = 2.5f

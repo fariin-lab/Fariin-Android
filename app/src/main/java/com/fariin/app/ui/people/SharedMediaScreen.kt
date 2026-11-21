@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.components.enterFade
 import com.fariin.app.ui.components.GlassDropdown
 import com.fariin.app.R
 import androidx.compose.ui.semantics.contentDescription
@@ -177,6 +178,8 @@ private fun MediaTile(item: SharedMedia.Item, modifier: Modifier, cid: String = 
     val file = rememberPlainFile(item.pictureUrl, item.pictureEnc)
     val bmp = rememberBitmap(file, px)
     val placeholder = rememberPlaceholder(item.thumb, item.blurhash)
+    // A picture that lands after the tile fades in over its blur (iOS pops 51, 54).
+    val late = remember { bmp == null }
     // A long press (iOS MediaGalleryView): Go to Message, Share (not in a restricted chat), Delete for Me.
     var menu by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
@@ -202,7 +205,8 @@ private fun MediaTile(item: SharedMedia.Item, modifier: Modifier, cid: String = 
                 HiddenMessages.hide(ctx, item.messageId)
             })
         }
-        (bmp ?: placeholder)?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+        if (bmp == null || late) placeholder?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+        bmp?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().enterFade(late)) }
         if (item.isVideo) {
             Box(Modifier.align(Alignment.Center).size(32.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)),
                 contentAlignment = Alignment.Center) {
@@ -308,13 +312,20 @@ private fun MediaGrid(media: List<SharedMedia.Item>, loaded: Boolean, top: andro
     LazyVerticalGrid(GridCells.Fixed(3), Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 2.dp, end = 2.dp, top = top + 2.dp, bottom = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         // While the first answer is on its way: grey tiles, not a spinner (iOS gridSkeleton).
-        if (!loaded && media.isEmpty()) items(12) { Box(Modifier.aspectRatio(1f).background(c.secondary.copy(alpha = 0.12f))) }
+        // The skeleton fades into the real grid, a filter's new grid fades in, and tiles after a deleted
+        // one glide up into its place (iOS pops 56, 57, 58).
+        val fadeIn = com.fariin.app.ui.components.Smooth.fadeSpec<Float>()
+        val place = com.fariin.app.ui.components.Smooth.soft<androidx.compose.ui.unit.IntOffset>()
+        if (!loaded && media.isEmpty()) items(12, key = { "sk$it" }) { Box(Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = fadeIn)
+            .aspectRatio(1f).background(c.secondary.copy(alpha = 0.12f))) }
         sections.forEach { (title, list) ->
             item(span = { GridItemSpan(maxLineSpan) }, key = "h-$title") {
                 Text(title, style = MaterialTheme.typography.titleSmall, color = c.secondary,
-                    modifier = Modifier.padding(start = 12.dp, top = 12.dp, bottom = 6.dp))
+                    modifier = Modifier.animateItem(fadeInSpec = fadeIn, placementSpec = place, fadeOutSpec = fadeIn)
+                        .padding(start = 12.dp, top = 12.dp, bottom = 6.dp))
             }
-            items(list, key = { it.id }) { item -> MediaTile(item, Modifier.aspectRatio(1f), cid = cid) { onOpen(item) } }
+            items(list, key = { it.id }) { item -> MediaTile(item, Modifier.animateItem(fadeInSpec = fadeIn, placementSpec = place, fadeOutSpec = fadeIn)
+                .aspectRatio(1f), cid = cid) { onOpen(item) } }
         }
     }
 }
