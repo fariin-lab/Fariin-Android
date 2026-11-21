@@ -385,6 +385,7 @@ private fun ThreadContent(
     var bulkDelete by remember { mutableStateOf(false) }
     var bulkForward by remember { mutableStateOf<List<Message>?>(null) }
     BackHandler(enabled = selecting) { selected.clear() }
+    val rowEnv = remember { RowEnv() }
     fun toggle(m: Message) { if (m.rowId in selected) selected.remove(m.rowId) else selected.add(m.rowId) }
     // The row a jump landed on, lit for a moment (iOS flashAndScroll).
     var flashId by remember { mutableStateOf<String?>(null) }
@@ -1191,6 +1192,33 @@ private fun ThreadContent(
                 groupDoc = if (ui.groupDoc["bubbleStylesOff"] == true) mapOf("bubbleStylesOff" to true) else emptyMap())
             val rowUi = remember(rowKey) { ui }
 
+            // The rows' way back into the screen: one object for the screen's life, its calls renewed
+            // each pass, so a row never holds the screen's state and is skipped when its own is unchanged.
+            rowEnv.jumpTo = { id -> jumpTo(id, advance = false) }
+            rowEnv.toggle = { m -> toggle(m) }
+            rowEnv.openMenu = { m, src, preview -> menuSource = src; menuPreview = preview; menuFor = m }
+            rowEnv.openPostMenu = { m, preview -> postPreview = preview; postMenuFor = m }
+            rowEnv.reply = { m -> replyTo = m; editing = null }
+            rowEnv.swipeMenu = { m -> swipeMenu(m) }
+            rowEnv.failed = { m -> failedFor = m }
+            rowEnv.view = { v -> viewing = withChatGallery(v, uiNow.value.messages, uiNow.value.isGroup || uiNow.value.channel != null) }
+            rowEnv.restrictTap = {
+                val conv = com.fariin.app.data.ChatsNow.findAny(uiNow.value.cid)
+                val by = conv?.let { com.fariin.app.data.ChatRestrictions.pendingRequestBy(it) }
+                if (by != null && by != uiNow.value.me && com.fariin.app.data.ChatRestrictions.restrictedByMe(conv, uiNow.value.me)) restrictAnswer = true
+                else android.widget.Toast.makeText(ctxR, "This request is no longer open", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            rowEnv.react = { m ->
+                rowView.lightTap()   // iOS: a light tap with the quick reaction
+                // The pill shows now, not when the sealed write comes back (ReactNow).
+                val next = MessageRules.nextReaction(ReactNow.mine(m, uiNow.value.me), quickReaction)
+                ReactNow.set(m, next)
+                actions.onReact(m, next)
+            }
+            rowEnv.reactors = { m -> reactorsFor = m.rowId }
+            rowEnv.menuLifted = { menuLifted }
+            rowEnv.flashShown = { flashShown }
+            rowEnv.flashFade = { flashFade.value }
             androidx.compose.runtime.CompositionLocalProvider(LocalThreadMessages provides uiMessages,
                 LocalTimerMark provides timerMark, LocalSearchTerm provides search.term,
                 LocalBubbleLinkTap provides linkTap,
@@ -1214,7 +1242,6 @@ private fun ThreadContent(
                     contentType = { _, i -> rowKind(ui.messages[i], ch != null) }) { _, i ->
                     val m = ui.messages[i]
                     val g = geometry[i]
-                    val rowTick = ThreadLogic.tick(m, ui.me, ui.receipts)
                     // A message that arrives fades in and the rows above glide up to make room;
                     // with Power Saving > Animations off it just appears. The one I just sent
                     // rises from the composer instead of fading (SendMotion.kt); one from someone else
@@ -1222,166 +1249,20 @@ private fun ThreadContent(
                     val flight = rememberSendFlight(sendMotion, m, ui.me, isNewest = i == ui.messages.lastIndex,
                         atBottom = { listState.firstVisibleItemIndex <= 1 })
                     val glide = if (flight != null) null else rememberArrivalGlide(arrivalMotion, m)?.takeIf { !bursting }
-                    Column(Modifier.animateItem(fadeInSpec = if (flight != null || glide != null || bursting) null else rowFade,
-                        placementSpec = if (bursting) null else rowPlace, fadeOutSpec = null)
-                        .sendFlight(flight)
-                        .arrivalGlide(glide)
-                        .fillMaxWidth().padding(top = g.gapDp.dp)) {
-                        if (g.showDate) DatePill(ThreadLogic.dayLabel(m.createdAtMillis, now))
-                        // Not in a channel (owner 2026-11-11: "remove unread on channel"); the open still lands there.
-                        if (m.rowId == dividerId && ui.channel == null) UnreadDivider()
-                        val pinNote = com.fariin.app.data.PinRules.notice(m.text)
-                        // This row's coordinates, read only at a long press.
-                        val coords = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
-                        val flashLit = Modifier.drawBehind {
-                            if (flashShown == m.rowId) drawRect(c.blue.copy(alpha = 0.14f * flashFade.value))
-                        }
-                        // Ticked rows fade in and out: a colour animation only while select mode is on
-                        // and for its fade-out after (selectFading), not in every row all the time.
-                        val selShown = selecting || selectFading
-                        val selLit = if (selShown) litColor(
-                            if (m.rowId == flashId || (selecting && m.rowId in selected)) c.blue.copy(alpha = 0.14f) else Color.Transparent)
-                            else Color.Transparent
-                        when {
-                            pinNote != null && !m.deleted -> {
-                                // The notice keeps the words from the moment of the pin; once that message is
-                                // deleted its words must not stay readable here, and there is nothing to jump to.
-                                val gone = deletedById.value[pinNote.messageId] == true
-                                Box(Modifier.fillMaxWidth().clickable(enabled = !selecting && !gone) { jumpTo(pinNote.messageId, advance = false) }) {
-                                    NoticePill("${if (m.authorId == ui.me) "You" else ui.names[m.authorId] ?: ui.title} pinned ${if (gone) "a message" else pinNote.label}")
-                                }
-                            }
-                            // A notice a group admin may clear (iOS canDeleteNotice, owner 2026-10-29): a long
-                            // press offers Select and Delete, and it takes a tick in select mode.
-                            ch == null && com.fariin.app.data.SelectRules.canDeleteNotice(m, ui.groupDoc, ui.me) -> {
-                                val pill: @Composable () -> Unit = {
-                                    val secs = m.disappearSeconds
-                                    if (secs != null) NoticePill(com.fariin.app.data.Disappearing.noticeLine(
-                                        if (m.authorId == ui.me) "You" else ui.names[m.authorId] ?: ui.title, secs), icon = true)
-                                    else NoticePill(youNotice(m, ui))
-                                }
-                                if (selecting) Row(Modifier.fillMaxWidth().background(selLit).clickable { toggle(m) },
-                                    verticalAlignment = Alignment.CenterVertically) {
-                                    SelectTick(m.rowId in selected)
-                                    Box(Modifier.weight(1f)) { pill() }
-                                } else Box(Modifier.fillMaxWidth()
-                                    .onPlaced { coords[0] = it }
-                                    .graphicsLayer { alpha = if (menuLifted == m.rowId) 0f else 1f }
-                                    .combinedClickableLong {
-                                        val lc = coords[0]?.takeIf { it.isAttached }
-                                        menuSource = lc?.let { menuSourceOf(it, false) }
-                                        menuPreview = { pill() }
-                                        menuFor = m
-                                    }) { pill() }
-                            }
-                            m.isSystem && m.disappearSeconds != null -> NoticePill(
-                                com.fariin.app.data.Disappearing.noticeLine(
-                                    if (m.authorId == ui.me) "You" else ui.names[m.authorId] ?: ui.title, m.disappearSeconds),
-                                icon = true)
-                            // A call record: the iOS call bubble (CallBubble.kt); tap asks, then calls back.
-                            m.isCall && ch == null -> {
-                                val theirs = ui.isGroup && m.callerUid != ui.me
-                                // A long press opens the message menu like any bubble; it used to fall
-                                // through to the bubble's tap and ask "Call them?" (Pixel, 2026-11-04).
-                                // A swipe replies, as on every other bubble (iOS allows Reply on a call).
-                                SwipeRow(enabled = MessageRules.canSwipeReply(m, mayReply), onReply = { replyTo = m; editing = null }, menu = swipeMenu(m)) {
-                                Box(Modifier.fillMaxWidth()
-                                    .onPlaced { coords[0] = it }
-                                    .graphicsLayer { alpha = if (menuLifted == m.rowId) 0f else 1f }
-                                    .combinedClickableLong {
-                                        val lc = coords[0]?.takeIf { it.isAttached }
-                                        menuSource = lc?.let { menuSourceOf(it, m.authorId == ui.me) }
-                                        menuPreview = {
-                                            CallBubble(m, ui.me, is24h, myFill(), receivedFill(), peerUid = null, title = ui.title, photoUrl = ui.photoUrl,
-                                                callerName = if (theirs) ui.names[m.callerUid ?: m.authorId] ?: "Someone" else null,
-                                                callerPhoto = if (theirs) ui.photos[m.callerUid ?: m.authorId] else null)
-                                        }
-                                        menuFor = m
-                                    }) {
-                                    CallBubble(m, ui.me, is24h, myFill(), receivedFill(),
-                                        peerUid = if (ui.isGroup) null else com.fariin.app.crypto.Wire.otherUid(ui.cid, ui.me),
-                                        title = ui.title, photoUrl = ui.photoUrl,
-                                        callerName = if (theirs) ui.names[m.callerUid ?: m.authorId] ?: "Someone" else null,
-                                        callerPhoto = if (theirs) ui.photos[m.callerUid ?: m.authorId] else null)
-                                }
-                                }
-                            }
-                            // "X asked to turn off Restricted chat": answered here by the one it was
-                            // asked of, while it is still open (iOS restrictRequestTarget).
-                            m.isSystem && m.isRestrictRequest && m.authorId != ui.me -> Box(Modifier.fillMaxWidth().clickable(enabled = !selecting) {
-                                val conv = com.fariin.app.data.ChatsNow.findAny(ui.cid)
-                                val by = conv?.let { com.fariin.app.data.ChatRestrictions.pendingRequestBy(it) }
-                                if (by != null && by != ui.me && com.fariin.app.data.ChatRestrictions.restrictedByMe(conv, ui.me)) restrictAnswer = true
-                                else android.widget.Toast.makeText(ctxR, "This request is no longer open", android.widget.Toast.LENGTH_SHORT).show()
-                            }) { NoticePill(youNotice(m, ui)) }
-                            m.isSystem || m.isCall -> NoticePill(if (ch != null) com.fariin.app.channel.ChannelRules.words(noticeText(m)) else youNotice(m, ui))
-                            // Ticking posts uses the select rows below, as in any chat (iOS: Select in a channel too).
-                            ch != null && !selecting -> androidx.compose.runtime.CompositionLocalProvider(
-                                com.fariin.app.ui.channels.LocalPostViews provides
-                                    if (m.deleted) null else com.fariin.app.channel.ChannelRules.shownViews(m.views, m.authorId, ui.me),
-                            ) {
-                                Column(Modifier.fillMaxWidth().combinedClickableLong { postPreview = { MessageRow(ui, m, g, is24h, {}) {} }; postMenuFor = m }) {
-                                    MessageRow(rowUi, m, g, is24h, { failedFor = it }, rowTick) { viewing = withChatGallery(it, uiNow.value.messages, uiNow.value.isGroup || uiNow.value.channel != null) }
-                                    // A text post carries its reactions inside the bubble; the rest under it.
-                                    // A photo, video or album post draws its bar inside its bubble (MediaRow), as text posts do.
-                                    // A picture, video or album post's pills sit inside its bubble (MediaRow).
-                                    if (!channelChipsInside(m)) { if (!mediaBarInside(m)) com.fariin.app.ui.channels.ChannelChips(ch, m); if (!mediaBarInside(m)) com.fariin.app.ui.channels.PostQuotesBar(m, inBubble = false, channelRepliesOff = ch.info.repliesOff, channelQuotesOff = ch.info.quotesOff) }
-                                }
-                            }
-                            selecting -> Row(
-                                // The tick's side of the row ticks too, as the rest of it.
-                                Modifier.fillMaxWidth().background(selLit).pointerInput(m.rowId) { detectTapGestures(onTap = { toggle(m) }) },
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                SelectTick(m.rowId in selected)
-                                // The bubble takes no taps of its own while ticking (a photo would open).
-                                Box(Modifier.weight(1f)) {
-                                    Column(Modifier.fillMaxWidth()) {
-                                        // No share button beside a post while ticking (iOS).
-                                        androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.channels.LocalPostSelecting provides true) {
-                                            MessageRow(rowUi, m, g, is24h, {}, rowTick) {}
-                                        }
-                                        ReactionChips(m, ui, m.authorId == ui.me) {}
-                                    }
-                                    // On top of the bubble, so the bubble itself gets no touch; only a TAP ticks.
-                                    // It used to eat every event, so a swipe never reached the list (no scroll
-                                    // while selecting) and its lift ticked the row (owner 2026-11-07: 3 picked,
-                                    // "7 messages" in Forward). A drag past the slop is the list's scroll now.
-                                    Box(Modifier.matchParentSize().pointerInput(m.rowId) {
-                                        detectTapGestures(onTap = { toggle(m) })
-                                    })
-                                }
-                            }
-                            else -> SwipeRow(enabled = MessageRules.canSwipeReply(m, mayReply), onReply = { replyTo = m; editing = null }, menu = swipeMenu(m)) {
-                                Column(Modifier.fillMaxWidth()
-                                    .onPlaced { coords[0] = it }
-                                    .graphicsLayer { alpha = if (menuLifted == m.rowId) 0f else 1f }
-                                    .then(if (selShown) Modifier.background(selLit) else flashLit).combinedClickableLong {
-                                        val lc = coords[0]?.takeIf { it.isAttached }
-                                        menuSource = lc?.let { menuSourceOf(it, m.authorId == ui.me) }
-                                        menuPreview = {
-                                            Column(Modifier.fillMaxWidth()) {
-                                                MessageRow(rowUi, m, g, is24h, {}, rowTick) {}
-                                                ReactionChips(m, ui, m.authorId == ui.me) {}
-                                            }
-                                        }
-                                        menuFor = m
-                                    }
-                                    .doubleTapToReact(!m.deleted && m.sendState == null && !m.isSystem &&
-                                        !com.fariin.app.data.GroupAdmins.reactionsHeldBack(ui.groupDoc, ui.me), key = m.id + ReactNow.mine(m, ui.me)) {
-                                        rowView.lightTap()   // iOS: a light tap with the quick reaction
-                                        // The pill shows now, not when the sealed write comes back (ReactNow).
-                                        val next = MessageRules.nextReaction(ReactNow.mine(m, ui.me), quickReaction)
-                                        ReactNow.set(m, next)
-                                        actions.onReact(m, next)
-                                    }) {
-                                    MessageRow(rowUi, m, g, is24h, { failedFor = it }, rowTick) { viewing = withChatGallery(it, uiNow.value.messages, uiNow.value.isGroup || uiNow.value.channel != null) }
-                                    // iOS: a pill opens who reacted (channels keep their own chips).
-                                    ReactionChips(ReactNow.shown(m, ui.me), ui, m.authorId == ui.me) { reactorsFor = m.rowId }
-                                }
-                            }
-                        }
-                    }
+                    val pinNote = com.fariin.app.data.PinRules.notice(m.text)
+                    // Only what this row draws goes in (2026-11-20, Oppo: every send rebuilt every visible
+                    // row, about 85 row passes a send, because the row's code read the whole screen).
+                    // A row whose inputs are unchanged is skipped.
+                    ThreadRow(
+                        m = m, g = g, tick = ThreadLogic.tick(m, ui.me, ui.receipts), ui = rowUi,
+                        day = if (g.showDate) ThreadLogic.dayLabel(m.createdAtMillis, now) else null,
+                        isDivider = m.rowId == dividerId && ui.channel == null,
+                        pinGone = pinNote != null && deletedById.value[pinNote.messageId] == true,
+                        flight = flight, glide = glide, bursting = bursting, rowFade = rowFade, rowPlace = rowPlace,
+                        selecting = selecting, selShown = selecting || selectFading,
+                        ticked = selecting && m.rowId in selected, flashHere = m.rowId == flashId,
+                        is24h = is24h, mayReply = mayReply, env = rowEnv,
+                    )
                 }
                 if (ui.loadingOlder) item(key = "older") {
                     Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
@@ -3688,3 +3569,183 @@ private fun Isolated(content: @Composable () -> Unit) = content()
 /** The chat's live list of messages, for a row whose [ThreadUi] copy is kept steady (a reply's quote). */
 internal val LocalThreadMessages = androidx.compose.runtime.staticCompositionLocalOf<androidx.compose.runtime.State<List<Message>>?> { null }
 
+
+/**
+ * What a chat row calls back into the screen. One per screen; the screen renews these calls on
+ * every pass, and a row reads them only at a tap or a draw (menuLifted, the flash), so a row never
+ * holds the screen's state and is not rebuilt when that state moves.
+ */
+@androidx.compose.runtime.Stable
+internal class RowEnv {
+    var jumpTo: (String) -> Unit = {}
+    var toggle: (Message) -> Unit = {}
+    var openMenu: (Message, MenuSource?, @Composable () -> Unit) -> Unit = { _, _, _ -> }
+    var openPostMenu: (Message, @Composable () -> Unit) -> Unit = { _, _ -> }
+    var reply: (Message) -> Unit = {}
+    var swipeMenu: (Message) -> (() -> Pair<SwipeActions.Slot?, SwipeActions.Slot?>)? = { null }
+    var failed: (Message) -> Unit = {}
+    var view: (Viewing) -> Unit = {}
+    var restrictTap: () -> Unit = {}
+    var react: (Message) -> Unit = {}
+    var reactors: (Message) -> Unit = {}
+    var menuLifted: () -> String? = { null }
+    var flashShown: () -> String? = { null }
+    var flashFade: () -> Float = { 0f }
+}
+
+/** One row of the chat list: a date pill, the unread line, then a notice, a call, a post or a bubble. */
+@Composable
+private fun androidx.compose.foundation.lazy.LazyItemScope.ThreadRow(
+    m: Message, g: ThreadLogic.RowGeometry, tick: com.fariin.app.data.Tick, ui: ThreadUi,
+    day: String?, isDivider: Boolean, pinGone: Boolean,
+    flight: SendMotion.Flight?, glide: ArrivalMotion.Glide?, bursting: Boolean,
+    rowFade: androidx.compose.animation.core.FiniteAnimationSpec<Float>?,
+    rowPlace: androidx.compose.animation.core.FiniteAnimationSpec<androidx.compose.ui.unit.IntOffset>?,
+    selecting: Boolean, selShown: Boolean, ticked: Boolean, flashHere: Boolean,
+    is24h: Boolean, mayReply: Boolean, env: RowEnv,
+) {
+    val c = Fariin.colors
+    val ch = ui.channel
+    Column(Modifier.animateItem(fadeInSpec = if (flight != null || glide != null || bursting) null else rowFade,
+        placementSpec = if (bursting) null else rowPlace, fadeOutSpec = null)
+        .sendFlight(flight)
+        .arrivalGlide(glide)
+        .fillMaxWidth().padding(top = g.gapDp.dp)) {
+        if (day != null) DatePill(day)
+        // Not in a channel (owner 2026-11-11: "remove unread on channel"); the open still lands there.
+        if (isDivider) UnreadDivider()
+        val pinNote = com.fariin.app.data.PinRules.notice(m.text)
+        // This row's coordinates, read only at a long press.
+        val coords = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+        val flashLit = Modifier.drawBehind {
+            if (env.flashShown() == m.rowId) drawRect(c.blue.copy(alpha = 0.14f * env.flashFade()))
+        }
+        // Ticked rows fade in and out: a colour animation only while select mode is on
+        // and for its fade-out after (selectFading), not in every row all the time.
+        val selLit = if (selShown) litColor(
+            if (flashHere || ticked) c.blue.copy(alpha = 0.14f) else Color.Transparent)
+            else Color.Transparent
+        when {
+            pinNote != null && !m.deleted -> {
+                // The notice keeps the words from the moment of the pin; once that message is
+                // deleted its words must not stay readable here, and there is nothing to jump to.
+                val gone = pinGone
+                Box(Modifier.fillMaxWidth().clickable(enabled = !selecting && !gone) { env.jumpTo(pinNote.messageId) }) {
+                    NoticePill("${if (m.authorId == ui.me) "You" else ui.names[m.authorId] ?: ui.title} pinned ${if (gone) "a message" else pinNote.label}")
+                }
+            }
+            // A notice a group admin may clear (iOS canDeleteNotice, owner 2026-10-29): a long
+            // press offers Select and Delete, and it takes a tick in select mode.
+            ch == null && com.fariin.app.data.SelectRules.canDeleteNotice(m, ui.groupDoc, ui.me) -> {
+                val pill: @Composable () -> Unit = {
+                    val secs = m.disappearSeconds
+                    if (secs != null) NoticePill(com.fariin.app.data.Disappearing.noticeLine(
+                        if (m.authorId == ui.me) "You" else ui.names[m.authorId] ?: ui.title, secs), icon = true)
+                    else NoticePill(youNotice(m, ui))
+                }
+                if (selecting) Row(Modifier.fillMaxWidth().background(selLit).clickable { env.toggle(m) },
+                    verticalAlignment = Alignment.CenterVertically) {
+                    SelectTick(ticked)
+                    Box(Modifier.weight(1f)) { pill() }
+                } else Box(Modifier.fillMaxWidth()
+                    .onPlaced { coords[0] = it }
+                    .graphicsLayer { alpha = if (env.menuLifted() == m.rowId) 0f else 1f }
+                    .combinedClickableLong {
+                        val lc = coords[0]?.takeIf { it.isAttached }
+                        env.openMenu(m, lc?.let { menuSourceOf(it, false) }) { pill() }
+                    }) { pill() }
+            }
+            m.isSystem && m.disappearSeconds != null -> NoticePill(
+                com.fariin.app.data.Disappearing.noticeLine(
+                    if (m.authorId == ui.me) "You" else ui.names[m.authorId] ?: ui.title, m.disappearSeconds),
+                icon = true)
+            // A call record: the iOS call bubble (CallBubble.kt); tap asks, then calls back.
+            m.isCall && ch == null -> {
+                val theirs = ui.isGroup && m.callerUid != ui.me
+                // A long press opens the message menu like any bubble; it used to fall
+                // through to the bubble's tap and ask "Call them?" (Pixel, 2026-11-04).
+                // A swipe replies, as on every other bubble (iOS allows Reply on a call).
+                SwipeRow(enabled = MessageRules.canSwipeReply(m, mayReply), onReply = { env.reply(m) }, menu = env.swipeMenu(m)) {
+                Box(Modifier.fillMaxWidth()
+                    .onPlaced { coords[0] = it }
+                    .graphicsLayer { alpha = if (env.menuLifted() == m.rowId) 0f else 1f }
+                    .combinedClickableLong {
+                        val lc = coords[0]?.takeIf { it.isAttached }
+                        env.openMenu(m, lc?.let { menuSourceOf(it, m.authorId == ui.me) }) {
+                            CallBubble(m, ui.me, is24h, myFill(), receivedFill(), peerUid = null, title = ui.title, photoUrl = ui.photoUrl,
+                                callerName = if (theirs) ui.names[m.callerUid ?: m.authorId] ?: "Someone" else null,
+                                callerPhoto = if (theirs) ui.photos[m.callerUid ?: m.authorId] else null)
+                        }
+                    }) {
+                    CallBubble(m, ui.me, is24h, myFill(), receivedFill(),
+                        peerUid = if (ui.isGroup) null else com.fariin.app.crypto.Wire.otherUid(ui.cid, ui.me),
+                        title = ui.title, photoUrl = ui.photoUrl,
+                        callerName = if (theirs) ui.names[m.callerUid ?: m.authorId] ?: "Someone" else null,
+                        callerPhoto = if (theirs) ui.photos[m.callerUid ?: m.authorId] else null)
+                }
+                }
+            }
+            // "X asked to turn off Restricted chat": answered here by the one it was
+            // asked of, while it is still open (iOS restrictRequestTarget).
+            m.isSystem && m.isRestrictRequest && m.authorId != ui.me -> Box(Modifier.fillMaxWidth().clickable(enabled = !selecting) { env.restrictTap() }) { NoticePill(youNotice(m, ui)) }
+            m.isSystem || m.isCall -> NoticePill(if (ch != null) com.fariin.app.channel.ChannelRules.words(noticeText(m)) else youNotice(m, ui))
+            // Ticking posts uses the select rows below, as in any chat (iOS: Select in a channel too).
+            ch != null && !selecting -> androidx.compose.runtime.CompositionLocalProvider(
+                com.fariin.app.ui.channels.LocalPostViews provides
+                    if (m.deleted) null else com.fariin.app.channel.ChannelRules.shownViews(m.views, m.authorId, ui.me),
+            ) {
+                Column(Modifier.fillMaxWidth().combinedClickableLong { env.openPostMenu(m) { MessageRow(ui, m, g, is24h, {}) {} } }) {
+                    MessageRow(ui, m, g, is24h, { env.failed(it) }, tick) { env.view(it) }
+                    // A text post carries its reactions inside the bubble; the rest under it.
+                    // A photo, video or album post draws its bar inside its bubble (MediaRow), as text posts do.
+                    // A picture, video or album post's pills sit inside its bubble (MediaRow).
+                    if (!channelChipsInside(m)) { if (!mediaBarInside(m)) com.fariin.app.ui.channels.ChannelChips(ch, m); if (!mediaBarInside(m)) com.fariin.app.ui.channels.PostQuotesBar(m, inBubble = false, channelRepliesOff = ch.info.repliesOff, channelQuotesOff = ch.info.quotesOff) }
+                }
+            }
+            selecting -> Row(
+                // The tick's side of the row ticks too, as the rest of it.
+                Modifier.fillMaxWidth().background(selLit).pointerInput(m.rowId) { detectTapGestures(onTap = { env.toggle(m) }) },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SelectTick(ticked)
+                // The bubble takes no taps of its own while ticking (a photo would open).
+                Box(Modifier.weight(1f)) {
+                    Column(Modifier.fillMaxWidth()) {
+                        // No share button beside a post while ticking (iOS).
+                        androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.channels.LocalPostSelecting provides true) {
+                            MessageRow(ui, m, g, is24h, {}, tick) {}
+                        }
+                        ReactionChips(m, ui, m.authorId == ui.me) {}
+                    }
+                    // On top of the bubble, so the bubble itself gets no touch; only a TAP ticks.
+                    // It used to eat every event, so a swipe never reached the list (no scroll
+                    // while selecting) and its lift ticked the row (owner 2026-11-07: 3 picked,
+                    // "7 messages" in Forward). A drag past the slop is the list's scroll now.
+                    Box(Modifier.matchParentSize().pointerInput(m.rowId) {
+                        detectTapGestures(onTap = { env.toggle(m) })
+                    })
+                }
+            }
+            else -> SwipeRow(enabled = MessageRules.canSwipeReply(m, mayReply), onReply = { env.reply(m) }, menu = env.swipeMenu(m)) {
+                Column(Modifier.fillMaxWidth()
+                    .onPlaced { coords[0] = it }
+                    .graphicsLayer { alpha = if (env.menuLifted() == m.rowId) 0f else 1f }
+                    .then(if (selShown) Modifier.background(selLit) else flashLit).combinedClickableLong {
+                        val lc = coords[0]?.takeIf { it.isAttached }
+                        env.openMenu(m, lc?.let { menuSourceOf(it, m.authorId == ui.me) }) {
+                            Column(Modifier.fillMaxWidth()) {
+                                MessageRow(ui, m, g, is24h, {}, tick) {}
+                                ReactionChips(m, ui, m.authorId == ui.me) {}
+                            }
+                        }
+                    }
+                    .doubleTapToReact(!m.deleted && m.sendState == null && !m.isSystem &&
+                        !com.fariin.app.data.GroupAdmins.reactionsHeldBack(ui.groupDoc, ui.me), key = m.id + ReactNow.mine(m, ui.me)) { env.react(m) }) {
+                    MessageRow(ui, m, g, is24h, { env.failed(it) }, tick) { env.view(it) }
+                    // iOS: a pill opens who reacted (channels keep their own chips).
+                    ReactionChips(ReactNow.shown(m, ui.me), ui, m.authorId == ui.me) { env.reactors(m) }
+                }
+            }
+        }
+    }
+}
