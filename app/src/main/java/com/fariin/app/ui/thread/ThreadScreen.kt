@@ -346,7 +346,7 @@ private fun ThreadContent(
     val fxNext = remember { mutableStateOf<String?>(null) }
     var fxPlaying by remember { mutableStateOf<Pair<String, Long>?>(null) }
     var fxPlusPage by remember { mutableStateOf(false) }
-    if (fxPlusPage) com.fariin.app.ui.settings.PlusPageSheet { fxPlusPage = false }
+    if (fxPlusPage) com.fariin.app.ui.settings.PlusGateSheet("sendEffects") { fxPlusPage = false }
     // Where the pressed row sits is read from its own coordinates at the long press (each row keeps
     // a handle, set once it is placed; no per-frame position callback), and the pressed row's own copy
     // for the lifted message (MessageMenuOverlay); the real row hides while its copy is up.

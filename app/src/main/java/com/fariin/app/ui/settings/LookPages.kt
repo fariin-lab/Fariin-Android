@@ -465,7 +465,7 @@ private fun WallpaperPreview(first: ChatWallpaper, siblings: List<ChatWallpaper>
         com.fariin.app.data.PlusStore.state("sharedWallpaper") else com.fariin.app.data.PlusStore.State.OFF
     var bothBusy by remember { mutableStateOf(false) }
     var plusPage by remember { mutableStateOf(false) }
-    if (plusPage) PlusPageSheet(onDismiss = { plusPage = false })
+    if (plusPage) com.fariin.app.ui.settings.PlusGateSheet("sharedWallpaper") { plusPage = false }
     fun setForBoth() {
         if (cid == null || bothBusy) return
         if (bothState == com.fariin.app.data.PlusStore.State.LOCKED) { plusPage = true; return }

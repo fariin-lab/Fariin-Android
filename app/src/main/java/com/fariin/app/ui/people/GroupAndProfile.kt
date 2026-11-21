@@ -190,7 +190,7 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
         editFor = uri
     }
 
-    if (plusPage) com.fariin.app.ui.settings.PlusPageSheet(onDismiss = { plusPage = false })
+    if (plusPage) com.fariin.app.ui.settings.PlusGateSheet("animatedAvatar") { plusPage = false }
     // iOS ProfilePhotoSheet Recents: the photos I had before, tap one to use it again.
     fun useAgain(f: java.io.File) {
         if (busy) return

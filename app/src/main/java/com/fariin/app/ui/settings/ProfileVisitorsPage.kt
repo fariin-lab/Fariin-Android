@@ -204,7 +204,7 @@ internal fun ProfileVisitorsPage(pop: () -> Unit) {
             }
         }
     }
-    if (plusPage) PlusPageSheet { plusPage = false }
+    if (plusPage) com.fariin.app.ui.settings.PlusGateSheet("profileVisitors") { plusPage = false }
 }
 
 private fun lockedTitle(n: Int) = when (n) {

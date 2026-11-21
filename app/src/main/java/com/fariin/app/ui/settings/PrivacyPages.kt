@@ -579,7 +579,7 @@ internal fun ChatKeyPage(pop: () -> Unit) {
     }
     if (ownKey) OwnChatKeyPage(pop = { ownKey = false }) { saved -> pin = saved; set = true; ownKey = false }
     }
-    if (plusPage) PlusPageSheet { plusPage = false }
+    if (plusPage) com.fariin.app.ui.settings.PlusGateSheet("chatKey") { plusPage = false }
     if (intro) ChatKeyIntroSheet(onDismiss = { intro = false }) { run { makeKey(); syncMessagesMode(true) } }
     // The contact page's bottom sheet (no photo: it is my own key). Same work as run(), awaited so the
     // button spins; a failure still shows on the page.

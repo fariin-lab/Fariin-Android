@@ -119,7 +119,7 @@ internal fun ChatFoldersPage(pop: () -> Unit) {
             }
         }
     }
-    if (plusPage) PlusPageSheet(onDismiss = { plusPage = false })
+    if (plusPage) com.fariin.app.ui.settings.PlusGateSheet("chatFolders") { plusPage = false }
     pendingDelete?.let { f ->
         GlassAlert(onDismissRequest = { pendingDelete = null }, title = { Text("Delete Folder?") },
             text = { Text("The chats stay in your chat list. Only the folder “${f.name}” goes.") },

@@ -117,7 +117,9 @@ private val plusFeatures = listOf(
 
 /** The grey line under a feature, with the real pinned-chat limit when there is one (iOS subtitle). */
 private fun subtitleOf(f: PlusFeature): String =
-    if (f.id == "morePins") PlusStore.pinnedChats?.let { "Pin up to $it chats at the top of your chat list." } ?: f.subtitle else f.subtitle
+    // The server's number is this account's own limit: a member's Plus limit, but a non-member's free one
+    // ("Pin up to 3" read as what Plus gives, Oppo 2026-11-20), so only a member sees it.
+    if (f.id == "morePins" && plusSubscribed()) PlusStore.pinnedChats?.let { "Pin up to $it chats at the top of your chat list." } ?: f.subtitle else f.subtitle
 
 /** This account has Plus now, or a store subscription whose end is still ahead (iOS `subscribed`). */
 private fun plusSubscribed(): Boolean =
@@ -301,6 +303,55 @@ fun PlusPageSheet(onDismiss: () -> Unit) {
                     .clickable { motion.close() }.padding(horizontal = 8.dp, vertical = 4.dp))
             if (!plusSubscribed()) PlusSubscribeButton(plan, Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp))
             opened?.let { start -> PlusFeatureSheet(shown, start) { opened = null } }
+        }
+    }
+}
+
+/** Things you see: their gate button reads "Unlock with Fariin Plus"; the rest "Learn About Fariin Plus" (iOS PlusGate). */
+private val plusVisualFeatures = setOf("appIcons", "pictureBubbles", "bubbleStyles", "sendEffects", "badge", "animatedAvatar", "sharedWallpaper")
+
+/**
+ * THE LOCKED PLUS FEATURE GATE (iOS PlusGate, owner 2026-11-20): an account that sees Fariin Plus
+ * but does not have it taps a Plus feature where a member would; this sheet is about THAT feature
+ * (its picture, title and words, a round X), and its one button closes it and opens the Fariin Plus
+ * page. Nothing is bought here; the server still refuses a locked account on its own.
+ */
+@Composable
+fun PlusGateSheet(feature: String, onDismiss: () -> Unit) {
+    var page by remember { mutableStateOf(false) }
+    if (page) { PlusPageSheet(onDismiss); return }
+    val f = plusFeatures.firstOrNull { it.id == feature }
+    if (f == null) { PlusPageSheet(onDismiss); return }
+    val c = Fariin.colors
+    var toPage by remember { mutableStateOf(false) }
+    val motion = rememberSheetMotion { if (toPage) page = true else onDismiss() }
+    val density = LocalDensity.current
+    val windowH = LocalWindowInfo.current.containerSize.height
+    val want = with(density) { (windowH - WindowInsets.statusBars.getTop(density) - 10.dp.toPx() - 470.dp.toPx() - WindowInsets.navigationBars.getBottom(density)).coerceAtLeast(0f) }
+    if (motion.mid <= 0f) motion.mid = want
+    androidx.compose.runtime.SideEffect { motion.fitMid(want) }
+    FariinSheetDialog(motion, fill = c.bgSecondary) { _ ->
+        Box(Modifier.fillMaxWidth().height(470.dp)) {
+            Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.fillMaxWidth().height(28.dp).sheetDrag(motion))
+                Box(Modifier.padding(horizontal = 20.dp).padding(top = 30.dp).fillMaxWidth().height(170.dp)
+                    .clip(RoundedCornerShape(28.dp)).background(PlusBlue.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                    Icon(ImageVector.cachedVector(f.icon), contentDescription = null,
+                        tint = if (f.id == "badge") PlusBlue else c.label, modifier = Modifier.size(56.dp))
+                }
+                Text(f.title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 16.dp).padding(top = 18.dp))
+                Text(f.detail, fontSize = 17.sp, color = c.secondary, textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 24.dp).padding(top = 10.dp))
+                Spacer(Modifier.weight(1f))
+                Box(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp).fillMaxWidth().height(50.dp).clip(CircleShape)
+                    .background(PlusBlue).clickable { toPage = true; motion.close() }, contentAlignment = Alignment.Center) {
+                    Text(if (f.id in plusVisualFeatures) "Unlock with Fariin Plus" else "Learn About Fariin Plus",
+                        fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                }
+            }
+            com.fariin.app.ui.components.FloatingIcon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Close",
+                onClick = { motion.close() }, circle = true, modifier = Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 12.dp))
         }
     }
 }

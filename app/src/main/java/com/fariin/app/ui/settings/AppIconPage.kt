@@ -245,7 +245,7 @@ internal fun AppIconPage(pop: () -> Unit) {
             confirmButton = { TextButton(onClick = { changed = null }) { Text("OK", color = c.label) } },
             containerColor = c.card, titleContentColor = c.label, textContentColor = c.label)
     }
-    if (plusPage) PlusPageSheet { plusPage = false }
+    if (plusPage) com.fariin.app.ui.settings.PlusGateSheet("appIcons") { plusPage = false }
     error?.let { msg ->
         GlassAlert(onDismissRequest = { error = null }, title = { Text("Couldn't change the icon") }, text = { Text(msg) },
             confirmButton = { TextButton(onClick = { error = null }) { Text("OK", color = c.label) } },
