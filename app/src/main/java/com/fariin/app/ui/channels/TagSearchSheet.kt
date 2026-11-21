@@ -155,8 +155,8 @@ private fun Middle(text: String, action: String?, onAction: () -> Unit) {
 @Composable
 private fun TagRow(r: TagSearch.Row, onTag: (String) -> Unit, onOpen: () -> Unit) {
     val c = Fariin.colors
-    Column(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    Column(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(vertical = 8.dp)) {
+        Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Avatar(r.channel.photoUrl, 22.dp)
             Spacer(Modifier.width(8.dp))
             Text(r.channel.name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -166,8 +166,27 @@ private fun TagRow(r: TagSearch.Row, onTag: (String) -> Unit, onOpen: () -> Unit
                 Icon(ImageVector.cachedVector(R.drawable.ic_verified_tick), "Verified", tint = c.blue, modifier = Modifier.size(14.dp))
             }
         }
-        Spacer(Modifier.height(6.dp))
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)) {
+        Spacer(Modifier.height(4.dp))
+        // The post as in its channel (iOS: the REAL channel row); a card when it cannot be read.
+        val msg = remember(r.post.mid) { TagSearch.message(r) }
+        val me = remember { com.fariin.app.Fb.auth.currentUser?.uid.orEmpty() }
+        if (msg != null) {
+            val info = remember(r.channel) {
+                com.fariin.app.channel.ChannelInfo(cid = r.channel.cid, isChannel = true, title = r.channel.name,
+                    avatarUrl = r.channel.photoUrl, verified = r.channel.verified, isPublic = true,
+                    username = r.channel.publicName.orEmpty())
+            }
+            com.fariin.app.ui.thread.ChannelPostRow(info, msg, me, r.post.views,
+                onLinkTap = { sp -> if (sp.kind == com.fariin.app.data.TextLinks.Kind.TAG) onTag(sp.target) else onOpen() },
+                onOpen = onOpen)
+        } else Box(Modifier.padding(horizontal = 16.dp)) { PostCard(r, onTag) }
+    }
+}
+
+@Composable
+private fun PostCard(r: TagSearch.Row, onTag: (String) -> Unit) {
+    val c = Fariin.colors
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)) {
             val pic = if (r.post.sealedMedia) null else r.post.imageUrl ?: r.post.thumbUrl
             if (pic != null) coil3.compose.AsyncImage(model = pic, contentDescription = null, contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp).height(180.dp).background(c.placeholderFill))
@@ -187,5 +206,4 @@ private fun TagRow(r: TagSearch.Row, onTag: (String) -> Unit, onOpen: () -> Unit
                     .joinToString(" · "), fontSize = 12.sp, color = c.secondary)
             }
         }
-    }
 }

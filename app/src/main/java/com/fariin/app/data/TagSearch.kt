@@ -31,9 +31,40 @@ object TagSearch {
 
     data class Channel(val cid: String, val name: String, val photoUrl: String?, val verified: Boolean, val publicName: String?)
     data class Post(val mid: String, val text: String, val type: String, val imageUrl: String?, val thumbUrl: String?,
-                    val sealedMedia: Boolean, val views: Int, val createdAt: Long, val edited: Boolean, val albumCount: Int)
+                    val sealedMedia: Boolean, val views: Int, val createdAt: Long, val edited: Boolean, val albumCount: Int,
+                    /** The server's post as it came (stored field names), for [message]. */
+                    val raw: Map<String, Any?> = emptyMap())
     data class Row(val channel: Channel, val post: Post)
     data class Page(val state: String, val rows: List<Row>, val next: String?, val count: Int)
+
+    /**
+     * The result's post as the app's own [Message], through the same reader a channel post from
+     * Firestore goes through (iOS TagPosts.message). Only the time (ms here, a Timestamp there) and
+     * the media envelope differ: channel media is stored in the clear, so a missing envelope is the
+     * plain one.
+     */
+    fun message(r: Row): Message? {
+        val p = r.post.raw
+        if (r.post.mid.isEmpty()) return null
+        val d = HashMap<String, Any?>(p.filterValues { it != null })
+        d.remove("mid"); d.remove("clientId")
+        if (d["authorId"] !is String) d["authorId"] = ""
+        val ms = (p["createdAt"] as? Number)?.toLong() ?: 0L
+        d["createdAt"] = com.google.firebase.Timestamp(java.util.Date(if (ms > 0) ms else System.currentTimeMillis()))
+        val plain = com.fariin.app.crypto.EncMeta.PLAIN.asMap()
+        fun has(k: String, m: Map<*, *>) = !(m[k] as? String).isNullOrEmpty()
+        if (d["enc"] == null && (has("imageUrl", d) || has("videoUrl", d))) d["enc"] = plain
+        if (d["thumbEnc"] == null && has("thumbUrl", d)) d["thumbEnc"] = plain
+        (d["album"] as? List<*>)?.let { album ->
+            d["album"] = album.mapNotNull { (it as? Map<*, *>)?.let { item ->
+                val i = HashMap<String, Any?>(item.entries.mapNotNull { (k, v) -> (k as? String)?.takeIf { v != null }?.let { it to v } }.toMap())
+                if (i["enc"] == null) i["enc"] = plain
+                if (i["videoEnc"] == null && has("videoUrl", i)) i["videoEnc"] = plain
+                i
+            } }
+        }
+        return runCatching { Message.fromFirestore(r.post.mid, d, r.channel.cid) { raw, _ -> raw } }.getOrNull()
+    }
 
     suspend fun fetch(tag: String, following: Boolean, cursor: String?): Page {
         val args = hashMapOf<String, Any>("tag" to tag.lowercase(), "scope" to if (following) "following" else "all")
@@ -56,7 +87,8 @@ object TagSearch {
                     (p["thumbUrl"] as? String)?.takeIf { it.startsWith("https://") },
                     p["enc"] != null || p["thumbEnc"] != null,
                     (p["views"] as? Number)?.toInt() ?: 0, (p["createdAt"] as? Number)?.toLong() ?: 0L,
-                    p["edited"] == true, (p["album"] as? List<*>)?.size ?: 0),
+                    p["edited"] == true, (p["album"] as? List<*>)?.size ?: 0,
+                    p.entries.mapNotNull { (k, v) -> (k as? String)?.let { it to v } }.toMap()),
             )
         }
         return Page((d["state"] as? String) ?: "on", rows, (d["next"] as? String)?.takeIf { it.isNotEmpty() }, (d["count"] as? Number)?.toInt() ?: rows.size)

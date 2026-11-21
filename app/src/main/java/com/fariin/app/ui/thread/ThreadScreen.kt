@@ -2341,7 +2341,10 @@ private fun MediaRow(
         if (caption != null) {
             Box(Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
                 // With pills, the time goes with them (it joins their last row), as a text post's.
-                TextWithMeta(caption, LocalBubbleText.current.copy(color = ink), linkInk = if (isMe) Color.White else c.blue) {
+                // A channel post's caption opens Tag Search from its #tags too, as its text does (2026-11-20:
+                // "clip #ovntest" under a video was plain text).
+                TextWithMeta(caption, LocalBubbleText.current.copy(color = ink), linkInk = if (isMe) Color.White else c.blue,
+                    tags = ui.channel != null && !m.deleted) {
                     if (chips.isEmpty()) Meta(m, tick, isMe, is24h) else Spacer(Modifier)
                 }
             }
@@ -3747,5 +3750,29 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ThreadRow(
                 }
             }
         }
+    }
+}
+
+/**
+ * A channel post drawn by the chat's own row outside its chat (Tag Search results, iOS
+ * TagPostsSheet: "the post drawn by the REAL channel row"): media, views, time, edited, as in its
+ * channel; no reactions. A run in its words goes to [onLinkTap]; a tap on its media to [onOpen].
+ */
+@Composable
+internal fun ChannelPostRow(info: com.fariin.app.channel.ChannelInfo, m: Message, me: String, views: Int,
+                            onLinkTap: (com.fariin.app.data.TextLinks.Span) -> Unit, onOpen: () -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val ui = remember(info, me) {
+        ThreadUi(title = info.title, me = me, cid = info.cid, photoUrl = info.avatarUrl, loaded = true, synced = true,
+            channel = com.fariin.app.ui.channels.ChannelThreadUi(info, com.fariin.app.channel.ChannelRules.Role.VISITOR, guest = true,
+                muted = false, canReact = false, offered = emptyList(), pickable = emptyList()))
+    }
+    val media = remember(info.cid) { com.fariin.app.media.ChatMedia(ctx.applicationContext, info.cid, com.fariin.app.data.CryptoHub.get(ctx.applicationContext)) }
+    val is24h = remember { DateFormat.is24HourFormat(ctx) }
+    val one = remember(m) { androidx.compose.runtime.mutableStateOf(listOf(m)) }
+    androidx.compose.runtime.CompositionLocalProvider(LocalChatMedia provides media, LocalThreadMessages provides one,
+        LocalBubbleLinkTap provides onLinkTap, com.fariin.app.ui.channels.LocalPostViews provides views,
+        com.fariin.app.ui.channels.LocalPostSelecting provides true) {
+        MessageRow(ui, m, ThreadLogic.RowGeometry(showDate = false, first = true, last = true, gapDp = 0), is24h, {}) { onOpen() }
     }
 }
