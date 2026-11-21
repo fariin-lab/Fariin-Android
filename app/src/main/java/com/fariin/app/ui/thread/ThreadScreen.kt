@@ -2106,7 +2106,8 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                     }
                     gifQuote?.let { q ->
                         Box(Modifier.padding(start = 8.dp, end = 8.dp, top = if (gifCaption == null) 8.dp else 0.dp, bottom = 8.dp)) {
-                            QuoteCardBubble(q, isMe, ui.cid, hostMid = m.id, meta = { Meta(m, tick, isMe, is24h) }, compact = true)
+                            QuoteCardBubble(q, isMe, ui.cid, hostMid = m.id, meta = { Meta(m, tick, isMe, is24h) }, compact = true,
+                                hideText = m.quoteMediaOnly)
                         }
                     }
                 })
@@ -2229,6 +2230,9 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             // not top"): the post reads first, the card sits under the link it came from, and the time
             // takes its own line under the card. Our own group / channel link card stays above.
             val webCard = m.linkPreview?.takeIf { !m.deleted && quoteId == null }
+            // A quote sent with its text hidden: the post's picture as this bubble's own, above my words
+            // (iOS 2026-11-21); no picture for this reader = the card below, without the post's words.
+            val quoteAsMedia = quoteId != null && m.quoteMediaOnly && QuoteMediaOnly(quoteId, ui.cid, m.id)
             val cardBorn = remember { m.linkPreview != null }
             if (!m.deleted && quoteId == null && webCard == null) LiveGroupLinkCard(body, chromeMe)
             // A channel post's reactions sit inside its bubble, the time line with them (iOS).
@@ -2239,7 +2243,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             TextWithMeta(
                 text = body,
                 style = LocalBubbleText.current.copy(color = if (m.deleted) ink.copy(alpha = 0.7f) else ink),
-                meta = { if (chips.isEmpty() && quoteId == null && webCard == null) Meta(m, tick, isMe, is24h) else Spacer(Modifier) },
+                meta = { if (chips.isEmpty() && (quoteId == null || quoteAsMedia) && webCard == null) Meta(m, tick, isMe, is24h) else Spacer(Modifier) },
                 // iOS BubbleText: a group's @mentions in semibold.
                 bold = remember(body, m.mentions, ui.names, m.deleted) {
                     if (m.deleted) emptyList() else com.fariin.app.data.MentionRules.ranges(body, m.mentions, ui.names)
@@ -2262,10 +2266,10 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 Box(Modifier.enterFade(!cardBorn)) { LinkPreviewCard(lp, chromeMe) }
                 if (chips.isEmpty()) Box(Modifier.align(Alignment.End).padding(top = 4.dp)) { Meta(m, tick, isMe, is24h) }
             }
-            quoteId?.let { q ->
+            quoteId?.takeIf { !quoteAsMedia }?.let { q ->
                 if (body.isNotEmpty()) Spacer(Modifier.height(6.dp))
                 QuoteCardBubble(q, chromeMe, ui.cid, hostMid = m.id, meta = if (chips.isEmpty()) ({ Meta(m, tick, isMe, is24h) }) else null,
-                    compact = m.mediaKind != null, postLink = com.fariin.app.data.QuoteRules.hasPostLink(m.text))
+                    compact = m.mediaKind != null, postLink = com.fariin.app.data.QuoteRules.hasPostLink(m.text), hideText = m.quoteMediaOnly)
             }
             if (ch != null && chips.isNotEmpty()) com.fariin.app.ui.channels.ChannelChipsInBubble(ch, m, chips) { Meta(m, tick, isMe, is24h) }
             // "N Quotes" along the bubble's bottom (PostQuotesUi.kt).
@@ -2438,7 +2442,8 @@ private fun MediaRow(
         mediaQuote?.let { q ->
             Box(Modifier.padding(start = 8.dp, end = 8.dp, top = if (caption == null) 8.dp else 0.dp, bottom = 8.dp)) {
                 QuoteCardBubble(q, isMe, ui.cid, hostMid = m.id,
-                    meta = if (caption != null && chips.isEmpty()) ({ Meta(m, tick, isMe, is24h) }) else null, compact = true)
+                    meta = if (caption != null && chips.isEmpty()) ({ Meta(m, tick, isMe, is24h) }) else null, compact = true,
+                    hideText = m.quoteMediaOnly)
             }
         }
         if (ch != null && chips.isNotEmpty()) {

@@ -148,6 +148,7 @@ object LocalJson {
         m.bubbleStyle?.let { put("bs", it) }
         if (m.bubbleDecor) put("bsd", true)
         m.quoteId?.let { put("qid", it) }
+        if (m.quoteMediaOnly) put("qmo", true)
         if (m.quoteCount > 0) put("qc", m.quoteCount)
         if (m.quoteFaces.isNotEmpty()) put("qf", JSONArray(m.quoteFaces))
         if (m.replyCount > 0) put("rc", m.replyCount)
@@ -208,7 +209,7 @@ object LocalJson {
                 Message.LinkPreview(lp.optString("u"), lp.optString("t"), lp.optString("d"),
                     imageUrl = if (lp.has("i")) lp.getString("i") else null, imageEnc = encBack(lp.optJSONObject("ie")))
             },
-            bubbleStyle = s("bs"), bubbleDecor = o.optBoolean("bsd"), quoteId = s("qid"),
+            bubbleStyle = s("bs"), bubbleDecor = o.optBoolean("bsd"), quoteId = s("qid"), quoteMediaOnly = o.optBoolean("qmo"),
             quoteCount = o.optInt("qc"), quoteFaces = strings(o.optJSONArray("qf")) ?: emptyList(),
             replyCount = o.optInt("rc"), repliesOff = if (o.has("ro")) o.getBoolean("ro") else null,
             replyFaces = strings(o.optJSONArray("rf")) ?: emptyList(),

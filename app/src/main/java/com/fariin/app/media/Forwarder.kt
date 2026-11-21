@@ -88,6 +88,8 @@ object Forwarder {
             is Live.Edited -> if (live.fresh.text == m.text) m else m.copy(text = live.fresh.text, bold = live.fresh.bold, links = live.fresh.links)
         }
         val src = ChatMedia(context, sourceCid, crypto)
+        // A quote whose text was hidden stays hidden when forwarded (iOS 1ab4277a5).
+        if (m.quoteMediaOnly) m.quoteId?.let { com.fariin.app.data.QuoteStore.setMediaOnly(it, true) }
         // Opened once, and only if some target needs the old forward: photos, videos, voice, files and
         // albums first try the instant way (MediaSender.instant: a server copy and a re-wrapped key).
         var opened = false

@@ -1988,7 +1988,7 @@ class ThreadRepository(
         if (forwarded) fwdSource?.let { s -> runCatching { crypto.encryptForConversation(cid, s.json()) }.getOrNull()?.let { msg["fwd"] = it } }
         if (storyMention != null) msg["storyMention"] = mapOf("id" to storyMention.id, "thumb" to storyMention.thumbUrl)
         // A quoted channel post: only the server snapshot's id, in the clear (iOS ChatService).
-        if (quote != null) msg["quote"] = mapOf("qid" to quote)
+        if (quote != null) msg["quote"] = QuoteStore.wire(quote)
         if (countsAsUnread && storyMention == null) putBubbleStyle(msg, clientId)
         if (!forwarded && quote == null && storyMention == null) fxAtSend[clientId]?.let { msg["fx"] = it }
         // A poll says in the clear only pollMulti / pollEndsAt (iOS ChatService); the rest stays sealed.
@@ -2081,7 +2081,7 @@ class ThreadRepository(
             val j = s.json()
             runCatching { crypto.sealForGroup(j, members, cid) }.getOrNull()?.let { msg["fwd"] = if (it == j) s.map() else it }
         }
-        if (quote != null) msg["quote"] = mapOf("qid" to quote)   // a quoted channel post (iOS sendGroupText)
+        if (quote != null) msg["quote"] = QuoteStore.wire(quote)   // a quoted channel post (iOS sendGroupText)
         if (!forwarded && quote == null) fxAtSend[clientId]?.let { msg["fx"] = it }
         // Bold runs (TextFormat), sealed like the text: plain in a plain channel.
         if (fmt != null && t.isNotEmpty()) msg["fmt"] = crypto.sealForGroup(fmt, members, cid)

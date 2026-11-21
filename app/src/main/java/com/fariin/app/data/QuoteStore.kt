@@ -21,6 +21,32 @@ import java.util.concurrent.TimeUnit
  * fetched together (up to 50 a call). [cards] changes when an answer does, so open chats redraw.
  */
 object QuoteStore {
+    // ------------------------------------------------------------------ quote text hidden (iOS 2026-11-21)
+
+    /**
+     * The quotes this phone sends with their text hidden (`quote.mediaOnly`): readers draw the post's
+     * picture as the message's own. The newest 200 ids, kept on disk so a send queued across a
+     * relaunch goes out as written. It travels in every chat: it says nothing about the post.
+     */
+    private const val MEDIA_ONLY_KEY = "quoteMediaOnly.v1"
+    private val mediaOnlyQids: MutableList<String> by lazy {
+        runCatching {
+            com.google.firebase.FirebaseApp.getInstance().applicationContext.getSharedPreferences("quotes", 0)
+                .getString(MEDIA_ONLY_KEY, "").orEmpty().split(',').filter { QuoteRules.isQid(it) }.toMutableList()
+        }.getOrDefault(mutableListOf())
+    }
+    @Synchronized fun isMediaOnly(qid: String?): Boolean = qid != null && qid in mediaOnlyQids
+    @Synchronized fun setMediaOnly(qid: String, on: Boolean) {
+        if (!QuoteRules.isQid(qid) || on == (qid in mediaOnlyQids)) return
+        if (on) { mediaOnlyQids.add(qid); while (mediaOnlyQids.size > 200) mediaOnlyQids.removeAt(0) } else mediaOnlyQids.remove(qid)
+        runCatching {
+            com.google.firebase.FirebaseApp.getInstance().applicationContext.getSharedPreferences("quotes", 0).edit()
+                .putString(MEDIA_ONLY_KEY, mediaOnlyQids.joinToString(",")).apply()
+        }
+    }
+    /** The `quote` map a message carries: the id, and `mediaOnly` when its text was hidden. */
+    fun wire(qid: String): Map<String, Any> = if (isMediaOnly(qid)) mapOf("qid" to qid, "mediaOnly" to true) else mapOf("qid" to qid)
+
     private val fn get() = FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 

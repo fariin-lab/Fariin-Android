@@ -1,5 +1,7 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.cachedVector
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.background
@@ -81,14 +83,15 @@ private fun QuoteAlbumTiles(urls: List<String>) {
 internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta: (@Composable () -> Unit)? = null,
                               /** The message this card sits in (its chat is [openCid]): the server's `hosts`. */ hostMid: String? = null,
                               /** The quoting post has its own photo, video or album: the compact row. */ compact: Boolean = false,
-                              /** The words hold the post's own link (iOS 251b4be31, owner's design B): the small link card. */ postLink: Boolean = false) {
+                              /** The words hold the post's own link (iOS 251b4be31, owner's design B): the small link card. */ postLink: Boolean = false,
+                              /** The sender hid the post's text (`quote.mediaOnly`): the kind's word in its place. */ hideText: Boolean = false) {
     val cards by QuoteStore.cards.collectAsState()
     // Every draw asks: a miss, or an answer older than two minutes, is fetched with the others on screen.
     SideEffect {
         if (openCid != null && hostMid != null) QuoteStore.noteHost(qid, openCid, hostMid)
         QuoteStore.card(qid)
     }
-    val card = cards[qid]
+    val card = cards[qid]?.let { if (hideText && it.state == QuoteCard.State.OK) it.copy(text = "") else it }
     val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
@@ -322,4 +325,54 @@ internal fun QuoteThumb(card: QuoteCard, qid: String? = null, side: Dp = 36.dp) 
     val url: Any = qid?.let { QuoteStore.picture(it) } ?: QuoteRules.image(card) ?: card.photoUrl.ifEmpty { null } ?: return
     coil3.compose.AsyncImage(url, null, contentScale = ContentScale.Crop,
         modifier = Modifier.size(side).clip(RoundedCornerShape(6.dp)).background(Fariin.colors.secondary.copy(alpha = 0.15f)))
+}
+
+/**
+ * A QUOTE SENT WITH ITS TEXT HIDDEN (iOS 2026-11-21, `quote.mediaOnly`): the quoted post's picture,
+ * video poster or album's first picture as this bubble's own media, the channel named on a small chip
+ * at its lower left. A tap opens the post. Draws nothing (and returns false) when the post is not
+ * there for this reader or has no picture: the caller then shows the card, without the post's words.
+ */
+@Composable
+internal fun QuoteMediaOnly(qid: String, openCid: String?, hostMid: String?): Boolean {
+    val cards by QuoteStore.cards.collectAsState()
+    SideEffect {
+        if (openCid != null && hostMid != null) QuoteStore.noteHost(qid, openCid, hostMid)
+        QuoteStore.card(qid)
+    }
+    val card = cards[qid]?.takeIf { it.state == QuoteCard.State.OK } ?: return false
+    val url = QuoteRules.image(card) ?: return false
+    val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    Box(Modifier.fillMaxWidth().height(220.dp).padding(bottom = 6.dp).clip(RoundedCornerShape(12.dp))
+        .background(Fariin.colors.secondary.copy(alpha = 0.18f))
+        .clickable {
+            val notice = QuoteRules.tapNotice(card)
+            if (notice != null) { com.fariin.app.ui.components.Snack.show(notice); return@clickable }
+            if (card.cid.isEmpty()) return@clickable
+            if (card.mid.isNotEmpty()) QuoteStore.pendingJump.value = QuoteStore.Jump(card.cid, card.mid)
+            if (QuoteRules.jumpsInPlace(card, openCid)) return@clickable
+            keyboard?.hide(); focus.clearFocus()
+            channelNav.open(card.cid)
+        }) {
+        coil3.compose.AsyncImage(QuoteStore.picture(qid) ?: url, contentDescription = QuoteRules.body(card.copy(text = "")),
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        if (card.kind == "video") Box(Modifier.align(Alignment.Center).size(44.dp).clip(androidx.compose.foundation.shape.CircleShape)
+            .background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
+            androidx.compose.material3.Icon(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_play_fill),
+                null, tint = Color.White, modifier = Modifier.size(24.dp))
+        }
+        // The channel's chip: its picture and name, on the picture's lower left.
+        Row(Modifier.align(Alignment.BottomStart).padding(8.dp).clip(RoundedCornerShape(50))
+            .background(Color.Black.copy(alpha = 0.5f)).padding(start = 3.dp, end = 9.dp, top = 3.dp, bottom = 3.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            com.fariin.app.ui.components.Avatar(card.photoUrl.ifEmpty { null }, 20.dp, squircle = true,
+                kind = com.fariin.app.ui.components.AvatarKind.CHANNEL)
+            Spacer(Modifier.width(6.dp))
+            Text(card.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1,
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 180.dp))
+        }
+    }
+    return true
 }

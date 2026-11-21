@@ -123,6 +123,11 @@ data class Message(
     /** A quoted channel post: only the id of the server's snapshot travels, `quote: { qid }`, in
      *  the clear beside the sealed text (iOS Message.quoteId). The card asks the server (QuoteStore). */
     val quoteId: String? = null,
+    /**
+     * The sender hid the quoted post's text (iOS 2026-11-21, `quote.mediaOnly`): the post's picture is
+     * drawn as this message's own media with the channel on a chip; a card never shows the post's words.
+     */
+    val quoteMediaOnly: Boolean = false,
     /** The sender's bubble style id, plain `bs` beside the sealed text (BubbleStyles); null = normal. */
     val bubbleStyle: String? = null,
     /** Fariin Plus send effect, plain `fx` (SendEffects.IDS); played only after the server says so. */
@@ -380,6 +385,7 @@ data class Message(
                     else -> null
                 },
                 quoteId = ((data["quote"] as? Map<*, *>)?.get("qid") as? String)?.takeIf { QuoteRules.isQid(it) },
+                quoteMediaOnly = (data["quote"] as? Map<*, *>)?.get("mediaOnly") == true,
                 bubbleStyle = BubbleStyles.parseId(data["bs"]),
                 fx = (data["fx"] as? String)?.takeIf { it in SendEffects.IDS },
                 bubbleDecor = BubbleStyles.parseDecor(data["bsd"]),
