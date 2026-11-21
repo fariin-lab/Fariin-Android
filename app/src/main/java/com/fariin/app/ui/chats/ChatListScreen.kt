@@ -1368,20 +1368,16 @@ internal fun ChatRow(
     val context = LocalContext.current
     val unread = if (conv.isBlockedByMe(me)) 0 else conv.unread(me)
     // iOS clockTick: wakes at a mute's end and just past midnight, so the bell and "Yesterday" stay right.
-    var clockTick by remember { mutableIntStateOf(0) }
-    LaunchedEffect(conv.mutedBy[me] ?: 0.0) {
-        while (true) {
-            val nowMs = System.currentTimeMillis()
-            val mute = conv.mutedBy[me] ?: 0.0
-            val midnight = Calendar.getInstance().apply {
-                add(Calendar.DAY_OF_YEAR, 1); set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 5); set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
-            val next = if (mute > nowMs) minOf(mute.toLong(), midnight) else midnight
-            kotlinx.coroutines.delay(maxOf(1_000L, next - nowMs))
-            clockTick++
-        }
+    // Midnight is one clock for the whole list (ListClock); only a row whose mute is still running
+    // waits for its end. Each row used to start its own coroutine and Calendar every time it
+    // scrolled in (Oppo fling profile, ~53 ms).
+    var muteTick by remember { mutableIntStateOf(0) }
+    val muteEnd = conv.mutedBy[me] ?: 0.0
+    if (muteEnd > System.currentTimeMillis()) LaunchedEffect(muteEnd) {
+        kotlinx.coroutines.delay(maxOf(1_000L, muteEnd.toLong() - System.currentTimeMillis()))
+        muteTick++
     }
+    val clockTick = ListClock.day * 31 + muteTick
     val muted = remember(conv, me, clockTick) { conv.isMuted(me, System.currentTimeMillis().toDouble()) }
     val keys = (keysState ?: CryptoHub.keysEpoch.collectAsState()).value
     // Battery/lag audit 2026-11-06: no box is opened during composition. A line opened before
@@ -1762,4 +1758,28 @@ private fun PeelBack(active: androidx.compose.runtime.State<Boolean>, selecting:
     BackHandler(enabled = on && selecting, onBack = clearSelection)
     BackHandler(enabled = on && !selecting && searching, onBack = closeSearch)
     BackHandler(enabled = on && !selecting && !searching && showArchive, onBack = closeArchive)
+}
+
+/**
+ * The chat list's one midnight clock (iOS clockTick): [day] moves on a few seconds past each
+ * midnight, so every row's "Yesterday" and weekday labels turn over together. Started by its first
+ * reader, on the main thread.
+ */
+internal object ListClock {
+    private val tick = androidx.compose.runtime.mutableIntStateOf(0)
+    private var started = false
+    val day: Int get() {
+        if (!started) { started = true; schedule() }
+        return tick.intValue
+    }
+    private fun schedule() {
+        val midnight = Calendar.getInstance().apply {
+            add(Calendar.DAY_OF_YEAR, 1); set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 5); set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            tick.intValue++
+            schedule()
+        }, maxOf(1_000L, midnight - System.currentTimeMillis()))
+    }
 }
