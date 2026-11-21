@@ -2225,12 +2225,12 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             // in the words still gets the live card.
             // A quoted channel post goes UNDER the words instead, the time on its own line below it (QuoteBubble.kt).
             val quoteId = m.quoteId?.takeIf { !m.deleted }
-            if (!m.deleted && quoteId == null)
-                m.linkPreview.let { lp ->
-                    // A card that lands after the words fades in (iOS pops 14); one there from the start is just there.
-                    val cardBorn = remember { lp != null }
-                    if (lp != null) Box(Modifier.enterFade(!cardBorn)) { LinkPreviewCard(lp, chromeMe) } else LiveGroupLinkCard(body, chromeMe)
-                }
+            // A web link's preview goes UNDER the words (iOS 77cf11ae0, owner 2026-11-21: "make it bottom
+            // not top"): the post reads first, the card sits under the link it came from, and the time
+            // takes its own line under the card. Our own group / channel link card stays above.
+            val webCard = m.linkPreview?.takeIf { !m.deleted && quoteId == null }
+            val cardBorn = remember { m.linkPreview != null }
+            if (!m.deleted && quoteId == null && webCard == null) LiveGroupLinkCard(body, chromeMe)
             // A channel post's reactions sit inside its bubble, the time line with them (iOS).
             val ch = ui.channel
             val chips = if (ch != null && channelChipsInside(m)) com.fariin.app.ui.channels.rememberPostChips(ch, m) else emptyList()
@@ -2239,7 +2239,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             TextWithMeta(
                 text = body,
                 style = LocalBubbleText.current.copy(color = if (m.deleted) ink.copy(alpha = 0.7f) else ink),
-                meta = { if (chips.isEmpty() && quoteId == null) Meta(m, tick, isMe, is24h) else Spacer(Modifier) },
+                meta = { if (chips.isEmpty() && quoteId == null && webCard == null) Meta(m, tick, isMe, is24h) else Spacer(Modifier) },
                 // iOS BubbleText: a group's @mentions in semibold.
                 bold = remember(body, m.mentions, ui.names, m.deleted) {
                     if (m.deleted) emptyList() else com.fariin.app.data.MentionRules.ranges(body, m.mentions, ui.names)
@@ -2255,6 +2255,12 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 // A channel post's #tags and $tags open Tag Search.
                 tags = ui.channel != null && !m.deleted,
             )
+            }
+            webCard?.let { lp ->
+                Spacer(Modifier.height(6.dp))
+                // A card that lands after the words fades in (iOS pops 14); one there from the start is just there.
+                Box(Modifier.enterFade(!cardBorn)) { LinkPreviewCard(lp, chromeMe) }
+                if (chips.isEmpty()) Box(Modifier.align(Alignment.End).padding(top = 4.dp)) { Meta(m, tick, isMe, is24h) }
             }
             quoteId?.let { q ->
                 if (body.isNotEmpty()) Spacer(Modifier.height(6.dp))
