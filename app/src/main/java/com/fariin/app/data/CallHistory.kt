@@ -169,8 +169,7 @@ data class AdhocCall(
  * rows, re-read only when the chat's updatedAt moved, plus the multi-person calls I was on
  * (`groupCalls`, members array-contains me; kind filtered here, so no composite index). Read only.
  *
- * TODO (iOS has these): the per-member outcome of a group chat's call (GroupCallOutcome: joinedUids / rungUids), locally
- * hidden calls, the live row of a call in progress, saved call links.
+ * A group chat's call reads as THIS viewer saw it (iOS GroupCallOutcome, from joinedUids / rungUids).
  */
 class CallsRepository(
     private val db: FirebaseFirestore = com.fariin.app.Fb.db,
@@ -214,7 +213,7 @@ class CallsRepository(
                     val name = if (group) c.title.ifEmpty { "Group" } else c.name(me)
                     val photo = if (group) c.avatarUrl else c.photoUrl(me)
                     val other = if (group) "" else c.otherUid(me)
-                    val list = snap.documents.map { entry(it, c.id, name, photo, other, group) }
+                    val list = snap.documents.map { entry(it, c.id, name, photo, other, group, me) }
                     cache[c.id] = c.updatedAtMillis to list
                     list
                 }
@@ -224,16 +223,26 @@ class CallsRepository(
             .also { failed = miss.get()?.let { e -> LoadFailure.of(e) } }
     }
 
-    private fun entry(d: DocumentSnapshot, cid: String, name: String, photo: String?, other: String, group: Boolean) =
-        CallEntry(
+    private fun entry(d: DocumentSnapshot, cid: String, name: String, photo: String?, other: String, group: Boolean, me: String): CallEntry {
+        // One map for the row (each getString parsed its field path again).
+        // A row just written has no server time yet: the phone's estimate, not 0 (which sorted a call made
+        // a moment ago to the very bottom of the list).
+        val data = d.getData(DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) ?: emptyMap()
+        val caller = data["callerUid"] as? String ?: ""
+        val stored = data["callOutcome"] as? String ?: "answered"
+        // A group chat's call as I saw it (iOS GroupCallOutcome): joined, missed, or never rung and
+        // never in it (no length). A 1:1 record never carries joinedUids and keeps its outcome.
+        val outcome = if (!group) stored else StickerGifRules.outcomeMine(stored, caller,
+            (data["joinedUids"] as? List<*>)?.filterIsInstance<String>(),
+            (data["rungUids"] as? List<*>)?.filterIsInstance<String>(), me) ?: stored
+        return CallEntry(
             id = d.id, cid = cid, name = name, photoUrl = photo, otherUid = other,
-            callerUid = d.getString("callerUid") ?: "",
-            outcome = d.getString("callOutcome") ?: "answered",
-            video = d.getBoolean("callVideo") ?: false,
-            durationSec = (d.get("callDuration") as? Number)?.toInt() ?: 0,
-            // A row just written has no server time yet: the phone's estimate, not 0 (which sorted a call made
-            // a moment ago to the very bottom of the list).
-            dateMs = d.getTimestamp("createdAt", DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)?.toDate()?.time ?: 0L,
+            callerUid = caller,
+            outcome = outcome,
+            video = data["callVideo"] as? Boolean ?: false,
+            durationSec = if (outcome == StickerGifRules.NOT_JOINED) 0 else (data["callDuration"] as? Number)?.toInt() ?: 0,
+            dateMs = (data["createdAt"] as? com.google.firebase.Timestamp)?.toDate()?.time ?: 0L,
             groupCid = if (group) cid else null,
         )
+    }
 }
