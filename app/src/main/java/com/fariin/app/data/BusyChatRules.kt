@@ -111,11 +111,12 @@ class IncrementalGeometry {
     private var geo: List<ThreadLogic.RowGeometry> = emptyList()
     private var days: List<LocalDate> = emptyList()
     private var zone: ZoneId? = null
+    private var lastChannel = false
 
-    fun update(next: List<Message>, z: ZoneId = ZoneId.systemDefault()): List<ThreadLogic.RowGeometry> {
+    fun update(next: List<Message>, z: ZoneId = ZoneId.systemDefault(), channel: Boolean = false): List<ThreadLogic.RowGeometry> {
         val n = next.size
         var p = 0
-        if (z == zone) {
+        if (z == zone && channel == lastChannel) {
             val lim = minOf(items.size, n)
             while (p < lim && items[p] === next[p]) p++
         }
@@ -124,7 +125,9 @@ class IncrementalGeometry {
         val keep = maxOf(0, p - 1)
         val day = ArrayList<LocalDate>(n)
         for (i in 0 until n) day.add(if (i < p) days[i] else Instant.ofEpochMilli(next[i].createdAtMillis.toLong()).atZone(z).toLocalDate())
-        fun joins(i: Int): Boolean = i in 1 until n && day[i - 1] == day[i] &&
+        // A channel's posts never run; a bare picture never runs with a bubble (iOS 2026-11-21).
+        fun joins(i: Int): Boolean = i in 1 until n && day[i - 1] == day[i] && !channel &&
+            ThreadLogic.kindsRun(next[i - 1], next[i]) &&
             next[i - 1].authorId == next[i].authorId &&
             !ThreadLogic.breaksCluster(next[i - 1]) && !ThreadLogic.breaksCluster(next[i]) &&
             next[i - 1].forwarded == next[i].forwarded &&
@@ -137,7 +140,7 @@ class IncrementalGeometry {
             val last = i == n - 1 || !joins(i + 1)
             out.add(ThreadLogic.RowGeometry(showDate, first, last, if (showDate) 0 else if (first) 14 else 2))
         }
-        items = next; geo = out; days = day; zone = z
+        items = next; geo = out; days = day; zone = z; lastChannel = channel
         return out
     }
 }

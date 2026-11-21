@@ -452,7 +452,7 @@ private fun ThreadContent(
     val now = remember(ui.messages) { System.currentTimeMillis().toDouble() }
     // Worked out again only from where the list changed (a busy group adds rows many times a second).
     val geometryCache = remember(ui.cid) { com.fariin.app.data.IncrementalGeometry() }
-    val geometry = remember(ui.messages) { geometryCache.update(ui.messages) }
+    val geometry = remember(ui.messages, ui.channel != null) { geometryCache.update(ui.messages, channel = ui.channel != null) }
     // Newest at the bottom: the list is reversed, so index 0 is the newest message (a view, no copy).
     val reversed = remember(ui.messages) { val n = ui.messages.size
         object : AbstractList<Int>() { override val size = n; override fun get(index: Int) = n - 1 - index } }

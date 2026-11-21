@@ -69,17 +69,49 @@ object ThreadLogic {
     /** System and call lines are not bubbles and never join a run. */
     fun breaksCluster(m: Message): Boolean = m.isSystem || m.isCall
 
+    /**
+     * What a row is for grouping (iOS 2026-11-21): 0 = anything else, 1 = a picture with words or a
+     * header, 2 = a file, 3 = a BARE picture (photo, video, GIF, album or sticker with no caption,
+     * quote, reply or Forwarded line: no bubble of its own).
+     */
+    fun runKind(m: Message): Int {
+        if (m.deleted || m.viewOnce) return 0
+        val headerless = m.replyTo == null && !m.forwarded
+        if (m.isSticker) return if (headerless) 3 else 1
+        return when (m.mediaKind) {
+            Message.MediaKind.PHOTO, Message.MediaKind.VIDEO, Message.MediaKind.ALBUM ->
+                if (headerless && m.text.isEmpty() && m.quoteId == null) 3 else 1
+            Message.MediaKind.FILE -> 2
+            else -> if (m.isGif) (if (headerless && m.text.isEmpty() && m.quoteId == null) 3 else 1) else 0
+        }
+    }
+
+    /**
+     * May [a] and the next row [b] share a run, as far as their kinds go: a file never runs with a
+     * picture, and a bare picture never runs with a bubble (iOS: a caption-less GIF sat 2 dp over the
+     * quote post under it and read as one block). Picture after picture still runs.
+     */
+    fun kindsRun(a: Message, b: Message): Boolean {
+        val x = runKind(a); val y = runKind(b)
+        val xPic = x == 1 || x == 3; val yPic = y == 1 || y == 3
+        if ((x == 2 && yPic) || (xPic && y == 2)) return false
+        if ((x == 3 && !yPic) || (!xPic && y == 3)) return false
+        return true
+    }
+
     data class RowGeometry(val showDate: Boolean, val first: Boolean, val last: Boolean, val gapDp: Int)
 
     /** [items] oldest first. Same day, same sender, both bubbles, within 5 minutes = one run. */
-    fun geometry(items: List<Message>, zone: ZoneId = ZoneId.systemDefault()): List<RowGeometry> {
+    fun geometry(items: List<Message>, zone: ZoneId = ZoneId.systemDefault(),
+                 /** A channel: every post is its own card, never in a run (iOS 2026-11-21). */
+                 channel: Boolean = false): List<RowGeometry> {
         val n = items.size
         val day = items.map { Instant.ofEpochMilli(it.createdAtMillis.toLong()).atZone(zone).toLocalDate() }
         val joins = BooleanArray(n)
         val sameDay = BooleanArray(n)
         for (i in 1 until n) {
             sameDay[i] = day[i - 1] == day[i]
-            joins[i] = sameDay[i] &&
+            joins[i] = sameDay[i] && !channel && kindsRun(items[i - 1], items[i]) &&
                 items[i - 1].authorId == items[i].authorId &&
                 !breaksCluster(items[i - 1]) && !breaksCluster(items[i]) &&
                 items[i - 1].forwarded == items[i].forwarded &&
