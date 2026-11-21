@@ -583,6 +583,11 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
     // storyExpiryHours, never a hard-coded day. The server corrects a lifetime it does not allow.
     val pickHours = com.fariin.app.data.PlusStore.state("storyExpiry") == com.fariin.app.data.PlusStore.State.ON
     var hoursMenu by remember { mutableStateOf(false) }
+    // Locked (iOS PlusGate B4): the ring and its list show too; the free hours are ticked and usable,
+    // the other lengths carry the Plus star and open the Story Length gate.
+    val hoursLocked = com.fariin.app.data.PlusStore.state("storyExpiry") == com.fariin.app.data.PlusStore.State.LOCKED
+    var hoursGate by remember { mutableStateOf(false) }
+    if (hoursGate) com.fariin.app.ui.settings.PlusGateSheet("storyExpiry") { hoursGate = false }
     var stickerTray by remember { mutableStateOf(false) }
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var audience by remember { mutableStateOf(textStory) }
@@ -996,7 +1001,7 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
                         modifier = Modifier.fillMaxWidth().focusProperties { canFocus = captionArmed }
                             .onFocusChanged { captionFocused = it.isFocused })
                 }
-                if (pickHours) Box {
+                if (pickHours || hoursLocked) Box {
                     // Picking a lifetime must not hand the caption the focus (and the keyboard).
                     Box(Modifier.size(44.dp).clip(CircleShape).clickable {
                         captionArmed = false; focus.clearFocus(force = true); keyboard?.hide(); hoursMenu = true
@@ -1009,10 +1014,17 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
                         Text("Choose how long the story will be visible.", fontSize = 13.sp, color = Fariin.colors.secondary,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp).width(220.dp))
                         StoryRules.HOURS.forEach { h ->
+                            val starred = hoursLocked && h != StoryRules.DEFAULT_HOURS
                             DropdownMenuItem(
                                 text = { Text("$h Hours") },
-                                trailingIcon = { if (h == hours) Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), contentDescription = null) },
-                                onClick = { captionArmed = false; hours = h; hoursMenu = false; focus.clearFocus(force = true) },
+                                trailingIcon = {
+                                    if (starred) com.fariin.app.ui.settings.PlusBadgeImage(16.dp)
+                                    else if (h == hours) Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), contentDescription = null)
+                                },
+                                onClick = {
+                                    captionArmed = false; hoursMenu = false; focus.clearFocus(force = true)
+                                    if (starred) hoursGate = true else hours = h
+                                },
                             )
                         }
                     }

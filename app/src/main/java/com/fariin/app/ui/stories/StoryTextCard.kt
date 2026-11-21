@@ -55,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -420,8 +421,13 @@ internal fun StoryTextCard(
     val hideWords = linkDraft?.takeIf { it.url == linkUrl } != null &&
         linkStyle == TextStoryRules.LinkStyle.POSTER && TextStoryRules.isBareLink(text)
 
+    // Android 8.1 and older hand the focus straight back to the first field that can take it after a
+    // clear, so Done raised the keyboard again (Oppo A5s, 2026-11-20: the text story never got past
+    // typing). The field may take focus only between a tap that asks for it and Done.
+    var mayFocus by remember { mutableStateOf(true) }
     fun setFocus(on: Boolean) {
-        if (on) { requester.requestFocus(); keyboard?.show() } else { focus.clearFocus(force = true); keyboard?.hide() }
+        if (on) { mayFocus = true; requester.requestFocus(); keyboard?.show() }
+        else { mayFocus = false; focus.clearFocus(force = true); keyboard?.hide() }
     }
     fun close() { if (text.isBlank()) onClose() else { setFocus(false); askDiscard = true } }
     LaunchedEffect(active) { if (!active && focused) setFocus(false) }
@@ -482,6 +488,7 @@ internal fun StoryTextCard(
                 textStyle = textStyle,
                 cursorBrush = SolidColor(ink),
                 modifier = Modifier.fillMaxWidth().wrapContentHeight().padding(horizontal = TextStoryRules.CARD_SIDE_DP.dp)
+                    .focusProperties { canFocus = mayFocus }
                     .focusRequester(requester)
                     .onFocusChanged { focused = it.isFocused; onTyping(it.isFocused) },
             )
