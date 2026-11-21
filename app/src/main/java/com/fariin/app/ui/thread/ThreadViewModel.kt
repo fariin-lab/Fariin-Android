@@ -376,15 +376,18 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
             val work = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
             work.launch {
                 var failedChats = 0
+                var gone = 0
                 for (m in ordered) {
                     val pinned = if (land != null) ids[m.rowId]?.let { mapOf(land to it) }.orEmpty() else emptyMap()
                     failedChats += try { com.fariin.app.media.Forwarder.forward(app, me, crypto, m, cid, targets, pinned).size }
-                        catch (_: com.fariin.app.media.Forwarder.Gone) { targets.distinct().take(com.fariin.app.media.MediaRules.FORWARD_CHATS_AT_ONCE).size }
+                        catch (_: com.fariin.app.media.Forwarder.Gone) { gone++; targets.distinct().take(com.fariin.app.media.MediaRules.FORWARD_CHATS_AT_ONCE).size }
                 }
                 if (note.isNotBlank()) for (t in targets.distinct().take(com.fariin.app.media.MediaRules.FORWARD_CHATS_AT_ONCE)) {
                     com.fariin.app.data.ThreadRepository(t, me, crypto, work).sendText(note)
                 }
                 val said = when {
+                    // Deleted by their author before they went (Forwarder.Gone): said as such, not "try again".
+                    gone > 0 && gone == ordered.size -> if (gone == 1) "This message was deleted." else "These messages were deleted."
                     failedChats == 0 -> if (land != null) null else if (targets.size > 1) "Forwarded to ${targets.size} chats" else "Forwarded"
                     failedChats == msgs.size * targets.size -> "Couldn't forward. Try again."
                     else -> "Some messages couldn't be forwarded."
@@ -398,11 +401,13 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         onForwardManyTo = { msgs, targets ->
             vm.viewModelScope.launch {
                 var failedChats = 0
+                var gone = 0
                 for (m in msgs) {
                     failedChats += try { com.fariin.app.media.Forwarder.forward(app, me, crypto, m, cid, targets).size }
-                        catch (_: com.fariin.app.media.Forwarder.Gone) { targets.distinct().take(com.fariin.app.media.MediaRules.FORWARD_CHATS_AT_ONCE).size }
+                        catch (_: com.fariin.app.media.Forwarder.Gone) { gone++; targets.distinct().take(com.fariin.app.media.MediaRules.FORWARD_CHATS_AT_ONCE).size }
                 }
                 notice = when {
+                    gone > 0 && gone == msgs.size -> if (gone == 1) "This message was deleted." else "These messages were deleted."
                     failedChats == 0 -> if (targets.size > 1) "Forwarded to ${targets.size} chats" else "Forwarded"
                     failedChats == msgs.size * targets.size -> "Couldn't forward. Try again."
                     else -> "Some messages couldn't be forwarded."
