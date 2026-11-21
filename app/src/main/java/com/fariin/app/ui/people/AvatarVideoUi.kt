@@ -102,66 +102,6 @@ private fun ClipPlayer(f: File, modifier: Modifier, playing: Boolean) {
         modifier = modifier.graphicsLayer { this.alpha = alpha })
 }
 
-/**
- * A picked video longer than 10 seconds: which 10 seconds to use (the system has no trimmer to
- * borrow, as iOS does). A preview of the part from the slider's start, and Use Video.
- */
-@Composable
-internal fun AvatarVideoTrimSheet(uri: Uri, durationMs: Long, onUse: (Long) -> Unit, onCancel: () -> Unit) {
-    val c = Fariin.colors
-    val ctx = LocalContext.current
-    val maxStart = (durationMs - AvatarVideo.MAX_MS).coerceAtLeast(0L)
-    var start by remember { mutableFloatStateOf(0f) }
-    // The view fills the circle with the middle of the picture (as the clip will), not a squashed whole.
-    val view = remember { arrayOfNulls<TextureView>(1) }
-    val player = remember(uri) {
-        ExoPlayer.Builder(ctx).build().apply {
-            volume = 0f
-            addListener(object : Player.Listener {
-                override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
-                    view[0]?.let { centerCrop(it, videoSize) }
-                }
-            })
-            setMediaItem(MediaItem.fromUri(uri)); prepare(); playWhenReady = true
-        }
-    }
-    DisposableEffect(player) { onDispose { player.release() } }
-    // Plays the chosen 10 seconds over and over.
-    LaunchedEffect(player) {
-        while (true) {
-            kotlinx.coroutines.delay(200)
-            val s = (start * maxStart).toLong()
-            if (player.currentPosition > s + AvatarVideo.MAX_MS || player.currentPosition < s - 300) player.seekTo(s)
-        }
-    }
-    val motion = com.fariin.app.ui.components.rememberSheetMotion(onCancel)
-    com.fariin.app.ui.components.FariinSheetDialog(motion, fill = c.card) { _ ->
-        Column(Modifier.fillMaxSize().padding(horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Spacer(Modifier.height(16.dp))
-            Text("Choose 10 Seconds", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.label)
-            Spacer(Modifier.height(20.dp))
-            Box(Modifier.size(240.dp).clip(CircleShape).background(c.fieldFill)) {
-                AndroidView(factory = { k -> TextureView(k).also { tv ->
-                    view[0] = tv; player.setVideoTextureView(tv)
-                    tv.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ -> centerCrop(v as TextureView, player.videoSize) }
-                } }, modifier = Modifier.fillMaxSize())
-            }
-            Spacer(Modifier.height(20.dp))
-            val s = (start * maxStart).toLong()
-            Text("${clock(s)} to ${clock(minOf(durationMs, s + AvatarVideo.MAX_MS))}", fontSize = 15.sp, color = c.secondary)
-            Slider(start, { start = it; player.seekTo((it * maxStart).toLong()) }, modifier = Modifier.fillMaxWidth(),
-                colors = SliderDefaults.colors(thumbColor = c.accent, activeTrackColor = c.accent))
-            Spacer(Modifier.height(12.dp))
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Box(Modifier.fillMaxWidth().height(50.dp).clip(CircleShape).background(c.accent).clickable { onUse(s); motion.close() },
-                    contentAlignment = Alignment.Center) { Text("Use Video", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.onAccent) }
-                Box(Modifier.fillMaxWidth().height(50.dp).clip(CircleShape).background(c.fieldFill).clickable { motion.close() },
-                    contentAlignment = Alignment.Center) { Text("Cancel", fontSize = 17.sp, color = c.label) }
-            }
-        }
-    }
-}
-
 /** Scales the picture so its middle fills [tv] (TextureView stretches it to the view by default). */
 private fun centerCrop(tv: TextureView, size: androidx.media3.common.VideoSize) {
     val vw = size.width * size.pixelWidthHeightRatio

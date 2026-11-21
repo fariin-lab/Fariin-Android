@@ -168,15 +168,15 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
     var stagedVideo by remember { mutableStateOf<java.io.File?>(null) }
     var sheetVideo by remember { mutableStateOf<java.io.File?>(null) }
     var makingVideo by remember { mutableStateOf(false) }
-    var trimFor by remember { mutableStateOf<Pair<android.net.Uri, Long>?>(null) }
+    var editFor by remember { mutableStateOf<android.net.Uri?>(null) }
     var plusPage by remember { mutableStateOf(false) }
     fun dropSheetVideo() { sheetVideo?.takeIf { it != stagedVideo }?.delete(); sheetVideo = null }
     val picker = rememberCirclePhotoPicker { jpeg -> sheetJpeg = jpeg; sheetRemove = false; dropSheetVideo() }
     val pick = picker.launch
-    fun makeClip(uri: android.net.Uri, start: Long) {
+    fun makeClip(uri: android.net.Uri, start: Long, end: Long, area: android.graphics.RectF) {
         makingVideo = true
         scope.launch {
-            val clip = com.fariin.app.data.AvatarVideoMaker.make(appCtx, uri, start)
+            val clip = com.fariin.app.data.AvatarVideoMaker.make(appCtx, uri, start, end, area)
             makingVideo = false
             if (clip == null) { error = "This video can’t be used. Try another one."; return@launch }
             dropSheetVideo()
@@ -186,15 +186,10 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
     val videoPicker = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        scope.launch {
-            val ms = com.fariin.app.data.AvatarVideoMaker.durationMs(appCtx, uri)
-            // Ten seconds or less is made at once; longer chooses its 10 seconds first.
-            if (ms > com.fariin.app.data.AvatarVideo.MAX_MS + 200) trimFor = uri to ms else makeClip(uri, 0)
-        }
+        // iOS 2026-11-20: every picked video opens the editor (the area in the circle and the time).
+        editFor = uri
     }
-    trimFor?.let { (u, ms) ->
-        AvatarVideoTrimSheet(u, ms, onUse = { start -> trimFor = null; makeClip(u, start) }, onCancel = { trimFor = null })
-    }
+
     if (plusPage) com.fariin.app.ui.settings.PlusPageSheet(onDismiss = { plusPage = false })
     // iOS ProfilePhotoSheet Recents: the photos I had before, tap one to use it again.
     fun useAgain(f: java.io.File) {
@@ -207,6 +202,10 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
         }
     }
     if (picker.pending != null) { picker.Host("Avatar", "Shown in chats, stories and groups"); return }
+    editFor?.let { u ->
+        AvatarVideoEditor(u, onDone = { a, b, area -> editFor = null; makeClip(u, a, b, area) }, onCancel = { editFor = null })
+        return
+    }
     com.fariin.app.ui.components.InnerPageDepth(if (page == "links" || page == "username") 1 else 0)
     if (page == "links") { ProfileLinksPage(api.me, links, onChanged = { links = it }, onBack = { page = "" }); return }
     if (page == "username") { UsernameScreen(api, me?.handle ?: "", onBack = { page = ""; scope.launch { me = api.profile(api.me) } }); return }

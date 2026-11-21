@@ -191,17 +191,21 @@ object AvatarVideoMaker {
         } catch (_: Exception) { 0 to 0 } finally { runCatching { r.release() } }
     }
 
-    /** The clip from [startMs], or null when this video cannot be used. */
-    suspend fun make(c: Context, uri: Uri, startMs: Long): Clip? {
+    /**
+     * The clip from [startMs] to [endMs] (null = 10 s on), cut to [crop] (the square chosen in the
+     * editor, fractions of the picture as shown, y down; null = the centred square), or null when
+     * this video cannot be used.
+     */
+    suspend fun make(c: Context, uri: Uri, startMs: Long, endMs: Long? = null, crop: android.graphics.RectF? = null): Clip? {
         val app = c.applicationContext
         val total = durationMs(app, uri)
         val (w, h) = withContext(Dispatchers.IO) { upright(app, uri) }
         if (total <= 0 || w <= 0 || h <= 0) return null
         val begin = startMs.coerceIn(0L, total)
-        val end = minOf(total, begin + AvatarVideo.MAX_MS)
+        val end = minOf(total, begin + AvatarVideo.MAX_MS, endMs ?: Long.MAX_VALUE)
         if (end - begin < 500) return null
         val out = File(app.cacheDir, "avatar-${System.currentTimeMillis()}.mp4")
-        val ok = withContext(Dispatchers.Main) { export(app, uri, out, begin, end, w, h) }
+        val ok = withContext(Dispatchers.Main) { export(app, uri, out, begin, end, w, h, crop) }
         if (!ok || out.length() <= 0 || out.length() > AvatarVideo.MAX_BYTES) { out.delete(); return null }
         val still = withContext(Dispatchers.IO) {
             val r = android.media.MediaMetadataRetriever()
@@ -215,7 +219,7 @@ object AvatarVideoMaker {
         return Clip(out, still)
     }
 
-    private suspend fun export(c: Context, uri: Uri, out: File, begin: Long, end: Long, w: Int, h: Int): Boolean =
+    private suspend fun export(c: Context, uri: Uri, out: File, begin: Long, end: Long, w: Int, h: Int, area: android.graphics.RectF?): Boolean =
         suspendCancellableCoroutine { cont ->
             val encoders = DefaultEncoderFactory.Builder(c)
                 // 10 s at 1.5 Mbit/s is about 1.9 MB, well under the 3 MB the server takes.
@@ -237,9 +241,10 @@ object AvatarVideoMaker {
             val item = MediaItem.Builder().setUri(uri).setClippingConfiguration(
                 MediaItem.ClippingConfiguration.Builder().setStartPositionMs(begin).setEndPositionMs(end).build(),
             ).build()
-            // The centred square, in the frame's own -1..1 space.
-            val crop = if (w >= h) { val k = h.toFloat() / w; Crop(-k, k, -1f, 1f) } else { val k = w.toFloat() / h; Crop(-1f, 1f, -k, k) }
-            val square = minOf(w, h)
+            // The chosen square (or the centred one), in the frame's own -1..1 space, y up.
+            val crop = if (area != null) Crop(2f * area.left - 1f, 2f * area.right - 1f, 1f - 2f * area.bottom, 1f - 2f * area.top)
+                else if (w >= h) { val k = h.toFloat() / w; Crop(-k, k, -1f, 1f) } else { val k = w.toFloat() / h; Crop(-1f, 1f, -k, k) }
+            val square = if (area != null) minOf(w * area.width(), h * area.height()).toInt().coerceAtLeast(2) else minOf(w, h)
             val video = ArrayList<androidx.media3.common.Effect>()
             video += crop
             for (s in StoryCameraRules.halvingSteps(square, SIDE)) video += Presentation.createForShortSide(s)
