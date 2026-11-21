@@ -76,8 +76,18 @@ fun Avatar(photoUrl: String?, size: Dp, modifier: Modifier = Modifier, squircle:
                 }
                 AsyncImage(model = small, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(size))
             }
+            // The request is made once per picture and says its size up front: a list row then finds
+            // its face in memory on its first frame, without waiting a layout pass to learn the size,
+            // and a fling does not build a new request for every row it shows (Oppo profile ~80 ms).
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            val sidePx: Int = with(androidx.compose.ui.platform.LocalDensity.current) { size.roundToPx() }
+            val request: coil3.request.ImageRequest = remember(photoUrl, sidePx) {
+                coil3.request.ImageRequest.Builder(ctx).data(photoUrl).size(coil3.size.Size(sidePx, sidePx))
+                    // As AsyncImage asks on its own: a bigger copy already in memory will do.
+                    .precision(coil3.size.Precision.INEXACT).build()
+            }
             AsyncImage(
-                model = photoUrl,
+                model = request,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.size(size),
