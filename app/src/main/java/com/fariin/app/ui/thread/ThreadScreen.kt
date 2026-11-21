@@ -1,5 +1,8 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.smoothSize
+import com.fariin.app.ui.components.fadeOnChange
+import com.fariin.app.ui.components.enterFade
 import com.fariin.app.ui.components.GlassDropdown
 import com.fariin.app.ui.thread.bubbles.artBubble
 import androidx.compose.ui.semantics.contentDescription
@@ -1100,12 +1103,15 @@ private fun ThreadContent(
               // behind them too, a white band under the pin with the photos cut off below it
               // (owner 2026-11-11: "the bar is supposed to be only the top").
               Box(Modifier.fillMaxWidth().then(if (CHAT_TOP_SOLID) Modifier.background(Fariin.colors.bg) else Modifier)) {
-                if (search.active) SearchTopBar(search, searchFocus, onClose = { closeSearch() }, onSubmit = {
+                // Search, Select and the chat's own header cross-fade into each other (iOS pops 37, 40).
+                androidx.compose.animation.AnimatedContent(if (search.active) 0 else if (selecting) 1 else 2,
+                    transitionSpec = com.fariin.app.ui.components.Smooth.crossfade(), label = "topBar") { top ->
+                if (top == 0) SearchTopBar(search, searchFocus, onClose = { closeSearch() }, onSubmit = {
                     // The keyboard's Search key drops the keyboard and steps on (iOS onSubmit).
                     keyboard?.hide()
                     if (search.matches.isNotEmpty()) { search.index = minOf(search.index + 1, search.matches.size - 1); goToMatch() }
                 })
-                else if (selecting) SelectTopBar(picked.size) { selected.clear() } else {
+                else if (top == 1) SelectTopBar(picked.size) { selected.clear() } else {
                     // Over a wallpaper whose top is the other tone, only the header's WORDS flip (light over a
                     // dark top): the buttons keep the app's own light or dark glass, as the composer does
                     // (owner 2026-11-10: in light mode the back and call buttons turned dark mode's black).
@@ -1114,6 +1120,7 @@ private fun ThreadContent(
                     androidx.compose.runtime.CompositionLocalProvider(LocalHeaderWordsDark provides if (flipped) headerDark else null) {
                         Header(ui, onBack, actions.onTitleClick, actions.onToggleMute)
                     }
+                }
                 }
               }
                 // Another chat's voice message still playing: its bar under the header (iOS VoiceNoteBar).
@@ -1324,8 +1331,11 @@ private fun ThreadContent(
                     Text(emoji, fontSize = 19.sp)
                 }
             }
-            // iOS: hidden while a voice note is being recorded.
-            if (!atBottom && !search.active && !voiceRecording) {
+            // iOS: hidden while a voice note is being recorded. It fades and grows in and out (iOS pops 16, 39).
+            androidx.compose.animation.AnimatedVisibility(!atBottom && !search.active && !voiceRecording,
+                Modifier.align(Alignment.BottomEnd).zIndex(1f).padding(end = COMPOSER_SIDE, bottom = with(density) { bottomBarPx.toDp() } + 10.dp),
+                enter = com.fariin.app.ui.components.Smooth.fadeIn() + (if (com.fariin.app.ui.components.Smooth.on) androidx.compose.animation.scaleIn(com.fariin.app.ui.components.Smooth.soft(), initialScale = 0.8f) else androidx.compose.animation.EnterTransition.None),
+                exit = com.fariin.app.ui.components.Smooth.fadeOut() + (if (com.fariin.app.ui.components.Smooth.on) androidx.compose.animation.scaleOut(com.fariin.app.ui.components.Smooth.fadeSpec(), targetScale = 0.8f) else androidx.compose.animation.ExitTransition.None)) {
                 JumpArrow((ui.messages.size - seenCount).coerceAtLeast(0), onClick = {
                     quoteSeq[0]++   // a quote jump still paging is dropped (iOS jumpSeq)
                     // iOS two-stage arrow: the first tap goes to the first unread message, once, and
@@ -1345,7 +1355,7 @@ private fun ThreadContent(
                         }
                     } else scope.launch { glideTo(listState, 0) }
                 // iOS: at the composer's side margin, 10 above it, over the edge glass.
-                }, modifier = Modifier.align(Alignment.BottomEnd).zIndex(1f).padding(end = COMPOSER_SIDE, bottom = with(density) { bottomBarPx.toDp() } + 10.dp))
+                })
             }
             // Fariin Plus sharedWallpaper: the other person set one for both of us. Said once per new
             // `at`, centred, with the way back to my own; nothing of Plus is named.
@@ -1399,11 +1409,36 @@ private fun ThreadContent(
             // keyboard's first steps moved the messages up, back 8 and up again; owner 2026-11-10).
             .layout { m, cs -> val pl = m.measure(cs); composerPx.intValue = pl.height; layout(pl.width, 0) { pl.place(0, -pl.height) } }
             .onSizeChanged { bottomBarPx = it.height }) {
-            if (search.active) {
+            // Which bar is at the bottom, so a change of bar cross-fades and the list's padding glides
+            // (iOS pops 19, 25, 37): select, search, blocked / request / guest bars and the composer.
+            // The last value of each bar's input, so a bar fading out still draws what it showed.
+            val heldBars = remember { arrayOfNulls<Any>(4) }
+            ch?.let { heldBars[0] = it }; ui.requestBar?.let { heldBars[1] = it }
+            ui.groupGuest?.let { heldBars[2] = it }; ui.sendBlocked?.let { heldBars[3] = it }
+            val barCh = ch ?: heldBars[0] as? com.fariin.app.ui.channels.ChannelThreadUi
+            val barRequest = ui.requestBar ?: heldBars[1] as? RequestBar
+            val barGuest = ui.groupGuest ?: heldBars[2] as? com.fariin.app.ui.people.GroupGuestUi
+            val barBlocked = ui.sendBlocked ?: heldBars[3] as? String
+            val barKind = when {
+                search.active -> 0
+                selecting -> 1
+                ch != null && ch.role != com.fariin.app.channel.ChannelRules.Role.ADMIN -> 2
+                ui.receipts.iBlocked && !ui.isGroup -> 3
+                ui.otherDeleted && !ui.isGroup -> 4
+                ui.requestBar != null -> 5
+                ui.groupGuest != null -> 6
+                ui.notAMember -> 7
+                ui.sendBlocked != null && ui.sendBlockedByMod -> 8
+                ui.sendBlocked != null -> 9
+                ui.isGroup && rememberMutedInGroup(ui.groupDoc, ui.me) -> 10
+                else -> 11
+            }
+            androidx.compose.animation.AnimatedContent(barKind, transitionSpec = com.fariin.app.ui.components.Smooth.crossfade(), label = "bottomBar") { kind ->
+            if (kind == 0) {
                 SearchNavBar(search, onStep = { d ->
                     search.index = (search.index + d).coerceIn(0, maxOf(0, search.matches.size - 1)); goToMatch()
                 }, onList = { search.asList = it })
-            } else if (selecting) {
+            } else if (kind == 1) {
                 val canDelete = picked.isNotEmpty() && (!ui.isGroup ||
                     picked.any { it.sendState != null || MessageRules.canDeleteForEveryone(it, ui.me, ui.adminMayDelete) })
                 SelectionBar(
@@ -1419,10 +1454,10 @@ private fun ThreadContent(
                         selected.clear()
                     },
                 )
-            } else if (ch != null && ch.role != com.fariin.app.channel.ChannelRules.Role.ADMIN) {
+            } else if (kind == 2) {
                 // No rule above it: the follower's capsule floats over the chat (iOS).
-                com.fariin.app.ui.channels.ChannelBottomBar(ch, ui.sendBlocked)
-            } else if (ui.receipts.iBlocked && !ui.isGroup) {
+                barCh?.let { com.fariin.app.ui.channels.ChannelBottomBar(it, ui.sendBlocked) }
+            } else if (kind == 3) {
                 // iOS blockedBar: the action alone, in the text colour.
                 HorizontalDivider(thickness = 0.5.dp, color = c.separator)
                 Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(12.dp), contentAlignment = Alignment.Center) {
@@ -1430,30 +1465,32 @@ private fun ThreadContent(
                         Text("Unblock", fontSize = 17.sp, color = c.label)
                     }
                 }
-            } else if (ui.otherDeleted && !ui.isGroup) {
+            } else if (kind == 4) {
                 // Nobody left to receive, so no composer (iOS decision D15).
                 DeletedAccountBar()
-            } else if (ui.requestBar != null) {
+            } else if (kind == 5) {
                 // A message request: Accept / Delete, "request sent", or their Chat Key keeping me out (iOS).
                 // A notice has nothing to type into, so the keyboard goes with the composer.
                 val kb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
-                LaunchedEffect(ui.requestBar.kind) { kb?.hide() }
-                RequestBarView(ui.requestBar, ui.me, ui.title, onBack, actions.onKeyAccepted)
-            } else if (ui.groupGuest != null) {
-                com.fariin.app.ui.people.GroupGuestJoinBar(ui.groupGuest)
-            } else if (ui.notAMember) {
+                barRequest?.let { rb ->
+                    LaunchedEffect(rb.kind) { kb?.hide() }
+                    RequestBarView(rb, ui.me, ui.title, onBack, actions.onKeyAccepted)
+                }
+            } else if (kind == 6) {
+                barGuest?.let { com.fariin.app.ui.people.GroupGuestJoinBar(it) }
+            } else if (kind == 7) {
                 // iOS removedBar: one centred line where the composer was.
                 HorizontalDivider(thickness = 0.5.dp, color = c.separator)
                 Text("You're no longer a member of this group", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.secondary,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp))
-            } else if (ui.sendBlocked != null && ui.sendBlockedByMod) {
-                GroupModBar(ui.sendBlocked)
-            } else if (ui.sendBlocked != null) {
+            } else if (kind == 8) {
+                barBlocked?.let { GroupModBar(it) }
+            } else if (kind == 9) {
                 HorizontalDivider(thickness = 0.5.dp, color = c.separator)
-                Text(ui.sendBlocked, fontSize = 15.sp, color = c.secondary,
+                Text(barBlocked.orEmpty(), fontSize = 15.sp, color = c.secondary,
                     modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp))
-            } else if (ui.isGroup && rememberMutedInGroup(ui.groupDoc, ui.me)) {
+            } else if (kind == 10) {
                 MutedInGroupBar()
             } else {
                 // The reply / edit / quote banner sits INSIDE the message box, over the field, as one
@@ -1669,6 +1706,7 @@ private fun ThreadContent(
                     // made the composer rebuild on each chat update in a group.
                     mentions = if (ui.isGroup) remember(ui.members, ui.me, ui.names, ui.photos) { MentionSource(ui.members, ui.me, ui.names, ui.photos) } else null)
             }
+            }
         }
     }
     }
@@ -1812,7 +1850,10 @@ private fun HeaderBody(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Uni
                         strong -> if (wordsDark) Color(0xFFE6E6E6) else Color(0xFF2E2E2E)
                         else -> if (wordsDark) Color(0xFFD1D1D1) else Color(0xFF525252)
                     }
-                    Text(ui.subtitle.ifEmpty { " " }, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = sub, maxLines = 1)
+                    // online / typing… / last seen / N members cross-fade (iOS pops 38).
+                    com.fariin.app.ui.components.Swap(ui.subtitle.ifEmpty { " " }, label = "subtitle") { t ->
+                        Text(t, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = sub, maxLines = 1)
+                    }
                 }
             }
             if (ui.channel == null && !ui.notAMember) com.fariin.app.ui.call.ThreadCallButtons(ui.cid, ui.me, ui.isGroup, ui.title, ui.photoUrl)
@@ -2018,7 +2059,8 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             } else Spacer(Modifier.width(34.dp))
             Spacer(Modifier.width(6.dp))
         }
-        if (failed) {
+        // The red (!) fades in when a send fails and out on Resend (iOS pops 18); my bubble keeps its place.
+        com.fariin.app.ui.components.Appear(failed, resize = false) {
             Box(
                 Modifier.padding(end = 8.dp).size(24.dp).clip(CircleShape).background(c.red).clickable { onRetry(m) },
                 contentAlignment = Alignment.Center,
@@ -2158,7 +2200,11 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             // A quoted channel post goes UNDER the words instead, the time on its own line below it (QuoteBubble.kt).
             val quoteId = m.quoteId?.takeIf { !m.deleted }
             if (!m.deleted && quoteId == null)
-                m.linkPreview.let { lp -> if (lp != null) LinkPreviewCard(lp, chromeMe) else LiveGroupLinkCard(body, chromeMe) }
+                m.linkPreview.let { lp ->
+                    // A card that lands after the words fades in (iOS pops 14); one there from the start is just there.
+                    val cardBorn = remember { lp != null }
+                    if (lp != null) Box(Modifier.enterFade(!cardBorn)) { LinkPreviewCard(lp, chromeMe) } else LiveGroupLinkCard(body, chromeMe)
+                }
             // A channel post's reactions sit inside its bubble, the time line with them (iOS).
             val ch = ui.channel
             val chips = if (ch != null && channelChipsInside(m)) com.fariin.app.ui.channels.rememberPostChips(ch, m) else emptyList()
@@ -3616,14 +3662,26 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ThreadRow(
 ) {
     val c = Fariin.colors
     val ch = ui.channel
+    // A row whose content changes shape after it was drawn (deleted for everyone, its link card
+    // arriving in a second write) resizes on the spring from then on, and a tombstone fades in
+    // (iOS pops 14, 15). Rows that never change pay nothing.
+    val born = remember { booleanArrayOf(m.deleted, m.linkPreview != null) }
+    val reshaped = m.deleted != born[0] || (m.linkPreview != null) != born[1]
     Column(Modifier.animateItem(fadeInSpec = if (flight != null || glide != null || bursting) null else rowFade,
-        placementSpec = if (bursting) null else rowPlace, fadeOutSpec = null)
+        // A removed row (Delete for me / for everyone gone, bulk delete) fades as the rows close up (iOS pops 13).
+        placementSpec = if (bursting) null else rowPlace, fadeOutSpec = if (bursting || rowPlace == null) null else com.fariin.app.ui.components.Smooth.fadeSpec())
         .sendFlight(flight)
         .arrivalGlide(glide)
+        .then(if (reshaped) Modifier.smoothSize() else Modifier)
+        .fadeOnChange(m.deleted)
         .fillMaxWidth().padding(top = g.gapDp.dp)) {
-        if (day != null) DatePill(day)
+        // A date chip that comes or goes after a delete, and the unread line placed once the server's
+        // window lands, open and close smoothly (iOS pops 22, 23); there from the first draw, just there.
+        val heldDay = remember { arrayOf(day) }
+        if (day != null) heldDay[0] = day
+        com.fariin.app.ui.components.Appear(day != null) { heldDay[0]?.let { DatePill(it) } }
         // Not in a channel (owner 2026-11-11: "remove unread on channel"); the open still lands there.
-        if (isDivider) UnreadDivider()
+        com.fariin.app.ui.components.Appear(isDivider) { UnreadDivider() }
         val pinNote = com.fariin.app.data.PinRules.notice(m.text)
         // This row's coordinates, read only at a long press.
         val coords = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }

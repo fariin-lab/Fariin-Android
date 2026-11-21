@@ -59,9 +59,11 @@ internal fun FloatingDayPill(listState: LazyListState, messages: List<Message>, 
     }
     val alpha by animateFloatAsState(if (shown && label != null) 1f else 0f, tween(if (shown) 150 else 250), label = "dayPill")
     if (alpha == 0f || label == null) return
-    Text(
-        label, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = Fariin.colors.label,
-        modifier = modifier.graphicsLayer { this.alpha = alpha }.floating(RoundedCornerShape(15.dp))
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-    )
+    // Crossing into another day: the words cross-fade and the pill's width follows (iOS pops 21).
+    androidx.compose.foundation.layout.Box(modifier.graphicsLayer { this.alpha = alpha }.floating(RoundedCornerShape(15.dp))
+        .padding(horizontal = 12.dp, vertical = 6.dp)) {
+        com.fariin.app.ui.components.Swap(label, label = "dayPillText") { l ->
+            Text(l, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = Fariin.colors.label)
+        }
+    }
 }

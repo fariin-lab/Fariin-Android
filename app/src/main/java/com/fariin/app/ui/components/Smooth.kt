@@ -96,10 +96,22 @@ object Smooth {
 /** Size changes on the soft spring (nothing when animations are off). */
 fun Modifier.smoothSize(): Modifier = if (Smooth.on && !Smooth.plain) animateContentSize(Smooth.soft()) else this
 
-/** Shows or hides [content] with a fade (and its space, when [resize]). */
+/**
+ * Shows or hides [content] with a fade (and its space, when [resize]). Until [visible] first changes
+ * it is a plain `if` (no transition machinery in every list row); from the first change on, it
+ * animates from where it was.
+ */
 @Composable
 fun Appear(visible: Boolean, modifier: Modifier = Modifier, resize: Boolean = true, content: @Composable () -> Unit) {
-    AnimatedVisibility(visible, modifier,
+    val state = androidx.compose.runtime.remember { androidx.compose.animation.core.MutableTransitionState(visible) }
+    val changed = androidx.compose.runtime.remember { booleanArrayOf(false) }
+    if (!changed[0] && visible == state.currentState) {
+        if (visible) androidx.compose.foundation.layout.Box(modifier) { content() }
+        return
+    }
+    changed[0] = true
+    state.targetState = visible
+    AnimatedVisibility(state, modifier,
         enter = if (resize) Smooth.expandIn() else Smooth.fadeIn(),
         exit = if (resize) Smooth.shrinkOut() else Smooth.fadeOut()) { content() }
 }
@@ -140,7 +152,11 @@ fun Modifier.fadeOnChange(value: Any?): Modifier {
             }
         }
     }
-    return this.then(androidx.compose.ui.Modifier.graphicsLayer { this.alpha = if (hide.value) 0f else alpha.value })
+    // A layer only while a change is showing (a row at rest gets none): hidden in the composition
+    // that brings the new value, then faded up.
+    val changing = last[0] != value
+    if (!changing && !hide.value && !alpha.isRunning && alpha.value >= 1f) return this
+    return this.then(androidx.compose.ui.Modifier.graphicsLayer { this.alpha = if (changing || hide.value) 0f else alpha.value })
 }
 
 /** True from the second frame this screen has drawn: what appears after that is a real change. */

@@ -1,5 +1,6 @@
 package com.fariin.app.ui.channels
 
+import com.fariin.app.ui.components.fadeOnChange
 import com.fariin.app.ui.components.GlassDropdown
 import com.fariin.app.R
 import com.fariin.app.data.NewBadgeSpots
@@ -115,8 +116,9 @@ fun PostViews(color: Color) {
     val v = LocalPostViews.current ?: return
     Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_views), contentDescription = null, tint = color, modifier = Modifier.size(11.dp))
     Spacer(Modifier.width(2.dp))
+    // A new count fades in (iOS pops 24) rather than swapping in one frame.
     Text(ChannelRules.compactCount(v) + "  ", fontSize = 11.sp, color = color, maxLines = 1,
-        modifier = Modifier.semantics { contentDescription = "$v views" })
+        modifier = Modifier.fadeOnChange(ChannelRules.compactCount(v)).semantics { contentDescription = "$v views" })
 }
 
 /** The chat is ticking rows (Select): a post's share button hides, as iOS. */

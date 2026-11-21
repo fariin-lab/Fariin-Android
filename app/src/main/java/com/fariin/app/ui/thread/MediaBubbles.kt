@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.enterFade
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import android.graphics.Bitmap
@@ -337,18 +338,28 @@ internal fun PictureBox(
                 onClick = { if (fetch?.tap() != true && bmp != null) onOpen() })
             .semantics { contentDescription = if (clip != null) "Video" else "Photo" },
     ) {
+        // A picture that came down while this bubble was on screen fades in over its blur (iOS pops
+        // 17, 49); one already on the phone (a scroll, a first paint) is drawn at once, as before.
+        val bornWithFile = remember(url) { got.file != null || picked != null }
+        val fadeSharp = bmp != null && !bornWithFile
         if (bmp != null) {
-            Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            if (fadeSharp && placeholder != null)
+                Image(placeholder, null, contentScale = ContentScale.Crop, filterQuality = FilterQuality.High, modifier = Modifier.fillMaxSize())
+            Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().enterFade(fadeSharp))
         } else if (picked != null) {
             Image(picked, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         } else if (placeholder != null) {
             Image(placeholder, null, contentScale = ContentScale.Crop, filterQuality = FilterQuality.High, modifier = Modifier.fillMaxSize())
         }
-        if (busy) {
+        // The upload ring and the download disc fade out when they are done (iOS pops 52, 53).
+        com.fariin.app.ui.components.Appear(busy, Modifier.align(Alignment.Center), resize = false) {
             // My own upload shows its progress (iOS ring); somebody else's still going up only spins.
-            UploadRing(m.clientId, Modifier.align(Alignment.Center), onCancel = uploadCancelFor(m))
-        } else if (pending) {
-            DownloadBadge(fetch!!.url, fetch.state, isVideo = clip != null)
+            UploadRing(m.clientId, onCancel = uploadCancelFor(m))
+        }
+        val heldFetch = remember { arrayOf<Pair<String?, Fetch>?>(null) }
+        if (pending) heldFetch[0] = fetch!!.url to fetch.state
+        com.fariin.app.ui.components.Appear(!busy && pending, Modifier.align(Alignment.Center), resize = false) {
+            heldFetch[0]?.let { (u, st) -> DownloadBadge(u, st, isVideo = clip != null) }
         }
         overlay()
     }

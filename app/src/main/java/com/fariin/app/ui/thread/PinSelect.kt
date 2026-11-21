@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.smoothSize
 import com.fariin.app.ui.components.GlassDropdown
 import com.fariin.app.ui.components.GlassAlert
 import com.fariin.app.ui.components.floating
@@ -309,8 +310,13 @@ internal fun SelectTopBar(count: Int, onClose: () -> Unit) {
                 modifier = Modifier.align(Alignment.CenterStart))
             Box(Modifier.align(Alignment.Center).height(44.dp).floating(androidx.compose.foundation.shape.CircleShape).padding(horizontal = 20.dp),
                 contentAlignment = Alignment.Center) {
-                Text(if (count == 1) "1 Selected" else "$count Selected", fontSize = 17.sp,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = c.label)
+                // The count rolls and the capsule's width follows (iOS pops 47).
+                androidx.compose.foundation.layout.Row(Modifier.smoothSize()) {
+                    com.fariin.app.ui.components.RollingNumber(count) { n ->
+                        Text("$n", fontSize = 17.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = c.label)
+                    }
+                    Text(" Selected", fontSize = 17.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = c.label)
+                }
             }
         }
     }

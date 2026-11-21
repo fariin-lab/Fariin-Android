@@ -689,11 +689,16 @@ internal fun JumpArrow(count: Int, onClick: () -> Unit, modifier: Modifier = Mod
             Modifier.size(40.dp).floating().clickable(onClick = onClick),
             contentAlignment = Alignment.Center,
         ) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_down), "Jump to the newest message", tint = c.label, modifier = Modifier.size(28.dp)) }
-        if (count > 0) Text(
-            if (count > 99) "99+" else "$count", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White,
-            modifier = Modifier.align(Alignment.TopCenter).offset(y = (-9).dp).clip(CircleShape).background(c.blue)
-                .padding(horizontal = 5.dp, vertical = 1.dp),
-        )
+        // The count fades in and out and rolls as new messages come (iOS pops 16).
+        val held = androidx.compose.runtime.remember { intArrayOf(count) }
+        if (count > 0) held[0] = count
+        com.fariin.app.ui.components.Appear(count > 0, Modifier.align(Alignment.TopCenter).offset(y = (-9).dp), resize = false) {
+            Box(Modifier.clip(CircleShape).background(c.blue).padding(horizontal = 5.dp, vertical = 1.dp)) {
+                com.fariin.app.ui.components.RollingNumber(minOf(held[0], 100)) { n ->
+                    Text(if (n > 99) "99+" else "$n", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            }
+        }
     }
 }
 
