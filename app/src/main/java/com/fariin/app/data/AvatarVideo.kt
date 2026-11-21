@@ -43,8 +43,8 @@ import kotlin.coroutines.resume
  * goes to transfer/<uid>/avatar-<ms>/video.mp4 and `plusAvatarVideo({path})` moves it to
  * profiles/<uid>-video.mp4 and writes users/{uid}.avatarVideo = {v, on}; only the server writes either.
  *
- * It plays only in the big pictures (the profile header and the 1:1 chat header), muted and looping
- * over the still, never in list rows. It plays while `on` is true, so the app needs no Plus answer of
+ * It plays in the big pictures (the profile header and the 1:1 chat header) and, since 2026-11-20, in
+ * the chat list rows (ListAvatarClips), muted and looping over the still, while `on` is true, so the app needs no Plus answer of
  * its own about anybody; Plus ending turns `on` off on the server.
  */
 data class AvatarVideo(val v: Long, val on: Boolean) {

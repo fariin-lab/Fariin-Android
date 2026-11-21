@@ -202,6 +202,8 @@ fun ChatListScreen(
     var folderNewFor by remember { mutableStateOf<String?>(null) }
     var folderAddFor by remember { mutableStateOf<Conversation?>(null) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // Video profile pictures start only while the list is still (ListAvatarClips).
+    LaunchedEffect(listState) { androidx.compose.runtime.snapshotFlow { listState.isScrollInProgress }.collect { ListAvatarClips.scrolling = it } }
     val listCard = rememberChatCard(me)
     // A second tap on Chats: out of Archived or search first, then to the top.
     com.fariin.app.ui.shell.OnTabReselect {
@@ -1465,6 +1467,9 @@ internal fun ChatRow(
                 contentAlignment = Alignment.Center) {
                 Avatar(conv.displayPhoto(me), if (ring.isEmpty()) 54.dp else 48.dp, squircle = conv.isChannel,
                     kind = com.fariin.app.ui.components.AvatarKind.of(conv.isGroup, conv.isChannel))
+                // Fariin Plus animatedAvatar: a 1:1 person's clip plays over the photo (iOS 2026-11-20).
+                if (!conv.isGroup && !conv.isChannel) com.fariin.app.crypto.Wire.otherUid(conv.id, me).takeIf { it.isNotEmpty() && it != me }
+                    ?.let { peer -> ListAvatarClip(conv.id, peer, if (ring.isEmpty()) 54.dp else 48.dp) }
                 // LOW: the ring's arcs are drawn once into a picture, not traced again on every scroll frame.
                 if (ring.isNotEmpty()) com.fariin.app.ui.stories.StoryRing(ring, Modifier.requiredSize(56.dp)
                     .then(if (cheap) Modifier.graphicsLayer(compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen) else Modifier),
