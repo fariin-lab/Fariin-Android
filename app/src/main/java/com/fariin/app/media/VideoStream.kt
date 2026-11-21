@@ -98,6 +98,12 @@ object VideoStream {
         len > 0 && sc.isCached(k, 0, len)
     }.getOrDefault(false)
 
+    /** The clip's whole length when all of it is in the stream cache, else null (MediaOrigin). */
+    fun fullLength(c: Context, url: String): Long? = runCatching {
+        val len = ContentMetadata.getContentLength(cache(c).getContentMetadata(key(url)))
+        len.takeIf { it > 0 && cache(c).isCached(key(url), 0, it) }
+    }.getOrNull()
+
     /** How many bytes from the start of [url] are already cached (what a preload left). */
     fun cachedPrefix(c: Context, url: String): Long =
         runCatching { cache(c).getCachedLength(key(url), 0, VideoPreload.BYTES * 4) }.getOrDefault(0L).coerceAtLeast(0L)

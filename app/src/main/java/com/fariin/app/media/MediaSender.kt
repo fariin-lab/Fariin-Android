@@ -84,8 +84,28 @@ class MediaSender(
             val j = src.json()
             sealOrNull(j, members)?.let { out = out + ("fwd" to (if (it == j) src.map() else it)) }
         }
+        // The file's first home (MediaOrigin), only beside `forwarded`: sealed like the text in a 1:1
+        // or an end-to-end group (the server could match a clear key to its chat); a plain group's seal
+        // hands it back clear. A seal that fails drops the field, never the message.
+        if (msg["forwarded"] == true) {
+            originClear?.let { o -> sealOrNull(o, members)?.let { out = out + ("origin" to it) } }
+            val items = msg["album"] as? List<*>
+            val os = albumOrigins
+            if (items != null && os != null && os.size == items.size) {
+                out = out + ("album" to items.mapIndexed { i, it ->
+                    val item = it as? Map<*, *> ?: return@mapIndexed it
+                    // A group seal grows one wrap per member: past 4096 characters the item goes without.
+                    val sealed = os[i]?.let { o -> sealOrNull(o, members) }?.takeIf { s -> s.length <= 4096 }
+                    if (sealed != null) item + ("origin" to sealed) else item
+                })
+            }
+        }
         batch.set(ref, out)
     }
+
+    /** A forward's clear `origin` payload (MediaOrigin.payloadFor), and one per album item. */
+    var originClear: String? = null
+    var albumOrigins: List<String?>? = null
 
     /** The group or channel a forward comes from (Message.ForwardSource), written as `fwd`. */
     var fwdSource: com.fariin.app.data.Message.ForwardSource? = null

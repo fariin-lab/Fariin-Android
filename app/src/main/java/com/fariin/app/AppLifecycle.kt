@@ -41,6 +41,8 @@ object AppLifecycle : DefaultLifecycleObserver {
         } catch (_: Exception) {}
         // Opened media over the iOS budget goes, oldest first.
         scope.launch { runCatching { ChatMedia.trim(a) }; runCatching { com.fariin.app.media.StorageSweep.sweep(a) } }
+        // The signed-in account's media origin index, read off the main thread (forwards it already holds).
+        runCatching { com.fariin.app.media.MediaOrigin.warm() }
     }
 
     override fun onStart(owner: LifecycleOwner) {

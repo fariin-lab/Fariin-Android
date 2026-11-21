@@ -52,16 +52,20 @@ object Forwarder {
         // "Forwarded from <group or channel>" (iOS ForwardSource.of): a forward keeps the source it came
         // with; a group or channel names itself; a person names nothing.
         val source = if (m.forwarded) m.forwardSource else runCatching { sourceOf(sourceCid, m.id, me) }.getOrNull()
+        // The file's first home and the byte count held here (MediaOrigin), sealed per target by the sender.
+        val origin = runCatching { MediaOrigin.payloadFor(m, src) }.getOrNull()
+        val albumOrigins = runCatching { MediaOrigin.albumPayloads(m, src) }.getOrNull()
         for (t in targets.distinct().take(MediaRules.FORWARD_CHATS_AT_ONCE)) {
             val fwd = MediaMessages.isForward(m.forwarded, sourceCid, t)
             val fc = fromChannel?.takeIf { !isChannel(t) }
             val clientId = clientIds[t] ?: UUID.randomUUID().toString().uppercase()
             val instant = instantKind && runCatching {
                 MediaSender(t, me, crypto, ChatMedia(context, t, crypto))
-                    .also { it.fwdChannelJson = fc; it.fwdSource = source.takeIf { fwd }; it.quoteId = m.quoteId }
+                    .also { it.fwdChannelJson = fc; it.fwdSource = source.takeIf { fwd }; it.quoteId = m.quoteId
+                        it.originClear = origin; it.albumOrigins = albumOrigins }
                     .instant(m, sourceCid, m.text, fwd, clientId, System.currentTimeMillis().toDouble())
             }.onFailure { android.util.Log.i("FariinForward", "old forward to $t: ${it.message}") }.isSuccess
-            val ok = instant || runCatching { sendTo(context, me, crypto, t, m, payload(), fwd, fc, source.takeIf { fwd }, clientId) }.isSuccess
+            val ok = instant || runCatching { sendTo(context, me, crypto, t, m, payload(), fwd, fc, source.takeIf { fwd }, clientId, origin, albumOrigins) }.isSuccess
             if (!ok) failed += t
             // Landed or not, the chat's own row takes over (or nothing, on a failure): the echo goes
             // once the real one is in (ThreadRepository.rebuild), or now when there is none.
@@ -125,7 +129,8 @@ object Forwarder {
     private suspend fun open(context: Context, src: ChatMedia, m: Message): Payload {
         val dir = File(context.cacheDir, "outgoing").also { it.mkdirs() }
         suspend fun bytes(url: String?, enc: com.fariin.app.crypto.EncMeta?): ByteArray =
-            url?.let { src.bytes(it, enc) } ?: throw SourceUnavailable()
+            // The message's own file only: an alias copy (MediaOrigin) is never forward input.
+            url?.let { src.bytes(it, enc, own = true) } ?: throw SourceUnavailable()
         suspend fun video(url: String?, enc: com.fariin.app.crypto.EncMeta?, posterUrl: String?,
                           posterEnc: com.fariin.app.crypto.EncMeta?): VideoPrep {
             val clip = File(dir, "fwd-${UUID.randomUUID()}.mp4").also { it.writeBytes(bytes(url, enc)) }
@@ -160,10 +165,12 @@ object Forwarder {
     private suspend fun sendTo(
         context: Context, me: String, crypto: FariinCrypto, target: String, m: Message, payload: Payload?, fwd: Boolean,
         fwdChannelJson: String?, source: Message.ForwardSource?, clientId: String,
+        origin: String? = null, albumOrigins: List<String?>? = null,
     ) {
         val ts = System.currentTimeMillis().toDouble()
         val sender = MediaSender(target, me, crypto, ChatMedia(context, target, crypto))
-            .also { it.fwdChannelJson = fwdChannelJson; it.fwdSource = source; it.quoteId = m.quoteId }
+            .also { it.fwdChannelJson = fwdChannelJson; it.fwdSource = source; it.quoteId = m.quoteId
+                it.originClear = origin; it.albumOrigins = albumOrigins }
         // Registered with MediaSend like a send from the composer (owner 2026-11-11, iOS fwd-cancel):
         // the X on a forwarded video still uploading only hid the bubble, and the video arrived anyway,
         // because nothing held this send for Cancel to stop. A Cancel ends the job quietly (join

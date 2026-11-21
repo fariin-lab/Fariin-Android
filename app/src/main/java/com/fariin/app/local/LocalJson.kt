@@ -107,6 +107,8 @@ object LocalJson {
                 it.videoUrl?.let { v -> put("v", v) }
                 enc(it.videoEnc)?.let { e -> put("ve", e) }
                 it.duration?.let { d -> put("d", d) }
+                it.origin?.let { g -> put("og", g) }
+                it.originSize?.let { n -> put("ogs", n) }
             })
         })
         if (m.reactions.isNotEmpty()) put("rx", JSONObject(m.reactions))
@@ -131,6 +133,8 @@ object LocalJson {
         m.callRungUids?.let { put("callR", JSONArray(it)) }
         m.fwdChannel?.let { put("fc", JSONObject().put("c", it.cid).put("t", it.title).put("p", it.photoUrl).put("u", it.username)) }
         m.forwardSource?.let { put("fs", it.json()) }
+        m.origin?.let { put("og", it) }
+        m.originSize?.let { put("ogs", it) }
         com.fariin.app.data.TextFormat.serialize(m.bold, m.text.length, m.links)?.let { put("fmt", it) }
         m.storyMention?.let { put("sm", JSONObject().put("id", it.id).put("t", it.thumbUrl)) }
         m.linkPreview?.let { lp ->
@@ -179,7 +183,9 @@ object LocalJson {
                     Message.AlbumItem(x.optString("u"), encBack(x.optJSONObject("e")),
                         if (x.has("w")) x.getDouble("w") else null, if (x.has("h")) x.getDouble("h") else null,
                         videoUrl = if (x.has("v")) x.getString("v") else null, videoEnc = encBack(x.optJSONObject("ve")),
-                        duration = if (x.has("d")) x.getDouble("d") else null)
+                        duration = if (x.has("d")) x.getDouble("d") else null,
+                        origin = com.fariin.app.media.MediaOrigin.valid(x.optString("og")),
+                        originSize = if (x.has("ogs")) x.getLong("ogs").takeIf { it > 0 } else null)
                 }
             } ?: emptyList(),
             reactions = o.optJSONObject("rx")?.let { r -> r.keys().asSequence().associateWith { r.getString(it) } } ?: emptyMap(),
@@ -207,7 +213,9 @@ object LocalJson {
             replyCount = o.optInt("rc"), repliesOff = if (o.has("ro")) o.getBoolean("ro") else null,
             replyFaces = strings(o.optJSONArray("rf")) ?: emptyList(),
             isRestrictRequest = o.optBoolean("rr"),
-        )
+            origin = com.fariin.app.media.MediaOrigin.valid(s("og")),
+            originSize = if (o.has("ogs")) o.getLong("ogs").takeIf { it > 0 } else null,
+        ).also { com.fariin.app.media.MediaOrigin.note(it) }
     }
 
     fun encodeMessages(list: List<Message>): String =

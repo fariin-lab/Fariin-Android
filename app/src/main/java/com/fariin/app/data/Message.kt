@@ -70,6 +70,12 @@ data class Message(
     /** A file's size in bytes, written in the clear by the sender (iOS sendFile). */
     val fileSize: Long? = null,
     val album: List<AlbumItem> = emptyList(),
+    /**
+     * The file's first home as a one-way key ([com.fariin.app.media.MediaOrigin]), written by a
+     * forward, and the byte count the forwarder held; null = this message is the original.
+     */
+    val origin: String? = null,
+    val originSize: Long? = null,
     /** uid to opened emoji (each sealed by its reactor; an unopened one is left out). */
     val reactions: Map<String, String> = emptyMap(),
     /** A channel post's views, counted by the server (functions-groups channelViews). */
@@ -209,8 +215,14 @@ data class Message(
         val localUri: String? = null,
         /** Local only: the picked file is a video (before it has a [videoUrl]). */
         val localVideo: Boolean = false,
+        /** The item's first home key and claimed byte count (see [Message.origin]). */
+        val origin: String? = null,
+        val originSize: Long? = null,
     ) {
         val isVideo: Boolean get() = videoUrl != null || localVideo
+        /** The key of this item's file: its claimed [origin], else the key of its own path. */
+        val mediaOrigin: String? get() = com.fariin.app.media.MediaOrigin.valid(origin)
+            ?: com.fariin.app.media.MediaOrigin.keyOfUrl(videoUrl ?: imageUrl)
     }
 
     enum class MediaKind { PHOTO, VIDEO, VOICE, ALBUM, FILE, VIEW_ONCE }
@@ -255,6 +267,12 @@ data class Message(
             type == "gif" -> "GIF"
             else -> ""
         }
+
+    /** The key of this message's file: its claimed [origin], else the key of its own path (iOS mediaOrigin). */
+    val mediaOrigin: String? get() = com.fariin.app.media.MediaOrigin.valid(origin)
+        ?: com.fariin.app.media.MediaOrigin.keyOfUrl(when (type) {
+            "video" -> videoUrl; "image" -> imageUrl; "audio" -> audioUrl; "file" -> fileUrl; else -> null
+        })
 
     companion object {
         const val NOT_ENCRYPTED = "This message wasn't encrypted and can't be shown."
@@ -303,7 +321,10 @@ data class Message(
                     (m["width"] as? Number)?.toDouble(), (m["height"] as? Number)?.toDouble(),
                     videoUrl = if (video) m["videoUrl"] as? String else null,
                     videoEnc = if (video) EncMeta.fromMap(m["videoEnc"] as? Map<*, *>) else null,
-                    duration = (m["duration"] as? Number)?.toDouble())
+                    duration = (m["duration"] as? Number)?.toDouble()).let { a ->
+                    com.fariin.app.media.MediaOrigin.open(m["origin"]) { open(it, author) }
+                        ?.let { o -> a.copy(origin = o.key, originSize = o.size) } ?: a
+                }
             } ?: emptyList()
             // iOS: the link card's words are sealed like the caption; a sentinel drops the whole card.
             val linkPreview = (data["linkPreview"] as? Map<*, *>)?.let { lp ->
@@ -324,7 +345,11 @@ data class Message(
                 else if (!Wire.isGroupCid(cid) && (!raw.startsWith(Wire.ENC1) ||
                     (data["fmt"] as? String)?.startsWith(Wire.ENC1) != true)) null
                 else openOptional("fmt")
+            val originClaim = if (data["deleted"] == true) null
+                else com.fariin.app.media.MediaOrigin.open(data["origin"]) { open(it, author) }
             return Message(
+                origin = originClaim?.key,
+                originSize = originClaim?.size,
                 id = id,
                 authorId = author,
                 // A sticker's sealed `text` is only what an older build shows instead (iOS): dropped.
@@ -421,7 +446,7 @@ data class Message(
                     val e = if (raw.startsWith("enc")) open(raw, uid) else raw
                     if (e.isEmpty() || e == Wire.NOT_READY || e == Wire.LOCKED) null else uid to e
                 }?.toMap() ?: emptyMap(),
-            )
+            ).also { com.fariin.app.media.MediaOrigin.note(it) }
         }
     }
 }

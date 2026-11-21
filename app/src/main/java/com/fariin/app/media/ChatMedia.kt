@@ -36,28 +36,38 @@ class ChatMedia(
     /** Where my own outgoing files wait (cleared with the cache, as iOS's temp folder is). */
     fun localDir(): File = File(context.cacheDir, "outgoing").also { it.mkdirs() }
 
-    fun cached(url: String): File? = if (isLocal(url)) null else key(url).takeIf { it.exists() && it.length() > 0 }
+    fun cached(url: String): File? = if (isLocal(url)) null else showable(url)
         // Used = young again, so the size cap (trim) drops the files nobody looked at for longest.
         ?.also { it.setLastModified(System.currentTimeMillis()) }
+
+    /** [url]'s own file, else its alias copy (MediaOrigin: the same file from another message). */
+    private fun showable(url: String): File? = key(url).takeIf { it.exists() && it.length() > 0 }
+        ?: alias(url).takeIf { it.exists() && it.length() > 0 }
+
+    /** The byte count of [url]'s OWN cached file (never an alias), or null: what a forward claims. */
+    fun ownBytes(url: String): Long? = if (isLocal(url)) null else key(url).length().takeIf { it > 0 }
+        // A plain clip watched through the stream cache is its own copy too (never an alias).
+        ?: VideoStream.fullLength(context, url)
 
     /**
      * [cached] without marking it used: the disk write moved off the main thread (a chat's first
      * frame paid it once per picture). The caller marks it with [touch] in the background.
      */
-    fun peek(url: String): File? = if (isLocal(url)) null else key(url).takeIf { it.exists() && it.length() > 0 }
+    fun peek(url: String): File? = if (isLocal(url)) null else showable(url)
 
     /** Marks [f] used (young again for the size cap). Disk work: off the main thread. */
     fun touch(f: File) { runCatching { f.setLastModified(System.currentTimeMillis()) } }
 
     /** Whether the file is in the cache, without touching it (the mark's media hold asks often). */
-    fun has(url: String): Boolean = !isLocal(url) && key(url).let { it.exists() && it.length() > 0 }
+    fun has(url: String): Boolean = !isLocal(url) && showable(url) != null
 
     /** Seed the cache with what I just sent, under its URL (iOS stores the plain image the same way). */
     fun store(url: String, plain: ByteArray) {
-        runCatching { atomicWrite(key(url), plain) }
+        runCatching { atomicWrite(key(url), plain); MediaOrigin.cached(url, plain.size.toLong()) }
     }
 
-    suspend fun bytes(url: String, enc: EncMeta?): ByteArray? = file(url, enc)?.let { f ->
+    /** [own]: the message's own file only, never an alias copy (forward input, MediaOrigin). */
+    suspend fun bytes(url: String, enc: EncMeta?, own: Boolean = false): ByteArray? = file(url, enc, own = own)?.let { f ->
         withContext(Dispatchers.IO) { runCatching { f.readBytes() }.getOrNull() }
     }
 
@@ -66,23 +76,34 @@ class ChatMedia(
      * the download in the narrow lane (two at a time). The transfer runs in [MediaDownloads]'s own
      * scope: a caller that goes away (a bubble scrolled off) leaves it running for the next look.
      */
-    suspend fun file(url: String, enc: EncMeta?, video: Boolean = false): File? = withContext(Dispatchers.IO) {
+    suspend fun file(url: String, enc: EncMeta?, video: Boolean = false, own: Boolean = false): File? = withContext(Dispatchers.IO) {
         when {
             url.startsWith(ASSET) -> assetFile(url)
             url.startsWith("/") -> File(url).takeIf { it.exists() }
             else -> {
-                cached(url)?.let { return@withContext it }
+                val mine = key(url)
+                if (mine.exists() && mine.length() > 0) {
+                    mine.setLastModified(System.currentTimeMillis())
+                    // Seen again: it names its origin for other messages (measured from the file).
+                    MediaOrigin.cached(url, mine.length())
+                    return@withContext mine
+                }
+                if (!own) cached(url)?.let { return@withContext it }
                 // A nearly full phone downloads nothing (iOS LowStorage): held, and the sheet says why.
                 if (com.fariin.app.system.LowStorage.tooFullToDownload(context)) {
                     withContext(Dispatchers.Main) { com.fariin.app.system.LowStorage.warnForDownload(context) }
                     return@withContext null
                 }
-                val job = inflight.computeIfAbsent(url) {
+                val slot = if (own) "own:$url" else url
+                val job = inflight.computeIfAbsent(slot) {
                     MediaDownloads.clearCancel(url)
                     MediaDownloads.scope.async(start = CoroutineStart.LAZY) {
                         val lane = if (video) MediaDownloads.videoLane else MediaDownloads.photoLane
-                        lane.withPermit { cached(url) ?: download(url, enc) }
-                    }.also { d -> d.invokeOnCompletion { inflight.remove(url, d) } }
+                        lane.withPermit {
+                            (if (own) key(url).takeIf { it.exists() && it.length() > 0 } else cached(url))
+                                ?: (if (own) null else fromOrigin(url)) ?: download(url, enc)
+                        }
+                    }.also { d -> d.invokeOnCompletion { inflight.remove(slot, d) } }
                 }
                 job.start()
                 job.await()
@@ -90,11 +111,43 @@ class ChatMedia(
         }
     }
 
+    /**
+     * A forward of a file this phone already holds under another message (MediaOrigin): copied into
+     * [url]'s alias file, nothing downloaded. Only when the other file still has the exact byte count
+     * the forward claims.
+     */
+    private fun fromOrigin(url: String): File? {
+        val (other, size) = MediaOrigin.source(url) ?: run {
+            // Not in the index yet: measure the own copies of the same file this session has read.
+            for (o in MediaOrigin.ownersOf(url)) ownBytes(o)?.let { MediaOrigin.cached(o, it) }
+            MediaOrigin.source(url)
+        } ?: return null
+        val src = key(other)
+        // A plain clip watched through the stream cache: copied out to its own file first.
+        if (!src.exists() || src.length() == 0L) VideoStream.copyCached(context, other, src)
+        if (!src.exists() || src.length() != size) return null
+        val out = alias(url)
+        return runCatching {
+            val tmp = File(dir, out.name + ".tmp" + System.nanoTime())
+            src.copyTo(tmp, overwrite = true)
+            if (!tmp.renameTo(out)) { out.delete(); tmp.renameTo(out) }
+            out.takeIf { it.exists() && it.length() == size }
+        }.getOrNull()?.also { android.util.Log.i("ChatMedia", "origin hit: ${size} bytes shown from this phone, not downloaded") }
+    }
+
+    /** The user removed [url]'s media: its own file and alias go, and its slot is not filled again. */
+    fun forget(url: String) {
+        if (isLocal(url)) return
+        runCatching { key(url).delete() }
+        runCatching { alias(url).delete() }
+        MediaOrigin.forget(url)
+    }
+
     private suspend fun download(url: String, enc: EncMeta?): File? {
         // A plain clip already watched to the end through the stream cache: copied out, not fetched again.
         if ((enc == null || enc.isPlain) && Wire.isGroupCid(cid) && url.startsWith("https://")) {
             val f = key(url)
-            if (VideoStream.copyCached(context, url, f)) return f
+            if (VideoStream.copyCached(context, url, f)) { MediaOrigin.cached(url, f.length()); return f }
         }
         val ref = if (R2Media.isR2(url)) null else try { FirebaseStorage.getInstance().getReferenceFromUrl(url) } catch (_: Exception) { null }
         val cipher = try {
@@ -115,6 +168,7 @@ class ChatMedia(
         }
         val f = key(url)
         atomicWrite(f, plain)
+        MediaOrigin.cached(url, plain.size.toLong())
         return f
     }
 
@@ -177,6 +231,8 @@ class ChatMedia(
     }
 
     private fun key(url: String): File = File(dir, sha(url))
+    /** Where a file from another message is shown for [url] (never forward input). */
+    private fun alias(url: String): File = File(dir, "a-" + sha(url))
 
     private fun atomicWrite(f: File, b: ByteArray) {
         val tmp = File(f.parentFile, f.name + ".tmp" + System.nanoTime())

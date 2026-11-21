@@ -806,7 +806,8 @@ class ThreadRepository(
             for (m in fresh) {
                 val urls = listOfNotNull(m.imageUrl, m.videoUrl, m.audioUrl, m.fileUrl, m.thumbUrl) +
                     m.album.flatMap { listOfNotNull(it.imageUrl, it.videoUrl) }
-                for (u in urls) try { md.cached(u)?.delete() } catch (_: Exception) {}
+                // Gone with its slot (MediaOrigin): another message's copy never fills it again.
+                for (u in urls) try { md.forget(u) } catch (_: Exception) {}
             }
         }
         Disappearing.askBurn(cid, fresh.map { it.id })
