@@ -322,7 +322,8 @@ private fun QuotedPollLink(card: QuoteCard, poll: com.fariin.app.data.PollCard, 
 @Composable
 internal fun QuoteThumb(card: QuoteCard, qid: String? = null, side: Dp = 36.dp) {
     // The JPEG this phone made for the quote first, then the server's picture, then the channel's photo.
-    val url: Any = qid?.let { QuoteStore.picture(it) } ?: QuoteRules.image(card) ?: card.photoUrl.ifEmpty { null } ?: return
+    val raw: Any = qid?.let { QuoteStore.picture(it) } ?: QuoteRules.image(card) ?: card.photoUrl.ifEmpty { null } ?: return
+    val url = rememberQuotePicture(card, raw) ?: return
     coil3.compose.AsyncImage(url, null, contentScale = ContentScale.Crop,
         modifier = Modifier.size(side).clip(RoundedCornerShape(6.dp)).background(Fariin.colors.secondary.copy(alpha = 0.15f)))
 }
@@ -356,7 +357,7 @@ internal fun QuoteMediaOnly(qid: String, openCid: String?, hostMid: String?): Bo
             keyboard?.hide(); focus.clearFocus()
             channelNav.open(card.cid)
         }) {
-        coil3.compose.AsyncImage(QuoteStore.picture(qid) ?: url, contentDescription = QuoteRules.body(card.copy(text = "")),
+        coil3.compose.AsyncImage(rememberQuotePicture(card, QuoteStore.picture(qid) ?: url), contentDescription = QuoteRules.body(card.copy(text = "")),
             contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
         if (card.kind == "video") Box(Modifier.align(Alignment.Center).size(44.dp).clip(androidx.compose.foundation.shape.CircleShape)
             .background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
@@ -375,4 +376,23 @@ internal fun QuoteMediaOnly(qid: String, openCid: String?, hostMid: String?): Bo
         }
     }
     return true
+}
+
+/**
+ * A quote's picture as the image loader can draw it. A channel's post picture on R2 (`r2:chat/<cid>/…`,
+ * groups and channels since config r2Media) is fetched in the clear through the channel's own media
+ * (iOS 671707b42: "the channel's R2 file"), and only from that channel's own folder; an https link or
+ * this phone's own bytes go as they are. Null while an R2 file is coming.
+ */
+@Composable
+internal fun rememberQuotePicture(card: QuoteCard, raw: Any?): Any? {
+    val r2 = (raw as? String)?.takeIf { com.fariin.app.media.R2Media.isR2(it) }
+    if (r2 == null) return raw
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val own = card.cid.isNotEmpty() && com.fariin.app.media.R2Media.keyOf(r2).startsWith("chat/${card.cid}/")
+    val file by androidx.compose.runtime.produceState<java.io.File?>(null, r2, own) {
+        if (!own) return@produceState
+        value = runCatching { com.fariin.app.media.ChatMedia(ctx.applicationContext, card.cid, null).file(r2, null) }.getOrNull()
+    }
+    return file
 }

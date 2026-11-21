@@ -635,12 +635,15 @@ internal fun ComposerBar(title: String, text: String, thumb: (@Composable () -> 
  */
 @Composable
 internal fun ComposerBanner(title: String, text: String, thumb: (@Composable () -> Unit)? = null,
-                            color: Color? = null, icon: Int? = null, onClose: () -> Unit) {
+                            color: Color? = null, icon: Int? = null,
+                            /** A tap on the bar (the quote preview, iOS 2026-11-21); null = the bar does nothing. */
+                            onTap: (() -> Unit)? = null, onClose: () -> Unit) {
     val c = Fariin.colors
     val tone = color ?: c.blue
     Row(Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 4.dp)
         .height(androidx.compose.foundation.layout.IntrinsicSize.Min)
-        .clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp)).background(tone.copy(alpha = 0.10f)),
+        .clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp)).background(tone.copy(alpha = 0.10f))
+        .then(if (onTap != null) Modifier.clickable(onClickLabel = "Preview", onClick = onTap) else Modifier),
         verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.width(4.dp).fillMaxHeight().background(tone))
         Column(Modifier.weight(1f).padding(start = 10.dp, top = 7.dp, bottom = 7.dp)) {
@@ -654,6 +657,8 @@ internal fun ComposerBanner(title: String, text: String, thumb: (@Composable () 
             }
         }
         if (thumb != null) Box(Modifier.padding(start = 8.dp)) { thumb() }
+        if (onTap != null) Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_right), null, tint = c.secondary,
+            modifier = Modifier.padding(start = 6.dp).size(13.dp))
         Box(Modifier.align(Alignment.Top).size(32.dp).clickable(onClickLabel = "Cancel", onClick = onClose),
             contentAlignment = Alignment.Center) {
             Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Cancel", tint = c.secondary, modifier = Modifier.size(14.dp))

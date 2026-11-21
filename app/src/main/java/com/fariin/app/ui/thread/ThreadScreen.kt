@@ -1534,14 +1534,27 @@ private fun ThreadContent(
                         }
                     }
                 }
+                // The quote preview (iOS 2026-11-21): a tap on the bar of a post with a picture shows it as
+                // it will go, with the hide-text button; the bar then says what goes.
+                var quotePreviewOpen by remember(ui.cid) { mutableStateOf(false) }
+                var quoteHideTick by remember { mutableStateOf(0) }
+                if (quoting == null) quotePreviewOpen = false
                 if (editing == null) quoting?.let { q ->
                     val pk = com.fariin.app.data.QuoteRules.pictureKey(q)
-                    banner = { ComposerBanner("Quote from ${com.fariin.app.data.QuoteRules.heading(q.card)}",
-                        com.fariin.app.data.QuoteRules.body(q.card),
-                        thumb = if (com.fariin.app.data.QuoteStore.picture(pk) != null || com.fariin.app.data.QuoteRules.image(q.card) != null || q.card.photoUrl.isNotEmpty()) ({ QuoteThumb(q.card, pk) }) else null) { quoting = null } }
+                    val hidden = run { quoteHideTick; com.fariin.app.data.QuoteStore.isMediaOnly(q.qid) }
+                    val heading = com.fariin.app.data.QuoteRules.heading(q.card)
+                    banner = { ComposerBanner(if (hidden) "${quoteKindWord(q.card)} from $heading" else "Quote from $heading",
+                        if (hidden) "Quote text hidden" else com.fariin.app.data.QuoteRules.body(q.card),
+                        thumb = if (com.fariin.app.data.QuoteStore.picture(pk) != null || com.fariin.app.data.QuoteRules.image(q.card) != null || q.card.photoUrl.isNotEmpty()) ({ QuoteThumb(q.card, pk) }) else null,
+                        onTap = if (quoteCanHide(q.card)) ({ quotePreviewOpen = true }) else null) { quoting = null } }
                 }
                 // The box's words, for the link card above it (LinkDraftBar).
                 var linkText by remember { mutableStateOf(actions.draft) }
+                if (quotePreviewOpen && editing == null) quoting?.let { q ->
+                    QuotePreview(q, linkText.trim(), run { quoteHideTick; com.fariin.app.data.QuoteStore.isMediaOnly(q.qid) }, myFill(),
+                        onToggle = { on -> com.fariin.app.data.QuoteStore.setMediaOnly(q.qid, on); quoteHideTick++ },
+                        onClose = { quotePreviewOpen = false })
+                }
                 val send: (String, List<String>, String?) -> Unit = { t, ids, fmt ->
                     val fx = fxNext.value.also { fxNext.value = null }
                     val sendFx = actions.onSendFx
