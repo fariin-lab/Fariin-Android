@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.fadeOnChange
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.navigationBars
@@ -176,14 +177,17 @@ internal fun SearchNavBar(s: InChatSearchState, onStep: (Int) -> Unit, onList: (
         .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.navigationBars.only(androidx.compose.foundation.layout.WindowInsetsSides.Horizontal))
         .windowInsetsPadding(rest).padding(start = COMPOSER_SIDE, end = COMPOSER_SIDE, top = 8.dp, bottom = 8.dp).height(44.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        if (s.matches.isNotEmpty() || s.searchable) {
-            Box(Modifier.height(40.dp).floating().clickable(enabled = s.asList) { onList(false) }.padding(horizontal = 16.dp),
+        // The pills and arrows fade in and out with the matches; the count fades to its new words (iOS pops 43).
+        com.fariin.app.ui.components.Appear(s.matches.isNotEmpty() || s.searchable, resize = false) {
+            Box(Modifier.height(40.dp).floating().clickable(enabled = s.asList) { onList(false) }.padding(horizontal = 16.dp)
+                .then(com.fariin.app.ui.components.SmoothSizeModifier),
                 contentAlignment = Alignment.Center) {
-                Text(ChatSearch.countText(s.matches.size, s.index, s.asList), fontSize = 15.sp, color = c.secondary)
+                val words = ChatSearch.countText(s.matches.size, s.index, s.asList)
+                Text(words, fontSize = 15.sp, color = c.secondary, modifier = Modifier.fadeOnChange(words))
             }
         }
         Spacer(Modifier.weight(1f))
-        if (s.matches.isNotEmpty()) {
+        com.fariin.app.ui.components.Appear(s.matches.isNotEmpty(), resize = false) { Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.height(40.dp).floating().clickable { onList(!s.asList) }.padding(horizontal = 16.dp),
                 contentAlignment = Alignment.Center) {
                 Text(if (s.asList) "Show as Chat" else "Show as List", fontSize = 15.sp, color = c.label)
@@ -194,7 +198,7 @@ internal fun SearchNavBar(s: InChatSearchState, onStep: (Int) -> Unit, onList: (
                 Spacer(Modifier.width(8.dp))
                 StepButton(ImageVector.cachedVector(R.drawable.ic_sf_chevron_down), "Next result", s.index < s.matches.size - 1) { onStep(1) }
             }
-        }
+        } }
     }
 }
 

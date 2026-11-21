@@ -1,5 +1,7 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.fadeOnChange
+import com.fariin.app.ui.components.enterFade
 import com.fariin.app.ui.components.smoothSize
 import com.fariin.app.ui.components.GlassDropdown
 import com.fariin.app.ui.components.GlassAlert
@@ -137,6 +139,20 @@ internal fun PinnedBar(
     ids: List<String>, index: Int, ui: ThreadUi, msgFor: (String) -> Message?,
     onJump: (String) -> Unit, onUnpin: (String) -> Unit, onSeeAll: () -> Unit = {},
 ) {
+    // The bar fades and opens when the first pin comes and closes when the last goes (iOS pops 20),
+    // still showing the last pin while it leaves.
+    val held = remember { arrayOf(ids) }
+    if (ids.isNotEmpty()) held[0] = ids
+    com.fariin.app.ui.components.Appear(ids.isNotEmpty()) {
+        PinnedBarBody(held[0], index, ui, msgFor, onJump, onUnpin, onSeeAll)
+    }
+}
+
+@Composable
+private fun PinnedBarBody(
+    ids: List<String>, index: Int, ui: ThreadUi, msgFor: (String) -> Message?,
+    onJump: (String) -> Unit, onUnpin: (String) -> Unit, onSeeAll: () -> Unit,
+) {
     if (ids.isEmpty()) return
     val c = Fariin.colors
     val idx = index.coerceIn(0, ids.size - 1)
@@ -154,9 +170,11 @@ internal fun PinnedBar(
         Row(Modifier.fillMaxWidth().height(48.dp).floating(CircleShape).padding(start = 6.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically) {
             val thumb = msg?.let { rememberPlaceholder(it.thumb, it.blurhash) }
+            // A picture that comes after the bar (an older pin read late) fades in (iOS pops 45).
+            val thumbLate = remember(pid) { thumb == null }
             if (thumb != null) {
                 androidx.compose.foundation.Image(thumb, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                    modifier = Modifier.size(36.dp).clip(RoundedCornerShape(9.dp)))
+                    modifier = Modifier.size(36.dp).clip(RoundedCornerShape(9.dp)).fadeOnChange(pid).enterFade(thumbLate))
                 Spacer(Modifier.width(10.dp))
             } else Spacer(Modifier.width(14.dp))
             if (ids.size > 1) {
@@ -168,7 +186,8 @@ internal fun PinnedBar(
                 }
                 Spacer(Modifier.width(10.dp))
             }
-            Column(Modifier.weight(1f).fillMaxHeight().clickable { onJump(pid) }, verticalArrangement = Arrangement.Center) {
+            // Another pin coming to the front (a new pin, one of several unpinned): its words fade in (iOS pops 41).
+            Column(Modifier.weight(1f).fillMaxHeight().clickable { onJump(pid) }.fadeOnChange(pid), verticalArrangement = Arrangement.Center) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(author, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))

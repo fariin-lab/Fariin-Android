@@ -1764,7 +1764,12 @@ private val LocalHeaderWordsDark = androidx.compose.runtime.staticCompositionLoc
 @Composable
 private fun SafetyChangedPill(peer: String, name: String, onOpen: () -> Unit) {
     val pending by com.fariin.app.crypto.SafetyKeyLog.pending.collectAsState()
-    if (peer.isEmpty() || peer !in pending) return
+    // Tapped (seen): it closes with a fade and its height (iOS pops 46).
+    com.fariin.app.ui.components.Appear(peer.isNotEmpty() && peer in pending) { SafetyChangedPillBody(peer, name, onOpen) }
+}
+
+@Composable
+private fun SafetyChangedPillBody(peer: String, name: String, onOpen: () -> Unit) {
     val c = Fariin.colors
     Box(Modifier.fillMaxWidth().padding(top = 6.dp), contentAlignment = Alignment.Center) {
         Row(Modifier.clip(RoundedCornerShape(50)).background(c.card)

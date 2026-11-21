@@ -197,3 +197,6 @@ fun smoothFloat(target: Float): androidx.compose.runtime.State<Float> {
     }
     return anim.asState()
 }
+
+/** [smoothSize] as a value, for chains built outside a @Composable receiver. */
+val SmoothSizeModifier: Modifier get() = Modifier.smoothSize()

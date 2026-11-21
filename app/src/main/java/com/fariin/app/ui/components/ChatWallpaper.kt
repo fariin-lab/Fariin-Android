@@ -1,5 +1,6 @@
 package com.fariin.app.ui.components
 
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import android.content.Context
@@ -82,9 +83,35 @@ fun Modifier.chatWallpaper(cid: String): Modifier = composed {
     // This one runs the chat's clock; the header and list slices only read it, so they move together.
     val motion = rememberWallpaperMotion(w, preview = false, clock = ChatWallpaperClock.phase, drive = true)
     val dim = ChatLookStore.wallpaperDim(ctx)
+    // A wallpaper that changes while the chat is open (the other person or an admin set one, its
+    // photo finished downloading) cross-fades over the old one (iOS pops 44); never on the first draw.
+    val now = w to photo
+    val shown = androidx.compose.runtime.remember(cid) { arrayOf(now) }
+    val before = androidx.compose.runtime.remember(cid) { arrayOfNulls<Pair<ChatWallpaper, androidx.compose.ui.graphics.ImageBitmap?>>(1) }
+    val fade = androidx.compose.runtime.remember(cid) { androidx.compose.animation.core.Animatable(1f) }
+    val fadeScope = androidx.compose.runtime.rememberCoroutineScope()
+    SideEffect {
+        if (shown[0] != now) {
+            before[0] = shown[0]; shown[0] = now
+            if (Smooth.on) fadeScope.launch { fade.snapTo(0f); fade.animateTo(1f, androidx.compose.animation.core.tween(400, easing = Motion.Decelerate)) }
+        }
+    }
+    val prevPattern = before[0]?.first?.takeIf { drawsPattern(it) }?.let { WallpaperArt.pattern(ctx) }
     motion.isolate { Modifier.drawBehind {
-        drawWallpaper(w, c.dark, c.bg, pattern, photo, topAnchored = true, motion = motion)
-        if (w != ChatWallpaper.None) drawWallpaperDim(dim.floatValue)
+        val f = fade.value
+        val old = before[0]
+        if (f < 1f && old != null) {
+            drawWallpaper(old.first, c.dark, c.bg, prevPattern, old.second, topAnchored = true, motion = motion)
+            if (old.first != ChatWallpaper.None) drawWallpaperDim(dim.floatValue)
+            drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(androidx.compose.ui.geometry.Offset.Zero, size),
+                androidx.compose.ui.graphics.Paint().apply { alpha = f })
+            drawWallpaper(w, c.dark, c.bg, pattern, photo, topAnchored = true, motion = motion)
+            if (w != ChatWallpaper.None) drawWallpaperDim(dim.floatValue)
+            drawContext.canvas.restore()
+        } else {
+            drawWallpaper(w, c.dark, c.bg, pattern, photo, topAnchored = true, motion = motion)
+            if (w != ChatWallpaper.None) drawWallpaperDim(dim.floatValue)
+        }
     } }
 }
 
