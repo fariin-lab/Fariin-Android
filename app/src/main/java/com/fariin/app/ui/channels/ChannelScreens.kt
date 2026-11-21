@@ -1,5 +1,6 @@
 package com.fariin.app.ui.channels
 
+import com.fariin.app.ui.components.fadeOnChange
 import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.offset
@@ -160,6 +161,8 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                 val local = if (q.isEmpty()) rows else rows.filter { it.title.contains(q, ignoreCase = true) || it.handle.contains(q, ignoreCase = true) }
                 val shown = local + serverHits.filter { h -> local.none { it.cid == h.cid } }
                     .map { DiscoveredChannel(it.cid, it.handle, it.title, it.photoUrl, "", it.memberCount, verified = it.verified) }
+                // Skeleton, notes and the list fade into each other (iOS pops 91).
+                Box(Modifier.fillMaxSize().fadeOnChange(Triple(loading && rows.isEmpty(), rows.isEmpty(), shown.isEmpty()))) {
                 when {
                     loading && rows.isEmpty() -> if (skeleton) ExploreSkeleton(squircle = true)
                     failed && rows.isEmpty() -> Note("Couldn't load channels. Check your connection and try again.")
@@ -167,6 +170,8 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                     shown.isEmpty() -> Note("No channels match “${query.trim()}”.")
                     else -> LazyColumn(Modifier.fillMaxSize().navigationBarsPadding()) {
                         items(shown, key = { it.cid }, contentType = { "channel" }) { r ->
+                            // Rows a refresh brings fade in; the others glide to their places (iOS pops 91).
+                            Box(Modifier.animateItem(fadeInSpec = com.fariin.app.ui.components.Smooth.fadeSpec(), placementSpec = com.fariin.app.ui.components.Smooth.soft(), fadeOutSpec = com.fariin.app.ui.components.Smooth.fadeSpec())) {
                             @Suppress("UNUSED_VARIABLE") val b = bias.size
                             // Followed, just followed, or one I run (owner/admin: in its `users`, no follow entry).
                             val mine = r.cid !in leaving && (entries.containsKey(r.cid) || justFollowed.contains(r.cid) ||
@@ -194,12 +199,14 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                                 }
                             }
                         }
-                    }
+                    }}
+                }
                 }
             } else {
                 val local = if (q.isEmpty()) groupRows else groupRows.filter { it.title.contains(q, ignoreCase = true) || it.handle.contains(q, ignoreCase = true) }
                 val shown = local + serverHits.filter { h -> local.none { it.cid == h.cid } }
                     .map { com.fariin.app.channel.DiscoveredGroup(it.cid, it.handle, it.title, it.photoUrl, it.memberCount, it.verified, "") }
+                Box(Modifier.fillMaxSize().fadeOnChange(Pair(groupsLoading && groupRows.isEmpty(), groupRows.isEmpty()))) {
                 when {
                     groupsLoading && groupRows.isEmpty() -> if (skeleton) ExploreSkeleton(squircle = false)
                     groupsFailed && groupRows.isEmpty() -> Note("Couldn't load groups. Check your connection and try again.")
@@ -207,6 +214,8 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                     shown.isEmpty() -> Note("No groups match “${query.trim()}”.")
                     else -> LazyColumn(Modifier.fillMaxSize().navigationBarsPadding()) {
                         items(shown, key = { it.cid }, contentType = { "channel" }) { r ->
+                            // Rows a refresh brings fade in; the others glide to their places (iOS pops 91).
+                            Box(Modifier.animateItem(fadeInSpec = com.fariin.app.ui.components.Smooth.fadeSpec(), placementSpec = com.fariin.app.ui.components.Smooth.soft(), fadeOutSpec = com.fariin.app.ui.components.Smooth.fadeSpec())) {
                             val mine = r.cid !in leaving && (justJoined.contains(r.cid) ||
                                 com.fariin.app.data.CryptoHub.listedConversation(r.cid)?.users?.contains(me) == true)
                             // On screen and not mine: fetch its visitor page now, so a tap opens filled.
@@ -232,7 +241,8 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                                 }
                             }
                         }
-                    }
+                    }}
+                }
                 }
             }
         }

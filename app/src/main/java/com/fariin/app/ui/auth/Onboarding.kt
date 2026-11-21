@@ -223,7 +223,8 @@ fun OnboardingPage(
                 }
             }
         }
-        error?.let { Spacer(Modifier.height(14.dp)); ErrorLine(it) }
+        // A failed save's line folds in (iOS pops 96).
+        com.fariin.app.ui.components.AppearText(error) { Column { Spacer(Modifier.height(14.dp)); ErrorLine(it) } }
         Spacer(Modifier.height(28.dp))
         ActionPill("Continue", enabled = HandleRules.canContinue(name, state, saving), busy = saving) { save() }
         Spacer(Modifier.height(14.dp))

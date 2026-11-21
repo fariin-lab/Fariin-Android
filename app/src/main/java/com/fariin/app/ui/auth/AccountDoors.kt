@@ -207,7 +207,8 @@ fun RestoreAccountPage(handle: String, dueMs: Long, onRestored: () -> Unit) {
                 else Text("Cancel Deletion", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.onAccent)
             }
             Text(RestoreRules.deadline(days), fontSize = 13.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 14.dp))
-            error?.let { Text(it, fontSize = 13.sp, color = c.red, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 14.dp)) }
+            // A sign-in error folds in with a fade; the doors under it move on the spring (iOS pops 87).
+            com.fariin.app.ui.components.AppearText(error) { Text(it, fontSize = 13.sp, color = c.red, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 14.dp)) }
             TextButton(onClick = { confirmDelete = true }, enabled = !working, modifier = Modifier.padding(top = 20.dp)) {
                 Text("Delete it now", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.red)
             }

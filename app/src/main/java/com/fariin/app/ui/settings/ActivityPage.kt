@@ -1,5 +1,6 @@
 package com.fariin.app.ui.settings
 
+import com.fariin.app.ui.components.fadeOnChange
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -107,8 +108,13 @@ fun ActivityScreen(onBack: () -> Unit, onOpen: (ActivityItem) -> Unit) {
         Column(Modifier.fillMaxSize().background(c.bgSecondary).verticalScroll(scroll).padding(top = top)) {
             Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for ((label, on) in listOf("All" to !unreadOnly, "Unread" to unreadOnly)) {
-                    Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (on) c.bg else c.label,
-                        modifier = Modifier.clip(CircleShape).background(if (on) c.label else c.label.copy(alpha = 0.08f))
+                    // The filled chip moves over with a fade, not a jump (iOS pops 92).
+                    val chipFill by androidx.compose.animation.animateColorAsState(if (on) c.label else c.label.copy(alpha = 0.08f),
+                        com.fariin.app.ui.components.Smooth.fadeSpec(), label = "chip")
+                    val chipInk by androidx.compose.animation.animateColorAsState(if (on) c.bg else c.label,
+                        com.fariin.app.ui.components.Smooth.fadeSpec(), label = "chipInk")
+                    Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = chipInk,
+                        modifier = Modifier.clip(CircleShape).background(chipFill)
                             .clickable { unreadOnly = label == "Unread" }.padding(horizontal = 14.dp, vertical = 6.dp))
                 }
             }
@@ -117,6 +123,8 @@ fun ActivityScreen(onBack: () -> Unit, onOpen: (ActivityItem) -> Unit) {
             val blocked by com.fariin.app.data.BlockList.state.collectAsState()
             val shown = list?.let { l -> if (unreadOnly) l.filter { it.id in unreadAtOpen.orEmpty() } else l }
                 ?.filter { it.fromUid.isEmpty() || !blocked.contains(it.fromUid) }
+            // The first answer, and All <-> Unread, fade the rows or the empty words in (iOS pops 92, 93).
+            Column(Modifier.fadeOnChange(Triple(shown == null, unreadOnly, shown?.isEmpty()))) {
             when {
                 shown == null -> com.fariin.app.ui.components.LoadingLine("Loading…", Modifier.padding(16.dp), fontSize = 17.sp)
                 shown.isEmpty() -> Text(if (unreadOnly) "Nothing unread." else "When people reply to or react to your comments, you'll see it here.",
@@ -137,6 +145,7 @@ fun ActivityScreen(onBack: () -> Unit, onOpen: (ActivityItem) -> Unit) {
                         else -> onOpen(item)
                     }
                 } }
+            }
             }
             Spacer(Modifier.size(com.fariin.app.ui.shell.bottomBarInset()))
         }

@@ -200,3 +200,14 @@ fun smoothFloat(target: Float): androidx.compose.runtime.State<Float> {
 
 /** [smoothSize] as a value, for chains built outside a @Composable receiver. */
 val SmoothSizeModifier: Modifier get() = Modifier.smoothSize()
+
+/**
+ * A line that is there only while [text] is (an error, a note): it folds in and out with a fade, the
+ * rows under it moving on the spring, and keeps its last words while it leaves.
+ */
+@Composable
+fun AppearText(text: String?, modifier: Modifier = Modifier, content: @Composable (String) -> Unit) {
+    val held = androidx.compose.runtime.remember { arrayOf(text) }
+    if (text != null) held[0] = text
+    Appear(text != null, modifier) { held[0]?.let { content(it) } }
+}

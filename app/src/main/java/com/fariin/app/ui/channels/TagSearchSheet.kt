@@ -105,7 +105,10 @@ fun TagSearchSheet(tag: String, startFollowing: Boolean, onClose: () -> Unit, on
                 }
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(tag, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1)
-                    if (phase == "on") Text(if (count == 1) "1 post" else "$count posts", fontSize = 13.sp, color = c.secondary)
+                    // The count folds in under the tag, the title easing up, not jumping (iOS pops 95).
+                    com.fariin.app.ui.components.AppearText(if (phase == "on") (if (count == 1) "1 post" else "$count posts") else null) {
+                        Text(it, fontSize = 13.sp, color = c.secondary)
+                    }
                 }
             }
             Spacer(Modifier.height(12.dp))

@@ -362,7 +362,8 @@ internal fun MethodPage(
                     RaisedPill("Continue with Email", enabled = !busy, lastUsed = lastDoor == SignInMethod.Email) { onEmail(mode, "") }
                 }
             }
-            error?.let { Spacer(Modifier.height(12.dp)); ErrorLine(it) }
+            // A wrong code's or a failed sign-in's line folds in (iOS pops 96).
+            com.fariin.app.ui.components.AppearText(error) { Column { Spacer(Modifier.height(12.dp)); ErrorLine(it) } }
             Spacer(Modifier.weight(1f).height(24.dp))
             val toCreate = accountsFace || mode == AuthMode.Login
             SecondaryPill(if (toCreate) "Create account" else "Log in", height = 54, strong = true, enabled = !busy) {
@@ -552,8 +553,9 @@ internal fun EmailPage(
                 AuthField(email, { email = it; emailInvalid = false }, "Email", ImageVector.cachedVector(R.drawable.ic_sf_envelope),
                     keyboard = EmailKeyboard, invalid = emailInvalid, focusRequester = emailFocus, onFocus = { emailFocused = it },
                     actions = KeyboardActions(onNext = { if (mode == AuthMode.Create) advance() else try { passwordFocus.requestFocus() } catch (_: Exception) {} }))
-                if (emailInvalid) Text("Enter a correct email address, like name@example.com", fontSize = 13.sp, color = c.red,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp))
+                com.fariin.app.ui.components.AppearText(if (emailInvalid) "Enter a correct email address, like name@example.com" else null) {
+                    Text(it, fontSize = 13.sp, color = c.red, modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp))
+                }
             }
             if (!onEmailStep) {
                 AuthField(password, { password = it }, "Password", ImageVector.cachedVector(R.drawable.ic_sf_lock), secret = true, reveal = reveal, onReveal = { reveal = !reveal },

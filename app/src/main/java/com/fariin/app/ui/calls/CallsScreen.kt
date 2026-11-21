@@ -340,7 +340,7 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
             }) }
             when {
                 // iOS CallListSkeleton while the history is read.
-                !loaded -> item(key = "skeleton") { com.fariin.app.ui.components.CallListSkeleton() }
+                !loaded -> item(key = "skeleton") { Box(Modifier.animateItem(fadeInSpec = com.fariin.app.ui.components.Smooth.fadeSpec(), placementSpec = com.fariin.app.ui.components.Smooth.soft(), fadeOutSpec = com.fariin.app.ui.components.Smooth.fadeSpec())) { com.fariin.app.ui.components.CallListSkeleton() }}
                 // A failed read is never drawn as an empty history.
                 calls.isEmpty() && allLinks.isEmpty() && live.isEmpty() && liveEntry == null && error != null -> item(key = "error") {
                     com.fariin.app.ui.components.CenteredNotice("Couldn't load calls", error, "Retry", onRetry,
@@ -349,9 +349,9 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
                 else -> {
                     // owner 2026-10-23 (iOS): Create a Call Link always first, then the live group calls.
                     // The admin panel's Call Links switch (iOS CallFeatures.callLinks).
-                    if (!selecting && com.fariin.app.data.AppFeatures.callLinks) item(key = "create-link", contentType = "create") { CreateLinkRow { nav.newCallLink() } }
-                    if (!selecting) items(live, key = { "live:" + it.cid }) { l -> com.fariin.app.ui.call.LiveGroupCallRow(l, groups.firstOrNull { it.id == l.cid }) }
-                    items(rows, key = { r -> if (r is com.fariin.app.call.SavedCallLink) "link:" + r.roomId else (r as CallRun).id }) { r ->
+                    if (!selecting && com.fariin.app.data.AppFeatures.callLinks) item(key = "create-link", contentType = "create") { Box(Modifier.animateItem(fadeInSpec = com.fariin.app.ui.components.Smooth.fadeSpec(), placementSpec = com.fariin.app.ui.components.Smooth.soft(), fadeOutSpec = com.fariin.app.ui.components.Smooth.fadeSpec())) { CreateLinkRow { nav.newCallLink() } }}
+                    if (!selecting) items(live, key = { "live:" + it.cid }) { l -> Box(Modifier.animateItem(fadeInSpec = com.fariin.app.ui.components.Smooth.fadeSpec(), placementSpec = com.fariin.app.ui.components.Smooth.soft(), fadeOutSpec = com.fariin.app.ui.components.Smooth.fadeSpec())) { com.fariin.app.ui.call.LiveGroupCallRow(l, groups.firstOrNull { it.id == l.cid }) }}
+                    items(rows, key = { r -> if (r is com.fariin.app.call.SavedCallLink) "link:" + r.roomId else (r as CallRun).id }) { r -> Box(Modifier.animateItem(fadeInSpec = com.fariin.app.ui.components.Smooth.fadeSpec(), placementSpec = com.fariin.app.ui.components.Smooth.soft(), fadeOutSpec = com.fariin.app.ui.components.Smooth.fadeSpec())) {
                         if (r is com.fariin.app.call.SavedCallLink) {
                             val tag = "link:" + r.roomId
                             var menu by remember { mutableStateOf(false) }
@@ -405,7 +405,7 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
                                     onDelete = { deleteRun() })
                             }
                         }
-                    }
+                    }}
                     // The empty states sit under the create row, so it is there before the first call.
                     when {
                         rows.isNotEmpty() || live.isNotEmpty() -> {}

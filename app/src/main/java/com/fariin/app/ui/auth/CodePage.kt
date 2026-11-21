@@ -1,5 +1,6 @@
 package com.fariin.app.ui.auth
 
+import com.fariin.app.ui.components.fadeOnChange
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.fariin.app.ui.components.cachedVector
 import com.fariin.app.R
@@ -155,7 +156,8 @@ fun CodePage(
 
     Column(Modifier.fillMaxSize().background(c.bg).imePadding()) {
         if (onBack != null && step != CodeStep.NewPassword) BackRow(onBack) else Spacer(Modifier.height(52.dp))
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
+        // Email -> code -> new password: the form, title and words fade into the next step (iOS pops 88).
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).fadeOnChange(step),
             verticalArrangement = Arrangement.spacedBy(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             PageTitle(
                 when (step) { CodeStep.Email -> CodePurpose.EMAIL_STEP_TITLE; CodeStep.NewPassword -> CodePurpose.NEW_PASSWORD_TITLE; CodeStep.Code -> purpose.title },

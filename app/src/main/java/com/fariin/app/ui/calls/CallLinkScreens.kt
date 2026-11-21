@@ -1,5 +1,6 @@
 package com.fariin.app.ui.calls
 
+import com.fariin.app.ui.components.fadeOnChange
 import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.fariin.app.ui.components.cachedVector
@@ -196,7 +197,9 @@ private fun LinkBody(s: LinkState, onUsed: () -> Unit, onDeleted: (() -> Unit)?,
     var error by remember { mutableStateOf<String?>(null) }
     val title = s.name.ifEmpty { CallLinkDefaults.NAME }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 24.dp)) {
+    // The server's real values (video or voice, Admin Approval) fade in once, not flip (iOS pops 94).
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 24.dp)
+        .fadeOnChange(s.video == null)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             CallLinkAvatar(80.dp, s.roomId)
             Spacer(Modifier.height(12.dp))
