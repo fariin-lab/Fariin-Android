@@ -154,6 +154,20 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         else if (s.canLoadOlder) HistoryStart.mark(app, me, cid, false)
     }
     val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
+    // Clear Messages with Undo (iOS 2026-11-21): everything up to the cut is hidden while the Undo
+    // waits and after the clear; Undo shows it again at once from what this chat holds.
+    val clearCuts by com.fariin.app.data.ClearCuts.cuts.collectAsState()
+    val clearCut = clearCuts[cid]
+    val shownMessages = remember(s.messages, clearCut) {
+        if (clearCut == null) s.messages else s.messages.filterNot { com.fariin.app.data.ClearCuts.hides(clearCut, it) }
+    }
+    LaunchedEffect(s.messages) {
+        var newest = 0.0
+        for (m in s.messages) if (m.sendState == null && m.createdAtMillis > newest) newest = m.createdAtMillis
+        com.fariin.app.data.ClearCuts.noteNewest(cid, newest)
+    }
+    // Leaving the chat runs its waiting clear now (iOS commitClear); the cut stays, so nothing old redraws.
+    androidx.compose.runtime.DisposableEffect(cid) { onDispose { com.fariin.app.data.LeaveUndo.commitClear(cid) } }
     val ui = ThreadUi(
         otherPlusBubble = s.otherPlusBubble, myPlusBubble = s.myPlusBubble,
         title = channel?.info?.title?.ifEmpty { null } ?: guest?.preview?.title ?: conv?.displayName(me) ?: "",
@@ -163,7 +177,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         photoUrl = channel?.info?.avatarUrl ?: guest?.preview?.photoUrl ?: conv?.displayPhoto(me),
         isGroup = conv?.isGroup == true || guest != null,
         me = me,
-        messages = s.messages,
+        messages = shownMessages,
         receipts = receipts,
         names = if (guest != null) guestNames.toMap() else conv?.names ?: emptyMap(),
         roles = if (conv?.isGroup == true && channel == null) com.fariin.app.data.GroupRole.all(s.conv) else emptyMap(),

@@ -96,6 +96,9 @@ object LeaveUndo {
     private var title: String = ""
     private var failText: String? = null
     private var timer: Job? = null
+    /** Clear Messages: the chat stays in my lists; Undo or a failure runs [restore] instead. */
+    private var keepsChat = false
+    private var restore: (() -> Unit)? = null
     /** A leave that failed when it ran, shown so it is never silent. */
     var onFailure: (String) -> Unit = {}
 
@@ -105,10 +108,31 @@ object LeaveUndo {
         pending = cid to leave
         title = groupTitle
         failText = failed
+        keepsChat = false
+        restore = null
         _hidden.value = _hidden.value + cid
         timer?.cancel()
         timer = scope.launch { delay(WINDOW_MS); commit() }
     }
+
+    /**
+     * Clear Messages with Undo (iOS LeaveGroupUndo kind .clearAll, 2026-11-21): the chat stays where it
+     * is (its messages are hidden by [ClearCuts]), [clear] runs after the window, and Undo or a
+     * refusal runs [restore] so the messages come back.
+     */
+    fun startClear(cid: String, groupTitle: String, failed: String, restore: () -> Unit, clear: suspend () -> Unit) {
+        if (pending != null) commit()
+        pending = cid to clear
+        title = groupTitle
+        failText = failed
+        keepsChat = true
+        this.restore = restore
+        timer?.cancel()
+        timer = scope.launch { delay(WINDOW_MS); commit() }
+    }
+
+    /** Leaving the chat runs its waiting Clear Messages now (iOS commitClear), as leaving the app does. */
+    fun commitClear(cid: String) { if (keepsChat && pending?.first == cid) commit() }
 
     /**
      * Off my lists at once while [work] runs behind (a channel's Leave, iOS 2026-11-08: no
@@ -129,7 +153,9 @@ object LeaveUndo {
     fun undo() {
         timer?.cancel(); timer = null
         pending?.let { _hidden.value = _hidden.value - it.first }
+        if (pending != null) restore?.invoke()
         pending = null
+        restore = null
     }
 
     /** Run the waiting leave now. The group stays hidden through it; a failure gives it back. */
@@ -140,14 +166,18 @@ object LeaveUndo {
         val t = title
         val f = failText
         failText = null
+        val keep = keepsChat
+        val back = restore
+        keepsChat = false
+        restore = null
         scope.launch {
             try {
                 p.second()
                 // The list drops it when the server's copy arrives; hidden a moment longer (iOS).
-                delay(3_000)
-                _hidden.value = _hidden.value - p.first
+                if (!keep) { delay(3_000); _hidden.value = _hidden.value - p.first }
             } catch (_: Exception) {
                 _hidden.value = _hidden.value - p.first
+                back?.invoke()   // a refused clear: the messages come back
                 onFailure(f ?: leaveFailed(t))
             }
         }
