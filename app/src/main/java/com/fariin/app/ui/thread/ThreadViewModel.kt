@@ -265,7 +265,8 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         },
         onForwardTo = { m, targets ->
             vm.viewModelScope.launch {
-                val failed = com.fariin.app.media.Forwarder.forward(app, me, crypto, m, cid, targets)
+                val failed = try { com.fariin.app.media.Forwarder.forward(app, me, crypto, m, cid, targets) }
+                    catch (gone: com.fariin.app.media.Forwarder.Gone) { notice = gone.message; return@launch }
                 notice = when {
                     failed.isEmpty() -> if (targets.size > 1) "Forwarded to ${targets.size} chats" else "Forwarded"
                     failed.size == targets.size -> "Couldn't forward. Try again."
@@ -377,7 +378,8 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
                 var failedChats = 0
                 for (m in ordered) {
                     val pinned = if (land != null) ids[m.rowId]?.let { mapOf(land to it) }.orEmpty() else emptyMap()
-                    failedChats += com.fariin.app.media.Forwarder.forward(app, me, crypto, m, cid, targets, pinned).size
+                    failedChats += try { com.fariin.app.media.Forwarder.forward(app, me, crypto, m, cid, targets, pinned).size }
+                        catch (_: com.fariin.app.media.Forwarder.Gone) { targets.distinct().take(com.fariin.app.media.MediaRules.FORWARD_CHATS_AT_ONCE).size }
                 }
                 if (note.isNotBlank()) for (t in targets.distinct().take(com.fariin.app.media.MediaRules.FORWARD_CHATS_AT_ONCE)) {
                     com.fariin.app.data.ThreadRepository(t, me, crypto, work).sendText(note)
@@ -397,8 +399,8 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
             vm.viewModelScope.launch {
                 var failedChats = 0
                 for (m in msgs) {
-                    val f = com.fariin.app.media.Forwarder.forward(app, me, crypto, m, cid, targets)
-                    failedChats += f.size
+                    failedChats += try { com.fariin.app.media.Forwarder.forward(app, me, crypto, m, cid, targets).size }
+                        catch (_: com.fariin.app.media.Forwarder.Gone) { targets.distinct().take(com.fariin.app.media.MediaRules.FORWARD_CHATS_AT_ONCE).size }
                 }
                 notice = when {
                     failedChats == 0 -> if (targets.size > 1) "Forwarded to ${targets.size} chats" else "Forwarded"

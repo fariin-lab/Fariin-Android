@@ -24,10 +24,54 @@ import java.util.UUID
  * cannot go that way (function not live, R2 links, plain/sealed mixed, a key that will not open)
  * falls back to the old path above, unchanged.
  *
- * TODO (iOS has it): the live re-read of the source (an edit or delete in the last moments).
+ * The source is read again from the server first (iOS liveForwardText, 3 s at most): one its author
+ * deleted is not forwarded ([Gone]), and an edited one goes with its new words.
  */
 object Forwarder {
     class SourceUnavailable : Exception("The original could not be opened.")
+    /** The author deleted the message (Delete for Everyone) before it went: nothing is sent. */
+    class Gone : Exception("This message was deleted.")
+
+    private sealed class Live {
+        object Deleted : Live()
+        object AsHeld : Live()
+        /** Edited: its new words with their own bold and links. */
+        data class Edited(val fresh: Message) : Live()
+    }
+    /** One read per message for 30 s, however many chats it goes to (iOS forwardChecks). */
+    private val liveChecks = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, Live>>()
+
+    /**
+     * The words to forward now, not when the sheet opened: [Live.Deleted] when the author deleted it,
+     * their edited text when edited. No answer in 3 s (offline) = the copy in hand, as before.
+     */
+    private suspend fun liveText(m: Message, cid: String, crypto: FariinCrypto): Live {
+        if (cid == com.fariin.app.data.OfficialChannel.CID || m.id.isEmpty()) return Live.AsHeld
+        val key = "$cid/${m.id}"
+        liveChecks[key]?.takeIf { System.currentTimeMillis() - it.first < 30_000 }?.let { return it.second }
+        val read = kotlinx.coroutines.withTimeoutOrNull(3_000) {
+            runCatching {
+                com.fariin.app.Fb.db.collection("conversations").document(cid).collection("messages").document(m.id)
+                    .get(com.google.firebase.firestore.Source.SERVER).await()
+            }.getOrNull()
+        } ?: return Live.AsHeld
+        val live = when {
+            !read.exists() || read.getBoolean("deleted") == true -> Live.Deleted
+            read.getBoolean("edited") == true -> {
+                val fresh = runCatching {
+                    Message.fromFirestore(m.id, read.data ?: emptyMap(), cid) { raw, author -> crypto.decrypt(raw, cid, author) }
+                }.getOrNull()
+                // A seal that does not open (not warm, locked) keeps the words in hand.
+                val t = fresh?.text
+                if (fresh == null || t == com.fariin.app.crypto.Wire.NOT_READY || t == com.fariin.app.crypto.Wire.LOCKED) Live.AsHeld
+                else Live.Edited(fresh)
+            }
+            else -> Live.AsHeld
+        }
+        if (liveChecks.size > 200) liveChecks.clear()
+        liveChecks[key] = System.currentTimeMillis() to live
+        return live
+    }
 
     /** Forwards [m] from [sourceCid] to each of [targets]; returns the targets that failed. */
     suspend fun forward(
@@ -35,6 +79,14 @@ object Forwarder {
         /** Per target, the clientId its bubble already shows under (ForwardEchoes); else a new one. */
         clientIds: Map<String, String> = emptyMap(),
     ): List<String> = withContext(Dispatchers.IO) {
+        val m = when (val live = liveText(m, sourceCid, crypto)) {
+            Live.Deleted -> {
+                for (t in targets) clientIds[t]?.let { com.fariin.app.data.ForwardEchoes.remove(t, it) }
+                throw Gone()
+            }
+            Live.AsHeld -> m
+            is Live.Edited -> if (live.fresh.text == m.text) m else m.copy(text = live.fresh.text, bold = live.fresh.bold, links = live.fresh.links)
+        }
         val src = ChatMedia(context, sourceCid, crypto)
         // Opened once, and only if some target needs the old forward: photos, videos, voice, files and
         // albums first try the instant way (MediaSender.instant: a server copy and a re-wrapped key).
