@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item><color android:color="#484F7C" /></item>
+    <item android:drawable="@drawable/app_icon_plus_night_sky" android:top="18dp" android:bottom="18dp" android:left="18dp" android:right="18dp" />
+</layer-list>

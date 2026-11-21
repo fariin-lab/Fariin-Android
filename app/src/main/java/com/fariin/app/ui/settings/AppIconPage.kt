@@ -54,8 +54,30 @@ internal const val PAGE_APP_ICON = "look:appicon"
 internal object AppIcons {
     data class Choice(val alias: String, val label: String, val art: Int)
 
+    /** The free icons the picker offers (iOS 2026-11-20 set): Black (the default) and five more. */
     val all = listOf(
         Choice(".IconDefault", "Black", R.drawable.app_icon_black),
+        Choice(".IconClassic", "Classic", R.drawable.app_icon_classic),
+        Choice(".IconMidnight", "Midnight", R.drawable.app_icon_midnight),
+        Choice(".IconSnow", "Snow", R.drawable.app_icon_snow),
+        Choice(".IconMint", "Mint", R.drawable.app_icon_mint),
+        Choice(".IconTangerine", "Tangerine", R.drawable.app_icon_tangerine),
+    )
+
+    /** Fariin Plus icons the picker offers (feature appIcons), each with the Plus star. */
+    val plus = listOf(
+        Choice(".IconPlusOcean", "Ocean", R.drawable.app_icon_plus_ocean),
+        Choice(".IconPlusGraphiteLine", "Graphite Line", R.drawable.app_icon_plus_graphite_line),
+        Choice(".IconPlusGrape", "Grape", R.drawable.app_icon_plus_grape),
+        Choice(".IconPlusAurora", "Aurora", R.drawable.app_icon_plus_aurora),
+        Choice(".IconPlusNightSky", "Night Sky", R.drawable.app_icon_plus_night_sky),
+        Choice(".IconPlusObsidian", "Obsidian Blue", R.drawable.app_icon_plus_obsidian),
+        Choice(".IconPlusPrism", "Prism Blue", R.drawable.app_icon_plus_prism),
+    )
+
+    /** No longer offered (iOS 2026-11-20), never deleted: someone already on one keeps it, shown
+     *  with nothing ringed, and a Plus one still goes back to the default when Plus ends. */
+    private val oldFree = listOf(
         Choice(".IconBlue", "Blue", R.drawable.app_icon_bubble_blue),
         Choice(".IconGraphite", "Graphite", R.drawable.app_icon_graphite),
         Choice(".IconIndigo", "Indigo", R.drawable.app_icon_indigo),
@@ -63,17 +85,15 @@ internal object AppIcons {
         Choice(".IconCrimson", "Crimson", R.drawable.app_icon_crimson),
         Choice(".IconSand", "Sand", R.drawable.app_icon_sand),
     )
-
-    /** Fariin Plus icons (feature appIcons): offered only while plusState says so. */
-    val plus = listOf(
+    private val oldPlus = listOf(
         Choice(".IconPlusBlack", "Plus Black", R.drawable.app_icon_plus_black),
         Choice(".IconPlusBlue", "Plus Blue", R.drawable.app_icon_plus_blue),
         Choice(".IconBlush", "Blush", R.drawable.app_icon_blush),
         Choice(".IconLavender", "Lavender", R.drawable.app_icon_lavender),
         Choice(".IconPeach", "Peach", R.drawable.app_icon_peach),
     )
-    private val every get() = all + plus
-    fun isPlus(alias: String) = plus.any { it.alias == alias }
+    private val every get() = all + oldFree + plus + oldPlus
+    fun isPlus(alias: String) = (plus + oldPlus).any { it.alias == alias }
 
     /**
      * On every real plusState answer: a Plus icon kept while appIcons is not "on" goes back to the
@@ -168,65 +188,43 @@ internal fun AppIconPage(pop: () -> Unit) {
     val barScroll = rememberScrollState()
     BarPage("App Icon", onBack = pop, under = underBar(barScroll)) { top ->
         Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // One card (iOS 2026-11-20): the free icons, then the Plus ones, each with the Plus star.
+            // Locked: a Plus tile opens the Plus page instead of changing the icon.
+            val plusState = com.fariin.app.data.PlusStore.state("appIcons")
+            val plusShown = plusState != com.fariin.app.data.PlusStore.State.OFF
+            val tiles = AppIcons.all.map { it to false } + (if (plusShown) AppIcons.plus.map { it to true } else emptyList())
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(c.card).padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                AppIcons.all.chunked(4).forEach { row ->
+                tiles.chunked(4).forEach { row ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                        row.forEach { ch ->
+                        row.forEach { (ch, starred) ->
                             val sel = ch.alias == current
                             // No grey press shade (owner 2026-11-10): the ring and the alert say it.
                             Column(Modifier.weight(1f).clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {
                                 if (ch.alias == current) return@clickable
+                                if (starred && plusState != com.fariin.app.data.PlusStore.State.ON) { plusPage = true; return@clickable }
                                 try { AppIcons.choose(ctx, ch.alias); current = ch.alias; changed = ch }
                                 catch (e: Exception) { error = e.message ?: "Something went wrong." }
                             }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 val shape = RoundedCornerShape(15.dp)
-                                Image(painterResource(ch.art), contentDescription = ch.label, contentScale = ContentScale.Crop,
-                                    modifier = Modifier.size(64.dp).clip(shape)
-                                        // iOS: the chosen icon ringed in the text colour, its name in the text colour.
-                                        .border(if (sel) 3.dp else 1.dp, if (sel) c.label else c.label.copy(alpha = 0.1f), shape))
-                                Text(ch.label, fontSize = 13.sp, color = if (sel) c.label else c.secondary)
+                                Box {
+                                    Image(painterResource(ch.art), contentDescription = ch.label, contentScale = ContentScale.Crop,
+                                        modifier = Modifier.size(64.dp).clip(shape)
+                                            // iOS: the chosen icon ringed in the text colour, its name in the text colour.
+                                            .border(if (sel) 3.dp else 1.dp, if (sel) c.label else c.label.copy(alpha = 0.1f), shape))
+                                    if (starred) PlusBadgeImage(16.dp, Modifier.align(Alignment.TopEnd).offset(x = 5.dp, y = (-5).dp)
+                                        .clip(androidx.compose.foundation.shape.CircleShape).background(c.card).padding(2.dp))
+                                }
+                                Text(ch.label, fontSize = 13.sp, color = if (sel) c.label else c.secondary, maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                             }
                         }
                         repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
             }
-            // Fariin Plus icons: locked opens the Plus page, on switches; Plus Black/Blue carry the star.
-            val plusState = com.fariin.app.data.PlusStore.state("appIcons")
-            if (plusState != com.fariin.app.data.PlusStore.State.OFF) {
-                Text("Fariin Plus", fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(start = 4.dp, top = 8.dp))
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(c.card).padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                    AppIcons.plus.chunked(4).forEach { row ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                            row.forEach { ch ->
-                                val sel = ch.alias == current
-                                Column(Modifier.weight(1f).clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {
-                                    if (ch.alias == current) return@clickable
-                                    if (plusState != com.fariin.app.data.PlusStore.State.ON) { plusPage = true; return@clickable }
-                                    try { AppIcons.choose(ctx, ch.alias); current = ch.alias; changed = ch }
-                                    catch (e: Exception) { error = e.message ?: "Something went wrong." }
-                                }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    val shape = RoundedCornerShape(15.dp)
-                                    Box {
-                                        Image(painterResource(ch.art), contentDescription = ch.label, contentScale = ContentScale.Crop,
-                                            modifier = Modifier.size(64.dp).clip(shape)
-                                                .border(if (sel) 3.dp else 1.dp, if (sel) c.label else c.label.copy(alpha = 0.1f), shape))
-                                        if (ch.alias == ".IconPlusBlack" || ch.alias == ".IconPlusBlue")
-                                            PlusBadgeImage(16.dp, Modifier.align(Alignment.TopEnd).offset(x = 5.dp, y = (-5).dp)
-                                                .clip(androidx.compose.foundation.shape.CircleShape).background(c.card).padding(2.dp))
-                                    }
-                                    Text(ch.label, fontSize = 13.sp, color = if (sel) c.label else c.secondary, maxLines = 1)
-                                }
-                            }
-                            repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
-                        }
-                    }
-                }
-                Text("The launcher may take a few seconds to show the new icon, and some launchers remove the shortcut from the home screen.",
-                    fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 4.dp))
-            }
+            Text("The launcher may take a few seconds to show the new icon, and some launchers remove the shortcut from the home screen.",
+                fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 4.dp))
             // iOS: "...on your Home Screen, in notifications and in the App Library." Android has no
             // App Library and keeps its own small notification icon, so the line names what changes here.
             Text("The icon changes on your Home screen and in the app list.", fontSize = 13.sp, color = c.secondary,
