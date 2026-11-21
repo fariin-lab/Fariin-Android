@@ -56,6 +56,8 @@ object AppFeatures {
     val videoStream: Boolean get() = offOnly("videoStream", true)
     /** The main screen turns with the phone (iOS OrientationLock.phoneTurns, 2026-11-16). */
     val phoneLandscape: Boolean get() = offOnly("phoneLandscape", true)
+    /** Two columns (list | open chat) where the window is wide (iOS splitView, 2026-11-16). */
+    val splitView: Boolean get() = offOnly("splitView", true)
 
     /** getAppConfig's value for this account first ([AppConfig], next-launch keys from its launch
      *  snapshot), then config/features as of this launch, then the shipped default. */

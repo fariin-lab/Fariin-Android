@@ -1,5 +1,9 @@
 package com.fariin.app
 
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -419,7 +423,8 @@ class MainActivity : ComponentActivity() {
         val openChatFn: (com.fariin.app.data.Conversation) -> Unit = remember(nav, me) { { conv ->
             // The saved rows start loading now, off the main thread, while the page is set up.
             com.fariin.app.data.ThreadRowsPrefetch.prefetch(me, conv.id)
-            nav.navigate("thread/${conv.id}") { launchSingleTop = true } } }
+            // Two columns: the chat on the right replaces the open one (no stack of chats behind it).
+            nav.navigate("thread/${conv.id}") { launchSingleTop = true; if (SplitLayout.wide) popUpTo("main") { inclusive = false } } } }
         val peopleNavObj = remember(nav, people) { com.fariin.app.ui.people.peopleNav(nav, people) }
         val channelNavObj = remember(nav) { com.fariin.app.ui.channels.channelNav(nav) }
         CompositionLocalProvider(LocalOpenChat provides openChatFn,
@@ -511,7 +516,13 @@ class MainActivity : ComponentActivity() {
             com.fariin.app.ui.components.GeoBlockGate(me) { lifecycleScope.launch { SessionEnd.signOut(applicationContext) } }
             // The saved quote cards read off the main thread now, not in the first chat's opening frame.
             androidx.compose.runtime.LaunchedEffect(me) { if (me.isNotEmpty()) com.fariin.app.data.QuoteStore.warmInBackground() }
-            Box(Modifier.fillMaxSize()
+            // TWO COLUMNS (iOS 65db3a5e5, 2026-11-16): where the window is wide (840 dp and up, never by
+            // device), the list stays on the left, always shown and live, and the pages open on the right.
+            val conf = androidx.compose.ui.platform.LocalConfiguration.current
+            val wide = conf.screenWidthDp >= 840 && com.fariin.app.data.AppFeatures.splitView
+            androidx.compose.runtime.SideEffect { SplitLayout.wide = wide }
+            val listShown = onTop || wide
+            Box((if (wide) Modifier.width(SplitLayout.LIST_WIDTH).fillMaxHeight() else Modifier.fillMaxSize())
                 // Nor while a page change plays (PageMotion.moving): a tap on the list then opened a
                 // second chat under the first one still sliding. Read at the touch, not in composition.
                 .pointerInput(Unit) {
@@ -523,16 +534,20 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 .graphicsLayer {
-                alpha = if (pm.top == null || pm.shows(pm.mainId)) 1f else 0f
-                translationX = shell.shift * size.width
-            }.then(if (onTop) Modifier else Modifier.clearAndSetSemantics { })) {
+                alpha = if (wide || pm.top == null || pm.shows(pm.mainId)) 1f else 0f
+                translationX = if (wide) 0f else shell.shift * size.width
+            }.then(if (listShown) Modifier else Modifier.clearAndSetSemantics { })) {
                 CompositionLocalProvider(LocalOnBackPressedDispatcherOwner provides shellBack) {
-                    HeldChats(chatsState, covered = !onTop) { listChats -> MainShell(me, listChats, decryptor, onSignOut = { lifecycleScope.launch { SessionEnd.signOut(applicationContext) } }, onRetryChats = vm::retry) }
+                    HeldChats(chatsState, covered = !listShown) { listChats -> MainShell(me, listChats, decryptor, onSignOut = { lifecycleScope.launch { SessionEnd.signOut(applicationContext) } }, onRetryChats = vm::retry) }
                 }
-                if (!onTop) Box(Modifier.fillMaxSize().pointerInput(Unit) {
+                if (!listShown) Box(Modifier.fillMaxSize().pointerInput(Unit) {
                     awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } }
                 })
             }
+            if (wide) Box(Modifier.padding(start = SplitLayout.LIST_WIDTH).width(0.5.dp).fillMaxHeight().background(com.fariin.app.ui.theme.Fariin.colors.separator))
+            // The pages: over the whole screen, or in the right column.
+            Box(if (wide) Modifier.fillMaxSize().padding(start = SplitLayout.LIST_WIDTH + 0.5.dp).clipToBounds() else Modifier.fillMaxSize()) {
+            if (wide && onTop) SplitPlaceholder()
             // The open chat, kept under the pages pushed over it (its profile, group info, a member's
             // page), as the list is kept above: the nav host took it apart once such a page landed and
             // built it again from nothing on Back, the heaviest frame of that trip (480 ms on the cheap
@@ -561,6 +576,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             com.fariin.app.ui.components.PageMotionBackGuard()
+            }
             }
             }
         }
@@ -992,5 +1008,20 @@ private fun KeptChat(held: KeptChats.Held, topId: String?, saveable: androidx.co
         if (!onTop) Box(Modifier.fillMaxSize().pointerInput(Unit) {
             awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } }
         })
+    }
+}
+
+/** Two columns on a wide window (iOS splitView): set by the main screen each pass. */
+internal object SplitLayout {
+    @Volatile var wide: Boolean = false
+    val LIST_WIDTH = 360.dp
+}
+
+/** The right column with no chat open (iOS: an empty detail pane). */
+@Composable
+private fun SplitPlaceholder() {
+    val c = com.fariin.app.ui.theme.Fariin.colors
+    Box(Modifier.fillMaxSize().background(c.bg), contentAlignment = androidx.compose.ui.Alignment.Center) {
+        androidx.compose.material3.Text("Select a chat to start messaging", color = c.secondary, fontSize = 15.sp)
     }
 }
