@@ -195,21 +195,17 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
         text = { Text("All posts in this channel will be deleted for everyone. Your followers stay. You can't undo this.") },
         confirmButton = { androidx.compose.material3.TextButton({
             askClear = false
-            clearing = true
-            scope.launch {
-                val ok = runCatching {
-                    val fn = com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
-                        .getHttpsCallable("clearGroupMessages").withTimeout(540, java.util.concurrent.TimeUnit.SECONDS)
-                    val data = mutableMapOf<String, Any>("cid" to info.cid)
-                    for (round in 0 until 12) {
-                        val d = fn.call(data).await().getData() as? Map<*, *> ?: break
-                        if (d["more"] != true) break
-                        d["before"]?.let { data["before"] = it }
-                    }
-                }.isSuccess
-                clearing = false
-                com.fariin.app.ui.components.Snack.show(if (ok) "All messages were cleared." else "Couldn't clear the messages. Check your connection and try again.")
-            }
+            // WITH AN UNDO, AS LEAVE HAS (iOS 2026-11-21): back to the channel, its posts gone at once,
+            // "All posts cleared." with Undo for 5 s; the server clear runs only after that (or when
+            // the chat is left or the app goes away). Undo or a refusal puts every post back.
+            val cid = info.cid
+            val cut = com.fariin.app.data.ClearCuts.hide(cid)
+            com.fariin.app.data.LeaveUndo.startClear(cid, info.title.ifEmpty { "the channel" },
+                "Couldn't clear the messages. Check your connection and try again.",
+                restore = { com.fariin.app.data.ClearCuts.show(cid) }) { com.fariin.app.data.ClearCuts.clearOnServer(cid, cut) }
+            com.fariin.app.ui.components.Snack.undo("All posts cleared.", info.avatarUrl, true,
+                com.fariin.app.data.LeaveUndo.WINDOW_MS) { com.fariin.app.data.LeaveUndo.undo() }
+            onBack()
         }) { Text("Clear", color = c.red) } },
         dismissButton = { androidx.compose.material3.TextButton({ askClear = false }) { Text("Cancel", color = c.accent) } },
         containerColor = c.card)

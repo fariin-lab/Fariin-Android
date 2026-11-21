@@ -830,20 +830,17 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     if (askClearAll) PersonConfirmSheet((conv["avatarUrl"] as? String)?.ifEmpty { null }, conv["title"] as? String ?: "", "Clear all messages?",
         "Every message in this group is deleted for you and all members. You can't undo this.",
         listOf(PersonAction("Clear") {
-            clearingAll = true
-            val ok = runCatching {
-                val fn = com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
-                    .getHttpsCallable("clearGroupMessages").withTimeout(540, java.util.concurrent.TimeUnit.SECONDS)
-                val data = mutableMapOf<String, Any>("cid" to cid)
-                for (round in 0 until 12) {
-                    val d = fn.call(data).await().getData() as? Map<*, *> ?: break
-                    if (d["more"] != true) break
-                    d["before"]?.let { data["before"] = it }
-                }
-            }.isSuccess
-            clearingAll = false
-            com.fariin.app.ui.components.Snack.show(if (ok) "All messages were cleared." else "Couldn't clear the messages. Check your connection and try again.")
-            ok
+            // WITH AN UNDO, AS LEAVE HAS (iOS 2026-11-21): back to the chat, every message gone at once,
+            // "History cleared." with Undo for 5 s; the server clear runs only after that (or when the
+            // chat is left or the app goes away). Undo or a refusal puts every message back.
+            val cut = com.fariin.app.data.ClearCuts.hide(cid)
+            com.fariin.app.data.LeaveUndo.startClear(cid, (conv["title"] as? String)?.ifEmpty { null } ?: "the group",
+                "Couldn't clear the messages. Check your connection and try again.",
+                restore = { com.fariin.app.data.ClearCuts.show(cid) }) { com.fariin.app.data.ClearCuts.clearOnServer(cid, cut) }
+            com.fariin.app.ui.components.Snack.undo("History cleared.", (conv["avatarUrl"] as? String)?.ifEmpty { null }, false,
+                com.fariin.app.data.LeaveUndo.WINDOW_MS) { com.fariin.app.data.LeaveUndo.undo() }
+            onBack()
+            true
         }), onDismiss = { askClearAll = false })
     val exitScope = rememberCoroutineScope()
     // iOS settingsCard for everyone in the group (owner 2026-11-07 with the iPhone's page): Sounds &
