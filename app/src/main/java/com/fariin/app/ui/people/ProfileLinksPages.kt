@@ -1,5 +1,7 @@
 package com.fariin.app.ui.people
 
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.text.withStyle
 import com.fariin.app.ui.components.GlassAlert
 import com.fariin.app.R
 import com.fariin.app.ui.settings.BarPage
@@ -164,16 +166,24 @@ fun ProfileLinkChips(links: List<ProfileLink>, modifier: Modifier = Modifier, on
     val c = Fariin.colors
     val ctx = LocalContext.current
     val ink = if (onDark) Color.White else c.label
-    Row(modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        for (l in links) {
-            Row(Modifier.clip(CircleShape).background(if (onDark) Color.White.copy(alpha = 0.2f) else c.card)
-                .clickable { l.openUrl?.let { u -> com.fariin.app.ui.thread.openWebLink(ctx, u) } }
-                .padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_link_copy), null, tint = ink, modifier = Modifier.size(14.dp))
-                Spacer(Modifier.width(5.dp))
-                Text(l.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = ink, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 160.dp))
-            }
+    // iOS 2026-11-15 (ProfileLinkChips): 34 tall pills, "glyph  Title - site"; two links share the row
+    // in equal widths, one link sits centred at its own width.
+    @Composable
+    fun Pill(l: ProfileLink, pill: Modifier) {
+        val site = l.displayUrl.substringBefore('/').takeIf { it.isNotEmpty() && !it.equals(l.title, ignoreCase = true) }
+        Row(pill.height(34.dp).clip(CircleShape).background(if (onDark) Color.White.copy(alpha = 0.2f) else c.card)
+            .clickable { l.openUrl?.let { u -> com.fariin.app.ui.thread.openWebLink(ctx, u) } }
+            .padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+            Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_link_copy), null, tint = ink, modifier = Modifier.size(13.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(androidx.compose.ui.text.buildAnnotatedString {
+                withStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.SemiBold)) { append(l.title) }
+                if (site != null) withStyle(androidx.compose.ui.text.SpanStyle(color = ink.copy(alpha = 0.6f))) { append(" - $site") }
+            }, fontSize = 15.sp, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+    }
+    if (links.size == 1) Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Pill(links[0], Modifier) }
+    else Row(modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        for (l in links.take(2)) Pill(l, Modifier.weight(1f))
     }
 }
