@@ -59,6 +59,19 @@ data class ActivityItem(
     val isMention get() = kind == "mention"
 
     companion object {
+        /**
+         * A post's words as an Activity row may show them (iOS ActivityStore, 2026-11-15): the server
+         * copies a post's raw text, so a poll post showed "fariin-poll:eyJ...". A feature marker
+         * (`fariin-<name>:`) that parses as a poll is "Poll: <question>"; a poll marker cut short is
+         * "Poll"; any other marker is "Post"; everything else stays as it is.
+         */
+        fun shown(text: String): String {
+            if (!FEATURE_MARKER.containsMatchIn(text)) return text
+            PollRules.parse(text)?.let { return "Poll: " + it.question }
+            return if (text.startsWith(PollRules.MARKER)) "Poll" else "Post"
+        }
+        private val FEATURE_MARKER = Regex("^fariin-[a-z0-9]+:")
+
         fun parse(id: String, d: Map<String, Any?>): ActivityItem? {
             val kind = d["kind"] as? String ?: return null
             if (kind != "reply" && kind != "react" && kind != "quote" && kind != "comment" && kind != "mention") return null
@@ -76,12 +89,12 @@ data class ActivityItem(
             return ActivityItem(
                 id = id, kind = kind, at = Conversation.millis(d["at"]), read = d["read"] as? Boolean ?: true,
                 cid = cid, chTitle = d["chTitle"] as? String ?: "", chPhoto = d["chPhoto"] as? String ?: "",
-                mid = mid, post = d["post"] as? String ?: "", thumb = d["thumb"] as? String ?: "",
+                mid = mid, post = shown(d["post"] as? String ?: ""), thumb = d["thumb"] as? String ?: "",
                 thumbKind = d["thumbKind"] as? String ?: "",
-                mineRid = mine.s("rid"), mineAid = mine.s("aid"), mineText = mine.s("t"),
+                mineRid = mine.s("rid"), mineAid = mine.s("aid"), mineText = shown(mine.s("t")),
                 fromUid = from.s("u"), fromName = from.s("n"), fromPhoto = from.s("p"),
                 hasFrom2 = from2 != null, from2Uid = from2?.s("u") ?: "", from2Name = from2?.s("n") ?: "", from2Photo = from2?.s("p") ?: "",
-                text = d["text"] as? String ?: "", newRid = nw.s("rid"), newAid = nw.s("aid"),
+                text = shown(d["text"] as? String ?: ""), newRid = nw.s("rid"), newAid = nw.s("aid"),
                 emoji = d["emoji"] as? String ?: "", others = (d["others"] as? Number)?.toInt() ?: 0, rx = rx,
                 whereCid = where?.s("cid") ?: "", whereMid = where?.s("mid") ?: "", whereTitle = where?.s("title") ?: "",
             )
