@@ -39,9 +39,18 @@ import com.fariin.app.R
  */
 @Composable
 fun VoiceNoteBar(here: String?, me: String, modifier: Modifier = Modifier, onOpen: (String) -> Unit) {
-    val s by VoicePlayer.state.collectAsState()
+    val live by VoicePlayer.state.collectAsState()
+    // It fades and opens with its height (the list's or chat's space following), and closes the same
+    // way, still showing the note while it leaves (iOS pops 117).
+    val showing = live.cid != null && live.id != null && live.cid != here
+    val held = androidx.compose.runtime.remember { arrayOf(live) }
+    if (showing) held[0] = live
+    com.fariin.app.ui.components.Appear(showing, modifier) { VoiceNoteBarBody(held[0], me, Modifier, onOpen) }
+}
+
+@Composable
+private fun VoiceNoteBarBody(s: VoicePlayer.State, me: String, modifier: Modifier, onOpen: (String) -> Unit) {
     val cid = s.cid ?: return
-    if (s.id == null || cid == here) return
     val c = Fariin.colors
     val conv = ChatsNow.find(cid)
     val name = when {

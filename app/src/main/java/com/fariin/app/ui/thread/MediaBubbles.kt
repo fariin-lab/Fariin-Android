@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.fadeOnChange
 import com.fariin.app.ui.components.enterFade
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -436,8 +437,11 @@ internal fun VoiceBody(m: Message, cid: String, isMe: Boolean, width: Dp, meta: 
         // Compact as the reference app's (owner 2026-11-13, "our bubbles look bigger"): the row 48
         // (was 55), so a voice note is about 60 tall, and the play disc 38 (was 44).
         Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
+            // The pale disc with its spinner turns solid with a fade when the note is here (iOS pops 110).
+            val waiting = loading || url == null || m.uploading && m.audioUrl == null && m.localPath == null
+            val discAlpha by com.fariin.app.ui.components.smoothFloat(if (loading || url == null) 0.22f else 1f)
             Box(
-                Modifier.size(38.dp).clip(CircleShape).background(tint.copy(alpha = if (loading || url == null) 0.22f else 1f))
+                Modifier.size(38.dp).clip(CircleShape).background(tint.copy(alpha = discAlpha))
                     .clickable(enabled = url != null && !loading) {
                         scope.launch {
                             loading = true
@@ -450,11 +454,13 @@ internal fun VoiceBody(m: Message, cid: String, isMe: Boolean, width: Dp, meta: 
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                if (loading || url == null || m.uploading && m.audioUrl == null && m.localPath == null) {
+                val bornWaiting = remember { waiting }
+                if (waiting) {
                     com.fariin.app.ui.components.FariinSpinner(size = 22.dp, color = tint)
                 } else {
                     Icon(if (playing) ImageVector.cachedVector(R.drawable.ic_sf_pause_fill) else ImageVector.cachedVector(R.drawable.ic_sf_play_fill),
-                        if (playing) "Pause" else "Play", tint = glyph, modifier = Modifier.size(24.dp))
+                        if (playing) "Pause" else "Play", tint = glyph,
+                        modifier = Modifier.size(24.dp).enterFade(bornWaiting).fadeOnChange(playing))
                 }
             }
             Spacer(Modifier.width(8.dp))
@@ -467,13 +473,18 @@ internal fun VoiceBody(m: Message, cid: String, isMe: Boolean, width: Dp, meta: 
                     // The speed pill only while this note is playing or paused part-way (owner
                     // 2026-11-12, as the reference app): the rest of the time the wave has the room.
                     // The bubble has a fixed width, so it never grows when the pill comes.
-                    if (mine && (playing || (progress > 0f && progress < 0.999f))) {
+                    // It slides open and the wave narrows on the spring, not in one frame (iOS pops 109).
+                    androidx.compose.animation.AnimatedVisibility(mine && (playing || (progress > 0f && progress < 0.999f)),
+                        enter = com.fariin.app.ui.components.Smooth.fadeIn() + (if (com.fariin.app.ui.components.Smooth.on) androidx.compose.animation.expandHorizontally(com.fariin.app.ui.components.Smooth.soft()) else androidx.compose.animation.EnterTransition.None),
+                        exit = com.fariin.app.ui.components.Smooth.fadeOut() + (if (com.fariin.app.ui.components.Smooth.on) androidx.compose.animation.shrinkHorizontally(com.fariin.app.ui.components.Smooth.soft()) else androidx.compose.animation.ExitTransition.None)) {
+                    Row {
                     Spacer(Modifier.width(8.dp))
                     Box(
                         Modifier.width(40.dp).height(22.dp).clip(RoundedCornerShape(50)).background(tint.copy(alpha = 0.2f))
                             .clickable { VoicePlayer.cycleRate(cid) },
                         contentAlignment = Alignment.Center,
                     ) { Text(MediaRules.rateLabel(rate), fontSize = 12.sp, color = tint) }
+                    }
                     }
                 }
                 Spacer(Modifier.height(6.dp))
