@@ -17,4 +17,5 @@ HSPLcom/fariin/app/device/**;->**(**)**
 HSPLcom/fariin/app/media/ChatMedia**;->**(**)**
 HSPLcom/fariin/app/media/MediaRules**;->**(**)**
 HSPLcom/fariin/app/media/BlurHash**;->**(**)**
+HSPLcom/fariin/app/media/MediaOrigin**;->**(**)**
 Lcom/fariin/app/**;
