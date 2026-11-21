@@ -185,6 +185,16 @@ fun StoryViewerDialog(
     // PredictiveBackHandler alone was not always reached; the dialog's back now asks the viewer to
     // close, with the same shrink into the card as the swipe down.
     var backTick by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    // Put aside under a channel page (StoryAside): shown again once that page has closed.
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        androidx.compose.runtime.snapshotFlow { com.fariin.app.ui.components.PageMotion.top to com.fariin.app.ui.components.PageMotion.moving }
+            .collect { (top, moving) ->
+                val under = StoryAside.under ?: return@collect
+                if ((top ?: "") != under) StoryAside.opened = true
+                else if (StoryAside.opened && !moving) StoryAside.under = null
+            }
+    }
+    DisposableEffect(Unit) { onDispose { StoryAside.under = null } }
     Dialog(
         onDismissRequest = { backTick++ },
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false,
@@ -193,6 +203,17 @@ fun StoryViewerDialog(
         // Block screenshots (iOS captureProtected): while such a story is on screen this window is
         // FLAG_SECURE, so a screenshot or a screen recording of it comes out black.
         val window = (androidx.compose.ui.platform.LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+        // Put aside (StoryAside): the window is not drawn and takes no touch, focus or Back, so the
+        // channel page under it is used as usual; it comes back as it was when that page closes.
+        val aside = StoryAside.under != null
+        DisposableEffect(window, aside) {
+            window?.let { w ->
+                val f = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                if (aside) w.addFlags(f) else w.clearFlags(f)
+                w.decorView.visibility = if (aside) android.view.View.INVISIBLE else android.view.View.VISIBLE
+            }
+            onDispose { }
+        }
         // The window itself neither dims nor fades: the zoom paints its own wall, on the card's fraction.
         DisposableEffect(window) {
             window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
@@ -409,12 +430,15 @@ fun StoryViewer(
                 try {
                     val known = com.fariin.app.data.ChatsNow.findAny(cid)?.isChannel == true ||
                         com.fariin.app.channel.ChannelFollows.entries.value.containsKey(cid)
-                    val channel = known || runCatching {
-                        com.fariin.app.Fb.db.collection("conversations")
-                            .document(cid).get().await().getBoolean("channel") == true
-                    }.getOrDefault(false)
+                    // A channel I do not follow: its document is members-only (the rules), so the
+                    // visitor's copy says whether it is a public channel (iOS opens its visitor page).
+                    val channel = known || (com.fariin.app.channel.ChannelService.preview(cid) as? com.fariin.app.channel.ChannelService.PreviewResult.Found)
+                        ?.preview?.isChannel == true
                     if (!channel) return@launch
-                    onClose()
+                    // iOS 2026-11-16: the channel's page slides in OVER the paused story (followed or
+                    // not); Back returns to the story and it plays on (StoryAside).
+                    StoryAside.under = com.fariin.app.ui.components.PageMotion.top ?: ""
+                    StoryAside.opened = false
                     // The channel's thread scrolls to the post and lights it once its messages are in.
                     com.fariin.app.data.QuoteStore.pendingJump.value = com.fariin.app.data.QuoteStore.Jump(cid, mid)
                     channelNav.open(cid)
@@ -879,7 +903,7 @@ fun StoryViewer(
                         convs.firstOrNull { !it.isGroup && it.users.contains(st.authorUid) && it.users.contains(me) }?.isBlockedByMe(me) == true) },
                     onRepost = { st -> startRepost(st, g) },
                     me = me, group = g, card = cardOf(g), active = page == pager.currentPage && !pager.isScrollInProgress,
-                    paused = postOpening || sheetFor != null || profileUid != null || confirmDelete != null || replyFocused || hero.live || reposting.value || guideUp || editViewersFor != null || reportUp,
+                    paused = postOpening || StoryAside.under != null || sheetFor != null || profileUid != null || confirmDelete != null || replyFocused || hero.live || reposting.value || guideUp || editViewersFor != null || reportUp,
                     // The bars and caption stay inside the shrinking card and fade as it shrinks (iOS);
                     // over a third of the pull they were gone in a frame on a quick swipe.
                     chrome = {
@@ -2126,4 +2150,15 @@ private fun AudienceGlyph(s: Story) {
         }
         else -> Icon(ImageVector.cachedVector(R.drawable.ic_sf_person2_fill), null, tint = tint, modifier = m)
     }
+}
+
+/**
+ * A story put aside under a channel page opened from its "View post" (iOS b6dbdbf28): its window is
+ * hidden and lets touches and Back through, the story holds still, and when the page under it is on
+ * top again (the channel closed) it shows and plays on. [under] = the page that was on top then.
+ */
+internal object StoryAside {
+    var under by androidx.compose.runtime.mutableStateOf<String?>(null)
+    /** The channel page has been on top since (so the return to [under] means it closed). */
+    var opened by androidx.compose.runtime.mutableStateOf(false)
 }

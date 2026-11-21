@@ -38,7 +38,11 @@ object OpenGate {
                 val publicChannel = snap.getBoolean("channel") == true && snap.getBoolean("isPublic") == true
                 if (!publicChannel && me !in users) return Result.REFUSED
             } catch (e: FirebaseFirestoreException) {
-                return if (e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) Result.REFUSED else Result.OPEN
+                if (e.code != FirebaseFirestoreException.Code.PERMISSION_DENIED) return Result.OPEN
+                // The document is members-only; a public channel I do not follow still opens (its
+                // visitor page), as the visitor's copy says (publicGroupPreview).
+                val pv = com.fariin.app.channel.ChannelService.preview(cid)
+                if ((pv as? com.fariin.app.channel.ChannelService.PreviewResult.Found)?.preview?.isChannel != true) return Result.REFUSED
             } catch (_: Exception) { return Result.OPEN }
         }
         // The post: gone when its document is missing or a tombstone, read from the server only.
