@@ -44,6 +44,7 @@ data class Person(
             .also { if (d.containsKey("name")) VerifiedPeople.note(uid, d["verification"]) }
             // Fariin Plus animatedAvatar: whether their big pictures move (a whole document only).
             .also { if (d.containsKey("name")) AvatarVideoIndex.recordRaw(uid, d["avatarVideo"]) }
+            .also { ProfilePhotoIndex.record(uid, d) }
 
         private fun fromDoc(uid: String, d: Map<String, Any?>): Person = Person(
             uid = uid,

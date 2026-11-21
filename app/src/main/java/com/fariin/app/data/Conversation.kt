@@ -157,9 +157,11 @@ data class Conversation(
     fun photoUrl(me: String): String? {
         val other = otherUid(me)
         if (!isGroup && isDeletedAccount(other)) return null
-        // TODO: iOS also compares with the photo in the person's own profile (ProfilePhotoIndex)
-        // and keeps whichever has the newer `?v=` stamp.
-        return photos[other]?.takeIf { it.isNotEmpty() }
+        // The chat's mirror, or their own profile's photo when this phone has read a newer one
+        // (ProfilePhotoIndex, iOS photoUrl(for:)): a member on an old build left the mirror stale.
+        val mirror = photos[other]?.takeIf { it.isNotEmpty() }
+        if (isGroup) return mirror
+        return ProfilePhotoIndex.newer(mirror, ProfilePhotoIndex.photo(other, contact = startedBy.isEmpty() || accepted))
     }
 
     fun displayName(me: String): String =

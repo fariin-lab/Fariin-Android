@@ -105,6 +105,7 @@ object AvatarVideoIndex {
             val d = try { com.fariin.app.Fb.db.collection("users").document(uid).get().await().data } catch (_: Exception) { null }
                 ?: return@launch
             recordRaw(uid, d["avatarVideo"])
+            ProfilePhotoIndex.record(uid, d)
         }
     }
 
