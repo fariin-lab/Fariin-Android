@@ -2087,9 +2087,14 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             Modifier.bubbleDecor(bubbleDecorFor(m, styled, isMe, c.dark, g.first, g.last, failed, showSender))
                 .widthIn(max = maxW)
                 // A picture style: its own 9-slice picture on every message, unclipped, no run shape (bubbles/BubbleArtDraw.kt).
-                .then(if (art != null) Modifier.artBubble(art, c.dark, centre = m.linkPreview == null) else Modifier.bubbleClip(shape)
-                .then(if (styled != null) Modifier.styledFill(styled, shape, c.dark) else Modifier.background(if (isMe) myFill() else receivedFill()).then(receivedRim(isMe, shape)))
-                .padding(horizontal = if (kind == Message.MediaKind.VOICE) 13.dp else 14.dp, vertical = 5.dp)),
+                // Android 10 and older clip in drawing (BubbleClipRules), a path clip per bubble per frame. A
+                // plain words bubble needs none: its fill is drawn in the run shape itself (Oppo 2026-11-20).
+                .then(if (art != null) Modifier.artBubble(art, c.dark, centre = m.linkPreview == null)
+                    else (if (styled == null && m.linkPreview == null && BubbleClipRules.clipInDraw(android.os.Build.VERSION.SDK_INT))
+                        Modifier.background(if (isMe) myFill() else receivedFill(), shape).then(receivedRim(isMe, shape))
+                    else Modifier.bubbleClip(shape)
+                        .then(if (styled != null) Modifier.styledFill(styled, shape, c.dark) else Modifier.background(if (isMe) myFill() else receivedFill()).then(receivedRim(isMe, shape))))
+                        .padding(horizontal = if (kind == Message.MediaKind.VOICE) 13.dp else 14.dp, vertical = 5.dp)),
         ) {
             if (showSender && g.first) {
                 SenderLine(ui, m.authorId)

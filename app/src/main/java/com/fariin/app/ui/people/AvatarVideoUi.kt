@@ -59,6 +59,11 @@ val LocalTabShown = androidx.compose.runtime.staticCompositionLocalOf<androidx.c
 @Composable
 fun AvatarVideoLayer(uid: String?, video: AvatarVideo?, modifier: Modifier = Modifier, file: File? = null, playing: Boolean = true) {
     val ctx = LocalContext.current.applicationContext
+    // Power Saving's video autoplay off (the default on a LOW phone, and under Battery Saver) or system
+    // animations off: the still shows (iOS: Low Power / Reduce Motion). Each clip frame redraws the
+    // whole window; on the Oppo the chat header's clip doubled the frames of every send. A clip the
+    // person is choosing ([file], Edit Profile's preview) always plays.
+    if (file == null && (!com.fariin.app.perf.rememberPowerState().autoplayVideos || !com.fariin.app.ui.thread.systemAnimationsOn())) return
     val source by produceState<File?>(null, file, uid, video) {
         value = when {
             file != null -> file
