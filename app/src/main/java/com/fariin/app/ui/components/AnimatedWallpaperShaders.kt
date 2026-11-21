@@ -368,21 +368,46 @@ internal object AnimatedStill {
     // A screen already drawing a still keeps its own reference; only the map lets go.
     init { com.fariin.app.MemoryTrim.register("animated-stills") { synchronized(cache) { cache.clear() } } }
 
-    fun bitmap(a: AnimatedWallpaper, aspect: Float, dark: Boolean, intensity: Int): ImageBitmap {
+    /** Bumped on the main thread when a still finishes; a draw that read it redraws then. */
+    val ready = androidx.compose.runtime.mutableIntStateOf(0)
+    private val building = HashSet<String>()
+    private val worker = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "AnimatedStill").apply { isDaemon = true } }
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+
+    /**
+     * The still when it is made, else null and it is started on a worker thread. Worked out on the
+     * draw thread it cost ~110 ms of the first chat open after a cold start on the Oppo (method
+     * profile 2026-11-21); the draw shows the look's middle colour for that moment instead.
+     */
+    fun bitmapOrNull(a: AnimatedWallpaper, aspect: Float, dark: Boolean, intensity: Int): ImageBitmap? {
         val sharp = a.look == AnimatedLook.STARS || a.look == AnimatedLook.PARTICLES
         val h = if (sharp) 240 else 96
         val w = (h * aspect).toInt().coerceIn(8, h * 2)
         val amount = if (a.look == AnimatedLook.PARTICLES) intensity.coerceIn(0, 2) else 0
-        return synchronized(cache) {
-            cache.getOrPut("${a.id}|$dark|$w|$amount") {
-                val px = IntArray(w * h)
-                val sw = w.toFloat(); val sh = h.toFloat()
-                for (y in 0 until h) for (x in 0 until w) {
-                    px[y * w + x] = color(a, x + 0.5f, y + 0.5f, sw, sh, dark, amount)
-                }
-                Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888).asImageBitmap()
-            }
+        val key = "${a.id}|$dark|$w|$amount"
+        synchronized(cache) {
+            cache[key]?.let { return it }
+            if (!building.add(key)) return null
         }
+        worker.execute {
+            val made = runCatching { make(a, w, h, dark, amount) }.getOrNull()
+            synchronized(cache) { building.remove(key); if (made != null) cache[key] = made }
+            main.post { ready.intValue++ }
+        }
+        return null
+    }
+
+    /** The look's colour at its middle: what shows while its still is being made. */
+    fun middle(a: AnimatedWallpaper, dark: Boolean, intensity: Int): Int =
+        color(a, 0.5f, 0.5f, 1f, 1f, dark, if (a.look == AnimatedLook.PARTICLES) intensity.coerceIn(0, 2) else 0)
+
+    private fun make(a: AnimatedWallpaper, w: Int, h: Int, dark: Boolean, amount: Int): ImageBitmap {
+        val px = IntArray(w * h)
+        val sw = w.toFloat(); val sh = h.toFloat()
+        for (y in 0 until h) for (x in 0 until w) {
+            px[y * w + x] = color(a, x + 0.5f, y + 0.5f, sw, sh, dark, amount)
+        }
+        return Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888).asImageBitmap()
     }
 
     private fun fract(x: Float) = x - floor(x)

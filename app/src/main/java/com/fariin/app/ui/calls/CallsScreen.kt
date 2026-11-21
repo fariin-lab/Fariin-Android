@@ -113,7 +113,9 @@ fun CallsTab(me: String, conversations: List<Conversation>, demoCalls: List<Call
             conversations.fold(17L) { h, c -> (h * 31 + c.id.hashCode()) * 31 + c.updatedAtMillis.hashCode() }
         }
         LaunchedEffect(me, key) {
-            calls = repo.load(me, conversations)
+            // Off the main thread, as MainShell reads it: every call row's fields were parsed there
+            // (Firestore field paths, ~110 ms of a chat's first open on the Oppo, 2026-11-21).
+            calls = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { repo.load(me, conversations) }
             loaded = true
         }
     }

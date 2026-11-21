@@ -249,7 +249,11 @@ fun DrawScope.drawAnimated(a: AnimatedWallpaper, dark: Boolean, phase: Float, la
     // some 250 ms on one.
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
         com.fariin.app.perf.PowerSaving.state.value.deviceClass != com.fariin.app.perf.PerfClass.HIGH) {
-        drawImage(AnimatedStill.bitmap(a, size.width / size.height, dark, intensity), dstSize = full, filterQuality = FilterQuality.Low)
+        // Read here, so the frame after the still is made draws it.
+        AnimatedStill.ready.intValue
+        val still = AnimatedStill.bitmapOrNull(a, size.width / size.height, dark, intensity)
+        if (still == null) drawRect(Color(AnimatedStill.middle(a, dark, intensity)))
+        else drawImage(still, dstSize = full, filterQuality = FilterQuality.Low)
         return
     }
     if (layer == null || scale <= 1f) {
