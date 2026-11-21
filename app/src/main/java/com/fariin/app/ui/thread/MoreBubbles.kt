@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.enterFade
 import android.content.ActivityNotFoundException
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -293,7 +294,9 @@ internal fun hasReplyThumb(o: Message?): Boolean {
 
 /** The quote's small square picture for [o] ([hasReplyThumb]), opened by the bubble's own loaders. */
 @Composable
-internal fun ReplyThumb(o: Message, side: Dp, modifier: Modifier = Modifier) {
+internal fun ReplyThumb(o: Message, side: Dp, modifier: Modifier = Modifier,
+                         /** The composer's card: a picture that lands after the card fades in (iOS pops 27). */
+                         fadeIn: Boolean = false) {
     val box = modifier.size(side).clip(RoundedCornerShape(6.dp))
     if (o.isSticker) {
         StickerArt(o.stickerPack!!, o.stickerId!!, o.imageUrl, o.enc, box, still = true)
@@ -316,8 +319,10 @@ internal fun ReplyThumb(o: Message, side: Dp, modifier: Modifier = Modifier) {
     val got = rememberGatedFile(if (local == null) url else null, enc, AutoDownload.Kind.PHOTOS)
     val px = with(androidx.compose.ui.platform.LocalDensity.current) { side.roundToPx() }
     val bmp = rememberBitmap(local ?: got.file, px)
+    val bornEmpty = remember { bmp == null }
     Box(box.background(fill), contentAlignment = Alignment.Center) {
-        if (bmp != null) Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        if (bmp != null) Image(bmp, null, contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize().then(if (fadeIn) Modifier.enterFade(bornEmpty) else Modifier))
         if (o.mediaKind == Message.MediaKind.VIDEO) {
             Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_sf_play_fill), null, tint = Color.White, modifier = Modifier.size(side * 0.5f))
         }

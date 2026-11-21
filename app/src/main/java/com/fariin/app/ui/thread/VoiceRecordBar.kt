@@ -1,5 +1,8 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.enterFade
+import androidx.compose.ui.draw.clipToBounds
+import com.fariin.app.ui.components.fadeOnChange
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -66,7 +69,8 @@ internal fun LockTarget(progress: Float, modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
         Icon(if (progress >= 1f) ImageVector.cachedVector(R.drawable.ic_sf_lock_fill) else ImageVector.cachedVector(R.drawable.ic_sf_lock_open_fill), contentDescription = "Slide up to lock",
-            tint = c.label, modifier = Modifier.size(20.dp))
+            // Open -> closed fades in (iOS pops 120).
+            tint = c.label, modifier = Modifier.size(20.dp).fadeOnChange(progress >= 1f))
         Icon(ImageVector.cachedVector(R.drawable.ic_sf_chevron_up), null, tint = c.secondary.copy(alpha = 1f - progress * 0.7f),
             modifier = Modifier.size(20.dp))
     }
@@ -106,10 +110,12 @@ internal fun LockedVoiceBar(
                 contentAlignment = Alignment.Center) {
                 Icon(if (preview.playing) ImageVector.cachedVector(R.drawable.ic_sf_pause_fill) else ImageVector.cachedVector(R.drawable.ic_sf_play_fill),
                     contentDescription = if (preview.playing) "Pause preview" else "Play preview",
-                    tint = c.label, modifier = Modifier.size(24.dp))
+                    // Play <-> pause fades (iOS pops 35).
+                    tint = c.label, modifier = Modifier.size(24.dp).fadeOnChange(preview.playing))
             }
             Spacer(Modifier.width(4.dp))
-            Waveform(bars, preview.progress, c.label, Modifier.weight(1f).height(22.dp), onSeek)
+            // The review strip's wave fades in when the recording pauses for review (iOS pops 115).
+            Waveform(bars, preview.progress, c.label, Modifier.weight(1f).height(22.dp).enterFade(true), onSeek)
             Spacer(Modifier.width(8.dp))
             val shown = if (preview.playing || preview.positionMs > 0) preview.positionMs / 1000.0 else total
             Text(MediaRules.durationLabel(floor(shown)), style = TextStyle(fontSize = 15.sp, color = c.secondary,
@@ -133,7 +139,7 @@ internal fun LockedVoiceBar(
             .clickable(onClick = onPauseOrResume), contentAlignment = Alignment.Center) {
             Icon(if (reviewing) ImageVector.cachedVector(R.drawable.ic_mic) else ImageVector.cachedVector(R.drawable.ic_sf_pause_fill),
                 contentDescription = if (reviewing) "Keep recording" else "Pause and listen back",
-                tint = if (reviewing) Color.White else c.label, modifier = Modifier.size(20.dp))
+                tint = if (reviewing) Color.White else c.label, modifier = Modifier.size(20.dp).fadeOnChange(reviewing))
         }
     }
 }
@@ -145,12 +151,15 @@ private fun OnceToggle(on: Boolean, onToggle: () -> Unit) {
     Box(Modifier.size(36.dp).clip(CircleShape).clickable(onClick = onToggle)
         .semantics { contentDescription = if (on) "One-time listen on" else "One-time listen off" },
         contentAlignment = Alignment.Center) {
-        Box(
-            Modifier.size(24.dp).clip(CircleShape)
-                .then(if (on) Modifier.background(c.blue) else Modifier.border(1.6.dp, c.label, CircleShape)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("1", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = if (on) Color.White else c.label)
+        // Outline <-> filled blue cross-fades (iOS pops 36).
+        com.fariin.app.ui.components.Swap(on, label = "once") { lit ->
+            Box(
+                Modifier.size(24.dp).clip(CircleShape)
+                    .then(if (lit) Modifier.background(c.blue) else Modifier.border(1.6.dp, c.label, CircleShape)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("1", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = if (lit) Color.White else c.label)
+            }
         }
     }
 }
@@ -159,18 +168,31 @@ private fun OnceToggle(on: Boolean, onToggle: () -> Unit) {
 @Composable
 private fun LiveWave(levels: StateFlow<Float>, tint: Color, modifier: Modifier) {
     val live = remember { mutableStateListOf<Float>() }
+    // When the last sample came and the usual time between samples: the bars glide left between
+    // samples instead of stepping a whole bar at each (iOS pops 116).
+    val lastAt = remember { longArrayOf(0L, 100_000_000L) }
     LaunchedEffect(levels) {
         levels.collect { l ->
+            val now = System.nanoTime()
+            if (lastAt[0] != 0L) lastAt[1] = ((lastAt[1] * 3 + (now - lastAt[0]).coerceIn(30_000_000L, 400_000_000L)) / 4)
+            lastAt[0] = now
             live.add(l)
             while (live.size > 48) live.removeAt(0)
         }
     }
-    Canvas(modifier.fillMaxHeight()) {
+    val frame = remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+    if (com.fariin.app.ui.components.Smooth.on) LaunchedEffect(Unit) {
+        while (true) androidx.compose.runtime.withFrameNanos { frame.longValue = it }
+    }
+    Canvas(modifier.fillMaxHeight().clipToBounds()) {
         val barW = 2.5.dp.toPx()
         val gap = 2.dp.toPx()
         val fit = ((size.width + gap) / (barW + gap)).toInt().coerceAtLeast(1)
         val shown = live.takeLast(fit)
-        val startX = size.width - shown.size * (barW + gap) + gap
+        frame.longValue
+        val glide = if (!com.fariin.app.ui.components.Smooth.on || lastAt[0] == 0L) 0f
+            else (1f - ((System.nanoTime() - lastAt[0]).toFloat() / lastAt[1]).coerceIn(0f, 1f)) * (barW + gap)
+        val startX = size.width - shown.size * (barW + gap) + gap + glide
         shown.forEachIndexed { i, l ->
             val h = maxOf(2.dp.toPx(), l.coerceIn(0f, 1f) * size.height)
             drawRoundRect(tint, topLeft = Offset(startX + i * (barW + gap), (size.height - h) / 2),

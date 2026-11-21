@@ -1499,7 +1499,7 @@ private fun ThreadContent(
                 replyTo?.let { r ->
                     banner = { ComposerBanner(if (r.authorId == ui.me) "You" else ui.names[r.authorId] ?: ui.title,
                         replyLine(r, com.fariin.app.data.CardRules.previewWord(r.text) ?: r.bodyText),
-                        thumb = if (hasReplyThumb(r)) ({ ReplyThumb(r, 36.dp) }) else null,
+                        thumb = if (hasReplyThumb(r)) ({ ReplyThumb(r, 36.dp, fadeIn = true) }) else null,
                         color = if (r.authorId == ui.me) null else senderColor(r.authorId),
                         icon = replyIcon(r)) { replyTo = null } }
                 }
@@ -1508,7 +1508,7 @@ private fun ThreadContent(
                 editing?.let { e -> banner = {
                     val pic = hasReplyThumb(e)
                     ComposerBanner("Edit message", e.text.ifEmpty { replyLine(e, e.bodyText) },
-                        thumb = if (pic) ({ ReplyThumb(e, 36.dp) }) else null,
+                        thumb = if (pic) ({ ReplyThumb(e, 36.dp, fadeIn = true) }) else null,
                         icon = if (pic) null else R.drawable.ic_sf_pencil) { editing = null }
                 } }
                 // A channel post quoted into this chat (iOS .quote banner): waits above the composer
@@ -2961,8 +2961,13 @@ private fun Composer(
                 Spacer(Modifier.width(8.dp))
                 // The pill: 40 at one line, corners of 20 (a capsule until it grows), the field 14 in.
                 // With a reply open the box is solid, so the messages behind never show through it.
-                Column(Modifier.weight(1f).floating(RoundedCornerShape(if (banner != null) 20.dp else 20.dp), fill = if (banner != null) c.card else null)) {
-                if (banner != null) banner()
+                // The reply / edit / quote / forward card opens and closes with a fade and its height,
+                // and a field that grows a line follows on the spring (iOS pops 26, 29).
+                val heldBanner = remember { arrayOfNulls<@Composable () -> Unit>(1) }
+                if (banner != null) heldBanner[0] = banner
+                Column(Modifier.weight(1f).floating(RoundedCornerShape(if (banner != null) 20.dp else 20.dp), fill = if (banner != null) c.card else null)
+                    .smoothSize()) {
+                com.fariin.app.ui.components.Appear(banner != null) { heldBanner[0]?.invoke() }
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = COMPOSER_BUTTON),
                     verticalAlignment = Alignment.Bottom,
@@ -3107,7 +3112,9 @@ private fun Composer(
                     }
                     // iOS: a tick while editing (the change is saved, not sent), the arrow otherwise.
                     Icon(androidx.compose.ui.res.painterResource(if (prefill != null) R.drawable.ic_sf_checkmark else R.drawable.ic_sf_arrow_up),
-                        contentDescription = if (prefill != null) "Save" else "Send", tint = Color.White, modifier = Modifier.size(22.dp))
+                        contentDescription = if (prefill != null) "Save" else "Send", tint = Color.White,
+                        // Arrow <-> tick when an edit starts or ends (iOS pops 30).
+                        modifier = Modifier.size(22.dp).fadeOnChange(prefill != null))
                 }
             } else Box(Modifier.size(COMPOSER_BUTTON)) {
                 // The lock target floats over the mic while the hold runs and comes down to meet
@@ -3202,8 +3209,9 @@ private fun FieldIcon(icon: Int, label: String, onClick: () -> Unit) {
     Box(Modifier.size(width = 32.dp, height = COMPOSER_BUTTON).clickable(
         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center) {
+        // GIF <-> keyboard, bell <-> bell-off: the new mark fades in (iOS pops 31, 33).
         Icon(androidx.compose.ui.res.painterResource(icon), contentDescription = label,
-            tint = Fariin.colors.label.copy(alpha = 0.55f), modifier = Modifier.size(24.dp))
+            tint = Fariin.colors.label.copy(alpha = 0.55f), modifier = Modifier.size(24.dp).fadeOnChange(icon))
     }
 }
 

@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.smoothSize
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -63,7 +64,8 @@ internal fun MentionPicker(src: MentionSource, box: TextFieldValue, onPick: (Tex
     if (people.isEmpty()) return
     BackHandler { closedAt = head }
     val c = Fariin.colors
-    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp).floating(RoundedCornerShape(16.dp))) {
+    // Typing on narrows it from 4 rows to 1: the list's height follows on the spring (iOS pops 28).
+    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp).floating(RoundedCornerShape(16.dp)).smoothSize()) {
         for (p in people) {
             Row(
                 Modifier.fillMaxWidth().clickable {
