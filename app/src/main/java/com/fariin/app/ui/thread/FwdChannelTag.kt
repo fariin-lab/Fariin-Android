@@ -130,8 +130,10 @@ internal fun ForwardedTag(m: Message, isMe: Boolean, inChannel: Boolean, openCid
     ) {
         Avatar(fc.photoUrl.ifEmpty { null }, 22.dp, squircle = true)
         Spacer(Modifier.width(7.dp))
+        // The name gives way first (weight, measured last): on a narrow phone the row ran out of room
+        // and squeezed Follow into a blue sliver (Oppo, 2026-11-21).
         Text(fc.title, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = ink, maxLines = 1,
-            overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 150.dp))
+            overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false).widthIn(max = 150.dp))
         Spacer(Modifier.width(6.dp))
         Text("Channel", fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = if (isMe) Color.White else ChannelBlue,
             modifier = Modifier.clip(RoundedCornerShape(8.5.dp))
