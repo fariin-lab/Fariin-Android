@@ -157,6 +157,8 @@ fun OnboardingPage(
     fun save() {
         val problem = HandleRules.saveProblem(name, handle, currentHandle)
         if (problem != null) { error = problem; return }
+        // iOS save(): no network, refused up front in the sign-in screens' words.
+        if (com.fariin.app.data.ConnectionStatus.offline) { error = com.fariin.app.data.AuthMessages.OFFLINE; return }
         saving = true; error = null
         scope.launch {
             try {
