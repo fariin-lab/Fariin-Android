@@ -329,7 +329,7 @@ object Requests {
     enum class Stance { OPEN, AWAITING_REPLY, INCOMING, FIRST_MESSAGE }
 
     /** MessageRequests.stance: [rawStance] with the admin panel's switch applied (MsgPolicy). */
-    fun stance(c: Conversation, me: String, unfriendedBy: String = ""): Stance {
+    fun stance(c: Conversation, me: String, unfriendedBy: String = c.unfriendedBy): Stance {
         if (c.reqOff && !c.isGroup) return Stance.OPEN
         return when (val s = rawStance(c, me, unfriendedBy)) {
             Stance.OPEN -> s
@@ -339,7 +339,7 @@ object Requests {
     }
 
     /** MessageRequests.rawStance: the two fields, no admin switch. */
-    fun rawStance(c: Conversation, me: String, unfriendedBy: String = ""): Stance {
+    fun rawStance(c: Conversation, me: String, unfriendedBy: String = c.unfriendedBy): Stance {
         if (c.isGroup || c.startedBy.isEmpty() || c.accepted) return Stance.OPEN
         if (c.lastSender.isEmpty()) {
             return if (c.startedBy != me && unfriendedBy == me) Stance.AWAITING_REPLY else Stance.FIRST_MESSAGE

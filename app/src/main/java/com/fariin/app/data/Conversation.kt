@@ -84,6 +84,8 @@ data class Conversation(
     val acceptedAtMillis: Double = 0.0,
     val accepted: Boolean = true,
     val reqOff: Boolean = false,
+    /** Who removed the other as a friend (iOS MessageRequests.unfriend); they wait for a new knock. */
+    val unfriendedBy: String = "",
     /** Restricted chat (iOS): each person's own switch, and the older shared fields. */
     val restrictedBy: Map<String, Boolean> = emptyMap(),
     val restrictLegacy: Boolean = false,
@@ -359,6 +361,7 @@ data class Conversation(
                 // Absent means "from before message requests existed": accepted.
                 accepted = data["accepted"] as? Boolean ?: (data["startedBy"] == null),
                 reqOff = data["reqOff"] as? Boolean ?: false,
+                unfriendedBy = data["unfriendedBy"] as? String ?: "",
                 restrictedBy = (data["restrictedBy"] as? Map<*, *>)?.mapNotNull { (k, v) ->
                     (k as? String)?.takeIf { v == true }?.let { it to true } }?.toMap() ?: emptyMap(),
                 restrictLegacy = listOf("noScreenshots", "noForwarding", "noSaving").any { data[it] == true },
