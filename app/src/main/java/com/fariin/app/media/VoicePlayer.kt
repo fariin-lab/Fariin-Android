@@ -16,6 +16,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -59,10 +61,36 @@ object VoicePlayer {
     private fun callActive(): Boolean =
         com.fariin.app.call.CallManager.ui.value.status.live || com.fariin.app.call.GroupCall.ui.value.joined
 
+    /** Set only when a call paused the note, so the call ending carries it on (iOS resumeAfterInterruption). */
+    private var resumeAfterCall = false
+    private var callWatch: Job? = null
+
     /** A call is starting or ringing: the note pauses and keeps its place (iOS interruption began). */
     fun pauseForCall() {
         val p = player ?: return
-        if (p.isPlaying) { p.pause(); save(); tick() }
+        if (p.isPlaying) { p.pause(); save(); tick(); resumeAfterCall = true }
+    }
+
+    /**
+     * Any call, one to one or group, ringing or joining, pauses the note (group calls never did), and
+     * when the last one is over a note the call paused plays on from its place (iOS interruption
+     * ended). Anything the person does with the note in between cancels that.
+     */
+    private fun watchCalls() {
+        if (callWatch?.isActive == true) return
+        callWatch = main.launch {
+            kotlinx.coroutines.flow.combine(com.fariin.app.call.CallManager.ui, com.fariin.app.call.GroupCall.ui) { a, g ->
+                a.status.live || g.joined || g.connecting
+            }.distinctUntilChanged().collectLatest { up ->
+                if (up) pauseForCall()
+                else if (resumeAfterCall) {
+                    delay(600)   // the call's audio lets go first
+                    resumeAfterCall = false
+                    val p = player ?: return@collectLatest
+                    if (!p.isPlaying && !callActive()) p.play()
+                }
+            }
+        }
     }
 
     fun cycleRate(cid: String) {
@@ -79,6 +107,7 @@ object VoicePlayer {
                messageId: String? = null, createdAtMs: Double = 0.0) {
         val s = _state.value
         val p = player
+        resumeAfterCall = false   // the person chose: a call ending must not override it
         if (s.id == id && p != null) {
             if (p.isPlaying) { p.pause(); _state.value = _state.value.copy(pausedByUser = true) }
             else if (callActive()) return
@@ -112,6 +141,7 @@ object VoicePlayer {
     }
 
     fun stop() {
+        resumeAfterCall = false
         save()
         VoiceEar.stop()
         player?.release(); player = null
@@ -133,6 +163,7 @@ object VoicePlayer {
         val p = player ?: return
         // A pause on the bar keeps the bar: it holds the only play button (iOS pause(byUser:) outside the chat).
         _state.value = _state.value.copy(pausedByUser = false)
+        resumeAfterCall = false
         if (p.isPlaying) p.pause() else if (callActive()) return else { if (p.playbackState == Player.STATE_ENDED) p.seekTo(0); p.play() }
     }
 
@@ -195,6 +226,7 @@ object VoicePlayer {
         p.play()
         player = p
         VoiceEar.watch(context) { player }   // raise to ear, as iOS
+        watchCalls()
         _state.value = _state.value.copy(id = id, playing = true, failed = _state.value.failed - id, cid = cid, author = author,
             pausedByUser = false)
         ticker?.cancel()
