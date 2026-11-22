@@ -309,8 +309,11 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
         if (g != null) nav.chat(g)
         else if (run.latest.adhoc != null) info = run   // a multi-person call has no one chat or profile
         else if (run.latest.otherUid.isNotEmpty()) {
-            // The profile shows this call's card (iOS source .calls).
-            com.fariin.app.data.CallInfoLink.set(run.latest.otherUid, run.latest)
+            // The profile shows a call card (iOS source .calls): the newest call with them, iOS
+            // lastCall, whichever of their rows was tapped. Calls I deleted are not counted.
+            val newest = calls.filter { it.cid == run.latest.cid && it.groupCid == null && it.adhoc == null && it.id !in hidden }
+                .maxByOrNull { it.dateMs } ?: run.latest
+            com.fariin.app.data.CallInfoLink.set(run.latest.otherUid, newest)
             nav.contact(run.latest.otherUid)
         } else info = run
     }
