@@ -1799,7 +1799,11 @@ private fun GroupCallParticipantsSheet(g: GroupCallUi, meId: String?, onFocus: (
             if (isLink && g.joined) NotHereYet(g, meId)
             SheetSection {
                 androidx.compose.foundation.lazy.LazyColumn {
-                    items(g.members, key = { it.id }) { m ->
+                    // iOS inCall: me first, then by name, ties by id so two people with one name
+                    // do not swap places on every update.
+                    val inCall = g.members.sortedWith(compareBy<GroupMember> { if (it.local) 0 else 1 }
+                        .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }.thenBy { it.id })
+                    items(inCall, key = { it.id }) { m ->
                         val mine = m.id == meId
                         val speaking = m.id == g.activeSpeaker && !mine
                         val ring by animateFloatAsState(if (speaking) 1f else 0f, tween(200), label = "ring")
