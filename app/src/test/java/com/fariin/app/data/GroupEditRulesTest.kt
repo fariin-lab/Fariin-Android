@@ -21,6 +21,8 @@ class GroupEditRulesTest {
     @Test fun adminNeedsChangeInfoWhenRightsAreWrittenOut() {
         assertFalse(GroupRules.canEditInfo("adm", group("adminRights" to mapOf("adm" to listOf("pinMessages"))), now))
         assertTrue(GroupRules.canEditInfo("adm", group("adminRights" to mapOf("adm" to listOf("changeInfo"))), now))
+        // Without the right, the members' switch still lets them in, as any member (iOS).
+        assertTrue(GroupRules.canEditInfo("adm", group("adminRights" to mapOf("adm" to listOf("pinMessages")), "membersCanEditInfo" to true), now))
         // The owner holds every right whatever the map says.
         assertTrue(GroupRules.canEditInfo("own", group("adminRights" to mapOf("own" to emptyList<String>())), now))
     }

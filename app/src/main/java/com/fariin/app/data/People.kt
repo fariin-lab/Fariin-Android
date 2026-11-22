@@ -761,7 +761,8 @@ object GroupRules {
      * GroupInfoView.canEditInfo: may [me] change the name and photo? Never in a group Fariin closed
      * (`mod.state` disabled, or suspended and not over) or one its owner ended. The owner always;
      * an admin with Change group info (a legacy admin with no `adminRights` entry has it); a
-     * member when `membersCanEditInfo` is on and no live `changeInfo` restriction stops them.
+     * member when `membersCanEditInfo` is on and no live `changeInfo` restriction stops them. An
+     * admin without the right is a member too here: the switch lets them in (iOS, firestore.rules).
      */
     fun canEditInfo(me: String, data: Map<String, Any?>, nowMs: Double = System.currentTimeMillis().toDouble()): Boolean {
         if (me.isEmpty()) return false
@@ -772,7 +773,7 @@ object GroupRules {
         val admins = (data["admins"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
         if (me in admins) {
             val granted = (data["adminRights"] as? Map<*, *>)?.get(me) as? List<*> ?: return true
-            return "changeInfo" in granted
+            if ("changeInfo" in granted) return true
         }
         val users = (data["users"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
         if (me !in users || data["membersCanEditInfo"] != true) return false
