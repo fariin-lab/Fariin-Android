@@ -126,6 +126,18 @@ object SelectRules {
         return Split(n, picked.size - n)
     }
 
+    /**
+     * ThreadView.selectionCanBeDeleted: the bin is live only when EVERY pick may go (not just one).
+     * A notice needs canDeleteNotice; anything else canDeleteHere (a 1:1 always, a group only what
+     * goes for everyone or is my own unsent one).
+     */
+    fun deletable(picked: List<Message>, me: String, isGroup: Boolean, adminMayDelete: Boolean, owner: String = "",
+                  channel: Boolean = false, groupDoc: Map<String, Any?> = emptyMap()): Boolean =
+        picked.isNotEmpty() && picked.all { m ->
+            if (m.isSystem) canDeleteNotice(m, groupDoc, me)
+            else !isGroup || m.sendState != null || MessageRules.canDeleteForEveryone(m, me, adminMayDelete, owner, channel)
+        }
+
     fun forwardable(picked: List<Message>): Boolean =
         picked.isNotEmpty() && picked.size <= MAX_FORWARD && picked.all(MessageRules::canForward)
 

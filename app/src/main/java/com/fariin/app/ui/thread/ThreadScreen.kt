@@ -1570,8 +1570,9 @@ private fun ThreadContent(
                     search.index = (search.index + d).coerceIn(0, maxOf(0, search.matches.size - 1)); goToMatch()
                 }, onList = { search.asList = it })
             } else if (kind == 1) {
-                val canDelete = picked.isNotEmpty() && (!ui.isGroup ||
-                    picked.any { it.sendState != null || MessageRules.canDeleteForEveryone(it, ui.me, ui.adminMayDelete, ui.ownerId, channel = ui.channel != null) })
+                // iOS selectionCanBeDeleted: every pick must be one I may delete, not just one of them.
+                val canDelete = com.fariin.app.data.SelectRules.deletable(picked, ui.me, ui.isGroup, ui.adminMayDelete, ui.ownerId,
+                    channel = ui.channel != null, groupDoc = ui.groupDoc)
                 SelectionBar(
                     deleteEnabled = canDelete,
                     forwardEnabled = !restrictedNow && com.fariin.app.data.SelectRules.forwardable(picked),
