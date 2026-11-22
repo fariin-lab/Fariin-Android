@@ -27,8 +27,18 @@ class MessageLengthTest {
     @Test fun noSpaceCutsAtTheEdgeNeverInsideAnEmoji() {
         val s = "x".repeat(99) + "😀" + "y".repeat(10)
         val parts = MessageLength.splitForBubbles(s, max = 100)
-        assertEquals("x".repeat(99), parts[0])
-        assertEquals("😀" + "y".repeat(10), parts[1])
+        // The emoji is one character (iOS String.count): 100 fit in the first bubble.
+        assertEquals("x".repeat(99) + "😀", parts[0])
+        assertEquals("y".repeat(10), parts[1])
+        val t = "x".repeat(100) + "😀" + "y".repeat(10)
+        assertEquals(listOf("x".repeat(100), "😀" + "y".repeat(10)), MessageLength.splitForBubbles(t, max = 100))
+    }
+
+    @Test fun emojiCountAsOneCharacter() {
+        // 60 emoji are 120 UTF-16 units but 60 characters: one bubble, as on iOS.
+        val s = "😀".repeat(60)
+        assertEquals(listOf(s), MessageLength.splitForBubbles(s, max = 100))
+        assertEquals(60, MessageLength.charCount(s))
     }
 
     @Test fun maxLengthTextIsTwoBubbles() {

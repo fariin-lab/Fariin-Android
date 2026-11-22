@@ -44,14 +44,15 @@ object MessageLength {
     fun splitForBubbles(text: String, max: Int = BUBBLE_CHARS): List<String> {
         val out = mutableListOf<String>()
         var rest = text
-        while (rest.length > max) {
-            val edge = boundaryAtOrBefore(rest, max).takeIf { it > 0 } ?: max
+        // [max] counts characters as a person sees them, as iOS String.count (an emoji is one).
+        while (rest.length > max && charCount(rest) > max) {
+            val edge = takeChars(rest, max).length.takeIf { it > 0 } ?: max
             val window = rest.substring(0, edge)
             val nl = window.lastIndexOf('\n')
             val sp = window.lastIndexOf(' ')
             val cut = when {
-                nl > max / 2 -> nl
-                sp > max / 2 -> sp
+                nl >= 0 && charCount(window.substring(0, nl)) > max / 2 -> nl
+                sp >= 0 && charCount(window.substring(0, sp)) > max / 2 -> sp
                 else -> edge
             }
             val piece = rest.substring(0, cut).trim()
@@ -72,6 +73,15 @@ object MessageLength {
         bi.setText(s)
         val end = bi.next(n)
         return if (end == java.text.BreakIterator.DONE) s else s.substring(0, end)
+    }
+
+    /** Characters as a person sees them (iOS String.count). */
+    fun charCount(s: String): Int {
+        val bi = java.text.BreakIterator.getCharacterInstance()
+        bi.setText(s)
+        var n = 0
+        while (bi.next() != java.text.BreakIterator.DONE) n++
+        return n
     }
 
     /** The nearest character boundary at or before [i] (never inside a surrogate pair or an emoji). */
