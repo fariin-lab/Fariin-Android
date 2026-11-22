@@ -196,7 +196,12 @@ object ChannelFollows {
         val g = gen
         for (cid in want - docRegs.keys) {
             docRegs[cid] = db.collection("conversations").document(cid)
-                .addSnapshotListener(com.fariin.app.perf.ListenThread.exec) { s, _ -> onDoc(g, cid, s?.data, s?.metadata?.isFromCache == false) }
+                .addSnapshotListener(com.fariin.app.perf.ListenThread.exec) { s, _ ->
+                    // The server says the channel is gone (deleted): its row drops off the list (iOS
+                    // attachDocListener). A cache answer or a passing error does not.
+                    if (s != null && !s.exists() && !s.metadata.isFromCache) dropDoc(g, cid)
+                    else onDoc(g, cid, s?.data, s?.metadata?.isFromCache == false)
+                }
         }
         // Past the cap with nothing saved: one plain read, so the row still shows.
         for (cid in entries.keys) {
@@ -222,6 +227,15 @@ object ChannelFollows {
         // iOS attachDocListener: the channel's shared wallpaper lands now, not when the chat opens.
         runCatching { com.google.firebase.FirebaseApp.getInstance().applicationContext }.getOrNull()
             ?.let { com.fariin.app.data.ChatLookStore.syncGroupWallpaper(it, cid, d["wallpaper"] as? String) }
+    }
+
+    /** Listen thread: a channel the server no longer has leaves the list and the disk copy. */
+    private fun dropDoc(g: Int, cid: String) {
+        if (g != gen) return
+        inbox.remove(cid)
+        if (!_docs.value.containsKey(cid)) return
+        _docs.update { it - cid }
+        saveToDisk()
     }
 
     /** Listen thread: one publish and at most one save for every answer gathered. */
