@@ -107,6 +107,11 @@ class GroupAdminsTest {
         assertEquals(3, GroupAdmins.slowIndex(25))
         assertTrue(GroupAdmins.hasLink("see https://x.y"))
         assertFalse(GroupAdmins.hasLink("plain words"))
+        // Bare domains count too (iOS link detector); a file name or an email does not.
+        assertTrue(GroupAdmins.hasLink("go to fariin.com now"))
+        assertTrue(GroupAdmins.hasLink("fariin.com/help"))
+        assertFalse(GroupAdmins.hasLink("see photo.png"))
+        assertFalse(GroupAdmins.hasLink("mail me at a@b.com"))
     }
 
     @Test fun linkStatusLines() {

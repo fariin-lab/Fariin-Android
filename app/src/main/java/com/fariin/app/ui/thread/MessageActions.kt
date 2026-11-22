@@ -204,7 +204,9 @@ internal fun MessageMenu(
                 m.mediaKind == null && m.poll == null && !m.isCall && !m.isSystem &&
                 !bubbleStylesOff(ui.channel != null, ui.groupDoc, ui.isGroup))
                 add(MenuItem("Bubble Style", null, iconRes = com.fariin.app.R.drawable.ic_set_appearance, badge = NewBadgeSpots.CHAT_MENU_BUBBLE_STYLE) { com.fariin.app.ui.settings.BubbleStyleSheet.open.value = true })
-            if (MessageRules.canEdit(m, ui.me, now) && !card) add(MenuItem("Edit", null, iconRes = com.fariin.app.R.drawable.ic_sf_pencil, badge = NewBadgeSpots.CHAT_MENU_EDIT) { onStartEdit(m) })
+            // iOS canEdit: not while an admin has me muted in this group.
+            val mutedHere = ui.isGroup && ui.groupDoc.isNotEmpty() && com.fariin.app.data.MemberRestrict.isMuted(ui.groupDoc, ui.me, now)
+            if (MessageRules.canEdit(m, ui.me, now) && !card && !mutedHere) add(MenuItem("Edit", null, iconRes = com.fariin.app.R.drawable.ic_sf_pencil, badge = NewBadgeSpots.CHAT_MENU_EDIT) { onStartEdit(m) })
             // In a channel only its owner and admins see a post's earlier versions (iOS 0ed7fa04);
             // groups and 1:1 chats unchanged.
             val historyAllowed = ui.channel?.let { it.role == com.fariin.app.channel.ChannelRules.Role.ADMIN } ?: true
