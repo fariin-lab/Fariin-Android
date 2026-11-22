@@ -48,7 +48,8 @@ internal fun styledBubble(m: Message, stylesOff: Boolean, plus: com.fariin.app.d
     if (CardRules.location(m.text) != null || CardRules.contact(m.text) != null) return null
     // Fariin Plus: the sender's profile style, only when the message carries no free style of its own.
     if (m.bubbleStyle == null || !BubbleStyles.SHOWN) {
-        val p = com.fariin.app.data.PlusBubbles.drawn(plus)
+        val p = com.fariin.app.data.PlusBubbles.drawn(plus,
+            strong = plus != null && com.fariin.app.data.PlusBubbles.strong(androidx.compose.ui.platform.LocalContext.current))
         if (p != null) return StyledBubble(Brush.linearGradient(listOf(Color(p.from), Color(p.to)),
             start = Offset.Zero, end = Offset.Infinite), Color(p.text), glass = false)
         if (!BubbleStyles.SHOWN) return null

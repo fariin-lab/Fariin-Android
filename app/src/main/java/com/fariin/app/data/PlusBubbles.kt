@@ -62,6 +62,23 @@ object PlusBubbles {
     fun record(v: PlusBubble?) { if (v != mine) mine = v }
     fun clear() { mine = null }
 
+    // The phone's higher contrast (iOS Increase Contrast): Android 14+ contrast level above
+    // standard, or the older "high contrast text" switch. Read at most every 5 s, not per bubble.
+    private var strongAt = 0L
+    private var strongOn = false
+    fun strong(c: android.content.Context): Boolean {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (strongAt == 0L || now - strongAt > 5_000) {
+            strongAt = now
+            strongOn = try {
+                val level = if (android.os.Build.VERSION.SDK_INT >= 34)
+                    (c.getSystemService(android.content.Context.UI_MODE_SERVICE) as? android.app.UiModeManager)?.contrast ?: 0f else 0f
+                level > 0f || android.provider.Settings.Secure.getInt(c.contentResolver, "high_text_contrast_enabled", 0) == 1
+            } catch (_: Exception) { false }
+        }
+        return strongOn
+    }
+
     /** `plusBubbleStyle({style})`; null = Classic. Throws a sentence to show. */
     suspend fun choose(id: String?) {
         try {
