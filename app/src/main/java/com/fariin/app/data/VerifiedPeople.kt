@@ -54,6 +54,12 @@ object VerifiedPeople {
             ?.putString(uid, JSONObject().put("k", kind).put("t", now).toString())?.apply()
     }
 
+    /** Sign-out (iOS VerificationIndex.clear): the next account starts blank. */
+    fun clear(c: Context) {
+        checkedAt.clear(); _kinds.value = emptyMap(); loaded = true
+        c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+    }
+
     /** The badge for [uid]: null when none, else its type ("" plain). */
     fun badge(kinds: Map<String, String>, uid: String): String? = kinds[uid]?.takeIf { it != "-" }
 
