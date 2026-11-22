@@ -90,6 +90,9 @@ class CryptoDecryptor(private val crypto: FariinCrypto) : MessageDecryptor {
      */
     private fun local(conv: Conversation): String? {
         if (conv.isChannel || (conv.isGroup && conv.isPublicGroup)) return null
+        // A line blanked because its timer ran out stays blank: the phone's copy of that
+        // message must not come back in its place (iOS blankLine / localOverlay).
+        conv.lastExpiresAtMillis?.let { if (it <= System.currentTimeMillis()) return null }
         val (text, at) = com.fariin.app.local.LocalDb.summary(conv.id) ?: return null
         return text.takeIf { it.isNotEmpty() && at + 2_000 >= conv.updatedAtMillis.toLong() }
     }
