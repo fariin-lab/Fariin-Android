@@ -612,8 +612,8 @@ object PhotoRef {
  * NEW name (same files, new `v`), on my profile and in every chat's copy. Every viewer's cached copy
  * is keyed by the old name, so their next draw misses the cache and storage.rules is asked again;
  * someone who may no longer see it gets the initial instead. Three tries, 2 s and 6 s apart; no
- * photo is an answer, not a failure. Android's files are always tagged "checked" and it publishes no
- * blurred cover, so nothing else needs re-labelling here.
+ * photo is an answer, not a failure. Android's files are always tagged "checked" (the server
+ * relabels them) and it publishes no blurred cover, so any old cover is cleared here.
  */
 object PhotoRepublish {
     private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
@@ -636,7 +636,10 @@ object PhotoRepublish {
         val v = System.currentTimeMillis()
         val circle = PhotoRef.reference("profiles/$me.jpg", v)
         val poster = if (d.getString("posterUrl").isNullOrEmpty()) null else PhotoRef.reference("profiles/$me-poster.jpg", v)
-        val userFields = HashMap<String, Any>().apply { put("photoUrl", circle); poster?.let { put("posterUrl", it) } }
+        // The blurred cover goes too (iOS writes "" when the photo is not for everyone). Android makes
+        // no cover, so it is always withdrawn: one set on an iPhone must not stay readable after the
+        // photo was hidden here.
+        val userFields = HashMap<String, Any>().apply { put("photoUrl", circle); put("photoThumb", ""); poster?.let { put("posterUrl", it) } }
         try { db.collection("users").document(me).set(userFields, SetOptions.merge()).await() } catch (_: Exception) { return false }
         val fields = HashMap<String, Any>().apply { put("photos.$me", circle); poster?.let { put("posters.$me", it) } }
         try {
