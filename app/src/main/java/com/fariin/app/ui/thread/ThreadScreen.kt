@@ -1848,21 +1848,48 @@ private fun ThreadContent(
                         if (rest != null) composerRefill = System.nanoTime() to rest
                     }
                 }
+                // A pick sent from the attach sheet or from a pasted picture's editor: the same holds (iOS).
+                val sendPicked: (List<Uri>, String, Boolean) -> Unit = { uris, cap, once ->
+                    val kinds = uris.map { if ((resolver.getType(it) ?: "").startsWith("video/")) com.fariin.app.data.GroupAdmins.SendKind.VIDEOS
+                        else com.fariin.app.data.GroupAdmins.SendKind.PHOTOS }.distinct()
+                    // A pick that goes out as several albums is several messages: slow mode lets one through (iOS).
+                    val many = if (ui.isGroup && doc.isNotEmpty() && com.fariin.app.data.GroupAdmins.slows(doc, ui.me) &&
+                        uris.size > com.fariin.app.media.MediaRules.ALBUM_MAX_ITEMS)
+                        "Send one message at a time: one video, or up to ${com.fariin.app.media.MediaRules.ALBUM_MAX_ITEMS} photos as one album." else null
+                    val stop = slow() ?: many ?: kinds.firstNotNullOfOrNull { held(it) }
+                    if (stop != null) actions.onNotice(stop) else { sendMotion.arm(SendMotion.Kind.MEDIA, ui.messages, sendAnim)
+                        // Any pick sent while replying carries the reply and closes the bar.
+                        val re = replyTo; replyTo = null
+                        onSendPick(uris, cap, once, re) }
+                }
+                // A picture pasted into the field (iOS D-composer-5): copied in, then the photo editor
+                // (one) or the pager (several), as a pick from the attach sheet; Send goes through sendPicked.
+                var pasted by remember { mutableStateOf<List<Uri>?>(null) }
+                val pasteScope = androidx.compose.runtime.rememberCoroutineScope()
+                pasted?.let { list ->
+                    if (list.size == 1) PhotoDrawEditor(list[0], editOnly = false, startDrawing = false,
+                        onClose = { pasted = null }, allowViewOnce = ui.channel == null,
+                        onSend = { photo, cap, once -> pasted = null; sendPicked(listOf(photo), cap, once) })
+                    else {
+                        val items = remember(list) { androidx.compose.runtime.mutableStateListOf<Uri>().apply { addAll(list) } }
+                        val none = remember(list) { androidx.compose.runtime.mutableStateListOf<Uri>() }
+                        var cap by remember(list) { mutableStateOf("") }
+                        MediaPagerEditor(items, none, 0, cap, onCaption = { cap = it }, onClose = { pasted = null },
+                            onSend = { l, c2 -> pasted = null; sendPicked(l, c2, false) })
+                    }
+                }
+                val onPastePictures = steady1 { pics: List<Pair<Uri, String>> ->
+                    val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.PHOTOS)
+                    if (stop != null) actions.onNotice(stop) else pasteScope.launch {
+                        val copies = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            pics.mapNotNull { (u, t) -> com.fariin.app.system.ShareActivity.copyIn(hookCtx, u, t) }
+                        }
+                        if (copies.isEmpty()) com.fariin.app.ui.components.Snack.show("Couldn't paste the picture.") else pasted = copies
+                    }
+                }.takeIf { !ui.knock }
                 if (attachOpen) AttachSheet(allowViewOnce = ui.channel == null, onDismiss = { attachOpen = false; attachCamera = false; AttachKeyboard.release() },
                     cameraFirst = attachCamera,
-                    onSendMedia = { uris, cap, once ->
-                        val kinds = uris.map { if ((resolver.getType(it) ?: "").startsWith("video/")) com.fariin.app.data.GroupAdmins.SendKind.VIDEOS
-                            else com.fariin.app.data.GroupAdmins.SendKind.PHOTOS }.distinct()
-                        // A pick that goes out as several albums is several messages: slow mode lets one through (iOS).
-                        val many = if (ui.isGroup && doc.isNotEmpty() && com.fariin.app.data.GroupAdmins.slows(doc, ui.me) &&
-                            uris.size > com.fariin.app.media.MediaRules.ALBUM_MAX_ITEMS)
-                            "Send one message at a time: one video, or up to ${com.fariin.app.media.MediaRules.ALBUM_MAX_ITEMS} photos as one album." else null
-                        val stop = slow() ?: many ?: kinds.firstNotNullOfOrNull { held(it) }
-                        if (stop != null) actions.onNotice(stop) else { sendMotion.arm(SendMotion.Kind.MEDIA, ui.messages, sendAnim)
-                            // Any pick sent while replying carries the reply and closes the bar.
-                            val re = replyTo; replyTo = null
-                            onSendPick(uris, cap, once, re) }
-                    },
+                    onSendMedia = sendPicked,
                     onSendFile = { u -> val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.FILES); if (stop != null) actions.onNotice(stop) else { val re = replyTo; replyTo = null; onSendFile(u, re) } },
                     // Several files (or photos as files) are several messages; slow mode keeps only the
                     // first, so the pick is refused (iOS slowRefusesBatch).
@@ -1935,6 +1962,7 @@ private fun ThreadContent(
                     onRecording = steady1 { r: Boolean -> voiceRecording = r }, onCapturing = steady1(actions.onRecordingVoice),
                     voiceOff = knockHold ?: held(com.fariin.app.data.GroupAdmins.SendKind.VOICE) ?: (if (slowLeft > 0) slow() else null),
                     onVoiceOff = steady1(actions.onNotice),
+                    onPastePictures = onPastePictures,
                     onRowPlaced = steady1 { r: androidx.compose.ui.geometry.Rect? -> sendMotion.composerRow = r },
                     // Fariin Plus send effects: 1:1s and groups, not channels, not the first message
                     // to a stranger (iOS requestStance .firstMessage), not while quoting or editing.
@@ -3204,6 +3232,8 @@ private fun Composer(
     /** Why voice messages are off for me here (iOS sendHeldBack(.sendVoice)): the mic says it and records nothing. */
     voiceOff: String? = null,
     onVoiceOff: (String) -> Unit = {},
+    /** A picture pasted into the field (iOS D-composer-5): it opens the photo editor. Null: words only. */
+    onPastePictures: ((List<Pair<Uri, String>>) -> Unit)? = null,
 ) {
     val voiceOffNow = androidx.compose.runtime.rememberUpdatedState(voiceOff)
     val onVoiceOffNow = androidx.compose.runtime.rememberUpdatedState(onVoiceOff)
@@ -3625,6 +3655,8 @@ private fun Composer(
                             .boldMenuItem(boldable, hasSelection = { !boxValue.selection.collapsed }, onBold = boldBar.onBold, onLink = openLink)
                             // A hardware keyboard's Return sends (iOS); the on-screen one is untouched.
                             .onPreviewKeyEvent { hardwareReturn(it) }
+                            // A picture on the clipboard pastes as a photo, as iOS (PasteImage.kt).
+                            .pastePictures(context, onPastePictures)
                             // Screen readers: the placeholder is a separate Text, so the field names itself.
                             .semantics { contentDescription = placeholder },
                     )
