@@ -136,7 +136,8 @@ private fun Card(b: InAppBanner) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // A channel's face is its rounded square, as on its row and its page (owner 2026-11-10).
-        Avatar(b.photo, 40.dp, squircle = com.fariin.app.data.CryptoHub.listedConversation(b.cid)?.isChannel == true ||
+        if (b.cid == com.fariin.app.data.OfficialChannel.CID) com.fariin.app.ui.official.OfficialAvatar(40.dp)
+        else Avatar(b.photo, 40.dp, squircle = com.fariin.app.data.CryptoHub.listedConversation(b.cid)?.isChannel == true ||
             com.fariin.app.channel.ChannelFollows.docs.value[b.cid]?.get("channel") == true)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {

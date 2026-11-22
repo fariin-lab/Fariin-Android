@@ -53,10 +53,16 @@ object InAppRules {
         val s = (decision as? NotifDecision.Show)?.spec ?: return InAppRoute.Nothing
         if (!inFront) return InAppRoute.System
         if (!s.opensChat || s.channel != NotifChannel.MESSAGES) return InAppRoute.System
-        val banner = if (prefs.preview && !locked) {
+        val banner = if (!prefs.preview || locked) null else if (s.key == com.fariin.app.data.OfficialChannel.CID) {
+            // Fariin's own messages ("New login") speak as Fariin with its mark, the title in front
+            // of the words (iOS InAppBannerCenter.show). The host draws the mark for this cid.
+            val head = s.title.trim()
+            val words = if (head.isEmpty() || head == com.fariin.app.data.OfficialChannel.NAME) s.body else "$head: ${s.body}"
+            InAppBanner(s.key, com.fariin.app.data.OfficialChannel.NAME, words, null)
+        } else {
             val photo = if (s.plain) localPhoto else if (s.isGroup) s.groupPhoto ?: localPhoto else s.senderPhoto ?: localPhoto
             InAppBanner(s.key, s.title.ifBlank { "New message" }, s.body, photo)
-        } else null
+        }
         return InAppRoute.InApp(banner, prefs.sound, prefs.vibrate)
     }
 }
