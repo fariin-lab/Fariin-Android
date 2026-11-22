@@ -65,6 +65,9 @@ class ThreadLogicTest {
         assertEquals("Oct 20, 2026", ThreadLogic.dayLabel(at(2026, 10, 20), now, zone, Locale.US))
         assertEquals("May 1, 2026", ThreadLogic.dayLabel(at(2026, 5, 1), now, zone, Locale.US))
         assertEquals("March 3, 2019", ThreadLogic.dayLabel(at(2019, 3, 3), now, zone, Locale.US))
+        // The pinned list keeps the short date at any age.
+        assertEquals("Mar 3, 2019", ThreadLogic.pinnedDayLabel(at(2019, 3, 3), now, zone, Locale.US))
+        assertEquals("Yesterday", ThreadLogic.pinnedDayLabel(at(2026, 11, 1, 23), now, zone, Locale.US))
     }
 
     @Test fun runsAndSeparators() {

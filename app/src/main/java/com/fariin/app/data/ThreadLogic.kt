@@ -141,6 +141,18 @@ object ThreadLogic {
         }
     }
 
+    /** The pinned list's day (iOS PinnedMessagesSheet.dayLabel): Today, Yesterday, else always the
+     *  short date with its year ("Nov 2, 2019"), never the long form the chat uses past six months. */
+    fun pinnedDayLabel(millis: Double, nowMillis: Double, zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String {
+        val d = Instant.ofEpochMilli(millis.toLong()).atZone(zone).toLocalDate()
+        val today = Instant.ofEpochMilli(nowMillis.toLong()).atZone(zone).toLocalDate()
+        return when (d) {
+            today -> "Today"
+            today.minusDays(1) -> "Yesterday"
+            else -> mediumDate.withLocale(locale).format(d)
+        }
+    }
+
     /** The bubble's time: "9:41 AM" or "09:41" with the phone's 24-hour setting. */
     fun timeLabel(millis: Double, is24h: Boolean, zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String {
         val t = Instant.ofEpochMilli(millis.toLong()).atZone(zone).toLocalTime()

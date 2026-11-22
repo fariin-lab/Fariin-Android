@@ -254,8 +254,8 @@ internal fun PinnedMessagesSheet(
             } else {
                 androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
                     pinned.forEachIndexed { i, m ->
-                        val day = com.fariin.app.data.ThreadLogic.dayLabel(m.createdAtMillis, now)
-                        if (i == 0 || day != com.fariin.app.data.ThreadLogic.dayLabel(pinned[i - 1].createdAtMillis, now)) {
+                        val day = com.fariin.app.data.ThreadLogic.pinnedDayLabel(m.createdAtMillis, now)
+                        if (i == 0 || day != com.fariin.app.data.ThreadLogic.pinnedDayLabel(pinned[i - 1].createdAtMillis, now)) {
                             item(key = "day-${m.id}") {
                                 Text(day, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.secondary,
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
