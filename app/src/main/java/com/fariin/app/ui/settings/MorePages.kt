@@ -577,7 +577,7 @@ private fun ChatsSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
             clearScope.launch {
                 // Every chat in the list, as iOS clearEverything (ChatService.deleteForMe each): my own
                 // clearedAt mark, written on the server so every device of mine follows; the other
-                // person keeps theirs. A channel I only follow is unfollowed, as iOS. The Fariin chat
+                // person keeps theirs. A channel I only follow is left as it is (no clear mark for a follower). The Fariin chat
                 // is not in the list, so iOS leaves it as it is ([ClearHistoryRules]).
                 val ok = com.fariin.app.data.CryptoHub.listedAll().map { c ->
                     when (com.fariin.app.data.ClearHistoryRules.step(me, c)) {
