@@ -103,6 +103,23 @@ object AutoDownload {
     /** [allowedNow], and small enough to come by itself ([size] unknown counts as small, as iOS). */
     fun allowedNow(c: Context, k: Kind, size: Long?): Boolean = (size == null || size <= 0 || size <= capBytes(k)) && allowedNow(c, k)
 
+    /** iOS VoiceAutoDownload.sizeLimit: a voice note's ceiling is never below the panel's floor (2 MB),
+     *  else the file ceiling: 2 MB on mobile data, 3 MB on Wi-Fi. */
+    fun voiceLimit(onWifi: Boolean): Long =
+        maxOf(com.fariin.app.data.AppConfig.bytes(com.fariin.app.data.AppConfig.K.voiceAutoDownloadMB), (if (onWifi) 3L else 1L) * 1024 * 1024)
+
+    /** iOS VoiceAutoDownload.estimatedBytes: a note carries its length, not its size, so the size is
+     *  guessed from it (40 kbit/s, with room for the seal). Unknown length = null. */
+    fun voiceEstimate(duration: Double?): Long? =
+        duration?.takeIf { it.isFinite() && it > 0 }?.let { (it * 5_000 * 1.1).toLong() + 4_096 }
+
+    /** May this voice note come by itself on this network: the Audio row, and not too long (iOS decide). */
+    fun voiceAllowedNow(c: Context, duration: Double?): Boolean {
+        if (!allowedNow(c, Kind.AUDIO)) return false
+        val est = voiceEstimate(duration) ?: return true
+        return est <= voiceLimit(onWifi(c))
+    }
+
     fun onWifi(c: Context): Boolean = runCatching {
         val cm = c.getSystemService(ConnectivityManager::class.java)
         val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false

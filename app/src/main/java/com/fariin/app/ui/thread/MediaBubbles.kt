@@ -426,9 +426,10 @@ internal fun VoiceBody(m: Message, cid: String, isMe: Boolean, width: Dp, meta: 
     // Storage and Data > Auto-Download > Voice messages (iOS AutoDownloadPrefs, audio "always" by
     // default): a note that may come down on this network is fetched as its bubble appears, so the
     // tap plays at once. Not allowed: it still loads on the tap. ChatMedia shares one download.
+    // A long note (over about 2 MB on mobile data, 3 MB on Wi-Fi) waits for the tap, as iOS.
     val remote = m.audioUrl?.takeIf { m.localPath == null && !ChatMedia.isLocal(it) }
     LaunchedEffect(remote) {
-        if (remote != null && media.cached(remote) == null && AutoDownload.allowedNow(ctx, AutoDownload.Kind.AUDIO)) {
+        if (remote != null && media.cached(remote) == null && AutoDownload.voiceAllowedNow(ctx, m.duration)) {
             media.file(remote, m.enc)
         }
     }
