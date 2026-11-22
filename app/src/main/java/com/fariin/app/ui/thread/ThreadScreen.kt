@@ -610,6 +610,14 @@ private fun ThreadContent(
             dismissButton = { androidx.compose.material3.TextButton({ answer(false) }) { Text("Keep On", color = Fariin.colors.accent) } })
     }
     LaunchedEffect(ui.messages) { selected.retainAll(ui.messages.map { it.rowId }.toSet()) }
+    // iOS: the message being edited was deleted for everyone, or its timer took it from inside the
+    // loaded window: leave edit mode instead of keeping the banner over nothing.
+    LaunchedEffect(ui.messages) {
+        val e = editing ?: return@LaunchedEffect
+        val live = ui.messages.firstOrNull { it.id == e.id }
+        val inWindow = ui.messages.minOfOrNull { it.createdAtMillis }?.let { it <= e.createdAtMillis } ?: false
+        if (live?.deleted == true || (live == null && inWindow)) editing = null
+    }
     if (bulkDelete) BulkDeleteDialog(picked, ui, onDismiss = { bulkDelete = false }) { plan ->
         actions.onDeleteMany(plan); selected.clear()
     }
