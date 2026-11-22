@@ -85,10 +85,16 @@ internal fun OneTimePhotoPage(m: Message, cid: String, onClose: () -> Unit) {
         val longPx = remember { ctx.resources.displayMetrics.let { maxOf(it.widthPixels, it.heightPixels) } }
         val cap = remember { LowEnd.viewerSide(longPx * 2, LowEnd.isLowRam(ctx)) }
         val bmp = rememberBitmap(file, cap, maxLongPx = cap)
+        // Set once the picture was on screen; read again when the page goes.
+        var seen by remember { mutableStateOf(false) }
         if (bmp != null) LaunchedEffect(m.id) {
+            seen = true
             ViewedOnce.mark(ctx, m.id)
             OnceBurn.burn(cid, m.id)
         }
+        // iOS asks for the burn again when the page closes (harmless twice): a first call lost
+        // to a bad signal still burns it on the server.
+        DisposableEffect(Unit) { onDispose { if (seen) OnceBurn.burn(cid, m.id) } }
         // The copy this effect was made for, taken now: `file` read inside onDispose is the state's
         // CURRENT value, so the effect for "no file yet" deleted the photo the moment it arrived, and
         // the viewer spun forever (overnight test 2026-11-10: a view-once photo never opened).
