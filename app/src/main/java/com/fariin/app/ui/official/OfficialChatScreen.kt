@@ -332,7 +332,8 @@ fun OfficialChatScreen(onBack: () -> Unit, onInfo: (() -> Unit)? = null) {
             items(view.visible, key = { it.id }) { a ->
                 // Counted as seen once it is on screen (iOS countsAsRead).
                 LaunchedEffect(a.id) { OfficialChannel.countRead(a) }
-                val now = System.currentTimeMillis().toDouble()
+                // Server ms: a Reject button goes when the server's 48 hours do (iOS ServerClock).
+                val now = com.fariin.app.data.ServerClock.nowMs()
                 AnnouncementCard(a, timeLabel(a.sortAt, is24h), a.buttons.filter { it.isUsable(now) }, ::tap,
                     ticked = if (selecting) a.id in picked else null, onToggle = { toggle(a.id) },
                     onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(a.plainText)) },
