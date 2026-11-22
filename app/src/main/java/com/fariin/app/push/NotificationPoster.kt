@@ -235,7 +235,7 @@ object NotificationPoster {
 
     /** The rules refused a reply sent from the shade: say so, a tap opens the chat. */
     @SuppressLint("MissingPermission")
-    fun showReplyFailed(c: Context, cid: String) {
+    fun showReplyFailed(c: Context, cid: String, why: String? = null) {
         ensureChannels(c)
         val nmc = NotificationManagerCompat.from(c)
         if (!nmc.areNotificationsEnabled()) return
@@ -246,7 +246,7 @@ object NotificationPoster {
             .setSmallIcon(R.drawable.ic_stat_fariin)
             .setColor(Color.rgb(0x1E, 0x88, 0xE5))
             .setContentTitle("Message not sent")
-            .setContentText(if (name != null) "Your reply to $name could not be sent. Open the chat to try again."
+            .setContentText(why ?: if (name != null) "Your reply to $name could not be sent. Open the chat to try again."
                 else "Your reply could not be sent. Open the chat to try again.")
             .setContentIntent(tap)
             .setAutoCancel(true)

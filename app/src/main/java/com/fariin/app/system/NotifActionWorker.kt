@@ -13,6 +13,8 @@ import com.fariin.app.data.ThreadRepository
 import com.fariin.app.local.SendQueue
 import com.fariin.app.push.NotificationPoster
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.Query
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -51,6 +53,13 @@ class NotifActionWorker(c: Context, params: WorkerParameters) : CoroutineWorker(
                     val id = inputData.getString(CLIENT_ID) ?: return Result.failure()
                     SendQueue.init(c)
                     val e = SendQueue.all(me).firstOrNull { it.clientId == id } ?: return Result.success()  // already sent
+                    // A group's limits hold for a reply from the shade too: the chat's composer checks
+                    // them, the rules check only who may send. Held back = not sent, and it says why.
+                    groupHold(cid, me, e.text)?.let { why ->
+                        SendQueue.remove(me, e.clientId)
+                        NotificationPoster.showReplyFailed(c, cid, why)
+                        return Result.success()
+                    }
                     runCatching { crypto.ensureReady() }
                     return when (withTimeoutOrNull(STEP_MS) { repo.sendQueued(e) } ?: ThreadRepository.QueuedResult.LATER) {
                         ThreadRepository.QueuedResult.SENT -> {
@@ -69,6 +78,28 @@ class NotifActionWorker(c: Context, params: WorkerParameters) : CoroutineWorker(
         } finally {
             scope.cancel()
         }
+    }
+
+    /**
+     * The composer's group holds (ThreadScreen gatedSend): links off for me, and slow mode's wait
+     * since my last message. Null = may send, or the group could not be read (the send then goes
+     * on and the rules decide).
+     */
+    private suspend fun groupHold(cid: String, me: String, text: String): String? {
+        if (!com.fariin.app.crypto.Wire.isGroupCid(cid)) return null
+        val conv = com.fariin.app.Fb.db.collection("conversations").document(cid)
+        val d = withTimeoutOrNull(STEP_MS) { runCatching { conv.get().await().data }.getOrNull() } ?: return null
+        val now = System.currentTimeMillis().toDouble()
+        if (com.fariin.app.data.GroupAdmins.hasLink(text)) {
+            com.fariin.app.data.GroupAdmins.heldBack(d, me, com.fariin.app.data.GroupAdmins.SendKind.LINKS, now)?.let { return it }
+        }
+        if (!com.fariin.app.data.GroupAdmins.slows(d, me)) return null
+        val recent = withTimeoutOrNull(STEP_MS) {
+            runCatching { conv.collection("messages").orderBy("createdAt", Query.Direction.DESCENDING).limit(30).get().await() }.getOrNull()
+        } ?: return null
+        val lastMine = recent.documents.firstOrNull { it.getString("authorId") == me && it.getString("type") != "system" }
+            ?.let { com.fariin.app.data.Conversation.millis(it.get("createdAt")) }?.takeIf { it > 0 }
+        return com.fariin.app.data.GroupAdmins.slowWait(d, me, lastMine, now)
     }
 
     /** A few tries in the background; then the send queue keeps the words for the next start. */
