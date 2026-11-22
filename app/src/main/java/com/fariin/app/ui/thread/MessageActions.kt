@@ -397,6 +397,9 @@ internal fun DeleteDialog(m: Message, ui: ThreadUi, actions: ThreadActions,
 internal fun ReactionChips(m: Message, ui: ThreadUi, isMe: Boolean, onTap: (String) -> Unit) {
     // Most rows have none: no watchers set up for them (two per row, every row of a chat's open).
     if (m.reactions.isEmpty()) return
+    // iOS reactionChips: a deleted message or a story-reaction message shows none, even when the
+    // reactions field is still on the document.
+    if (m.deleted || MessageRules.isStoryReaction(m)) return
     val retired = rememberRetired()
     val chips = remember(m.reactions, ui.me, retired) { MessageRules.reactionChips(m.reactions, ui.me, retired) }
     if (chips.isEmpty()) return
