@@ -99,15 +99,27 @@ object BackupArchive {
 
     class Header(val made: Long, val hasPassword: Boolean, val store: ByteArray?, val password: ByteArray?, val salt: ByteArray?, val ops: Long, val mem: Long)
 
-    fun readHeader(bytes: ByteArray): Header? = runCatching {
-        val o = org.json.JSONObject(bytes.toString(Charsets.UTF_8))
-        if (o.optInt("v") != V) return null
-        val w = o.getJSONObject("wrapped")
-        val kdf = o.optJSONObject("kdf")
-        Header(o.getLong("made"), w.has("password"), w.optString("store").takeIf { it.isNotEmpty() }?.let { B64.decode(it) },
-            w.optString("password").takeIf { it.isNotEmpty() }?.let { B64.decode(it) },
-            kdf?.optString("salt")?.let { B64.decode(it) }, kdf?.optLong("ops") ?: OPS, kdf?.optLong("mem") ?: MEM)
-    }.getOrNull()
+    /** A backup made by a newer app (header v above ours): the words say to update first (iOS newerVersion). */
+    class NewerVersion : Exception("This backup was made by a newer Fariin. Update the app first.")
+
+    /** Null when damaged; throws [NewerVersion] for a newer format. */
+    fun readHeader(bytes: ByteArray): Header? {
+        val o = runCatching { org.json.JSONObject(bytes.toString(Charsets.UTF_8)) }.getOrNull() ?: return null
+        val v = o.optInt("v", 0)
+        if (v > V) throw NewerVersion()
+        if (v != V) return null
+        return runCatching {
+            val w = o.getJSONObject("wrapped")
+            val kdf = o.optJSONObject("kdf")
+            val salt = kdf?.optString("salt")?.let { B64.decode(it) }
+            val ops = kdf?.optLong("ops") ?: OPS
+            val mem = kdf?.optLong("mem") ?: MEM
+            // As iOS: a changed header must not make this phone spend minutes or gigabytes.
+            if (kdf != null && (salt?.size != 16 || ops !in 1L..10L || mem !in 8_192L..1_073_741_824L)) return null
+            Header(o.getLong("made"), w.has("password"), w.optString("store").takeIf { it.isNotEmpty() }?.let { B64.decode(it) },
+                w.optString("password").takeIf { it.isNotEmpty() }?.let { B64.decode(it) }, salt, ops, mem)
+        }.getOrNull()
+    }
 
     /** The archive key from the store copy, or else from the password. */
     fun unlock(c: FariinCrypto, h: Header, storeKey: ByteArray?, password: String?): ByteArray? {
