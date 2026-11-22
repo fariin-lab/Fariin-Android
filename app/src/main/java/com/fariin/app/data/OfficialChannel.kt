@@ -276,7 +276,7 @@ object OfficialChannel {
         val latest = v.latest ?: return null
         if (me.isEmpty()) return null
         val s = v.state
-        val now = System.currentTimeMillis().toDouble()
+        val now = ServerClock.nowMs()
         val mutedEnd = if (s.isMutedNow(now)) (if (s.mutedUntil > 0) s.mutedUntil else Double.MAX_VALUE) else 0.0
         return Conversation(
             id = CID,
@@ -427,6 +427,9 @@ object OfficialChannel {
         build = appBuild
         val db = com.fariin.app.Fb.db
         val user = db.collection("users").document(me)
+        // Publish and expiry times are the server's: learn the phone's clock error once, then
+        // decide again (iOS ServerClock.now). Until then the phone's own clock, as before.
+        scope.launch { ServerClock.nowMsSynced(); recompute() }
         // No `where` on publishAt: a query fixed at attach time misses the next send. `reaches` decides.
         regs = listOf(
             db.collection("config").document("official").addSnapshotListener { snap, _ -> OfficialConfig.take(snap?.data) },
@@ -468,7 +471,7 @@ object OfficialChannel {
 
     private fun recompute() {
         val me = uid ?: return
-        val now = System.currentTimeMillis().toDouble()
+        val now = ServerClock.nowMs()
         val joined = com.fariin.app.Fb.auth.currentUser?.metadata?.creationTimestamp?.toDouble()?.takeIf { it > 0 }
         val next = visible(broadcast, personal, state, me, build, java.util.Locale.getDefault().country.ifEmpty { null }, now, joined)
         // One timer for the next moment something falls due or expires.
@@ -501,7 +504,7 @@ object OfficialChannel {
     }
 
     /** When a switch was chosen, written with it so the rules refuse an older choice that lands later. */
-    private fun chosenAt() = System.currentTimeMillis().toDouble()
+    private fun chosenAt() = ServerClock.nowMs()
 
     /** Mark as Unread from the chat list: the badge shows one, as a normal chat's. A flag, not a rewind. */
     fun markUnread() {
@@ -532,7 +535,7 @@ object OfficialChannel {
 
     /** Clear Chat: everything that had arrived by now leaves this account's chat. Never moved back. */
     fun clearHistory() {
-        val at = clearMark(state, System.currentTimeMillis().toDouble())
+        val at = clearMark(state, ServerClock.nowMs())
         state = state.copy(clearedAt = at)
         recompute()
         stateRef()?.set(mapOf("clearedAt" to at), SetOptions.merge())
@@ -547,7 +550,7 @@ object OfficialChannel {
 
     private fun syncTopics() {
         val c = app ?: return
-        com.fariin.app.push.OfficialPushTopics.sync(c, state.isMutedNow(System.currentTimeMillis().toDouble()))
+        com.fariin.app.push.OfficialPushTopics.sync(c, state.isMutedNow(ServerClock.nowMs()))
     }
 
     /**
@@ -563,7 +566,7 @@ object OfficialChannel {
         scheduleMuteEnd()
         com.fariin.app.Fb.db.collection("users").document(me)
             .collection("officialChannel").document("state")
-            .set(mapOf("muted" to muted, "mutedUntil" to end, "mutedAt" to System.currentTimeMillis().toDouble()), SetOptions.merge())
+            .set(mapOf("muted" to muted, "mutedUntil" to end, "mutedAt" to ServerClock.nowMs()), SetOptions.merge())
     }
 
     /**
@@ -575,7 +578,7 @@ object OfficialChannel {
     private fun scheduleMuteEnd() {
         muteEnd?.cancel(); muteEnd = null
         if (!state.muted || state.mutedUntil <= 0.0) return
-        val wait = state.mutedUntil - System.currentTimeMillis()
+        val wait = state.mutedUntil - ServerClock.nowMs()
         if (wait <= 0) { setMuted(false); return }
         muteEnd = scope.launch { delay(wait.toLong() + 1000); scheduleMuteEnd() }
     }
