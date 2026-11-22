@@ -225,8 +225,13 @@ class ShareActivity : ComponentActivity() {
         }
     }
 
+    private var sent = false
+
     /** Sends to each chosen chat through its normal paths, then opens the chat (one) or the list. */
     private fun send(me: String, cids: List<String>, s: Shared, caption: String) {
+        // One send per share: a second fast tap on Send, before the screen closes, sent it all twice.
+        if (sent) return
+        sent = true
         val app = applicationContext
         val crypto = CryptoHub.get(app)
         for (cid in cids) {
@@ -237,6 +242,9 @@ class ShareActivity : ComponentActivity() {
             if (s.media.isNotEmpty() && s.files.isNotEmpty() && caption.isBlank()) s.text?.let { repo.sendText(it) }
             for (f in s.files) repo.sendDocument(app, f) { why -> sends.launch(Dispatchers.Main) { Toast.makeText(app, why, Toast.LENGTH_LONG).show() } }
         }
+        // One chat opens, so the upload shows there. Several can't all be opened: a toast confirms
+        // instead (iOS ForwardPicker "Sent to N chats").
+        if (cids.size > 1) Toast.makeText(app, "Sent to ${cids.size} chats", Toast.LENGTH_SHORT).show()
         startActivity(if (cids.size == 1) ChatShortcuts.openIntent(this, cids[0])
             else Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
         finish()
