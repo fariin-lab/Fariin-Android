@@ -17,11 +17,11 @@ object VoiceRecordRules {
     /** iOS: 0.5 s, Apple's long-press threshold; a tap a hair longer still reads as a tap. */
     const val TAP_MS = 500L
 
-    /** How far up (dp) the finger goes to lock; the lock target floats about this far above the mic. */
-    const val LOCK_DP = 86f
+    /** How far up (dp) the finger goes to lock (iOS lockThreshold 88); the lock target floats about this far above the mic. */
+    const val LOCK_DP = 88f
 
-    /** How far left (dp) the finger goes to cancel. */
-    const val CANCEL_DP = 120f
+    /** How far left (dp) the finger goes to cancel (iOS cancelThreshold 80, inside its 90 linear stretch). */
+    const val CANCEL_DP = 80f
 
     /** A tap that travels further than this (dp) is a drag toward lock or cancel. */
     const val SLOP_DP = 10f

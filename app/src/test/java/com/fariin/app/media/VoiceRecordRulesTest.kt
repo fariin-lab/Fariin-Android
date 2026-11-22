@@ -28,11 +28,12 @@ class VoiceRecordRulesTest {
     }
 
     @Test fun lockAndCancelLines() {
-        assertTrue(VoiceRecordRules.locks(-90f, 86f))
-        assertFalse(VoiceRecordRules.locks(-80f, 86f))
+        assertTrue(VoiceRecordRules.locks(-90f, 88f))
+        assertFalse(VoiceRecordRules.locks(-80f, 88f))
         assertFalse(VoiceRecordRules.locks(40f, 86f))
-        assertTrue(VoiceRecordRules.cancels(-121f, 120f))
-        assertFalse(VoiceRecordRules.cancels(-100f, 120f))
+        assertTrue(VoiceRecordRules.cancels(-81f, 80f))
+        assertFalse(VoiceRecordRules.cancels(-79f, 80f))
+        assertEquals(80f, VoiceRecordRules.CANCEL_DP, 0f); assertEquals(88f, VoiceRecordRules.LOCK_DP, 0f)   // iOS thresholds
         assertEquals(0f, VoiceRecordRules.lockProgress(10f, 86f), 0f)
         assertEquals(0.5f, VoiceRecordRules.lockProgress(-43f, 86f), 0.001f)
         assertEquals(1f, VoiceRecordRules.lockProgress(-200f, 86f), 0f)
