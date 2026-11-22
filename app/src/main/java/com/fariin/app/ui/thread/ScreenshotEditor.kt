@@ -361,11 +361,7 @@ private fun tickMark(t: Tick): String? = when (t) {
     else -> null
 }
 
-private val shotSenderPalette = listOf(
-    Color(0xFF007AFF), Color(0xFFAF52DE), Color(0xFFFF2D55), Color(0xFFFF9500),
-    Color(0xFF34C759), Color(0xFF30B0C7), Color(0xFF5856D6), Color(0xFFFF3B30),
-)
-private fun senderColor(uid: String) = shotSenderPalette[Math.floorMod(uid.hashCode(), shotSenderPalette.size)]
+// Sender names use the chat's own colours (ThreadScreen senderColor), so the picture matches.
 
 /** Saves the picture in cache/open (served by our FileProvider) and opens the system share sheet. */
 private suspend fun sharePicture(ctx: android.content.Context, picture: android.graphics.Bitmap): Boolean {
