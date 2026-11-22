@@ -2328,8 +2328,28 @@ class ThreadRepository(
             // iOS deleteMessage -> removePinnedMessage: a pin must not outlive what it points at.
             if (m.id in PinRules.pinnedIds(_state.value.conv)) try { unpin(m.id) } catch (_: Exception) {}
             rewriteSummaryAfterDelete()
+            clearReactionPreviewIfFrom(data["reactions"] as? Map<*, *>)
             true
         } catch (_: Exception) { false }
+    }
+
+    /**
+     * iOS clearReactionPreviewIfFrom: the chat list's "reacted to" line came from a reaction on the
+     * message just deleted, so it goes with it. Best effort.
+     */
+    private suspend fun clearReactionPreviewIfFrom(reactions: Map<*, *>?) {
+        if (reactions.isNullOrEmpty()) return
+        try {
+            val d = convRef.get().await()
+            val by = d.getString("lastReactionBy") ?: return
+            val enc = d.getString("lastReactionEnc") ?: return
+            if (reactions[by] as? String != enc) return
+            convRef.update(mapOf<String, Any>(
+                "lastReactionEnc" to FieldValue.delete(), "lastReactionBy" to FieldValue.delete(),
+                "lastReactionToAuthor" to FieldValue.delete(), "lastReactionAt" to FieldValue.delete(),
+                "lastReactionToEnc" to FieldValue.delete(), "lastReactionToImages" to FieldValue.delete(),
+            )).await()
+        } catch (_: Exception) {}
     }
 
     /** This message is the newest one on screen (calls and system lines count, as the summary's query does). */
