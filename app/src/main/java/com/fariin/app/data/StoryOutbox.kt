@@ -136,7 +136,10 @@ object StoryOutbox {
                 if (choice == StoryAudienceChoice.GLOWERS && !Glow.state.value.known) return
                 if (aud != null) {
                     myFriends = aud.optJSONObject("myFriends")?.let { listFrom(it) } ?: continue
-                    hidden = aud.optJSONArray("hidden")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() } ?: continue
+                    // The ticket's hide list plus anyone hidden since it was queued (iOS resolveAudience reads
+                    // the hide list live at upload): someone hidden while it waited must not get it.
+                    val queuedHidden = aud.optJSONArray("hidden")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() } ?: continue
+                    hidden = queuedHidden + (if (StoryPrivacyStore.serverLoaded.value) StoryPrivacyStore.hidden.value else emptySet())
                     lists = aud.optJSONArray("lists")?.let { a -> (0 until a.length()).mapNotNull { listFrom(a.getJSONObject(it)) } }.orEmpty()
                 } else {
                     myFriends = StoryPrivacyStore.myFriends.value
