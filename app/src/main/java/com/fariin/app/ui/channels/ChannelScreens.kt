@@ -161,7 +161,7 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                 contentAlignment = Alignment.Center) {
                 com.fariin.app.ui.components.FloatingBack(onBack, Modifier.align(Alignment.CenterStart))
                 // Design C: the switch is the title, centred, the back button's width free on both sides.
-                ExploreSwitch(groupsTab, Modifier.padding(horizontal = 56.dp)) { g -> if (g != groupsTab) { groupsTab = g; query = "" } }
+                ExploreSwitch(groupsTab, Modifier.padding(horizontal = 56.dp)) { g -> if (g != groupsTab) groupsTab = g }
             }
         }) { top ->
             Spacer(Modifier.height(top))
