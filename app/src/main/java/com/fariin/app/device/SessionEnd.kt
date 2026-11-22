@@ -219,6 +219,7 @@ object SessionEnd {
         com.fariin.app.data.StoryPrivacyStore.stop()   // a return to the same account listens again
         com.fariin.app.auth.Passkeys.lastList = null   // the next account never sees this one's passkeys
         if (keepFor.isNullOrEmpty()) com.fariin.app.media.ChatMedia.wipe(c)
+        removeTempCopies(c)
         try { coil3.SingletonImageLoader.get(c).let { it.diskCache?.clear(); it.memoryCache?.clear() } } catch (_: Exception) {}
         com.fariin.app.ui.thread.DecodedPictures.clear()   // decoded chat photos held in memory
         com.fariin.app.data.ChatSearch.seen.clear()        // in-chat search corpora
@@ -257,6 +258,19 @@ object SessionEnd {
         // The kept chat list is sealed with this key: it stays while there is a kept list, or the
         // list could never be read again. A different account's sign-in wipes the list (claimKept).
         if (keepFor.isNullOrEmpty()) com.fariin.app.local.AtRest.forgetKey()
+    }
+
+    /**
+     * Plain copies made to open, share, edit or export (iOS SessionWipe.removeTempCopies): an opened
+     * file or an exported chat is decrypted, so it goes on every log out, kept media or not.
+     */
+    private fun removeTempCopies(c: Context) {
+        val dirs = listOf("open", "shared-in", "edited", "chat-camera", "story-camera", "story-repost")
+        val prefixes = listOf("story-save-", "repost-", "story-edit-", "story-part-")
+        runCatching {
+            for (d in dirs) java.io.File(c.cacheDir, d).deleteRecursively()
+            c.cacheDir.listFiles()?.forEach { f -> if (prefixes.any { f.name.startsWith(it) }) f.deleteRecursively() }
+        }
     }
 
 }
