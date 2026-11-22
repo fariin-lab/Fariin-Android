@@ -606,10 +606,26 @@ object GroupCall {
                         when (e) {
                             is RoomEvent.Disconnected -> GroupCallWire.endNotice(e.reason, endingForAll)?.let { fail(it) } ?: leave()
                             is RoomEvent.Reconnecting -> { _ui.value = _ui.value.copy(reconnecting = true); refresh() }
-                            is RoomEvent.Reconnected -> { _ui.value = _ui.value.copy(reconnecting = false); refresh() }
+                            is RoomEvent.Reconnected -> {
+                                // Back after a blip (iOS reconnectCompleted): hands of people who left
+                                // meanwhile come down, and my own hand goes out again.
+                                val me = r.localParticipant.identity?.value
+                                val here = r.remoteParticipants.values.mapNotNull { it.identity?.value }.toSet()
+                                val hands = _ui.value.hands.filter { it == me || it in here }
+                                _ui.value = _ui.value.copy(reconnecting = false, hands = hands)
+                                if (_ui.value.myHand) sendSocial(handJson(true))
+                                refresh()
+                            }
                             is RoomEvent.DataReceived -> if (e.topic == SOCIAL_TOPIC) social(e.data, e.participant?.identity?.value ?: "")
-                            // A newcomer learns my raised hand (iOS participantArrived).
-                            is RoomEvent.ParticipantConnected -> { if (_ui.value.myHand) sendSocial(handJson(true)); refresh() }
+                            // A newcomer learns my raised hand (iOS participantArrived). Twice, 2 s
+                            // apart: the first can beat their data channel.
+                            is RoomEvent.ParticipantConnected -> {
+                                if (_ui.value.myHand) {
+                                    sendSocial(handJson(true))
+                                    scope.launch { delay(2_000); if (room === r && _ui.value.myHand) sendSocial(handJson(true)) }
+                                }
+                                refresh()
+                            }
                             is RoomEvent.ParticipantDisconnected -> {
                                 e.participant.identity?.value?.let { gone -> _ui.value = _ui.value.copy(hands = _ui.value.hands - gone) }
                                 refresh()
