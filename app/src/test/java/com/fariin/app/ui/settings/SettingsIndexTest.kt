@@ -49,6 +49,13 @@ class SettingsIndexTest {
         assertEquals(null, SettingsIndex.entries.first { it.title == "Account" }.crumb)
     }
 
+    @Test fun nightModeOpensItsOwnPage() {
+        // iOS: Night Mode is a page of its own, listed with the pages.
+        val e = SettingsIndex.entries.first { it.title == "Night Mode" }
+        assertEquals(PAGE_NIGHT, e.page)
+        assertTrue(e.isPage)
+    }
+
     @Test fun idsAreUnique() {
         val ids = SettingsIndex.entries.map { it.id }
         assertEquals(ids.size, ids.toSet().size)

@@ -175,7 +175,7 @@ internal const val PAGE_ACCOUNT = "account"
 /** My Profile (iOS GlowProfileView), behind the myProfileCard switch. */
 internal const val PAGE_GLOW_PROFILE = "glow:profile"
 internal const val PAGE_APPEARANCE = "appearance"
-private const val PAGE_NIGHT = "night"
+internal const val PAGE_NIGHT = "night"
 internal const val PAGE_ABOUT = "about"
 internal const val PAGE_PASSWORD = "auth:password"
 private const val PAGE_RESET = "auth:reset:"

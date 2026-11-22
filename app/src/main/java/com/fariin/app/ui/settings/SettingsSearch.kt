@@ -132,7 +132,7 @@ internal object SettingsIndex {
         if (com.fariin.app.data.BubbleStyles.SHOWN) page("Bubble Styles", ap, "bubble style styles cute aesthetic pink lavender peach mint picture anime", PAGE_BUBBLE_STYLE)
         page("App Icon", ap, "app icon home screen icon alternate logo", PAGE_APP_ICON)
         page("Quick Reaction", ap, "quick reaction double tap emoji react heart like", PAGE_QUICK)
-        row("Night Mode", ap, "night mode dark mode light mode theme system appearance", PAGE_APPEARANCE)
+        page("Night Mode", ap, "night mode dark mode light mode theme system appearance", PAGE_NIGHT)
         // Chats
         val ch = listOf(CH)
         if (com.fariin.app.data.MsgPolicy.chatKeyVisible) page("Chat Key", ch, "chat key pin number code private contact me", PAGE_CHAT_KEY)
