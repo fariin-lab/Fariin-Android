@@ -64,6 +64,24 @@ class SettingsIndexTest {
         assertTrue(SettingsIndex.matching("contacts").none { it.title == "Bio" })
     }
 
+    @Test fun customStoryListsAreFound() {
+        // iOS lists every story audience, my own lists included, each opening its page.
+        val before = SettingsIndex.storyLists
+        SettingsIndex.storyLists = { listOf(com.fariin.app.data.StoryListDoc("l1", "custom", name = "Family"),
+            com.fariin.app.data.StoryListDoc("l2", "custom", name = "Everyone")) }
+        try {
+            val e = SettingsIndex.matching("family").first()
+            assertEquals(listOf("Stories"), e.path)
+            assertEquals(PAGE_STORY_CUSTOM + "l1", e.page)
+            assertTrue(SettingsIndex.matching("custom list").any { it.title == "Family" })
+            // Same name as a built-in: listed once, as iOS.
+            assertEquals(1, SettingsIndex.entries.count { it.id == "Stories\u203aEveryone" })
+        } finally {
+            SettingsIndex.storyLists = before
+        }
+        assertTrue(SettingsIndex.matching("family").isEmpty())
+    }
+
     @Test fun idsAreUnique() {
         val ids = SettingsIndex.entries.map { it.id }
         assertEquals(ids.size, ids.toSet().size)

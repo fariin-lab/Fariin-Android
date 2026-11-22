@@ -61,6 +61,10 @@ internal object SettingsIndex {
     @Volatile var hasTwoStep = false
     /** The account has an address a password can belong to (set by the Account page): only then is Password findable. */
     @Volatile var hasPassword = true
+    /** My custom story lists, each a row of the Stories page (iOS StoryAudienceStore.all). */
+    @Volatile var storyLists: () -> List<com.fariin.app.data.StoryListDoc> = {
+        runCatching { com.fariin.app.data.StoryPrivacyStore.custom.value }.getOrDefault(emptyList())
+    }
 
     data class Entry(val title: String, val icon: String?, val keywords: String, val page: String,
                      val path: List<String> = emptyList(), val isPage: Boolean = false) {
@@ -142,8 +146,11 @@ internal object SettingsIndex {
         row("Clear Chat History", ch, "clear chat history delete everything all messages erase", PAGE_CHATS)
         // Stories
         val st = listOf(ST)
-        page("Everyone", st, "story audience everyone public", PAGE_STORY_EVERYONE)
-        page("My Chats", st, "story audience my chats friends", PAGE_STORY_MYCHATS)
+        // The audiences in the Stories page's order, with the iOS words.
+        val skw = "story audience who can see stories list"
+        page("Everyone", st, "$skw everyone public", PAGE_STORY_EVERYONE)
+        page("My Chats", st, "$skw my friends chats", PAGE_STORY_MYCHATS)
+        for (l in storyLists()) if (l.name.isNotBlank()) page(l.name, st, "$skw custom list", PAGE_STORY_CUSTOM + l.id)
         row("View Receipts", st, "view receipts story views seen viewers", PAGE_STORIES)
         // Privacy & Security
         val pr = listOf(PR)
@@ -183,7 +190,7 @@ internal object SettingsIndex {
         row("Version", hp, "version build number app version", PAGE_ABOUT)
         row("Privacy Policy", hp, "privacy policy legal", PAGE_ABOUT)
         row("Terms & Conditions", hp, "terms conditions service legal", PAGE_ABOUT)
-    }
+    }.distinctBy { it.id }   // iOS: a list named like another row is listed once
 
     /** Lowercased, accents folded, "&" read as "and". */
     internal fun fold(s: String): String =
