@@ -320,9 +320,10 @@ internal fun ChannelPostMenu(
     // The outline "!" Report wears everywhere (not a red flag).
     val reportIcon = ImageVector.cachedVector(com.fariin.app.R.drawable.ic_report)
     val items = buildList {
+        // The iOS menu order: Forward, Quote, the replies switch, Copy Link, Copy, Edit,
+        // Edit History, Save, Select, Pin, Report, View Statistics, Delete.
+        val isAdmin = ch.role == Role.ADMIN
         if (!m.deleted) {
-            // A contact or location card is no text to copy (as the chat menu, MessageActions).
-            if (!ch.info.restricted && m.bodyText.isNotEmpty() && !com.fariin.app.data.CardRules.isCard(m.text)) add(PostItem("Copy", ImageVector.cachedVector(R.drawable.ic_sf_doc_on_doc), badge = NewBadgeSpots.CHAT_MENU_COPY) { onCopy(m.bodyText) })
             // "Forward" into my chats, as iOS (owner 2026-11-14: it said Share and opened the phone's sheet).
             if (!ch.info.restricted && onForward != null && com.fariin.app.data.MessageRules.canForward(m))
                 add(PostItem("Forward", ImageVector.cachedVector(R.drawable.ic_menu_forward), badge = NewBadgeSpots.CHAT_MENU_FORWARD) { onDismiss(); onForward(m) })
@@ -331,35 +332,40 @@ internal fun ChannelPostMenu(
             // Not when the channel turned Quotes off, for anyone (the server refuses everyone then).
             if (onQuote != null && !ch.info.restricted && com.fariin.app.data.MessageRules.canQuote(m) && !ch.info.quotesOff)
                 add(PostItem("Quote", quoteIcon, badge = NewBadgeSpots.CHAT_MENU_QUOTE) { onDismiss(); onQuote(m) })
-            // Tick several posts to forward, copy or (owner and admins) delete them together.
-            if (onSelect != null) add(PostItem("Select", ImageVector.cachedVector(R.drawable.ic_sf_checkmark_circle)) { onDismiss(); onSelect(m) })
+            // The owner and admins: the post's replies switch.
+            if (isAdmin) {
+                // Replies off or on for this post (iOS, owner 2026-11-06): the Change info right, which the
+                // server checks too. The post's own switch wins over the channel's; the post changes on
+                // screen at once (PostRepliesSwitch), older posts included.
+                // Never on a service line (pin notice, system line): there is nothing to reply to.
+                if (ch.canEdit && m.sendState == null && !com.fariin.app.data.MessageRules.isServiceLine(m)) {
+                    val off = com.fariin.app.data.PostReplyRules.postOff(m.repliesOff, ch.info.repliesOff, PostRepliesSwitch.of(m.id))
+                    add(PostItem(if (off) "Turn On Replies" else "Turn Off Replies",
+                        if (off) replyIcon else ImageVector.cachedVector(R.drawable.ic_block), badge = NewBadgeSpots.CHAT_MENU_REPLIES) {
+                        onDismiss(); PostRepliesSwitch.set(ch.info.cid, m.id, !off, ch.notice)
+                    })
+                }
+            }
             // A post's own link (iOS postLink, owner 2026-11-08): a delivered post of a public channel.
             com.fariin.app.channel.ChannelPostLink.link(ch.info.username, ch.info.cid, m.postSeq, m.id)?.takeIf {
                 m.sendState == null && !com.fariin.app.data.MessageRules.isServiceLine(m)
             }?.let { link -> add(PostItem("Copy Link", ImageVector.cachedVector(R.drawable.ic_sf_link)) { onCopy(link) }) }
+            // A contact or location card is no text to copy (as the chat menu, MessageActions).
+            if (!ch.info.restricted && m.bodyText.isNotEmpty() && !com.fariin.app.data.CardRules.isCard(m.text)) add(PostItem("Copy", ImageVector.cachedVector(R.drawable.ic_sf_doc_on_doc), badge = NewBadgeSpots.CHAT_MENU_COPY) { onCopy(m.bodyText) })
+            // The owner and admins edit and see earlier versions (the history is on the server).
+            if (isAdmin) {
+                // onEdit is only passed when this post may be edited (my own, in the edit window).
+                if (onEdit != null) add(PostItem("Edit", ImageVector.cachedVector(R.drawable.ic_sf_pencil), badge = NewBadgeSpots.CHAT_MENU_EDIT) { onDismiss(); onEdit(m) })
+                if (onEditHistory != null && m.edited) add(PostItem("Edit History", ImageVector.cachedVector(R.drawable.ic_sf_clock_arrow), badge = NewBadgeSpots.CHAT_MENU_EDIT_HISTORY) { onDismiss(); onEditHistory(m) })
+            }
             // iOS Save Image: where saving is allowed (not a protected channel).
             if (!ch.info.restricted && onSave != null && com.fariin.app.ui.thread.canSaveToGallery(m))
                 add(PostItem(when (m.mediaKind) { Message.MediaKind.PHOTO -> "Save Image"; Message.MediaKind.VIDEO -> "Save Video"; else -> "Save" },
                     ImageVector.cachedVector(R.drawable.ic_save_down), badge = NewBadgeSpots.CHAT_MENU_SAVE_IMAGE) { onDismiss(); onSave(m) })
+            // Tick several posts to forward, copy or (owner and admins) delete them together.
+            if (onSelect != null) add(PostItem("Select", ImageVector.cachedVector(R.drawable.ic_sf_checkmark_circle)) { onDismiss(); onSelect(m) })
+            if (isAdmin && pinned != null && onPin != null) add(PostItem(if (pinned) "Unpin" else "Pin", ImageVector.cachedVector(R.drawable.ic_pin_menu), badge = NewBadgeSpots.CHAT_MENU_PIN) { onDismiss(); onPin(m) })
             if (ch.role != Role.ADMIN) add(PostItem("Report", reportIcon, destructive = true, badge = NewBadgeSpots.CHAT_MENU_REPORT) { ch.onReport(m) })
-        }
-        // The owner and admins edit, pin and see a post's earlier versions (the history is on the server).
-        if (ch.role == Role.ADMIN && !m.deleted) {
-            // onEdit is only passed when this post may be edited (my own, in the edit window).
-            if (onEdit != null) add(PostItem("Edit", ImageVector.cachedVector(R.drawable.ic_sf_pencil), badge = NewBadgeSpots.CHAT_MENU_EDIT) { onDismiss(); onEdit(m) })
-            if (onEditHistory != null && m.edited) add(PostItem("Edit History", ImageVector.cachedVector(R.drawable.ic_sf_clock_arrow), badge = NewBadgeSpots.CHAT_MENU_EDIT_HISTORY) { onDismiss(); onEditHistory(m) })
-            if (pinned != null && onPin != null) add(PostItem(if (pinned) "Unpin" else "Pin", ImageVector.cachedVector(R.drawable.ic_pin_menu), badge = NewBadgeSpots.CHAT_MENU_PIN) { onDismiss(); onPin(m) })
-            // Replies off or on for this post (iOS, owner 2026-11-06): the Change info right, which the
-            // server checks too. The post's own switch wins over the channel's; the post changes on
-            // screen at once (PostRepliesSwitch), older posts included.
-            // Never on a service line (pin notice, system line): there is nothing to reply to.
-            if (ch.canEdit && m.sendState == null && !com.fariin.app.data.MessageRules.isServiceLine(m)) {
-                val off = com.fariin.app.data.PostReplyRules.postOff(m.repliesOff, ch.info.repliesOff, PostRepliesSwitch.of(m.id))
-                add(PostItem(if (off) "Turn On Replies" else "Turn Off Replies",
-                    if (off) replyIcon else ImageVector.cachedVector(R.drawable.ic_block), badge = NewBadgeSpots.CHAT_MENU_REPLIES) {
-                    onDismiss(); PostRepliesSwitch.set(ch.info.cid, m.id, !off, ch.notice)
-                })
-            }
         }
         // View Statistics (owner 2026-11-19): a real post only, just above Delete.
         if (ch.role == Role.ADMIN && onStats != null && !m.deleted && m.sendState == null && !com.fariin.app.data.MessageRules.isServiceLine(m))
