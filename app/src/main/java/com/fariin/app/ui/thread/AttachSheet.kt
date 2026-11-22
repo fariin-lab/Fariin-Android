@@ -254,7 +254,7 @@ internal fun AttachSheet(
     val askCamera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) launchCamera() else {
             com.fariin.app.ui.components.PermissionDenied.explain(context, android.Manifest.permission.CAMERA,
-                "Fariin needs the camera to take photos and videos.")
+                "Fariin needs the camera to take photos.")
             if (cameraFirst) onDismiss()
         }
     }
