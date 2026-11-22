@@ -15,22 +15,38 @@ import com.fariin.app.data.TextFormat
  * words takes the <b> runs back as bold. Other apps that read HTML see the bold too.
  */
 internal object BoldClip {
-    fun copy(c: Context, text: String, bold: List<TextFormat.Span>) {
+    /** The author's linked words go along too, as links in the HTML copy (iOS TextFormat.copy). */
+    fun copy(c: Context, text: String, bold: List<TextFormat.Span>, links: List<TextFormat.Link> = emptyList()) {
         val cm = c.getSystemService(ClipboardManager::class.java) ?: return
         val runs = TextFormat.normalize(bold, text.length)
-        val clip = if (runs.isEmpty()) ClipData.newPlainText("", text) else ClipData.newHtmlText("", text, html(text, runs))
+        val ls = TextFormat.normalizeLinks(links, text.length)
+        val clip = if (runs.isEmpty() && ls.isEmpty()) ClipData.newPlainText("", text) else ClipData.newHtmlText("", text, html(text, runs, ls))
         runCatching { cm.setPrimaryClip(clip) }
     }
 
-    private fun html(text: String, runs: List<TextFormat.Span>): String {
+    private fun html(text: String, runs: List<TextFormat.Span>, links: List<TextFormat.Link>): String {
         fun esc(s: String) = Html.escapeHtml(s).replace("\n", "<br>")
+        // Cut the words wherever a bold run or a link starts or ends, then mark each piece.
+        val cuts = (listOf(0, text.length) + runs.flatMap { listOf(it.start, it.end) } + links.flatMap { listOf(it.start, it.end) })
+            .distinct().sorted()
         val b = StringBuilder()
-        var at = 0
-        for (r in runs) {
-            b.append(esc(text.substring(at, r.start))).append("<b>").append(esc(text.substring(r.start, r.end))).append("</b>")
-            at = r.end
+        var open: TextFormat.Link? = null
+        for (i in 0 until cuts.size - 1) {
+            val x = cuts[i]
+            val y = cuts[i + 1]
+            if (y <= x) continue
+            val link = links.firstOrNull { it.start <= x && y <= it.end }
+            if (link != open) {
+                if (open != null) b.append("</a>")
+                if (link != null) b.append("<a href=\"").append(Html.escapeHtml(link.url)).append("\">")
+                open = link
+            }
+            val bold = runs.any { it.start <= x && y <= it.end }
+            val words = esc(text.substring(x, y))
+            if (bold) b.append("<b>").append(words).append("</b>") else b.append(words)
         }
-        return b.append(esc(text.substring(at))).toString()
+        if (open != null) b.append("</a>")
+        return b.toString()
     }
 
     /**

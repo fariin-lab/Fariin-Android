@@ -446,7 +446,7 @@ private fun ThreadContent(
     val swipeOn = remember(ui.me) { SwipeActions.on(swipeCtx, ui.me) }
     // A message's words keep their bold on the clipboard (iOS bold-everywhere); any other text goes plain.
     fun copyOf(m: com.fariin.app.data.Message, t: String) =
-        if (t == m.text && m.bold.isNotEmpty()) BoldClip.copy(swipeCtx, t, m.bold) else clipboard.setText(androidx.compose.ui.text.AnnotatedString(t))
+        if (t == m.text && (m.bold.isNotEmpty() || m.links.isNotEmpty())) BoldClip.copy(swipeCtx, t, m.bold, m.links) else clipboard.setText(androidx.compose.ui.text.AnnotatedString(t))
     fun swipeMenu(m: com.fariin.app.data.Message): (() -> Pair<SwipeActions.Slot?, SwipeActions.Slot?>)? {
         if (!swipeOn || !SwipeActions.hasMenu(m)) return null
         return {
