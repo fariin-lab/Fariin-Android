@@ -1508,6 +1508,17 @@ private fun StoryPage(
                             }
                         }
                     }
+                    // iOS sound switch: a video with sound gets a speaker left of "more"; one tap
+                    // mutes every story until it is tapped again.
+                    if (story.isVideo && StorySound.withSound[story.id] == true) {
+                        val off = StorySound.muted
+                        Box(Modifier.size(44.dp).clickable { StorySound.muted = !off }
+                            .semantics { contentDescription = if (off) "Turn sound on" else "Mute" },
+                            contentAlignment = Alignment.Center) {
+                            Icon(ImageVector.cachedVector(if (off) R.drawable.ic_speaker_off else R.drawable.ic_speaker_on),
+                                contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+                        }
+                    }
                     run {
                         Box {
                             // iOS StoryMoreGlyph: two white lines (21 and 14.4 long, 1.8 thick, 7.1 apart,
@@ -1643,9 +1654,25 @@ private fun StoryPage(
 }
 
 /** The picture, or the clip through Media3 while this page is the one on screen. */
+/**
+ * iOS StorySound: ONE sound switch for the whole viewer, not per story, so muting one clip keeps
+ * the next one quiet too. It starts with sound on every launch (kept in memory only).
+ */
+internal object StorySound {
+    var muted by mutableStateOf(false)
+    /** Story ids whose clip has an audio track and runs longer than [LONG_CLIP_SECONDS]. */
+    val withSound = mutableStateMapOf<String, Boolean>()
+    const val LONG_CLIP_SECONDS = 15.0
+
+    fun note(storyId: String, has: Boolean) {
+        if (has) withSound[storyId] = true else withSound.remove(storyId)
+    }
+}
+
 @Composable
 private fun StoryMedia(
     story: Story,
+    muted: Boolean = StorySound.muted,
     active: Boolean,
     isCurrentPage: Boolean,
     onLoaded: () -> Unit,
@@ -1700,13 +1727,21 @@ private fun StoryMedia(
         DisposableEffect(player) {
             val l = object : Player.Listener {
                 override fun onPlaybackStateChanged(state: Int) {
-                    if (state == Player.STATE_READY && !ready) { ready = true; loadedCb() }
+                    if (state == Player.STATE_READY && !ready) {
+                        ready = true; loadedCb()
+                        // iOS StorySound.noteAudio: a speaker only for a clip with sound that runs over 15 s.
+                        val secs = player.duration.takeIf { it > 0 }?.let { it / 1000.0 } ?: story.durationSec
+                        StorySound.note(story.id, player.currentTracks.containsType(androidx.media3.common.C.TRACK_TYPE_AUDIO)
+                            && secs > StorySound.LONG_CLIP_SECONDS)
+                    }
                     if (state == Player.STATE_ENDED) end()
                 }
             }
             player.addListener(l)
             onDispose { player.removeListener(l); player.release() }
         }
+        // The viewer's one sound switch (iOS StorySound): every clip follows it.
+        LaunchedEffect(player, muted) { player.volume = if (muted) 0f else 1f }
         // Back on a clip that had ended: from its start, not stuck at the end (same bug as the photo clock).
         LaunchedEffect(active, player) {
             if (active && player.playbackState == Player.STATE_ENDED) player.seekTo(0)
