@@ -142,6 +142,8 @@ class ViewerHost(
     val allowViewOnce: Boolean = false,
     /** The video Share's chat grid (iOS "Share with"): forwards the message to the chats picked. Null = system share only. */
     val forwardTo: ((Message, List<String>) -> Unit)? = null,
+    /** Whether the delete question would offer anything for this message (in a group, others' photos: no). */
+    val canDelete: (Message) -> Boolean = { true },
 )
 
 /**
@@ -379,7 +381,10 @@ private fun ViewerBody(
 
     val restricted = com.fariin.app.data.ChatRestrictions.isOn(LocalThreadCid.current)
     RestrictedWindow(restricted)
-    val buttons = ViewerRules.buttons(page, pages, me, host?.deleteDialog != null, chatCanSend = host?.sendEdited != null)
+    // iOS mayDelete: in a group Delete shows only where it leads somewhere, never an empty question.
+    val canDelete = host?.deleteDialog != null &&
+        (page.messageId?.let { id -> host.message(id) }?.let { host.canDelete(it) } ?: true)
+    val buttons = ViewerRules.buttons(page, pages, me, canDelete, chatCanSend = host?.sendEdited != null)
         .let { if (restricted) it.copy(share = false, barSave = false, saveAll = 0, menuSave = false, draw = false) else it }
         // A GIF moves: no pen on it.
         .let { if (GifVideo.mp4Of(page.url) != null || page.url.substringBefore('?').endsWith(".gif", true)) it.copy(draw = false) else it }
@@ -875,4 +880,10 @@ internal fun viewerHost(ui: ThreadUi, actions: ThreadActions, onSendPick: ((List
     } },
     allowViewOnce = ui.channel == null,   // groups too, as iOS (owner 2026-11-14); never a channel
     forwardTo = actions.onForwardTo,
+    // The same tests DeleteDialog makes: admin sheet, for everyone, for me (1:1), an unsent one of mine.
+    canDelete = { m ->
+        !ui.isGroup || m.sendState != null || AdminDelete.opens(ui.groupDoc, ui.me, listOf(m)) ||
+            com.fariin.app.data.MessageRules.canDeleteForEveryone(m, ui.me, ui.adminMayDelete, ui.ownerId,
+                channel = ui.channel != null || ui.groupDoc["channel"] == true)
+    },
 )
