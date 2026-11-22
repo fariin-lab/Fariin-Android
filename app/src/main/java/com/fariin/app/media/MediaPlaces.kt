@@ -61,7 +61,9 @@ object ViewedOnce {
 
     fun contains(c: Context, id: String): Boolean = id in load(c)
 
-    @Synchronized fun mark(c: Context, id: String) {
+    /** [cid]: the chat, so the phone's filed copy becomes its stub now (LocalDb.stubOpened). */
+    @Synchronized fun mark(c: Context, id: String, cid: String? = null) {
+        cid?.let { com.fariin.app.local.LocalDb.stubOpened(it, id) }
         val s = load(c)
         if (!s.add(id)) return
         while (s.size > 500) s.remove(s.first())

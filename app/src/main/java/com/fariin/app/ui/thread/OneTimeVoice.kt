@@ -133,7 +133,7 @@ private fun OneTimeVoicePage(m: Message, cid: String, onClose: () -> Unit) {
             onDispose {
                 player.release()
                 file?.delete()
-                if (heard) ViewedOnce.mark(ctx, m.id)
+                if (heard) ViewedOnce.mark(ctx, m.id, cid)
             }
         }
 

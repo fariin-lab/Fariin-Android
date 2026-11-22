@@ -716,7 +716,7 @@ private fun PhotoPage(p: ViewerRules.Page, current: Boolean, onTap: () -> Unit, 
     // server burn); the plain copy this phone opened is removed when the viewer closes.
     val once = p.once
     if (once != null && bmp != null) LaunchedEffect(once) {
-        com.fariin.app.media.ViewedOnce.mark(ctx, once.second)
+        com.fariin.app.media.ViewedOnce.mark(ctx, once.second, once.first)
         com.fariin.app.media.OnceBurn.burn(once.first, once.second)
     }
     if (once != null) DisposableEffect(file) { onDispose { file?.delete() } }

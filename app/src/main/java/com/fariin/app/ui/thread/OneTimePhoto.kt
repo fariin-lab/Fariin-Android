@@ -89,7 +89,7 @@ internal fun OneTimePhotoPage(m: Message, cid: String, onClose: () -> Unit) {
         var seen by remember { mutableStateOf(false) }
         if (bmp != null) LaunchedEffect(m.id) {
             seen = true
-            ViewedOnce.mark(ctx, m.id)
+            ViewedOnce.mark(ctx, m.id, cid)
             OnceBurn.burn(cid, m.id)
         }
         // iOS asks for the burn again when the page closes (harmless twice): a first call lost
