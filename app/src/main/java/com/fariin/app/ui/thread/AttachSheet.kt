@@ -133,6 +133,7 @@ internal fun AttachSheet(
 ) {
     val c = Fariin.colors
     val context = LocalContext.current
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
     val sheetScope = androidx.compose.runtime.rememberCoroutineScope()
     // The iOS sheet's own motion (FariinSheet: its curve, the finger-tracked drag, the rubber band,
     // the release by speed), with the iOS detents: it opens at half, the grid's upward scroll or a
@@ -382,9 +383,10 @@ internal fun AttachSheet(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Box(Modifier.weight(1f).padding(vertical = 4.dp), contentAlignment = Alignment.CenterStart) {
-                            if (caption.isEmpty()) Text(if (viewOnce) "View once" else "Add a caption", fontSize = 17.sp, color = c.secondary)
+                            // iOS: a view-once photo carries no caption, so the field is cleared and off.
+                            if (caption.isEmpty()) Text(if (viewOnce) "No caption for View Once" else "Add a caption", fontSize = 17.sp, color = c.secondary)
                             BasicTextField(caption, { caption = it.take(com.fariin.app.media.MediaRules.CAPTION_CHARS) }, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-                                cursorBrush = SolidColor(c.accent), maxLines = 5,
+                                cursorBrush = SolidColor(c.accent), maxLines = 5, enabled = !viewOnce,
                                 // Typing opens the sheet fully: at half height the caption sat under the
                                 // keyboard (Pixel 2026-11-05).
                                 modifier = Modifier.fillMaxWidth().onFocusChanged { f -> if (f.isFocused) sheetScope.launch { repeat(3) { kotlinx.coroutines.delay(150); motion.expand() } } })
@@ -392,7 +394,7 @@ internal fun AttachSheet(
                         if (onePhoto && allowViewOnce) Box(
                             Modifier.padding(start = 6.dp).size(30.dp).clip(CircleShape)
                                 .then(if (viewOnce) Modifier.background(c.accent) else Modifier.border(1.5.dp, c.label, CircleShape))
-                                .clickable { viewOnce = !viewOnce }.semantics { contentDescription = "View once" },
+                                .clickable { viewOnce = !viewOnce; if (viewOnce) { caption = ""; focus.clearFocus() } }.semantics { contentDescription = "View once" },
                             contentAlignment = Alignment.Center,
                         ) { Text("1", color = if (viewOnce) c.onAccent else c.label, fontWeight = FontWeight.SemiBold, fontSize = 14.sp) }
                     }
