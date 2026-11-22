@@ -849,6 +849,9 @@ class ThreadRepository(
     /** Due messages: the files this phone opened go, and the server is asked to delete (it re-reads
      *  every id and refuses anything not really due). Each id once per run. */
     private fun burn(due: List<Message>) {
+        // It leaves the phone's history at the same moment it leaves the screen (iOS burnDue),
+        // not only at the next app start.
+        if (me.isNotEmpty()) com.fariin.app.local.LocalDb.purgeExpired(me)
         val fresh = synchronized(burned) { due.filter { burned.add(it.id) } }
         if (fresh.isEmpty()) return
         media?.let { md ->
