@@ -1261,8 +1261,10 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                     Spacer(Modifier.width(14.dp))
                     Text("Add Members", fontSize = 17.sp, color = c.label)
                 }
+                // iOS GroupInfoMemberRow: the member's tag (Role) under the name.
+                val tags = com.fariin.app.data.GroupRole.all(conv)
                 shownMembers.forEach { u ->
-                    PersonRow(photos[u]?.ifEmpty { null }, if (u == me) "You" else names[u] ?: "Member", "",
+                    PersonRow(photos[u]?.ifEmpty { null }, if (u == me) "You" else names[u] ?: "User", tags[u]?.display ?: "",
                         // The member's short card for everyone (owner 2026-11-07: only admins got it, the rest went
                         // straight to the profile); it shows only the rows I may use. My own row: admins only.
                         onClick = if (iAmAdmin || u != me) ({ card = u }) else null) {
