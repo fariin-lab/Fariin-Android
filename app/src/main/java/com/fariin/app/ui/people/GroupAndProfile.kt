@@ -1332,7 +1332,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             if (inviteLink != null) {
                 add(com.fariin.app.ui.components.GlassMenuItem("Share Group",
                     androidx.compose.ui.res.painterResource(R.drawable.ic_share_box)) { sharingLink = true })
-                add(com.fariin.app.ui.components.GlassMenuItem("QR Code",
+                // iOS: QR Code only for the invite link; the public link's QR is on its own row above.
+                if (inviteLink != com.fariin.app.data.GroupShareLink.publicLink(conv)) add(com.fariin.app.ui.components.GlassMenuItem("QR Code",
                     androidx.compose.ui.res.painterResource(R.drawable.ic_qr)) { showQr = true })
             }
             add(com.fariin.app.ui.components.GlassMenuItem("Save to Photos: " + (if (saveOn) "On" else "Off"),
