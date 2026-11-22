@@ -182,6 +182,11 @@ internal fun MessageMenu(
             add(MenuItem("Cancel Sending", null, iconRes = com.fariin.app.R.drawable.ic_sf_xmark_circle, destructive = true) { cancel() })
         }
         if (com.fariin.app.data.SelectRules.selectable(m)) add(MenuItem("Select", null, iconRes = com.fariin.app.R.drawable.ic_sf_checkmark_circle) { onSelect(m) })
+    } else if (m.deleted) buildList<MenuItem> {
+        // A tombstone (iOS): Delete first, then Select, nothing that acts on content.
+        if (MessageRules.canDeleteHere(m, ui.me, ui.isGroup, ui.adminMayDelete, ui.ownerId))
+            add(MenuItem("Delete", null, iconRes = com.fariin.app.R.drawable.ic_sf_trash, destructive = true) { onDelete(m) })
+        if (com.fariin.app.data.SelectRules.selectable(m)) add(MenuItem("Select", null, iconRes = com.fariin.app.R.drawable.ic_sf_checkmark_circle) { onSelect(m) })
     } else buildList<MenuItem> {
         // Restricted chat (iOS): no Forward, Save or Copy for anyone in it.
         val restricted = com.fariin.app.data.ChatRestrictions.isOn(ui.cid)
