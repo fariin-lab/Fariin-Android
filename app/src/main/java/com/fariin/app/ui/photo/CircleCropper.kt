@@ -225,7 +225,9 @@ fun rememberCirclePhotoPicker(onJpeg: (ByteArray) -> Unit): CirclePhotoPicker {
         Unit
     }
     val askCamera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (ok) openCamera() else com.fariin.app.ui.components.Snack.show("Allow the camera in Settings to take a photo.")
+        // iOS CameraPicker words; refused for good, the bar carries Open Settings.
+        if (ok) openCamera() else com.fariin.app.ui.components.PermissionDenied.explain(ctx, android.Manifest.permission.CAMERA,
+            "Camera access is off.")
     }
     return CirclePhotoPicker(
         launch = { library = true },
