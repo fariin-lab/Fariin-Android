@@ -946,7 +946,7 @@ class ThreadRepository(
     private fun sendOne(t: String, reply: Message?, mentions: List<String>, after: kotlinx.coroutines.Job?, card: Boolean = true,
                         fmt: String? = null, fx: String? = null): kotlinx.coroutines.Job? {
         // A card is quoted by its noun (iOS safeText), never by its raw marker.
-        val ref = reply?.let { Message.ReplyRef(it.id, it.authorId, (CardRules.previewWord(it.text) ?: it.bodyText).take(200)) }
+        val ref = reply?.let { ReplyQuoteRules.ref(it) }
         // Never the same millisecond as the bubble before (a long text's parts keep their order on screen).
         val tap = maxOf(System.currentTimeMillis().toDouble(), lastTap + 1).also { lastTap = it }
         val clientId = UUID.randomUUID().toString().uppercase()
@@ -1594,7 +1594,7 @@ class ThreadRepository(
         if (s.packId == StickerFavorites.MINE) { sendMineSticker(s, reply); return }
         val tap = System.currentTimeMillis().toDouble()
         val clientId = UUID.randomUUID().toString().uppercase()
-        val ref = reply?.let { Message.ReplyRef(it.id, it.authorId, (CardRules.previewWord(it.text) ?: it.bodyText).take(200)) }
+        val ref = reply?.let { ReplyQuoteRules.ref(it) }
         pending[clientId] = Message(
             id = clientId, authorId = me, text = "", type = "sticker", createdAtMillis = tap, hasServerTime = false,
             clientTs = tap, clientId = clientId, sendState = Message.SendState.SENDING, replyTo = ref,
@@ -1625,7 +1625,7 @@ class ThreadRepository(
         val file = StickerFavorites.png(s.stickerId) ?: return
         val tap = System.currentTimeMillis().toDouble()
         val clientId = UUID.randomUUID().toString().uppercase()
-        val ref = reply?.let { Message.ReplyRef(it.id, it.authorId, (CardRules.previewWord(it.text) ?: it.bodyText).take(200)) }
+        val ref = reply?.let { ReplyQuoteRules.ref(it) }
         val png = file.readBytes()
         val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
         android.graphics.BitmapFactory.decodeByteArray(png, 0, png.size, opts)
@@ -1707,7 +1707,7 @@ class ThreadRepository(
     fun sendGif(g: StickerGifRules.Gif, reply: Message?) {
         val tap = System.currentTimeMillis().toDouble()
         val clientId = UUID.randomUUID().toString().uppercase()
-        val ref = reply?.let { Message.ReplyRef(it.id, it.authorId, (CardRules.previewWord(it.text) ?: it.bodyText).take(200)) }
+        val ref = reply?.let { ReplyQuoteRules.ref(it) }
         pending[clientId] = Message(
             id = clientId, authorId = me, text = "", type = "gif", createdAtMillis = tap, hasServerTime = false,
             clientTs = tap, clientId = clientId, sendState = Message.SendState.SENDING, replyTo = ref,

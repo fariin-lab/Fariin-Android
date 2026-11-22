@@ -2829,6 +2829,8 @@ private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
                 Text(when {
                     r.isStatus -> "Story"
                     blocked -> "Not available"
+                    original != null && icon != null && original.text.isEmpty() && replyMediaLabel(original) == null ->
+                        replyLine(original, com.fariin.app.data.ReplyQuoteRules.withoutGlyph(r.text).ifEmpty { original.bodyText })
                     original?.deleted == true -> "This message was deleted"
                     original?.viewOnce == true -> "Photo"
                     original != null -> replyLine(original, replyMediaLabel(original)
