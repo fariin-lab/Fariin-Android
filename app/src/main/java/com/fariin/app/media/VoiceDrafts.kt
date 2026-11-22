@@ -52,6 +52,13 @@ object VoiceDrafts {
         return Draft(f, d.toDoubleOrNull() ?: return null, levels)
     }
 
+    /** Sign-out (iOS AudioRecorder.wipeAllDrafts): every kept note and its record go. */
+    fun wipe(ctx: Context) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+        runCatching { File(ctx.filesDir, "voice-drafts").deleteRecursively() }
+        _index.value = emptyMap()
+    }
+
     /** Only the record; the file itself goes with the send or the bin. */
     fun forget(ctx: Context, key: String) {
         if (key.isEmpty()) return
