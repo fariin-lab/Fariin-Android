@@ -1167,15 +1167,22 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(8.dp))
                     .clickable { editAtDescription = true; editing = true }.padding(horizontal = 8.dp, vertical = 4.dp))
-            if (iAmMember) {
+            // iOS fariinLocked: suspended (not over) or disabled by Fariin. The page then shows why and
+            // the exit rows only: no circles, settings, media or members.
+            val fariinLocked = com.fariin.app.data.GroupMod.blocksSending(conv) && !com.fariin.app.data.GroupMod.ended(conv)
+            if (iAmMember && !fariinLocked) {
                 Spacer(Modifier.height(16.dp))
                 GroupCirclesRow(cid, me, conv, users.size, onSearch = if (fromChat) ({ com.fariin.app.ui.thread.InChatSearchLink.searchFromInfo(cid, onBack) }) else null,
                     onNotice = { notice = it }, moreAnchor = moreAnchor, onMore = { moreOpen = true })
             }
             Spacer(Modifier.height(20.dp))
+            if (fariinLocked) SettingsSection {
+                Text(com.fariin.app.data.GroupMod.noticeText(conv), fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(16.dp))
+            }
             // iOS GroupAboutCard: the description and, for a public group, its link with the QR.
             val publicName = (conv["username"] as? String)?.takeIf { it.isNotEmpty() && conv["isPublic"] == true }
-            if (desc.isNotEmpty() || publicName != null) SettingsSection {
+            if (!fariinLocked && (desc.isNotEmpty() || publicName != null)) SettingsSection {
                 if (desc.isNotEmpty()) DescriptionCard(desc)
                 if (publicName != null) {
                     if (desc.isNotEmpty()) androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
@@ -1195,7 +1202,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                     }
                 }
             }
-            if (iAmMember) SettingsSection {
+            if (iAmMember && !fariinLocked) SettingsSection {
                 // iOS settingsCard (owner 2026-10-18/20): Storage Used, then for the owner and admins one
                 // Group Settings row (the management lives on that page) and Join Requests while
                 // someone waits; a member's Disappearing Messages row stays here, read-only.
@@ -1231,15 +1238,15 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 }
             }
             // iOS: All Media between the settings and the members, for a member, when there is some.
-            if (iAmMember) SharedMediaCard(cid, shared) { allMedia = true }
+            if (iAmMember && !fariinLocked) SharedMediaCard(cid, shared) { allMedia = true }
             // iOS hideMembers (set by Fariin staff only): no list, faces or labels, only the count.
             // Fariin staff still see them, as on iOS (AdminStore.isAdmin).
             val membersHidden = conv["hideMembers"] == true && !appAdmin
-            if (membersHidden) Text("${users.size} Member${if (users.size == 1) "" else "s"}",
+            if (membersHidden && !fariinLocked) Text("${users.size} Member${if (users.size == 1) "" else "s"}",
                 style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = c.secondary,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 14.dp))
             // iOS membersSection: "N Members" opens the whole list; six shown, past six the first five and See All.
-            if (!membersHidden) {
+            if (!membersHidden && !fariinLocked) {
             val g = com.fariin.app.data.GroupMembers.Group.from(conv)
             val (shownMembers, more) = com.fariin.app.data.GroupMembers.infoShown(com.fariin.app.data.GroupMembers.infoOrder(g, me))
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp).clip(RoundedCornerShape(12.dp))
