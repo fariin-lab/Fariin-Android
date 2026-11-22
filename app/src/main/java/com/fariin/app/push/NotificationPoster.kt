@@ -342,6 +342,43 @@ object NotificationPoster {
 
     fun nudgeTag(cid: String) = "groupnudge-$cid"
 
+    /**
+     * "<name> is inviting you to a call" (server ringAdhocRecipients) when the push reached the
+     * app: the server's words, one per call (tag). A tap and Join do the same: the invitation
+     * (MainActivity reads the same keys a system-drawn one carries). [quiet] = in front with the
+     * App Lock page up: in the list only, the tone is ours.
+     */
+    @SuppressLint("MissingPermission")
+    fun postAdhocInvite(c: Context, title: String, body: String, p: com.fariin.app.data.AdhocCallPush, quiet: Boolean) {
+        ensureChannels(c)
+        val nmc = NotificationManagerCompat.from(c)
+        if (!nmc.areNotificationsEnabled()) return
+        val open = Intent(c, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            p.extras().forEach { (k, v) -> putExtra(k, v) }
+        }
+        val tap = PendingIntent.getActivity(c, ("a${p.roomId}").hashCode(), open,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val video = com.fariin.app.data.AdhocInviteRules.video(body)
+        val n = NotificationCompat.Builder(c, NotifChannel.CALLS.id)
+            .setSmallIcon(R.drawable.ic_stat_fariin)
+            .setColor(Color.rgb(0x1E, 0x88, 0xE5))
+            .setContentTitle(title)
+            .setContentText(body)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setContentIntent(tap)
+            .addAction(if (video) R.drawable.ic_call_video else R.drawable.ic_call_voice, "Join", tap)
+            .setAutoCancel(true)
+            .setSilent(quiet)
+            .build()
+        nmc.notify(adhocTag(p.roomId), ID, n)
+    }
+
+    fun adhocTag(roomId: String) = "adhoccall-$roomId"
+
+    /** Opened or joined: the call's invite leaves the list. */
+    fun clearAdhocInvite(c: Context, roomId: String) = NotificationManagerCompat.from(c).cancel(adhocTag(roomId), ID)
+
     /** Opened or joined: the group's nudge leaves the list. */
     fun clearGroupNudge(c: Context, cid: String) = NotificationManagerCompat.from(c).cancel(nudgeTag(cid), ID)
 

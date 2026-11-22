@@ -74,6 +74,16 @@ class FariinMessagingService : FirebaseMessagingService() {
             runBlocking { withTimeoutOrNull(NUDGE_TIMEOUT_MS) { showGroupNudge(applicationContext, n, message.notification?.title, message.notification?.body) } }
             return
         }
+        // Added to a multi-person call with no group chat (server ringAdhocRecipients). In front: the
+        // invitation at once, no banner (iOS willPresent); behind: our notification with Join.
+        if (message.data["type"] == com.fariin.app.data.AdhocInviteRules.TYPE) {
+            val p = com.fariin.app.data.AdhocInviteRules.parse(message.data) ?: return
+            val title = message.notification?.title?.takeIf { it.isNotEmpty() } ?: com.fariin.app.data.AdhocInviteRules.FALLBACK_TITLE
+            val body = message.notification?.body?.takeIf { it.isNotEmpty() } ?: com.fariin.app.data.AdhocInviteRules.FALLBACK_BODY
+            val c = applicationContext
+            android.os.Handler(android.os.Looper.getMainLooper()).post { showAdhocInvite(c, p, title, body) }
+            return
+        }
         if (message.data["type"] == "groupcall") {
             val cid = message.data["cid"].orEmpty()
             android.os.Handler(android.os.Looper.getMainLooper()).post { com.fariin.app.call.GroupRing.onPush(applicationContext, cid) }
@@ -153,6 +163,26 @@ class FariinMessagingService : FirebaseMessagingService() {
                     InAppNotify.present(c, InAppRoute.InApp(InAppBanner(n.cid, n.callerName, "wants to talk", face?.ifEmpty { null }, nudge = n),
                         prefs.sound, prefs.vibrate))
                 }
+            }
+        }
+
+        /** The multi-person call invite (AdhocInviteRules.route), on the main thread. */
+        private fun showAdhocInvite(c: Context, p: com.fariin.app.data.AdhocCallPush, title: String, body: String) {
+            val me = com.fariin.app.Fb.auth.currentUser?.uid.orEmpty()
+            val show = com.fariin.app.data.AdhocInviteRules.route(p, me, Push.pushOn(c),
+                myCallId = com.fariin.app.call.GroupCall.ui.value.cid,
+                otherCallLive = com.fariin.app.call.CallManager.ui.value.status.live,
+                inFront = com.fariin.app.AppLifecycle.inFront, locked = appLockShowing(c))
+            when (show) {
+                com.fariin.app.data.AdhocShow.NOTHING -> {}
+                com.fariin.app.data.AdhocShow.BUSY -> com.fariin.app.call.GroupRing.answer("busy", p.roomId, null, roomKind = "adhoc")
+                com.fariin.app.data.AdhocShow.NOTIFICATION -> NotificationPoster.postAdhocInvite(c, title, body, p, quiet = false)
+                com.fariin.app.data.AdhocShow.QUIET_NOTIFICATION -> {
+                    NotificationPoster.postAdhocInvite(c, title, body, p, quiet = true)
+                    val prefs = InAppNotify.prefs(c)
+                    InAppNotify.present(c, InAppRoute.InApp(null, prefs.sound, prefs.vibrate))
+                }
+                com.fariin.app.data.AdhocShow.INVITE -> com.fariin.app.call.GroupRing.onAdhocInvite(c, p.roomId, ring = true)
             }
         }
 

@@ -653,6 +653,14 @@ class MainActivity : ComponentActivity() {
     private fun takeLinkNudge(i: android.content.Intent?) {
         val e = i?.extras ?: return
         val type = e.getString("type")
+        // Added to a multi-person call (server ringAdhocRecipients), its body or its Join: the invitation.
+        if (type == com.fariin.app.data.AdhocInviteRules.TYPE) {
+            val p = com.fariin.app.data.AdhocInviteRules.parse(mapOf("type" to type, "roomId" to e.getString("roomId"))) ?: return
+            i.removeExtra("type"); i.removeExtra("roomId")
+            com.fariin.app.push.NotificationPoster.clearAdhocInvite(applicationContext, p.roomId)
+            com.fariin.app.call.GroupRing.onAdhocInvite(applicationContext, p.roomId, ring = false)
+            return
+        }
         if (type != "linknudge" && type != com.fariin.app.data.GroupNudgeRules.TYPE) return
         val d = e.keySet().mapNotNull { k -> e.getString(k)?.let { k to it } }.toMap()
         i.removeExtra("type")

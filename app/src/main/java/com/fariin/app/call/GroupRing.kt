@@ -40,8 +40,10 @@ data class GroupInvite(val cid: String, val title: String, val video: Boolean, v
                        /** A call link's ring (Add people in a link call): the link's key; [cid] is its room id. */
                        val linkKey: String? = null,
                        /** A nudge ("wants to talk"), not a ring: no ringtone, Ignore tells nobody (iOS openNudge). */
-                       val nudge: Boolean = false) {
-    val roomKind: String get() = if (linkKey != null) "link" else "group"
+                       val nudge: Boolean = false,
+                       /** A multi-person call with no group chat (groupCalls/adhoc_...): [cid] is its room id. */
+                       val adhoc: Boolean = false) {
+    val roomKind: String get() = if (linkKey != null) "link" else if (adhoc) "adhoc" else "group"
 }
 
 /** One person Add People rang into a link call (callLinks/{roomId}/invites/{uid}, iOS LinkCallInvites.Invite). */
@@ -181,6 +183,34 @@ object GroupRing {
         }
     }
 
+    /**
+     * Added to a multi-person call (server ringAdhocRecipients, push type "adhoccall"). [ring] true
+     * is the push with the app in front: it rings like a group's call while the ring minute lasts,
+     * and a busy phone tells the server "busy" (iOS reportBusy). [ring] false is a tapped
+     * notification or its Join (iOS showInvite): the invitation without a ring, even past the
+     * minute, while the call is on and I am on its list. Nothing when the starter is blocked.
+     */
+    fun onAdhocInvite(context: Context, roomId: String, ring: Boolean) {
+        val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
+        app = context.applicationContext
+        if (_invite.value?.cid == roomId || GroupCall.ui.value.cid == roomId) return
+        if (ring && roomId in declinedHere) return
+        scope.launch {
+            val doc = try { db.collection("groupCalls").document(roomId).get().await().data } catch (_: Exception) { null }
+            val info = com.fariin.app.data.AdhocInviteRules.invite(roomId, doc, me) { com.fariin.app.data.BlockList.contains(it) } ?: return@launch
+            val started = (doc?.get("startedAt") as? Timestamp)?.toDate()?.time
+            if (GroupCall.ui.value.cid != null || CallManager.ui.value.status.live || _invite.value != null) {
+                if (ring && GroupCall.ui.value.cid != roomId) answer("busy", roomId, started, roomKind = "adhoc")
+                return@launch
+            }
+            if (ring && !GroupRingRules.rings(doc, me, started, System.currentTimeMillis())) return@launch
+            if (!ring) declinedHere -= roomId
+            val faces = info.others.map { RingFace(it.uid, it.name, it.photo) }
+            ring(GroupInvite(roomId, info.title, info.video, info.startedBy, started ?: System.currentTimeMillis(), faces,
+                nudge = !ring, adhoc = true))
+        }
+    }
+
     private fun linkInvite(context: Context, d: Map<String, String>, nudge: Boolean) {
         val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         val roomId = d["roomId"].orEmpty()
@@ -266,7 +296,8 @@ object GroupRing {
             // Straight in, no approval wait (invited); the server hears "joined" (iOS reportLinkJoined).
             GroupCall.joinLink(context, key, video = i.video && cameraAllowed, mic = !muted)
             if (!i.nudge) answer("joined", i.cid, i.startedAtMs, roomKind = "link")
-        } else GroupCall.join(context, i.cid, i.title, video = i.video && cameraAllowed, requireLive = true, mic = !muted)
+        } else if (i.adhoc) GroupCall.joinAdhoc(context, i.cid, i.title, video = i.video && cameraAllowed, mic = !muted)
+        else GroupCall.join(context, i.cid, i.title, video = i.video && cameraAllowed, requireLive = true, mic = !muted)
         return i
     }
 

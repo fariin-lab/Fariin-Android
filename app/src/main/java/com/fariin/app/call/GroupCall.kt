@@ -312,8 +312,8 @@ data class CallReaction(val id: Long, val uid: String, val name: String, val emo
  * Screen share is LiveKit's own: the system's consent dialog, then a screen share track (the source
  * an iPhone's share arrives on too). Host controls (mute, mute all, allow to speak, remove, block,
  * end for everyone) go through the server's `callAdmin` (GroupCallAdmin has the rules). New Call
- * starts a multi-person `adhoc_` room ([startAdhoc]). Not on Android yet: growing a 1:1 into one,
- * and ringing for one somebody else started.
+ * starts a multi-person `adhoc_` room ([startAdhoc]); its invite push opens [joinAdhoc] (GroupRing).
+ * Not on Android yet: growing a 1:1 into one.
  */
 object GroupCall {
     private const val TAG = "GroupCall"
@@ -377,6 +377,8 @@ object GroupCall {
 
     /** I wrote this multi-person call's doc: until I am in the room, a leave must stop its ringing. */
     private var adhocWritten = false
+    /** I am joining a multi-person call someone else started (its invitation's Join). */
+    private var adhocJoining = false
     /** The people on this multi-person call's list (me included), for Add People. */
     private var adhocMembers: List<CallPerson> = emptyList()
 
@@ -393,7 +395,7 @@ object GroupCall {
         val roomId = GroupCallWire.newAdhocId(UUID.randomUUID().toString())
         val title = GroupCallWire.adhocTitle(others.map { it.name })
         recordId = null; startedHere = false; someoneCame = false; startedAtMs = null; micWish = mic; linkKey = null
-        dialing = true; joinedAtMs = 0L; lastRemote = emptySet(); adhocWritten = false
+        dialing = true; joinedAtMs = 0L; lastRemote = emptySet(); adhocWritten = false; adhocJoining = false
         groupReg?.remove(); groupReg = null
         faces = others.associate { it.uid to (it.name to it.photo) }; asked.clear(); team = null
         _ui.value = GroupCallUi(cid = roomId, title = title, connecting = true, cameraOn = video, micOn = mic, calling = true,
@@ -420,6 +422,46 @@ object GroupCall {
             if (wrote != true) { fail("Call failed"); return@launch }
             adhocWritten = true
             startedAtMs = System.currentTimeMillis()
+            val pass = try {
+                GroupCallWire.parsePass(functions.getHttpsCallable("groupCallToken").call(GroupCallWire.adhocTokenRequest(roomId)).await().data)
+            } catch (e: Exception) {
+                if (_ui.value.cid == roomId) fail(GroupCallWire.joinNotice(e.message))
+                return@launch
+            }
+            if (_ui.value.cid != roomId) return@launch
+            if (pass == null) { fail("Call failed"); return@launch }
+            connectRoom(app, roomId, title, video, requireLive = true, pass = pass)
+        }
+    }
+
+    /**
+     * A multi-person call someone else started, from its invitation (iOS joinAdhoc): the doc first
+     * (off says "Call ended", a failed read "Couldn't join"), then the pass by `roomId`, then the
+     * room. Once in, me on `joined` (iOS markJoined), so my other phones stop ringing.
+     */
+    fun joinAdhoc(context: Context, roomId: String, title: String, video: Boolean, mic: Boolean = true) {
+        if (busy()) return
+        recordId = null; startedHere = false; someoneCame = true; startedAtMs = null; micWish = mic; linkKey = null
+        dialing = false; joinedAtMs = 0L; lastRemote = emptySet(); adhocWritten = false; adhocJoining = true
+        groupReg?.remove(); groupReg = null
+        faces = emptyMap(); asked.clear(); team = null
+        _ui.value = GroupCallUi(cid = roomId, title = title, connecting = true, cameraOn = video, micOn = mic)
+        val app = context.applicationContext
+        appContext = app
+        scope.launch {
+            val doc = try { db.collection("groupCalls").document(roomId).get().await() } catch (_: Exception) {
+                if (_ui.value.cid == roomId) fail("Couldn't join")
+                return@launch
+            }
+            if (_ui.value.cid != roomId) return@launch
+            val d = doc.data
+            if (d == null || d["active"] != true) { fail("Call ended"); return@launch }
+            val names = (d["names"] as? Map<*, *>).orEmpty()
+            val photos = (d["photos"] as? Map<*, *>).orEmpty()
+            adhocMembers = (d["members"] as? List<*>).orEmpty().filterIsInstance<String>().distinct().map {
+                CallPerson(it, (names[it] as? String)?.takeIf { n -> n.isNotBlank() } ?: "Member", (photos[it] as? String)?.takeIf { p -> p.isNotEmpty() })
+            }
+            faces = adhocMembers.associate { it.uid to (it.name to it.photo) }
             val pass = try {
                 GroupCallWire.parsePass(functions.getHttpsCallable("groupCallToken").call(GroupCallWire.adhocTokenRequest(roomId)).await().data)
             } catch (e: Exception) {
@@ -648,7 +690,15 @@ object GroupCall {
                 _ui.value = _ui.value.copy(joinedAt = joinedAtMs)
                 startSpeakerTicks(r)
                 // A multi-person call I started: the calling sound goes on until someone comes.
-                if (GroupCallWire.isAdhoc(cid)) { adhocInRoom(cid, r); refresh(); return@run }
+                if (GroupCallWire.isAdhoc(cid)) {
+                    if (adhocJoining) {
+                        // Joined someone else's call: me on `joined` (iOS markJoined) and the joined tone.
+                        com.fariin.app.Fb.auth.currentUser?.uid?.let { db.collection("groupCalls").document(cid).update("joined", FieldValue.arrayUnion(it)) }
+                        refresh()
+                        CallTonePlayer.play(CallTone.GROUP_JOINED)
+                    } else { adhocInRoom(cid, r); refresh() }
+                    return@run
+                }
                 val starting = !requireLive && r.remoteParticipants.isEmpty() && _ui.value.linkRoom == null
                 // A call already running: the calling sound gives way to the joined tone.
                 if (!starting) dialing = false
@@ -1177,7 +1227,7 @@ object GroupCall {
         if (cid != null && r != null && _ui.value.joined && link == null) closeIfLast(cid, wasAlone = r.remoteParticipants.isEmpty())
         // Hung up (or failed) before the room was up: the doc already rings the others; stop it.
         else if (cid != null && adhocWritten && GroupCallWire.isAdhoc(cid)) stopAdhocRing(cid)
-        adhocWritten = false; adhocMembers = emptyList()
+        adhocWritten = false; adhocJoining = false; adhocMembers = emptyList()
         requestReg?.remove(); requestReg = null
         requestsReg?.remove(); requestsReg = null
         groupReg?.remove(); groupReg = null
