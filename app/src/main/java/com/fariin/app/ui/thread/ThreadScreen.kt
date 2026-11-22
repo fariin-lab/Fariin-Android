@@ -5,6 +5,7 @@ import com.fariin.app.ui.components.fadeOnChange
 import com.fariin.app.ui.components.enterFade
 import com.fariin.app.ui.components.GlassDropdown
 import com.fariin.app.ui.thread.bubbles.artBubble
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -2394,9 +2395,12 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
         // The red (!) fades in when a send fails and out on Resend (iOS pops 18); my bubble keeps its place.
         com.fariin.app.ui.components.Appear(failed, resize = false) {
             Box(
-                Modifier.padding(end = 8.dp).size(24.dp).clip(CircleShape).background(c.red).clickable { onRetry(m) },
+                // Screen reader: "Not delivered" and the try-again action, not "!" (iOS spokenLabel).
+                Modifier.padding(end = 8.dp).size(24.dp).clip(CircleShape).background(c.red)
+                    .clickable(onClickLabel = "Try again") { onRetry(m) }.semantics { contentDescription = "Not delivered" },
                 contentAlignment = Alignment.Center,
-            ) { Text("!", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+            ) { Text("!", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clearAndSetSemantics { }) }
         }
         // A story mention (iOS storyMentionRow): a centred card, not a bubble. 1:1 only.
         m.storyMention?.takeIf { !ui.isGroup && !m.deleted }?.let { sm ->
@@ -2991,7 +2995,7 @@ private fun Meta(m: Message, tick: Tick, isMe: Boolean, is24h: Boolean, onMedia:
         // On a timer: the timer mark before the time (iOS footer), from the first frame.
         val mark = LocalTimerMark.current
         if (com.fariin.app.data.Disappearing.shownExpiry(m, mark.seconds, mark.sinceMs, System.currentTimeMillis().toDouble()) != null) {
-            Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_disappearing), contentDescription = "Disappearing",
+            Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_disappearing), contentDescription = "Disappearing message",
                 tint = metaColor, modifier = Modifier.size(11.dp))
             Spacer(Modifier.width(3.dp))
         }
