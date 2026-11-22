@@ -186,12 +186,13 @@ internal fun VideoPage(p: ViewerRules.Page, current: Boolean, ctl: VideoCtl, chr
                 // The player takes over from a preload still running (one writer per clip).
                 com.fariin.app.media.VideoPreload.cancel(p.url)
                 com.fariin.app.media.VideoStream.log("open stream preloaded=${com.fariin.app.media.VideoStream.cachedPrefix(ctx, p.url)}")
-                ExoPlayer.Builder(ctx).setMediaSourceFactory(com.fariin.app.media.VideoStream.mediaSourceFactory(ctx)).build().apply {
+                ExoPlayer.Builder(ctx).setMediaSourceFactory(com.fariin.app.media.VideoStream.mediaSourceFactory(ctx))
+                    .setHandleAudioBecomingNoisy(true).build().apply {
                     setMediaItem(MediaItem.fromUri(p.url))
                     prepare()
                     playWhenReady = true
                 }
-            } else ExoPlayer.Builder(ctx).build().apply {
+            } else ExoPlayer.Builder(ctx).setHandleAudioBecomingNoisy(true).build().apply {   // headphones out: pause (iOS)
                 setMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
                 prepare()
                 playWhenReady = true
@@ -234,6 +235,15 @@ internal fun VideoPage(p: ViewerRules.Page, current: Boolean, ctl: VideoCtl, chr
                     if (ctl.player === player) { ctl.player = null; ctl.playing = false; ctl.firstFrame = false }
                     player.release()
                 }
+            }
+            // iOS: leaving the app pauses the clip; it stays paused on return.
+            val life = androidx.lifecycle.compose.LocalLifecycleOwner.current
+            DisposableEffect(player, life) {
+                val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+                    if (e == androidx.lifecycle.Lifecycle.Event.ON_STOP) player.pause()
+                }
+                life.lifecycle.addObserver(obs)
+                onDispose { life.lifecycle.removeObserver(obs) }
             }
             // Watchdog: no first frame in time and the stream gives way to the whole download.
             if (streaming) LaunchedEffect(player) {
