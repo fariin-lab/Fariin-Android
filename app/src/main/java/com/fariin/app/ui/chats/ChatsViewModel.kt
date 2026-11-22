@@ -149,7 +149,7 @@ class ChatsViewModel(
                 list.map { com.fariin.app.data.Disappearing.burnedIfDue(it, now) }
             },
                 // A request from someone I blocked never shows (iOS hideAccountBlocked).
-                requests = s.conversations.filter { ChatList.isIncomingRequest(it, me) &&
+                requests = s.conversations.filter { ChatList.isIncomingRequest(it, me) && !it.isCleared(me) &&
                     !com.fariin.app.data.BlockList.contains(it.otherUid(me)) },
                 archived = s.conversations.filter { it.isArchived(me) && !it.isCleared(me) && !ChatList.isIncomingRequest(it, me) }
                     .sortedByDescending { it.displayUpdatedAt(me) },
