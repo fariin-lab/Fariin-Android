@@ -212,7 +212,7 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                 when {
                     groupsLoading && groupRows.isEmpty() -> if (skeleton) ExploreSkeleton(squircle = false)
                     groupsFailed && groupRows.isEmpty() -> Note("Couldn't load groups. Check your connection and try again.")
-                    groupRows.isEmpty() && shown.isEmpty() -> Note("No public groups yet.")
+                    groupRows.isEmpty() && shown.isEmpty() -> Note("No public groups yet. To list yours, open it, tap its name, then Group Settings > Group Type > Public.")
                     shown.isEmpty() -> Note("No groups match “${query.trim()}”.")
                     else -> LazyColumn(Modifier.fillMaxSize().navigationBarsPadding()) {
                         items(shown, key = { it.cid }, contentType = { "channel" }) { r ->
@@ -314,7 +314,8 @@ private fun GroupRow(r: com.fariin.app.channel.DiscoveredGroup, pill: JoinPillSt
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     ExploreMark(r.verified, r.label, "Verified group")
                 }
-                Text(if (r.memberCount == 1) "1 member" else "${r.memberCount} members", fontSize = 15.sp, color = c.secondary)
+                // Whole number with the phone's separators, "1,234 members" (iOS memberCount.formatted()).
+                Text(if (r.memberCount == 1) "1 member" else "${java.text.NumberFormat.getIntegerInstance().format(r.memberCount)} members", fontSize = 15.sp, color = c.secondary)
             }
         }
         Spacer(Modifier.width(8.dp))
