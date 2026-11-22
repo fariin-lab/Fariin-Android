@@ -504,7 +504,11 @@ fun OfficialSeal(modifier: Modifier) {
  * A long press offers Mark as Read/Unread, Pin and Archive (iOS markUnread, setPinned, setArchived).
  */
 @Composable
-fun OfficialRow(view: OfficialChannel.View, onOpen: () -> Unit) {
+fun OfficialRow(view: OfficialChannel.View, onOpen: () -> Unit,
+                /** Fariin's live stories as ring arcs (true = seen); empty = no story up (iOS storyRing). */
+                ring: List<Boolean> = emptyList(),
+                /** A tap on the ringed mark opens the stories, not the chat. */
+                onStoryTap: (() -> Unit)? = null) {
     val c = Fariin.colors
     val context = LocalContext.current
     val latest = view.latest ?: return
@@ -516,7 +520,16 @@ fun OfficialRow(view: OfficialChannel.View, onOpen: () -> Unit) {
     Row(Modifier.fillMaxWidth().combinedClickable(onClick = onOpen, onLongClick = {
             haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); menu = true })
         .padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.padding(vertical = 10.dp)) { OfficialAvatar(56.dp) }
+        // With a story up the mark shrinks inside the ring, as every other row (iOS 2026-10-16).
+        Box(Modifier.padding(vertical = 10.dp).size(56.dp).then(if (onStoryTap != null && ring.isNotEmpty()) Modifier.clickable(
+                interactionSource = null, indication = null, onClickLabel = "View story") { onStoryTap() } else Modifier),
+            contentAlignment = Alignment.Center) {
+            if (ring.isEmpty()) OfficialAvatar(56.dp)
+            else {
+                OfficialAvatar(50.dp)
+                com.fariin.app.ui.stories.StoryRing(ring, Modifier.size(56.dp))
+            }
+        }
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f).padding(top = 7.dp, bottom = 9.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -833,7 +833,12 @@ fun ChatListScreen(
                     val officialItem: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
                         item(key = com.fariin.app.data.OfficialChannel.CID, contentType = "chat") {
                             Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) {
-                                com.fariin.app.ui.official.OfficialRow(official, onOpen = { if (!selecting) channels.official() })
+                                // Fariin's stories ring the mark, a tap on it opens them (iOS storyRing).
+                                val officialRing = stories.others.firstOrNull { it.key == com.fariin.app.data.OfficialChannel.CID && it.stories.isNotEmpty() }
+                                    ?.takeIf { it.key !in storyHidden }
+                                com.fariin.app.ui.official.OfficialRow(official, onOpen = { if (!selecting) channels.official() },
+                                    ring = officialRing?.let { com.fariin.app.data.StoryRings.seenFlags(it) }.orEmpty(),
+                                    onStoryTap = if (officialRing == null || selecting) null else ({ storyOpen = officialRing }))
                             }
                         }
                     }

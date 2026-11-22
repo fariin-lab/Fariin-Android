@@ -64,6 +64,15 @@ fun OfficialInfoPage(onBack: () -> Unit, onSearch: () -> Unit, onOpenImage: (Str
     BackHandler(onBack = onBack)
     val media = remember(view.visible) { view.visible.filter { it.mediaUrl != null }.reversed() }
     val muted = view.state.isMutedNow(System.currentTimeMillis().toDouble())
+    // Fariin's live stories, as the Stories tab has them (iOS storyGroup): a ring on the mark, a tap opens them.
+    val feed by com.fariin.app.data.LiveStories.state.collectAsState()
+    val storyHidden by com.fariin.app.data.StoryMutes.set.collectAsState()
+    val storyGroup = feed.others.firstOrNull { it.key == OfficialChannel.CID && it.stories.isNotEmpty() }?.takeIf { it.key !in storyHidden }
+    var storyOpen by remember { mutableStateOf<com.fariin.app.data.StoryGroup?>(null) }
+    storyOpen?.let { g ->
+        com.fariin.app.ui.stories.StoryViewerDialog(com.fariin.app.Fb.auth.currentUser?.uid.orEmpty(), listOf(g), 0,
+            com.fariin.app.data.ChatsNow.list, onClose = { storyOpen = null })
+    }
 
     if (confirmClear) GlassAlert(onDismissRequest = { confirmClear = false }, title = { Text("Clear this chat?") },
         text = { Text("Removes these messages from this phone. New updates will still arrive.") },
@@ -76,7 +85,14 @@ fun OfficialInfoPage(onBack: () -> Unit, onSearch: () -> Unit, onOpenImage: (Str
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) {
             // The card: the mark, the name with its tick, "Official Chat".
             Column(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                OfficialAvatar(112.dp)
+                if (storyGroup != null) {
+                    // The mark shrinks inside the ring with a gap (iOS: 104 in 118).
+                    Box(Modifier.size(118.dp).clip(CircleShape).clickable(onClickLabel = "Fariin's story") { storyOpen = storyGroup },
+                        contentAlignment = Alignment.Center) {
+                        OfficialAvatar(104.dp)
+                        com.fariin.app.ui.stories.StoryRing(com.fariin.app.data.StoryRings.seenFlags(storyGroup), Modifier.size(118.dp), lineWidth = 3.dp)
+                    }
+                } else OfficialAvatar(112.dp)
                 Spacer(Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(OfficialChannel.NAME, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = c.label)
