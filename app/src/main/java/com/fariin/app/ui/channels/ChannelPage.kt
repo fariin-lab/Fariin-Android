@@ -234,7 +234,12 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     // (owner 2026-11-08: "it comes out a little late", the tap waited on the network).
     val mayInvite = info.username.isEmpty() && role == Role.ADMIN && team?.can(me, com.fariin.app.channel.ChannelAdmins.Right.INVITE_USERS) == true
     var preLink by remember(info.cid) { mutableStateOf<String?>(null) }
-    LaunchedEffect(info.cid, mayInvite) { if (mayInvite && preLink == null) preLink = com.fariin.app.data.ChannelAddFollowers.existingLink(info.cid) }
+    // An admin without the invite right still passes on a private channel's existing link (iOS: Share
+    // shows when a link exists; without the right it is the link as it is, never a new one).
+    val adminSeesLink = role == Role.ADMIN && info.username.isEmpty()
+    LaunchedEffect(info.cid, mayInvite, adminSeesLink) {
+        if ((mayInvite || adminSeesLink) && preLink == null) preLink = com.fariin.app.data.ChannelAddFollowers.existingLink(info.cid)
+    }
     fun share() {
         // A private channel: its invite link, for an admin who may invite (iOS 1280e92d, More > Share Channel).
         if (mayInvite) {
@@ -246,6 +251,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
             }
             return
         }
+        if (adminSeesLink) preLink?.let { shareLink = it to com.fariin.app.data.ChannelAddFollowers.shareText(info.title, it); return }
         val text = ChannelRules.shareText(info.title, info.username) ?: run { notice = "This channel has no public link."; return }
         // Our own "Share with" sheet (iOS), not the system share page; that sits in its corner.
         shareLink = "https://fariin.com/${info.username}" to text
@@ -263,6 +269,12 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     }
     // An admin who is not the owner may leave (iOS GroupInfoView: only the owner may not; the owner
     // deletes the channel instead). An admin is a member, not a follower, so it is the group leave.
+    // A Fariin admin sees Statistics at any size (iOS AdminStore).
+    val appAdmin by androidx.compose.runtime.produceState(false, me) {
+        value = me.isNotEmpty() && runCatching {
+            com.fariin.app.Fb.db.collection("admins").document(me).get().await().exists()
+        }.getOrDefault(false)
+    }
     val adminMayLeave = role == Role.ADMIN && team != null && !team.isOwner(me)
     fun leave(fromUndo: Boolean) {
         undo = false
@@ -409,6 +421,14 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                     }
                 }
                 Spacer(Modifier.height(20.dp))
+                // Suspended or closed by Fariin (iOS fariinLocked, owner 2026-10-26): why, and the exit
+                // card. Nothing else: no settings, followers, media or links while the hold lasts.
+                if (info.lockNotice != null) {
+                    Card {
+                        Text(info.lockNotice, fontSize = 15.sp, color = c.secondary, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(16.dp))
+                    }
+                } else {
                 // About: the description and the public link.
                 if (info.description.isNotEmpty() || info.username.isNotEmpty()) Card {
                     if (info.description.isNotEmpty()) Column(Modifier.fillMaxWidth().padding(16.dp)) {
@@ -453,17 +473,23 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                         ChannelManageRows(info, team!!, me, shownCount, manage, last = false)
                         // The same groupStats switch as groups (iOS GroupInfoView).
                         if (com.fariin.app.data.AppFeatures.groupStats) com.fariin.app.ui.settings.SettingsRow("Statistics", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_statistics),
-                            last = true, badge = NewBadgeSpots.GROUP_INFO_STATISTICS) { sub = "stats" }
+                            last = true, badge = NewBadgeSpots.GROUP_INFO_STATISTICS) {
+                            // Below the follower minimum the tap explains the number (iOS statsReachable).
+                            if (com.fariin.app.data.GroupStats.reachable(info.followerCount, appAdmin, channel = true)) sub = "stats"
+                            else notice = com.fariin.app.data.GroupStats.tooSmallText(channel = true)
+                        }
                     }
                     // Channel Type and Protect Content live on Channel Settings (as iOS).
                 }
                 // iOS: All Media under the settings card, when the channel has photos or videos.
                 if (me.isNotEmpty()) com.fariin.app.ui.people.SharedMediaCard(info.cid, shared, inset = 0.dp) { allMedia = true }
+                }
                 Spacer(Modifier.height(20.dp))
                 Card {
                     // Leave first, then Report (iOS order), with the Leave Group arrow.
                     if (role == Role.FOLLOWER || adminMayLeave) FootRow("Leave Channel", ImageVector.cachedVector(R.drawable.ic_channel_leave), c.red) { confirmLeave = true }
-                    if (role != Role.ADMIN) {
+                    // Not when the channel switched reporting off (iOS groupNoReport).
+                    if (role != Role.ADMIN && !info.noReport) {
                         if (role == Role.FOLLOWER && com.fariin.app.ui.settings.SHOW_ROW_LINES) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 52.dp))
                         FootRow(if (reported) "Reported" else "Report Channel", ImageVector.cachedVector(com.fariin.app.R.drawable.ic_report),
                             if (reported) c.secondary else c.red) {
@@ -480,7 +506,13 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                         modifier = Modifier.padding(16.dp))
                 }
                 if (info.createdAtMillis > 0) {
-                    Text((if (team?.isOwner(me) == true) "Created by you.\n" else "") + "Created ${createdLine(ctx, info.createdAtMillis)}.", fontSize = 13.sp, color = c.secondary,
+                    // iOS createdLine: the owner's name to admins too ("Created by Maya."); never to followers.
+                    val by = when {
+                        role != Role.ADMIN || info.createdBy.isEmpty() -> ""
+                        info.createdBy == me -> "you"
+                        else -> info.names[info.createdBy].orEmpty()
+                    }
+                    Text((if (by.isNotEmpty()) "Created by $by.\n" else "") + "Created ${createdLine(ctx, info.createdAtMillis)}.", fontSize = 13.sp, color = c.secondary,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp))
                 }
                 error?.let { Text(it, fontSize = 13.sp, color = c.red, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) }

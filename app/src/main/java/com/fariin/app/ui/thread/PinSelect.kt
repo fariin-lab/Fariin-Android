@@ -391,11 +391,11 @@ private fun RowScope.SelectAction(title: String, icon: androidx.compose.ui.graph
 @Composable
 internal fun BulkDeleteDialog(picked: List<Message>, ui: ThreadUi, onDismiss: () -> Unit, onPlan: (SelectRules.Plan) -> Unit) {
     val c = Fariin.colors
-    val split = SelectRules.split(picked, ui.me, ui.adminMayDelete)
+    val split = SelectRules.split(picked, ui.me, ui.adminMayDelete, ui.ownerId)
     val hasMine = split.everyone > 0
     fun go(everyone: Boolean) {
         onDismiss()
-        onPlan(SelectRules.plan(picked, everyone, ui.me, ui.isGroup, ui.adminMayDelete))
+        onPlan(SelectRules.plan(picked, everyone, ui.me, ui.isGroup, ui.adminMayDelete, ui.ownerId))
     }
     val n = picked.size
     // One stacked glass pill per choice (owner 2026-11-10: all three were packed into one pill, so

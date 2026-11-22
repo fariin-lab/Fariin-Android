@@ -104,6 +104,11 @@ data class ChannelThreadUi(
     /** The admin card: I started this channel; I may change its name, photo and description. */
     val createdByMe: Boolean = false,
     val canEdit: Boolean = false,
+    /**
+     * Delete on a post (iOS canDeleteForEveryone): my own post, or another's with the Delete posts
+     * right, never the owner's unless I am the owner.
+     */
+    val mayDelete: (Message) -> Boolean = { false },
     /** The link Share on the admin card sends (public link, else the invite link); null = none. */
     val shareLink: suspend () -> String? = { null },
 )
@@ -276,7 +281,9 @@ fun ChannelChipsInBubble(ch: ChannelThreadUi, m: Message, chips: List<ChannelRul
 
 private data class PostItem(val title: String, val icon: ImageVector, val destructive: Boolean = false,
                             /** The row's NewBadgeSpots id, for the admin panel's "New" pill. */
-                            val badge: String? = null, val run: () -> Unit)
+                            val badge: String? = null,
+                            /** A live countdown on the row (a disappearing post), ms. */
+                            val countdownTo: Double? = null, val run: () -> Unit)
 
 /**
  * Long press on a post: the channel's reactions (its own list, or the first six of the 73, with
@@ -297,6 +304,8 @@ internal fun ChannelPostMenu(
     /** null: no Pin row; else whether the post is pinned now. */
     pinned: Boolean? = null,
     onPin: ((Message) -> Unit)? = null,
+    /** Save Image / Video to the phone (where saving is allowed); null = no row. */
+    onSave: ((Message) -> Unit)? = null,
     /** The post's own bubble, drawn for a photo, video or album post (else the words' pill). */
     preview: (@Composable () -> Unit)? = null,
 ) {
@@ -324,6 +333,14 @@ internal fun ChannelPostMenu(
                 add(PostItem("Quote", quoteIcon, badge = NewBadgeSpots.CHAT_MENU_QUOTE) { onDismiss(); onQuote(m) })
             // Tick several posts to forward, copy or (owner and admins) delete them together.
             if (onSelect != null) add(PostItem("Select", ImageVector.cachedVector(R.drawable.ic_sf_checkmark_circle)) { onDismiss(); onSelect(m) })
+            // A post's own link (iOS postLink, owner 2026-11-08): a delivered post of a public channel.
+            com.fariin.app.channel.ChannelRules.postLink(ch.info.username, m.id)?.takeIf {
+                m.sendState == null && !com.fariin.app.data.MessageRules.isServiceLine(m)
+            }?.let { link -> add(PostItem("Copy Link", ImageVector.cachedVector(R.drawable.ic_sf_link)) { onCopy(link) }) }
+            // iOS Save Image: where saving is allowed (not a protected channel).
+            if (!ch.info.restricted && onSave != null && com.fariin.app.ui.thread.canSaveToGallery(m))
+                add(PostItem(when (m.mediaKind) { Message.MediaKind.PHOTO -> "Save Image"; Message.MediaKind.VIDEO -> "Save Video"; else -> "Save" },
+                    ImageVector.cachedVector(R.drawable.ic_save_down), badge = NewBadgeSpots.CHAT_MENU_SAVE_IMAGE) { onDismiss(); onSave(m) })
             if (ch.role != Role.ADMIN) add(PostItem("Report", reportIcon, destructive = true, badge = NewBadgeSpots.CHAT_MENU_REPORT) { ch.onReport(m) })
         }
         // The owner and admins edit, pin and see a post's earlier versions (the history is on the server).
@@ -347,7 +364,12 @@ internal fun ChannelPostMenu(
         // View Statistics (owner 2026-11-19): a real post only, just above Delete.
         if (ch.role == Role.ADMIN && onStats != null && !m.deleted && m.sendState == null && !com.fariin.app.data.MessageRules.isServiceLine(m))
             add(PostItem("View Statistics", ImageVector.cachedVector(R.drawable.ic_statistics)) { onDismiss(); onStats(m) })
-        if (ch.role == Role.ADMIN) add(PostItem("Delete", ImageVector.cachedVector(R.drawable.ic_sf_trash), destructive = true) { onDelete(m) })
+        // iOS deleteOrTimerRow: Delete carries the post's countdown; who cannot delete gets the
+        // countdown on a row of its own (owner 2026-11-01).
+        val expires = m.expiresAtMillis?.takeIf { !m.deleted }
+        if (ch.role == Role.ADMIN && ch.mayDelete(m))
+            add(PostItem("Delete", ImageVector.cachedVector(R.drawable.ic_sf_trash), destructive = true, countdownTo = expires) { onDelete(m) })
+        else if (expires != null) add(PostItem("Disappearing", ImageVector.cachedVector(R.drawable.ic_disappearing), countdownTo = expires) {})
     }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().clickable(onClick = onDismiss), contentAlignment = Alignment.Center) {
@@ -409,9 +431,15 @@ internal fun ChannelPostMenu(
                 Spacer(Modifier.height(10.dp))
                 // The chat menu's own card (owner 2026-11-10: same liquid menu as chats, icons first, no lines).
                 if (items.isNotEmpty()) {
+                    // One ticker while a row counts down (as the chat menu).
+                    val clock = remember { androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis()) }
+                    if (items.any { it.countdownTo != null }) androidx.compose.runtime.LaunchedEffect(Unit) {
+                        while (true) { clock.longValue = System.currentTimeMillis(); kotlinx.coroutines.delay(1000 - clock.longValue % 1000) }
+                    }
                     val rows = items.map { item ->
                         com.fariin.app.ui.thread.MenuRow(item.title, androidx.compose.ui.graphics.vector.rememberVectorPainter(item.icon),
-                            item.destructive, null, { item.run() }, isNew = com.fariin.app.ui.components.isNew(item.badge))
+                            item.destructive, item.countdownTo?.let { com.fariin.app.data.Disappearing.countdown(it - clock.longValue) },
+                            { item.run() }, isNew = com.fariin.app.ui.components.isNew(item.badge))
                     }
                     // The card fills what it is given (the chat menu sizes it): here, its rows' own height
                     // (45 each, 10 above and below), or it ran to the screen's bottom (owner 2026-11-10).

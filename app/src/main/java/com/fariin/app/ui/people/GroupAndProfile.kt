@@ -925,7 +925,11 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             com.fariin.app.Fb.db.collection("admins").document(me).get().await().exists()
         }.getOrDefault(false)
     }
-    val showStats = iAmMember && com.fariin.app.data.AppFeatures.groupStats && com.fariin.app.data.GroupStats.showRow(conv, me, appAdmin)
+    val showStats = iAmMember && com.fariin.app.data.AppFeatures.groupStats && com.fariin.app.data.GroupStats.showRow(conv, me)
+    var statsTooSmall by remember { mutableStateOf(false) }
+    if (statsTooSmall) com.fariin.app.ui.components.GlassAlert(onDismissRequest = { statsTooSmall = false }, title = "Statistics",
+        message = com.fariin.app.data.GroupStats.tooSmallText(),
+        actions = listOf(com.fariin.app.ui.components.GlassAlertAction("OK", com.fariin.app.ui.components.GlassAlertStyle.Bold) { }))
     // iOS: the Search circle goes back to the group's chat and opens its search; only from that chat.
     val fromChat = androidx.compose.runtime.saveable.rememberSaveable { com.fariin.app.ui.thread.InChatSearchLink.takeOpenedFrom(cid) }
     notice?.let { n -> com.fariin.app.ui.components.GlassAlert(onDismissRequest = { notice = null }, text = { Text(n) },
@@ -1193,10 +1197,13 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                         value = com.fariin.app.data.JoinRequests.rowValue(waiting.size), last = !showStats,
                         badge = NewBadgeSpots.GROUP_SETTINGS_REQUESTS) { pages.add(GroupPage.JoinRequests) }
                 }
-                // Statistics (iOS showStatsRow): owner and admins of a big enough group, last row.
+                // Statistics (iOS showStatsRow): every owner and admin, last row; below the minimum the
+                // tap explains the number (owner 2026-11-15).
                 if (showStats) SettingsRow("Statistics", icon = painterResource(com.fariin.app.R.drawable.ic_statistics), last = true,
                     badge = NewBadgeSpots.GROUP_INFO_STATISTICS) {
-                    pages.add(GroupPage.Stats(conv["title"] as? String ?: "Group"))
+                    if (com.fariin.app.data.GroupStats.reachable((conv["users"] as? List<*>)?.size ?: 0, appAdmin))
+                        pages.add(GroupPage.Stats(conv["title"] as? String ?: "Group"))
+                    else statsTooSmall = true
                 }
             }
             // iOS: All Media between the settings and the members, for a member, when there is some.

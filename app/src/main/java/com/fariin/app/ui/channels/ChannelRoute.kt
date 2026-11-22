@@ -284,6 +284,11 @@ fun rememberChannelThread(cid: String, me: String, doc: Map<String, Any?>, messa
         createdByMe = (doc["createdBy"] as? String) == me,
         canEdit = role == ChannelRules.Role.ADMIN && doc.isNotEmpty() &&
             com.fariin.app.channel.ChannelAdmins.Team.from(doc).can(me, com.fariin.app.channel.ChannelAdmins.Right.CHANGE_INFO),
+        mayDelete = { m ->
+            val t = com.fariin.app.channel.ChannelAdmins.Team.from(doc)
+            role == ChannelRules.Role.ADMIN && (m.authorId == me ||
+                (t.can(me, com.fariin.app.channel.ChannelAdmins.Right.DELETE_MESSAGES) && (t.isOwner(me) || !t.isOwner(m.authorId))))
+        },
         shareLink = { com.fariin.app.data.ChannelAddFollowers.link(cid, doc) },
     )
 }

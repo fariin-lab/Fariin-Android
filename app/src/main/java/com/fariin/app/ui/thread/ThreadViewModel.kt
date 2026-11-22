@@ -196,7 +196,11 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         cid = cid,
         otherDeleted = conv?.isGroup != true && channel == null &&
             (s.otherDeleted || conv?.isDeletedAccount(conv.otherUid(me)) == true),
-        adminMayDelete = conv?.isGroup == true && me in admins,
+        // iOS adminCan(me, .deleteMessages): an admin holding the delete right, not every admin.
+        adminMayDelete = conv?.isGroup == true && me in admins && (if (channel != null)
+            com.fariin.app.channel.ChannelAdmins.Team.from(s.conv).can(me, com.fariin.app.channel.ChannelAdmins.Right.DELETE_MESSAGES)
+            else com.fariin.app.data.GroupAdmins.Team.from(s.conv).can(me, com.fariin.app.data.GroupAdmins.Right.DELETE_MESSAGES)),
+        ownerId = s.conv["createdBy"] as? String ?: "",
         members = conv?.users ?: emptyList(),
         memberReads = (s.conv["lastRead"] as? Map<*, *>)?.mapNotNull { (k, v) ->
             (k as? String)?.let { it to com.fariin.app.data.Conversation.millis(v) }

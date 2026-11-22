@@ -149,14 +149,26 @@ object GroupStats {
         })
     }
 
-    /** The Statistics row on Group Info (iOS showStatsRow): owner or admin, not locked, big enough or a Fariin admin. */
-    fun showRow(conv: Map<String, Any?>, me: String, appAdmin: Boolean, featureOn: Boolean = true, min: Int = MIN_MEMBERS): Boolean {
+    /** iOS AppLimits.channelStatsMinFollowers fallback (the panel's `channel_stats_min_followers`). */
+    const val MIN_FOLLOWERS = 100
+
+    /**
+     * The Statistics row on Group Info (iOS showStatsRow): every owner and admin at any size, not
+     * locked (owner 2026-11-15). Below the minimum a tap explains instead ([reachable]).
+     */
+    fun showRow(conv: Map<String, Any?>, me: String, featureOn: Boolean = true): Boolean {
         if (!featureOn || locked(conv, System.currentTimeMillis().toDouble())) return false
         val admins = (conv["admins"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
-        if (conv["createdBy"] != me && me !in admins) return false
-        val users = (conv["users"] as? List<*>)?.size ?: 0
-        return users >= min || appAdmin
+        return conv["createdBy"] == me || me in admins
     }
+
+    /** iOS statsReachable, the server's gate: big enough, or a Fariin admin at any size. */
+    fun reachable(size: Int, appAdmin: Boolean, channel: Boolean = false): Boolean =
+        appAdmin || size >= (if (channel) MIN_FOLLOWERS else MIN_MEMBERS)
+
+    /** iOS statsTooSmallText. */
+    fun tooSmallText(channel: Boolean = false): String =
+        "Statistics are available after reaching ${if (channel) MIN_FOLLOWERS else MIN_MEMBERS} ${if (channel) "followers" else "members"}."
 
     /** iOS GroupMod.locksGroup: disabled, or suspended and not yet over, by Fariin. */
     fun locked(conv: Map<String, Any?>, nowMs: Double): Boolean {

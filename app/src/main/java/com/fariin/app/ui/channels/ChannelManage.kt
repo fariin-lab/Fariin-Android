@@ -126,6 +126,10 @@ fun ChannelSettingsScreen(cid: String, me: String, onBack: () -> Unit, nav: Chan
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val api = androidx.compose.runtime.remember(me) { com.fariin.app.data.FirestorePeople(me, com.fariin.app.data.CryptoHub.get(ctx.applicationContext)) }
     var timerOpen by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var timerNeedsRight by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    if (timerNeedsRight) GlassAlert(onDismissRequest = { timerNeedsRight = false }, containerColor = c.card,
+        text = { Text("You need the Change info right to change this.") },
+        confirmButton = { TextButton({ timerNeedsRight = false }) { Text("OK", color = c.accent) } })
     val timer = (doc["disappearSeconds"] as? Number)?.toInt() ?: 0
     if (com.fariin.app.ui.people.DisappearingEditor(api, cid, isGroup = true, current = timer, open = timerOpen, onClose = { timerOpen = false })) return
     BarPage("Channel Settings", onBack, modifier = Modifier.background(c.bgSecondary)) { top ->
@@ -138,7 +142,11 @@ fun ChannelSettingsScreen(cid: String, me: String, onBack: () -> Unit, nav: Chan
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             ChannelManageList(info, team, me, shown, nav,
                 inviteOn = !(doc["inviteCode"] as? String).isNullOrEmpty(),
-                timer = timer, onTimer = { timerOpen = true }, onRecent = { nav.recent(cid) })
+                // iOS GroupSettingsView: changing the timer needs the Change info right.
+                timer = timer, onTimer = {
+                    if (team.can(me, com.fariin.app.channel.ChannelAdmins.Right.CHANGE_INFO)) timerOpen = true
+                    else timerNeedsRight = true
+                }, onRecent = { nav.recent(cid) })
             Spacer(Modifier.height(8.dp))
         }
     }
@@ -617,6 +625,7 @@ fun ChannelAdminScreen(cid: String, me: String, uid: String, onBack: () -> Unit)
     val held = draft ?: team.rightsOf(uid).map { it.slug }.toSet()
     var saving by remember { mutableStateOf(false) }
     var confirmDismiss by remember { mutableStateOf(false) }
+    var confirmBan by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
     var transferring by remember { mutableStateOf(false) }
     val info = ChannelInfo.from(cid, doc)
@@ -651,6 +660,19 @@ fun ChannelAdminScreen(cid: String, me: String, uid: String, onBack: () -> Unit)
             }
         }) { Text("Dismiss Admin", color = c.red) } },
         dismissButton = { TextButton({ confirmDismiss = false }) { Text("Cancel", color = c.accent) } })
+    // iOS member card canRemove: the owner may ban another admin (a removal is a ban, owner 2026-10-20).
+    if (confirmBan) GlassAlert(onDismissRequest = { confirmBan = false }, containerColor = c.card,
+        title = { Text("Ban $name?") },
+        text = { Text("They leave the channel and can't rejoin, find it in search or open it until an admin unbans them.") },
+        confirmButton = { TextButton({
+            confirmBan = false; saving = true
+            scope.launch {
+                try { com.fariin.app.data.GroupManage.removeMember(cid, uid, name); toast(ctx, "$name was removed from the channel."); leave() }
+                catch (e: Exception) { problem = ChannelService.errorText(e) }
+                saving = false
+            }
+        }) { Text("Ban", color = c.red) } },
+        dismissButton = { TextButton({ confirmBan = false }) { Text("Cancel", color = c.accent) } })
 
     val barScroll = rememberScrollState()
     BarPage(if (editable) "Admin Rights" else if (uid == me) "My Admin Rights" else name, onBack, action = {
@@ -688,6 +710,10 @@ fun ChannelAdminScreen(cid: String, me: String, uid: String, onBack: () -> Unit)
                 if (team.canDismiss(me, uid)) SettingsSection {
                     SettingsRow("Dismiss Admin", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_sf_person_minus)),
                         titleColor = c.red, trailing = Trailing.NONE, last = true) { if (!saving) confirmDismiss = true }
+                }
+                if (team.isOwner(me) && uid != me && uid != team.owner) SettingsSection {
+                    SettingsRow("Ban from Channel", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.cachedVector(R.drawable.ic_block)),
+                        titleColor = c.red, trailing = Trailing.NONE, last = true) { if (!saving) confirmBan = true }
                 }
             }
         }

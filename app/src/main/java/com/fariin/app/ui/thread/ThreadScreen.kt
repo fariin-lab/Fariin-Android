@@ -176,6 +176,8 @@ data class ThreadUi(
     val cid: String = "",
     /** Group: I hold the admin "Delete messages" right. */
     val adminMayDelete: Boolean = false,
+    /** The group or channel owner (createdBy), whose messages an admin never deletes for everyone. */
+    val ownerId: String = "",
     /** Group members and when each last read (ms), for Message Info. */
     val members: List<String> = emptyList(),
     val memberReads: Map<String, Double> = emptyMap(),
@@ -609,7 +611,8 @@ private fun ThreadContent(
             onEditHistory = { historyFor = it },
             onStats = { statsFor = it },
             pinned = if (ui.canPin && com.fariin.app.data.PinRules.offers(m)) (m.id in ui.pinnedIds) else null,
-            onPin = { if (it.id in ui.pinnedIds) actions.onUnpin(it.id) else actions.onPin(it) })
+            onPin = { if (it.id in ui.pinnedIds) actions.onUnpin(it.id) else actions.onPin(it) },
+            onSave = { if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onSave(it) })
     } }
     statsFor?.let { m ->
         androidx.compose.ui.window.Dialog(onDismissRequest = { statsFor = null },
@@ -1440,7 +1443,7 @@ private fun ThreadContent(
                 }, onList = { search.asList = it })
             } else if (kind == 1) {
                 val canDelete = picked.isNotEmpty() && (!ui.isGroup ||
-                    picked.any { it.sendState != null || MessageRules.canDeleteForEveryone(it, ui.me, ui.adminMayDelete) })
+                    picked.any { it.sendState != null || MessageRules.canDeleteForEveryone(it, ui.me, ui.adminMayDelete, ui.ownerId) })
                 SelectionBar(
                     deleteEnabled = canDelete,
                     forwardEnabled = !restrictedNow && com.fariin.app.data.SelectRules.forwardable(picked),

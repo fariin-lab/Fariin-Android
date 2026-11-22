@@ -325,6 +325,12 @@ data class ChannelInfo(
      * and admins included (createQuote refuses everyone). Missing = on.
      */
     val quotesOff: Boolean = false,
+    /** iOS groupNoReport: the channel switched off reporting its content (`noReport`). */
+    val noReport: Boolean = false,
+    /** The owner's uid (`createdBy`), for "Created by <name>." */
+    val createdBy: String = "",
+    /** Suspended (not yet over) or disabled by Fariin (iOS fariinLocked): why, else null. */
+    val lockNotice: String? = null,
 ) {
 
     val shownCount: Int get() = ChannelRules.subscriberCount(followerCount, users.size)
@@ -362,6 +368,10 @@ data class ChannelInfo(
                 // A private channel starts with Quotes off (iOS e5086b91b, owner 2026-11-08): no stored
                 // choice reads as off; turning it on in Channel Settings sticks. The server reads it alike.
                 quotesOff = d["quotesOff"] as? Boolean ?: !isPublic,
+                noReport = d["noReport"] == true,
+                createdBy = d["createdBy"] as? String ?: "",
+                lockNotice = if (com.fariin.app.data.GroupStats.locked(d, System.currentTimeMillis().toDouble()))
+                    com.fariin.app.data.ChannelWords.forChat(true, com.fariin.app.data.GroupMod.noticeText(d)) else null,
             )
         }
 

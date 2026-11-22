@@ -245,7 +245,7 @@ internal fun MessageMenu(
         // On a disappearing message Delete carries a live countdown from the server's stamp only
         // (iOS deleteOrTimerRow); someone who cannot delete gets the countdown on a row of its own.
         val expires = m.expiresAtMillis?.takeIf { !m.deleted }
-        if (MessageRules.canDeleteHere(m, ui.me, ui.isGroup, ui.adminMayDelete)) {
+        if (MessageRules.canDeleteHere(m, ui.me, ui.isGroup, ui.adminMayDelete, ui.ownerId)) {
             add(MenuItem("Delete", null, iconRes = com.fariin.app.R.drawable.ic_sf_trash, destructive = true, countdownTo = expires) { onDelete(m) })
         } else if (expires != null) {
             add(MenuItem("Disappearing", null, iconRes = com.fariin.app.R.drawable.ic_disappearing, countdownTo = expires) {})
@@ -353,9 +353,10 @@ internal fun DeleteDialog(m: Message, ui: ThreadUi, actions: ThreadActions,
         AdminDeleteSheet(listOf(m), ui, actions, onDismiss)
         return
     }
-    val everyone = MessageRules.canDeleteForEveryone(m, ui.me, ui.adminMayDelete)
+    val everyone = MessageRules.canDeleteForEveryone(m, ui.me, ui.adminMayDelete, ui.ownerId)
     // A channel post (iOS GlassConfirmDoor): one question about the post, Delete and Cancel.
-    if (ui.groupDoc["channel"] == true && everyone) {
+    // groupDoc is empty in a channel, so the channel itself is the test.
+    if ((ui.channel != null || ui.groupDoc["channel"] == true) && everyone) {
         com.fariin.app.ui.components.GlassAlert(
             onDismissRequest = onDismiss,
             title = "Delete this post?",

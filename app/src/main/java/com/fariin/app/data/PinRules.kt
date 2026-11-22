@@ -121,8 +121,8 @@ object SelectRules {
 
     data class Split(val everyone: Int, val onlyMe: Int)
 
-    fun split(picked: List<Message>, me: String, adminMayDelete: Boolean): Split {
-        val n = picked.count { MessageRules.canDeleteForEveryone(it, me, adminMayDelete) }
+    fun split(picked: List<Message>, me: String, adminMayDelete: Boolean, owner: String = ""): Split {
+        val n = picked.count { MessageRules.canDeleteForEveryone(it, me, adminMayDelete, owner) }
         return Split(n, picked.size - n)
     }
 
@@ -132,11 +132,11 @@ object SelectRules {
     /** What Delete for Everyone (everyone = true) or Delete for Me does to each pick. */
     data class Plan(val forEveryone: List<Message>, val forMe: List<Message>)
 
-    fun plan(picked: List<Message>, everyone: Boolean, me: String, isGroup: Boolean, adminMayDelete: Boolean): Plan {
+    fun plan(picked: List<Message>, everyone: Boolean, me: String, isGroup: Boolean, adminMayDelete: Boolean, owner: String = ""): Plan {
         val all = mutableListOf<Message>()
         val mine = mutableListOf<Message>()
         for (m in picked) {
-            if (everyone && MessageRules.canDeleteForEveryone(m, me, adminMayDelete)) all += m
+            if (everyone && MessageRules.canDeleteForEveryone(m, me, adminMayDelete, owner)) all += m
             else if (!isGroup || m.sendState != null) mine += m   // a group has no Delete for Me
         }
         return Plan(all, mine)

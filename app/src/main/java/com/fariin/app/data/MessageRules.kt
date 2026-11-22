@@ -13,10 +13,9 @@ object MessageRules {
     /** Limits.editWindowSeconds (15 min). The server allows 1020 s, a small clock margin. */
     const val EDIT_WINDOW_MS = 15 * 60 * 1000.0
     /**
-     * Limits.deleteForEveryoneSeconds (48 h). iOS defines it but never applies it (no rule and no
-     * menu check uses it), so Delete for Everyone has no time limit on iOS. Kept the same here.
+     * The remote deleteForEveryoneHours window (iOS ChatService.ownDeleteForEveryoneOpen): my own
+     * message goes for everyone only inside it. 0 from the server means no limit (owner 2026-11-13).
      */
-    /** 0 from the server means no limit (owner 2026-11-13). */
     val DELETE_FOR_EVERYONE_MS: Double get() = com.fariin.app.data.AppConfig.int(com.fariin.app.data.AppConfig.K.deleteForEveryoneHours)
         .let { if (it > 0) it * 3600 * 1000.0 else Double.POSITIVE_INFINITY }
 
@@ -45,14 +44,26 @@ object MessageRules {
     fun canDeleteForEveryone(m: Message, me: String, adminMayDelete: Boolean = false, authorIsOwner: Boolean = false,
                              iAmOwner: Boolean = false): Boolean {
         if (m.sendState != null || m.deleted || m.isCall) return false
-        if (m.authorId == me) return true
+        // Past the window only a group or channel admin holding the delete right still may (iOS).
+        if (m.authorId == me) return adminMayDelete || ownDeleteOpen(m)
         if (!adminMayDelete) return false
         return iAmOwner || !authorIsOwner
     }
 
+    /** The same, with the chat's owner uid ("" = none): an admin never deletes the owner's message. */
+    fun canDeleteForEveryone(m: Message, me: String, adminMayDelete: Boolean, owner: String): Boolean =
+        canDeleteForEveryone(m, me, adminMayDelete, authorIsOwner = owner.isNotEmpty() && m.authorId == owner,
+            iAmOwner = owner.isNotEmpty() && owner == me)
+
+    /** My own message is still inside the Delete for Everyone window. */
+    fun ownDeleteOpen(m: Message, now: Double = System.currentTimeMillis().toDouble()): Boolean {
+        val w = runCatching { DELETE_FOR_EVERYONE_MS }.getOrDefault(Double.POSITIVE_INFINITY)
+        return w.isInfinite() || now - m.createdAtMillis < w
+    }
+
     /** ThreadView.canDeleteHere: a 1:1 always (Delete for Me); a group only what goes for everyone. */
-    fun canDeleteHere(m: Message, me: String, isGroup: Boolean, adminMayDelete: Boolean = false): Boolean =
-        !isGroup || m.sendState != null || canDeleteForEveryone(m, me, adminMayDelete)
+    fun canDeleteHere(m: Message, me: String, isGroup: Boolean, adminMayDelete: Boolean = false, owner: String = ""): Boolean =
+        !isGroup || m.sendState != null || canDeleteForEveryone(m, me, adminMayDelete, owner)
 
     /** ThreadView.canForward. */
     fun canForward(m: Message): Boolean =
