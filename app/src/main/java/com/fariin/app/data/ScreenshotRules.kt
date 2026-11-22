@@ -102,13 +102,81 @@ object ScreenshotRules {
         )
     }
 
+    /**
+     * What is hidden in one message (iOS ShotCover): some spans of its words, or the whole message.
+     * Spans are in the text's UTF-16 units, start inclusive, end exclusive, sorted, never touching.
+     */
+    data class Span(val start: Int, val end: Int)
+
+    data class Cover(val spans: List<Span> = emptyList(), val whole: Boolean = false) {
+        val isEmpty: Boolean get() = spans.isEmpty() && !whole
+
+        /** Adds a span, folding it into any span it touches (iOS cover). */
+        fun cover(s: Span): Cover {
+            if (s.end <= s.start) return this
+            var merged = s
+            val kept = ArrayList<Span>()
+            for (x in spans) {
+                if (x.end < merged.start || merged.end < x.start) kept.add(x)
+                else merged = Span(minOf(x.start, merged.start), maxOf(x.end, merged.end))
+            }
+            kept.add(merged)
+            return copy(spans = kept.sortedBy { it.start })
+        }
+
+        /** Shows again the span that holds [index]; unchanged when nothing was hidden there. */
+        fun reveal(index: Int): Cover = spans.indexOfFirst { index >= it.start && index < it.end }
+            .let { i -> if (i < 0) this else copy(spans = spans.filterIndexed { j, _ -> j != i }) }
+
+        fun hides(index: Int): Boolean = whole || spans.any { index >= it.start && index < it.end }
+    }
+
+    /** The word around [index] (letters, digits and inner apostrophes), or null on a space or mark. */
+    fun wordAt(text: String, index: Int): Span? {
+        fun inWord(i: Int) = i in text.indices && (text[i].isLetterOrDigit() || text[i].isSurrogate() ||
+            (text[i] == '\'' && i > 0 && i + 1 < text.length && text[i - 1].isLetterOrDigit() && text[i + 1].isLetterOrDigit()))
+        // A tap just past the last letter of a word still means that word.
+        val at = when { inWord(index) -> index; inWord(index - 1) -> index - 1; else -> return null }
+        var a = at
+        var b = at + 1
+        while (inWord(a - 1)) a--
+        while (inWord(b)) b++
+        return Span(a, b)
+    }
+
+    /**
+     * The text as the picture draws it: every hidden letter becomes a dot, one per UTF-16 unit, so
+     * places in the text stay the same and a tap still finds its word. Spaces stay, so lines wrap as
+     * before. The hidden words themselves are never handed to the text drawing.
+     */
+    fun drawnText(text: String, cover: Cover): String {
+        if (cover.whole) return coverText(text)
+        if (cover.spans.isEmpty()) return text
+        val out = StringBuilder(text)
+        for (s in cover.spans) for (i in s.start.coerceAtLeast(0) until s.end.coerceAtMost(text.length)) {
+            if (!text[i].isWhitespace()) out.setCharAt(i, '•')
+        }
+        return out.toString()
+    }
+
     /** The editor's changes, kept apart from the copy. [removed] newest last, so Undo brings back the last one. */
-    data class Edits(val removed: List<String> = emptyList(), val hidden: Set<String> = emptySet()) {
+    data class Edits(val removed: List<String> = emptyList(), val covers: Map<String, Cover> = emptyMap()) {
         fun remove(id: String) = if (id in removed) this else copy(removed = removed + id)
         fun undo() = if (removed.isEmpty()) this else copy(removed = removed.dropLast(1))
-        fun toggleHidden(id: String) = copy(hidden = if (id in hidden) hidden - id else hidden + id)
         fun rows(shots: List<Shot>): List<Shot> = removed.toSet().let { gone -> shots.filter { it.id !in gone } }
-        fun isHidden(id: String) = id in hidden
+        fun cover(id: String): Cover = covers[id] ?: Cover()
+        private fun put(id: String, c: Cover) = copy(covers = if (c.isEmpty) covers - id else covers + (id to c))
+        /** The whole message hidden or shown again (its word spans go with it, as iOS). */
+        fun toggleHidden(id: String) = put(id, if (cover(id).whole) Cover() else Cover(whole = true))
+        fun isHidden(id: String) = cover(id).whole
+        /** Hides the word of [text] at [index]; a tap on a word already hidden shows it again. */
+        fun tapWord(id: String, text: String, index: Int): Edits {
+            val c = cover(id)
+            if (c.spans.any { index >= it.start && index < it.end }) return put(id, c.reveal(index))
+            val w = wordAt(text, index) ?: return this
+            return put(id, c.cover(w))
+        }
+        fun reveal(id: String, index: Int) = put(id, cover(id).reveal(index))
     }
 
     /** Where a row starts a new day (its pill) and where a group sender's name shows. */

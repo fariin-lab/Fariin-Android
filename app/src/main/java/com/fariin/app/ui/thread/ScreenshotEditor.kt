@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -175,6 +176,9 @@ private fun EditorPage(cid: String, shots: List<ScreenshotRules.Shot>, is24h: Bo
     val scope = rememberCoroutineScope()
     var edits by remember { mutableStateOf(ScreenshotRules.Edits()) }
     var undoFor by remember { mutableStateOf<String?>(null) }
+    // The message held (its actions show in a capsule) and the one whose words are being picked.
+    var active by remember { mutableStateOf<String?>(null) }
+    var picking by remember { mutableStateOf<String?>(null) }
     var dark by remember { mutableStateOf(c.dark) }
     var theme by remember { mutableStateOf(ShotTheme(null, "This chat")) }
     var rendering by remember { mutableStateOf(false) }
@@ -217,9 +221,23 @@ private fun EditorPage(cid: String, shots: List<ScreenshotRules.Shot>, is24h: Bo
                         fontSize = 15.sp, modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 50.dp))
                     rows.forEachIndexed { i, s ->
                         androidx.compose.runtime.key(s.id) {
-                            ShotRow(s, places[i], hidden = edits.isHidden(s.id), dark = dark, mine = mine, is24h = is24h,
-                                onRemove = { edits = edits.remove(s.id); undoFor = s.id },
-                                onToggleHidden = { edits = edits.toggleHidden(s.id) })
+                            ShotRow(s, places[i], cover = edits.cover(s.id), dark = dark, mine = mine, is24h = is24h,
+                                onRemove = {
+                                    edits = edits.remove(s.id); undoFor = s.id
+                                    if (active == s.id) active = null
+                                    if (picking == s.id) picking = null
+                                },
+                                onLong = { active = s.id; picking = null; undoFor = null },
+                                onTextTap = { at ->
+                                    val cv = edits.cover(s.id)
+                                    edits = when {
+                                        cv.whole -> edits.toggleHidden(s.id)
+                                        picking == s.id -> edits.tapWord(s.id, s.text, at)
+                                        cv.hides(at) -> edits.reveal(s.id, at)
+                                        else -> edits
+                                    }
+                                },
+                                onBubbleTap = { if (edits.isHidden(s.id)) edits = edits.toggleHidden(s.id) })
                         }
                     }
                     // The footer every picture carries.
@@ -257,8 +275,29 @@ private fun EditorPage(cid: String, shots: List<ScreenshotRules.Shot>, is24h: Bo
                 else Text("Share Picture", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             }
         }
+        // The held message's actions (iOS edit menu: Hide Text, Hide Message, Remove), then, while
+        // words are picked, a hint and Done.
+        val held = rows.firstOrNull { it.id == (picking ?: active) }
+        AnimatedVisibility(held != null, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 96.dp).zIndex(1f),
+            enter = com.fariin.app.ui.components.Smooth.fadeIn(), exit = com.fariin.app.ui.components.Smooth.fadeOut()) {
+            val h = held ?: return@AnimatedVisibility
+            Row(Modifier.height(44.dp).floating(CircleShape).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (picking == h.id) {
+                    Text("Tap words to hide them", color = c.secondary, fontSize = 15.sp, modifier = Modifier.padding(horizontal = 12.dp))
+                    CapsuleAction("Done", c.blue) { picking = null }
+                } else {
+                    if (h.text.isNotEmpty() && !edits.isHidden(h.id)) CapsuleAction("Hide Words", c.label, R.drawable.ic_eye_off) { picking = h.id; active = null }
+                    CapsuleAction(if (edits.isHidden(h.id)) "Show Message" else "Hide Message", c.label) {
+                        edits = edits.toggleHidden(h.id); active = null
+                    }
+                    CapsuleAction("Remove", c.red, R.drawable.ic_sf_trash) {
+                        edits = edits.remove(h.id); undoFor = h.id; active = null
+                    }
+                }
+            }
+        }
         // Undo, for a moment after a message is taken out.
-        AnimatedVisibility(undoFor != null, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 96.dp),
+        AnimatedVisibility(undoFor != null && held == null, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 96.dp),
             enter = com.fariin.app.ui.components.Smooth.fadeIn(), exit = com.fariin.app.ui.components.Smooth.fadeOut()) {
             Row(Modifier.height(40.dp).floating(CircleShape).padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -267,6 +306,19 @@ private fun EditorPage(cid: String, shots: List<ScreenshotRules.Shot>, is24h: Bo
                     modifier = Modifier.clickable { edits = edits.undo(); undoFor = null })
             }
         }
+    }
+}
+
+/** One word button in the held message's capsule, with one of our own icons when given. */
+@Composable
+private fun CapsuleAction(title: String, ink: Color, icon: Int? = null, onClick: () -> Unit) {
+    Row(Modifier.fillMaxHeight().clip(CircleShape).clickable(onClick = onClick).padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        if (icon != null) {
+            Image(painterResource(icon), null, Modifier.size(17.dp), colorFilter = ColorFilter.tint(ink))
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(title, color = ink, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1)
     }
 }
 
@@ -281,14 +333,25 @@ private fun RoundButton(icon: Int, label: String, modifier: Modifier = Modifier,
 /**
  * One message in the card: a simplified bubble in the chat's colours (mine in the chat colour, theirs
  * in the received grey), its day pill and group name where they start. Swipe left to take it out;
- * touch and hold to hide its words (dots are drawn, never the words); a tap on a hidden one shows it.
+ * touch and hold for its actions. Hidden words are drawn as dots, never as the words; a tap on
+ * hidden words (or a hidden message) shows them again, and while picking a tap on a word hides it.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ShotRow(
-    s: ScreenshotRules.Shot, place: ScreenshotRules.Place, hidden: Boolean, dark: Boolean, mine: Color, is24h: Boolean,
-    onRemove: () -> Unit, onToggleHidden: () -> Unit,
+    s: ScreenshotRules.Shot, place: ScreenshotRules.Place, cover: ScreenshotRules.Cover, dark: Boolean, mine: Color, is24h: Boolean,
+    onRemove: () -> Unit, onLong: () -> Unit, onTextTap: (Int) -> Unit, onBubbleTap: () -> Unit,
 ) {
+    val hidden = cover.whole
+    val longNow = rememberUpdatedState(onLong)
+    val tapNow = rememberUpdatedState(onTextTap)
+    var layout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+    // Taps on the words find the letter under the finger (the drawn text keeps every place).
+    val textTaps = Modifier.pointerInput(s.id) {
+        androidx.compose.foundation.gestures.detectTapGestures(
+            onTap = { p -> layout?.let { tapNow.value(it.getOffsetForPosition(p)) } },
+            onLongPress = { longNow.value() })
+    }
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val removeAt = with(density) { 80.dp.toPx() }
@@ -311,13 +374,12 @@ private fun ShotRow(
                     onDragCancel = { scope.launch { dx.animateTo(0f) } },
                 ) { change, amount -> change.consume(); scope.launch { dx.snapTo((dx.value + amount * 0.85f).coerceAtMost(0f)) } }
             }
-            .combinedClickable(onClick = { if (hidden) onToggleHidden() }, onLongClick = onToggleHidden,
-                onLongClickLabel = if (hidden) "Show" else "Hide")
+            .combinedClickable(onClick = onBubbleTap, onLongClick = onLong, onLongClickLabel = "Hide or remove")
             .padding(horizontal = 10.dp, vertical = 2.dp)) {
-            val body = if (hidden) ScreenshotRules.coverText(s.text) else s.text
+            val body = ScreenshotRules.drawnText(s.text, cover)
             if (s.kind == ScreenshotRules.Kind.SYSTEM) {
-                Text(body, color = chipInk, fontSize = 13.sp, modifier = Modifier.align(Alignment.Center)
-                    .offset { IntOffset(dx.value.toInt(), 0) }.clip(RoundedCornerShape(10.dp)).background(chip).padding(horizontal = 10.dp, vertical = 4.dp))
+                Text(body, color = chipInk, fontSize = 13.sp, onTextLayout = { layout = it }, modifier = Modifier.align(Alignment.Center)
+                    .offset { IntOffset(dx.value.toInt(), 0) }.clip(RoundedCornerShape(10.dp)).background(chip).padding(horizontal = 10.dp, vertical = 4.dp).then(textTaps))
             } else {
                 val fill = if (s.isMe) mine else if (dark) Color(0xFF26262B) else Color(0xFFF2F2F2)
                 val text = if (s.isMe) Color.White else ink
@@ -341,8 +403,9 @@ private fun ShotRow(
                     if (s.kind == ScreenshotRules.Kind.MEDIA && !hidden) Row(verticalAlignment = Alignment.CenterVertically) {
                         Image(painterResource(R.drawable.ic_sf_photo), null, Modifier.size(16.dp), colorFilter = ColorFilter.tint(text))
                         Spacer(Modifier.width(6.dp))
-                        Text(body, color = text, fontSize = 17.sp)
-                    } else Text(body, color = text, fontSize = 17.sp, letterSpacing = if (hidden) 1.sp else androidx.compose.ui.unit.TextUnit.Unspecified)
+                        Text(body, color = text, fontSize = 17.sp, onTextLayout = { layout = it }, modifier = textTaps)
+                    } else Text(body, color = text, fontSize = 17.sp, onTextLayout = { layout = it }, modifier = textTaps,
+                        letterSpacing = if (hidden) 1.sp else androidx.compose.ui.unit.TextUnit.Unspecified)
                     Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
                         val time = ThreadLogic.timeLabel(s.timeMs, is24h)
                         Text(if (s.edited) "edited $time" else time, color = meta, fontSize = 11.sp)

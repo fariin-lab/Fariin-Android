@@ -70,4 +70,53 @@ class ScreenshotRulesTest {
         assertEquals("1 message", ScreenshotRules.countLine(1))
         assertEquals("4 messages", ScreenshotRules.countLine(4))
     }
+
+    @Test fun wordAtFindsTheWholeWord() {
+        val t = "meet at don't go"
+        assertEquals(ScreenshotRules.Span(0, 4), ScreenshotRules.wordAt(t, 2))
+        assertEquals(ScreenshotRules.Span(0, 4), ScreenshotRules.wordAt(t, 4))
+        assertEquals(ScreenshotRules.Span(8, 13), ScreenshotRules.wordAt(t, 9))
+        assertNull(ScreenshotRules.wordAt("a  b", 2))
+        assertNull(ScreenshotRules.wordAt("", 0))
+    }
+
+    @Test fun coverMergesTouchingSpansAndReveals() {
+        var c = ScreenshotRules.Cover().cover(ScreenshotRules.Span(5, 8)).cover(ScreenshotRules.Span(0, 4))
+        assertEquals(listOf(ScreenshotRules.Span(0, 4), ScreenshotRules.Span(5, 8)), c.spans)
+        c = c.cover(ScreenshotRules.Span(4, 5))
+        assertEquals(listOf(ScreenshotRules.Span(0, 8)), c.spans)
+        assertTrue(c.hides(3))
+        assertFalse(c.hides(8))
+        assertTrue(c.reveal(2).isEmpty)
+        assertEquals(c, c.reveal(9))
+        assertEquals(c, c.cover(ScreenshotRules.Span(3, 3)))
+    }
+
+    @Test fun hiddenWordsBecomeDotsAndKeepPlaces() {
+        val t = "the code is 4471"
+        val c = ScreenshotRules.Cover().cover(ScreenshotRules.Span(12, 16)).cover(ScreenshotRules.Span(4, 8))
+        val d = ScreenshotRules.drawnText(t, c)
+        assertEquals("the •••• is ••••", d)
+        assertEquals(t.length, d.length)
+        assertFalse(d.contains("4471"))
+        assertFalse(d.contains("code"))
+        assertEquals(t, ScreenshotRules.drawnText(t, ScreenshotRules.Cover()))
+        assertFalse(ScreenshotRules.drawnText(t, ScreenshotRules.Cover(whole = true)).contains("the"))
+    }
+
+    @Test fun tapWordHidesThenShowsAgain() {
+        val t = "call me at noon"
+        var e = ScreenshotRules.Edits().tapWord("1", t, 12)
+        assertEquals(listOf(ScreenshotRules.Span(11, 15)), e.cover("1").spans)
+        e = e.tapWord("1", t, 0)
+        assertEquals(2, e.cover("1").spans.size)
+        e = e.tapWord("1", t, 13).tapWord("1", t, 1)
+        assertTrue(e.cover("1").isEmpty)
+        assertTrue(e.covers.isEmpty())
+        assertEquals(e, e.tapWord("1", "hi !! yo", 4))
+        e = e.tapWord("1", t, 0).toggleHidden("1")
+        assertTrue(e.isHidden("1"))
+        assertTrue(e.toggleHidden("1").cover("1").isEmpty)
+        assertEquals("4 messages", ScreenshotRules.countLine(4))
+    }
 }
