@@ -82,7 +82,9 @@ private fun ArticleCard(lp: Message.LinkPreview, isMe: Boolean) {
                     rememberBitmap(got.file, px)?.let {
                         Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                     }
-                } else {
+                } else if (!lp.imageUrl.contains("://")) {
+                    // Only my own pending card's picture, a file on this phone (iOS: the draft key).
+                    // An unsealed web address is never fetched: that would make the reader contact the site.
                     coil3.compose.AsyncImage(lp.imageUrl, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 }
             }
