@@ -1214,7 +1214,7 @@ class ThreadRepository(
         scope.launch(Dispatchers.IO) {
             val f = when (val r = FilePrep.fromUri(context, uri, m.localDir())) {
                 is FilePrep.Companion.Result.Ok -> r.prep
-                FilePrep.Companion.Result.TooLarge -> { onRefused("Files can be up to 25 MB."); return@launch }
+                FilePrep.Companion.Result.TooLarge -> { onRefused("File too large (max ${FilePrep.MAX_BYTES / (1024 * 1024)} MB)."); return@launch }
                 FilePrep.Companion.Result.Unreadable -> { onRefused("Couldn't read this file."); return@launch }
             }
             val tap = System.currentTimeMillis().toDouble()
@@ -1272,7 +1272,7 @@ class ThreadRepository(
             }
             val skipped = listOfNotNull(
                 unreadable.takeIf { it > 0 }?.let { n -> if (n == 1) "1 photo couldn't be read, so it was skipped." else "$n photos couldn't be read, so they were skipped." },
-                tooLarge.takeIf { it > 0 }?.let { n -> if (n == 1) "1 photo is over 25 MB, so it was skipped." else "$n photos are over 25 MB, so they were skipped." },
+                tooLarge.takeIf { it > 0 }?.let { n -> if (n == 1) "1 photo is over ${FilePrep.MAX_BYTES / (1024 * 1024)} MB, so it was skipped." else "$n photos are over ${FilePrep.MAX_BYTES / (1024 * 1024)} MB, so they were skipped." },
             )
             if (skipped.isNotEmpty()) onRefused(skipped.joinToString(" "))
             // One after another: each send's message is written before the next one starts.
