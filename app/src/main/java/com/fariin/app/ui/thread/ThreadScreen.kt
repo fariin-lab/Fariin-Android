@@ -221,6 +221,8 @@ internal data class TimerMark(val seconds: Int = 0, val sinceMs: Double? = null)
 internal val LocalTimerMark = androidx.compose.runtime.staticCompositionLocalOf { TimerMark() }
 /** A reply's quote tapped: go to the original (null in select mode, where a tap ticks the row). */
 internal val LocalQuoteJump = androidx.compose.runtime.compositionLocalOf<((String) -> Unit)?> { null }
+/** A quoted message I hid because I had its author blocked when it was sent (iOS quoteHiddenByBlock). */
+internal val LocalQuoteHiddenByBlock = androidx.compose.runtime.staticCompositionLocalOf<(String) -> Boolean> { { false } }
 
 /**
  * The chat page, after Kulan-iOS ThreadView + MessageList: my bubbles on the right in the chat
@@ -1249,6 +1251,7 @@ private fun ThreadContent(
                 LocalTimerMark provides timerMark, LocalSearchTerm provides search.term,
                 LocalBubbleLinkTap provides linkTap,
                 LocalQuoteJump provides (if (selecting) null else quoteTap),
+                LocalQuoteHiddenByBlock provides actions.onHiddenByBlock,
                 // Nothing INSIDE the list may draw glass from the list itself: the group's welcome card
                 // (a list row) did, and the backdrop recorded a layer that contained its own reader, an
                 // endless render tree that crashed the app (RenderThread SIGSEGV, 2026-11-06).
@@ -2656,7 +2659,11 @@ private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
         val live = LocalThreadMessages.current
         val original = remember(r.id, r.isStatus, live) { androidx.compose.runtime.derivedStateOf {
             if (r.isStatus) null else (live?.value ?: ui.messages).firstOrNull { it.id == r.id } } }.value
-        if (original != null && hasReplyThumb(original)) {
+        // iOS quoteHiddenByBlock: sent while I had its author blocked, so its words and picture stay hidden.
+        val hiddenByBlock = LocalQuoteHiddenByBlock.current
+        val blocks = com.fariin.app.data.BlockList.state.collectAsState().value
+        val blocked = !r.isStatus && r.authorId != ui.me && remember(r.id, blocks) { hiddenByBlock(r.id) }
+        if (!blocked && original != null && hasReplyThumb(original)) {
             ReplyThumb(original, 34.dp, Modifier.padding(start = 4.dp).align(Alignment.CenterVertically))
         }
         Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
@@ -2667,7 +2674,7 @@ private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
             // What it was, with its small icon and a voice note's length ("Voice message (0:04)"),
             // as the reply bar shows it (owner 2026-11-13, the reference app's quote).
             val sub = if (isMe) Color.White.copy(alpha = 0.85f) else c.label
-            val icon = original?.takeIf { !it.deleted && !it.viewOnce && !r.isStatus }?.let { replyIcon(it) }
+            val icon = original?.takeIf { !blocked && !it.deleted && !it.viewOnce && !r.isStatus }?.let { replyIcon(it) }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (icon != null) {
                     Icon(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(icon), null, tint = sub, modifier = Modifier.size(13.dp))
@@ -2675,6 +2682,7 @@ private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
                 }
                 Text(when {
                     r.isStatus -> "Story"
+                    blocked -> "Not available"
                     original?.deleted == true -> "This message was deleted"
                     original?.viewOnce == true -> "Photo"
                     original != null -> replyLine(original, com.fariin.app.data.CardRules.previewWord(r.text) ?: r.text.ifEmpty { original.bodyText })
