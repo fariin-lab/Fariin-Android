@@ -648,7 +648,7 @@ fun ChatListScreen(
                             onEdit = { folderEdit = it }, onManage = {
                                 com.fariin.app.ui.settings.SettingsLink.request(com.fariin.app.ui.settings.PAGE_CHAT_FOLDERS)
                                 onSettings()
-                            }, card = listCard?.takeIf { !searching && !selecting && filter == FILTER_ALL }) }
+                            }, card = listCard?.takeIf { !searching && !selecting && filter == FILTER_ALL && folder == null }) }
                         }
                     }
                 }

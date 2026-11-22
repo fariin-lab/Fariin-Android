@@ -74,30 +74,6 @@ internal fun rememberChatCard(me: String): ChatCard? {
 @Composable
 internal fun ChatListCard(card: ChatCard, me: String) {
     val c = Fariin.colors
-    val ctx = LocalContext.current
-    val nav = com.fariin.app.ui.people.LocalPeopleNav.current
-    val askNotif = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
-    val onTap = {
-        when (card.builtin) {
-            ChatCard.Builtin.PHOTO, ChatCard.Builtin.USERNAME -> nav.editProfile()
-            ChatCard.Builtin.NOTIFICATIONS -> {
-                val asked = ctx.getSharedPreferences("chat_cards", 0).getBoolean("askedNotif", false)
-                if (Build.VERSION.SDK_INT >= 33 && !asked) {
-                    ctx.getSharedPreferences("chat_cards", 0).edit().putBoolean("askedNotif", true).apply()
-                    askNotif.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                } else runCatching {
-                    ctx.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                        .putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                }
-            }
-            null -> card.link?.let { l ->
-                // https in the in-app browser; fariin:// as the app's own route, whatever takes it.
-                if (l.startsWith("https://", ignoreCase = true)) com.fariin.app.ui.thread.openWebLink(ctx, Uri.parse(l))
-                else runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(l)).setPackage(ctx.packageName)) }
-            }
-        }
-        Unit
-    }
     val shape = RoundedCornerShape(20.dp)
     Box(Modifier.fillMaxWidth().background(c.bg).padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 8.dp)) {
         ChatCardContent(card, me, Modifier.clip(shape).background(c.bgSecondary))
@@ -129,6 +105,7 @@ internal fun ChatCardContent(card: ChatCard, me: String, modifier: Modifier = Mo
                 }
             }
             null -> card.link?.let { l ->
+                // https in the in-app browser; fariin:// as the app's own route, whatever takes it.
                 if (l.startsWith("https://", ignoreCase = true)) com.fariin.app.ui.thread.openWebLink(ctx, Uri.parse(l))
                 else runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(l)).setPackage(ctx.packageName)) }
             }

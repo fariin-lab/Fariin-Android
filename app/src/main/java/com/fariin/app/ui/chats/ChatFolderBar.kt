@@ -120,9 +120,12 @@ internal fun ChatFolderBar(chats: List<Conversation>, me: String, onEdit: (ChatF
                 if (id != ChatFoldersStore.selectedId) { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); ChatFoldersStore.select(id) }
             }
         }
-        // One panel (iOS ChatFolderBar.card): a capsule for the tabs alone, 20 corners with the card
-        // under them after a hairline.
-        val panel = if (card == null) CircleShape else androidx.compose.foundation.shape.RoundedCornerShape(20.dp)
+        // One panel: a capsule for the tabs alone (21 = half the 42 row), 20 corners with the card
+        // under them after a hairline. The card fades and grows in and out, the panel with it, never
+        // in one frame (closing it, or a tab other than All Chats).
+        val panel = androidx.compose.foundation.shape.RoundedCornerShape(if (card == null) 21.dp else 20.dp)
+        val heldCard = remember { arrayOf(card) }
+        if (card != null) heldCard[0] = card
         androidx.compose.foundation.layout.Column(Modifier.fillMaxWidth().floating(panel).clip(panel)) {
         Box(Modifier.fillMaxWidth().height(42.dp)
             .pointerInput(fits) {
@@ -187,9 +190,13 @@ internal fun ChatFolderBar(chats: List<Conversation>, me: String, onEdit: (ChatF
                 }
             }
         }
-        if (card != null) {
-            Box(Modifier.fillMaxWidth().height(0.5.dp).background(c.separator))
-            ChatCardContent(card, me)
+        com.fariin.app.ui.components.Appear(card != null) {
+            heldCard[0]?.let { shown ->
+                androidx.compose.foundation.layout.Column {
+                    Box(Modifier.fillMaxWidth().height(0.5.dp).background(c.separator))
+                    ChatCardContent(shown, me)
+                }
+            }
         }
         }
     }
