@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -126,12 +127,18 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
             }
             else if (shown.isEmpty()) Text(if (query.isBlank()) "No chats yet" else "No chats found", fontSize = 15.sp, color = c.secondary,
                 modifier = Modifier.fillMaxWidth().padding(vertical = 28.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-            else LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 520.dp)
-                .padding(start = 16.dp, end = 16.dp, top = 12.dp).clip(RoundedCornerShape(20.dp)).background(c.card)) {
-                items(shown, key = { it.id }) { conv ->
+            else {
+            // iOS ForwardPicker: "Frequently contacted" (the five newest people) over "Recent chats",
+            // only with eight chats or more and not while searching. Never the same chat twice.
+            val frequent = if (query.isBlank() && !pickOne && chats.size >= 8) chats.filter { !it.isGroup }.take(5) else emptyList()
+            val recent = if (frequent.isEmpty()) shown else shown.filter { s -> frequent.none { it.id == s.id } }
+            // Each section is one rounded card: its first row rounds the top, its last the bottom.
+            fun shapeOf(i: Int, n: Int) = RoundedCornerShape(topStart = if (i == 0) 20.dp else 0.dp, topEnd = if (i == 0) 20.dp else 0.dp,
+                bottomStart = if (i == n - 1) 20.dp else 0.dp, bottomEnd = if (i == n - 1) 20.dp else 0.dp)
+            val row: @Composable (Conversation, androidx.compose.ui.graphics.Shape) -> Unit = { conv, shape ->
                     val on = conv.id in chosen
                     Row(
-                        Modifier.fillMaxWidth().clickable {
+                        Modifier.fillMaxWidth().clip(shape).background(c.card).clickable {
                             if (!on) com.fariin.app.data.ForwardRules.refusal(com.fariin.app.data.ForwardRules.docOf(conv.id, me), conv, me, preview)
                                 ?.let { refused = it; return@clickable }
                             if (pickOne) { onSend(listOf(conv.id)); onDismiss(); return@clickable }
@@ -152,7 +159,16 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
                             contentAlignment = Alignment.Center,
                         ) { if (on) Icon(ImageVector.cachedVector(R.drawable.ic_sf_checkmark), null, tint = Color.White, modifier = Modifier.size(16.dp)) }
                     }
+            }
+            LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 520.dp)
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
+                if (frequent.isNotEmpty()) {
+                    item(key = "h-frequent") { SectionTitle("Frequently contacted") }
+                    itemsIndexed(frequent, key = { _, it -> it.id }) { i, conv -> row(conv, shapeOf(i, frequent.size)) }
+                    item(key = "h-recent") { SectionTitle("Recent chats", top = 18.dp) }
                 }
+                itemsIndexed(recent, key = { _, it -> it.id }) { i, conv -> row(conv, shapeOf(i, recent.size)) }
+            }
             }
             if (pickOne) Spacer(Modifier.height(16.dp))
             else if (onSendNote != null) ForwardComposer(preview, chats.filter { it.id in chosen }, me) { note ->
@@ -171,6 +187,13 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
             }
         }
     }
+}
+
+/** A grey title over one section of the picker (iOS sectionTitle). */
+@Composable
+private fun SectionTitle(text: String, top: androidx.compose.ui.unit.Dp = 0.dp) {
+    Text(text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Fariin.colors.secondary,
+        modifier = Modifier.padding(start = 16.dp, top = top, bottom = 6.dp))
 }
 
 /** Chats a forward can land in: not a channel I only follow (its admins are its members and may post
