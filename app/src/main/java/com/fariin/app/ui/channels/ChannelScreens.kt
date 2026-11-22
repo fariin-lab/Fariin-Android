@@ -426,6 +426,9 @@ fun NewChannelScreen(me: String, onBack: () -> Unit, onDone: (String) -> Unit) {
     // The phone's Back on the form goes to the intro, as the bar's arrow does (owner 2026-11-09: it
     // left the whole flow and skipped the drawing).
     androidx.activity.compose.BackHandler(enabled = step == 1) { if (!creating) step = 0 }
+    // Once the channel is made, Channel Type has no way back: only Done leaves, into the channel
+    // (iOS hides Back there and blocks the swipe). The phone's Back left it half set up.
+    androidx.activity.compose.BackHandler(enabled = step == 2) {}
     when (step) {
         0 -> Intro(onBack) { step = 1 }
         1 -> Details(name, about, creating, error, photo, picker, onRemovePhoto = { photo = null },
