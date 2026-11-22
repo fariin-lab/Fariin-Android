@@ -168,9 +168,10 @@ object CallManager {
                 else if (!u.status.live && p.contains(LIVE_KEY)) p.edit().remove(LIVE_KEY).apply()
             }
         }
-        // The screen goes dark at the ear during a voice call on the earpiece.
+        // The screen goes dark at the ear during a voice call on the earpiece. Any video showing,
+        // mine or theirs, keeps it lit (iOS updateInCallScreenBehavior).
         main.launch {
-            ui.collect { u -> CallProximity.set(app, CallRouting.proximityWanted(u.status.phase, u.cameraOn || u.sharing || u.remoteScreen, u.route.current)) }
+            ui.collect { u -> CallProximity.set(app, CallRouting.proximityWanted(u.status.phase, u.cameraOn || u.remoteCameraOn || u.sharing || u.remoteScreen, u.route.current)) }
         }
         // iOS noteVideo: any camera coming on during the call, mine or theirs, is remembered.
         main.launch {
