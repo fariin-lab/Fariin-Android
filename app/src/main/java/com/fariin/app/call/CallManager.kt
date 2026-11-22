@@ -209,6 +209,7 @@ object CallManager {
         step("dial")
         peer = uid
         _ui.value = CallUi(peerUid = uid, peerName = name, peerPhoto = photo, cameraOn = video, speaker = video)
+        com.fariin.app.media.VoicePlayer.pauseForCall()   // iOS: the call takes the audio, the note pauses
         move(CallEvent.Dial(video))
         CallService.start(app, CallService.Mode.CALL, video)
         CallAudio.start(app, speaker = video)
@@ -338,6 +339,7 @@ object CallManager {
             _ui.value = CallUi(peerUid = d.caller, peerName = d.callerName ?: "Caller", peerPhoto = d.callerPhoto,
                 cameraOn = d.video, speaker = d.video, remoteCameraOn = d.cams[d.caller] ?: d.video)
             move(CallEvent.Ring(d.video))
+            com.fariin.app.media.VoicePlayer.pauseForCall()   // the ring pauses a playing note (iOS interruption)
             when (CallTelecom.reportIncoming(app, d.id, _ui.value.peerName, d.video)) {
                 // A phone call in another app that can not be held: busy, as iOS does while CallKit
                 // refuses the report.

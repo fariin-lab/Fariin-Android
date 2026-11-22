@@ -50,6 +50,16 @@ object VoicePlayer {
 
     fun rate(cid: String) = _state.value.rates[cid] ?: 1f
 
+    /** A call (one to one or group) owns the audio: no voice note plays over it (iOS VoiceAudio.callActive). */
+    private fun callActive(): Boolean =
+        com.fariin.app.call.CallManager.ui.value.status.live || com.fariin.app.call.GroupCall.ui.value.joined
+
+    /** A call is starting or ringing: the note pauses and keeps its place (iOS interruption began). */
+    fun pauseForCall() {
+        val p = player ?: return
+        if (p.isPlaying) { p.pause(); save(); tick() }
+    }
+
     fun cycleRate(cid: String) {
         val next = MediaRules.nextRate(rate(cid))
         _state.value = _state.value.copy(rates = _state.value.rates + (cid to next))
@@ -61,9 +71,10 @@ object VoicePlayer {
         val s = _state.value
         val p = player
         if (s.id == id && p != null) {
-            if (p.isPlaying) p.pause() else { if (p.playbackState == Player.STATE_ENDED) p.seekTo(0); p.play() }
+            if (p.isPlaying) p.pause() else if (callActive()) return else { if (p.playbackState == Player.STATE_ENDED) p.seekTo(0); p.play() }
             return
         }
+        if (callActive()) return
         main.launch {
             val playable = withContext(Dispatchers.IO) { playableFile(context, file) }
             if (playable == null) {
@@ -100,7 +111,7 @@ object VoicePlayer {
     /** The bar's control: pause the open note, or carry on from where it stopped. */
     fun playPause() {
         val p = player ?: return
-        if (p.isPlaying) p.pause() else { if (p.playbackState == Player.STATE_ENDED) p.seekTo(0); p.play() }
+        if (p.isPlaying) p.pause() else if (callActive()) return else { if (p.playbackState == Player.STATE_ENDED) p.seekTo(0); p.play() }
     }
 
     /** The run's next voice note (VoiceRun), fetched and played as a tap on it would; heard, so marked played. */
