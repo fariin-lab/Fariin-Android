@@ -103,6 +103,15 @@ class SettingsIndexTest {
         for (w in listOf("kawaii", "cotton candy", "careers", "sport")) assertTrue(w, e.keywords.contains(w))
     }
 
+    @Test fun aPhraseFromAWordStartScoresAsIos() {
+        // iOS startsAWord: "in app" starts a word run of "In-App Sounds" (800), "app sounds" too.
+        val e = SettingsIndex.entries.first { it.title == "In-App Sounds" }
+        assertEquals(800, SettingsIndex.score(e, SettingsIndex.fold("in app")))
+        assertEquals(800, SettingsIndex.score(e, SettingsIndex.fold("app sounds")))
+        // Inside a word only: 600.
+        assertEquals(600, SettingsIndex.score(e, SettingsIndex.fold("pp sounds")))
+    }
+
     @Test fun idsAreUnique() {
         val ids = SettingsIndex.entries.map { it.id }
         assertEquals(ids.size, ids.toSet().size)

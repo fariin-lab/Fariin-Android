@@ -200,11 +200,16 @@ internal object SettingsIndex {
         java.text.Normalizer.normalize(s.lowercase().replace("&", " and "), java.text.Normalizer.Form.NFD)
             .replace(Regex("\\p{M}+"), "").replace(Regex("\\s+"), " ").trim()
 
-    private fun words(s: String) = s.split(Regex("[^\\p{L}\\p{N}@]+")).filter { it.isNotEmpty() }
-    private fun startsAWord(q: String, text: String) = q.isNotEmpty() && words(text).any { it.startsWith(q) }
+    /** Letters and digits only, as iOS (so "@" and "-" split words). */
+    private fun words(s: String) = s.split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
+    /** iOS: the typed words, in order, from the start of a word ("in app" in "In-App Sounds"). */
+    private fun startsAWord(q: String, text: String): Boolean {
+        val qn = words(q).joinToString(" ")
+        return qn.isNotEmpty() && (" " + words(text).joinToString(" ")).contains(" $qn")
+    }
 
     /** iOS score: the title first (exact, start, a word's start, inside), then the words and path. */
-    private fun score(e: Entry, q: String): Int {
+    internal fun score(e: Entry, q: String): Int {
         val title = fold(e.title)
         val rest = fold(e.keywords + " " + e.path.joinToString(" "))
         if (title == q) return 1000
