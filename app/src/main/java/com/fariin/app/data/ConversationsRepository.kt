@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import com.fariin.app.local.LocalCache
 
 
@@ -71,6 +73,9 @@ class ConversationsRepository(
                 trySend(State.Loaded(convs, snap.metadata.isFromCache))
                 // Settings > Chats > Automatically Archive (iOS sweeps every chat-list snapshot).
                 if (useDiskCache) UnknownChatArchiver.sweep(uid, convs)
+                // A request I answered the old way is written as accepted (iOS healAnsweredRequests).
+                // Server data only, as iOS.
+                if (useDiskCache && !snap.metadata.isFromCache) AnsweredRequests.heal(convs, uid)
                 // iOS syncGroupWallpapers on the list snapshot: a group's shared wallpaper (and its
                 // photo) is ready before the chat is opened. Unchanged values cost nothing.
                 if (useDiskCache) runCatching { com.google.firebase.FirebaseApp.getInstance().applicationContext }.getOrNull()?.let { app ->
@@ -95,5 +100,37 @@ class ConversationsRepository(
         const val PAGE_SIZE = 300L
         private val parseThread: java.util.concurrent.Executor =
             java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "chat-list").apply { isDaemon = true } }
+    }
+}
+
+/**
+ * iOS MessageRequests.healAnsweredRequests: a request I started, still not accepted, where the
+ * other person has the last word AND the oldest message is mine ("I asked, they answered") gets
+ * `accepted: true` written, as an Accept would. When they wrote first, the oldest message is
+ * theirs and nothing is written: the request waits for my Accept. One read per chat, once per
+ * chat per session.
+ */
+object AnsweredRequests {
+    private val healed = java.util.Collections.synchronizedSet(HashSet<String>())
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+
+    fun heal(convs: List<Conversation>, me: String) {
+        if (me.isEmpty()) return
+        for (c in convs) {
+            if (c.convType == "group" || c.startedBy != me || c.accepted) continue
+            if (c.lastSender.isEmpty() || c.lastSender == me) continue
+            if (!healed.add(c.id)) continue
+            scope.launch {
+                runCatching {
+                    val ref = com.fariin.app.Fb.db.collection("conversations").document(c.id)
+                    val first = ref.collection("messages").orderBy("createdAt").limit(1).get().await()
+                    val author = first.documents.firstOrNull()?.getString("authorId")
+                    if (author != me) return@runCatching
+                    ref.set(mapOf("accepted" to true), com.google.firebase.firestore.SetOptions.merge()).await()
+                    // If Automatically Archive put it away, accepting takes it back out (iOS accept).
+                    UnknownChatArchiver.undoAutoArchive(me, c.id)
+                }
+            }
+        }
     }
 }
