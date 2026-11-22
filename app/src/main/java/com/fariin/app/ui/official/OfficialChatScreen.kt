@@ -246,6 +246,7 @@ fun OfficialChatScreen(onBack: () -> Unit, onInfo: (() -> Unit)? = null) {
                 // Search owns the top while it is open, as in a normal chat.
                 val focus = remember { androidx.compose.ui.focus.FocusRequester() }
                 LaunchedEffect(Unit) { focus.requestFocus() }
+                val searchKeys = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
                 Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     com.fariin.app.ui.components.FloatingBack({ closeSearch() }, Modifier.padding(start = 4.dp, end = 8.dp),
                         contentDescription = "Close search")
@@ -257,7 +258,8 @@ fun OfficialChatScreen(onBack: () -> Unit, onInfo: (() -> Unit)? = null) {
                             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 18.sp, color = c.label),
                             cursorBrush = androidx.compose.ui.graphics.SolidColor(c.label),
                             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
-                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { if (fromNewest > 0) fromNewest-- }),
+                            // The Search key drops the keyboard and steps on (iOS onSubmit).
+                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { searchKeys?.hide(); if (fromNewest > 0) fromNewest-- }),
                             modifier = Modifier.fillMaxWidth().focusRequester(focus))
                     }
                     if (query.isNotEmpty()) androidx.compose.material3.IconButton({ query = "" }) {
