@@ -79,6 +79,9 @@ class MessageRulesTest {
         assertEquals("t2", MessageRules.unreadDividerId(ms, me, 2))
         assertNull(MessageRules.unreadDividerId(ms, me, 0))
         assertNull(MessageRules.unreadDividerId(ms, me, 4))   // more unread than held
+        // A pin notice between them is skipped, not counted as unread.
+        val pinned = ms + Message(id = "p1", authorId = "a", text = PinRules.markerText("t1", "x"), createdAtMillis = 9.0)
+        assertEquals("t2", MessageRules.unreadDividerId(pinned, me, 2))
     }
 
     @Test fun usernameRules() {

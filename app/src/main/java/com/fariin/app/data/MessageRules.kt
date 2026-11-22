@@ -301,7 +301,8 @@ object MessageRules {
         if (unread <= 0) return null
         var left = unread
         for (m in messages.asReversed()) {
-            if (m.authorId == me || m.isSystem) continue
+            // Pin notices never count, as on iOS (unreadBoundary skips pinNotice rows).
+            if (m.authorId == me || m.isSystem || PinRules.notice(m.text) != null) continue
             left--
             if (left == 0) return m.rowId
         }
