@@ -167,19 +167,11 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
             Spacer(Modifier.height(top))
             com.fariin.app.ui.people.SearchField(query, if (groupsTab) "Search groups" else "Search channels") { query = it }
             val q = query.trim().removePrefix("@")
-            // Plus the server's public search for what the ranked list does not carry.
-            var serverHits by remember { mutableStateOf<List<com.fariin.app.data.PublicGroupHit>>(emptyList()) }
-            LaunchedEffect(q, groupsTab) {
-                serverHits = emptyList()
-                if (q.length < 3) return@LaunchedEffect
-                delay(300)   // one ask per pause in typing
-                serverHits = runCatching { com.fariin.app.data.PublicGroups.search(q) }.getOrDefault(emptyList())
-                    .filter { it.isChannel != groupsTab }
-            }
+            // The search filters only the loaded rows, as iOS (decision 2026-11-22): a server hit carried
+            // no SCAM/FAKE label, so a flagged channel could show unmarked.
             if (!groupsTab) {
                 val local = if (q.isEmpty()) rows else rows.filter { it.title.contains(q, ignoreCase = true) || it.handle.contains(q, ignoreCase = true) }
-                val shown = local + serverHits.filter { h -> local.none { it.cid == h.cid } }
-                    .map { DiscoveredChannel(it.cid, it.handle, it.title, it.photoUrl, "", it.memberCount, verified = it.verified) }
+                val shown = local
                 // Skeleton, notes and the list fade into each other (iOS pops 91).
                 androidx.compose.material3.pulltorefresh.PullToRefreshBox(refreshing, onRefresh = refresh, modifier = Modifier.fillMaxSize()) {
                 // A note or the skeleton scrolls too, so the pull works with no rows (a list inside a scroll would not).
@@ -228,8 +220,7 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                 }
             } else {
                 val local = if (q.isEmpty()) groupRows else groupRows.filter { it.title.contains(q, ignoreCase = true) || it.handle.contains(q, ignoreCase = true) }
-                val shown = local + serverHits.filter { h -> local.none { it.cid == h.cid } }
-                    .map { com.fariin.app.channel.DiscoveredGroup(it.cid, it.handle, it.title, it.photoUrl, it.memberCount, it.verified, "") }
+                val shown = local
                 val listShown = !(groupsLoading && groupRows.isEmpty()) && !(groupsFailed && groupRows.isEmpty()) && shown.isNotEmpty()
                 androidx.compose.material3.pulltorefresh.PullToRefreshBox(refreshing, onRefresh = refresh, modifier = Modifier.fillMaxSize()) {
                 Box(Modifier.fillMaxSize().then(if (listShown) Modifier else Modifier.verticalScroll(noteScroll))
