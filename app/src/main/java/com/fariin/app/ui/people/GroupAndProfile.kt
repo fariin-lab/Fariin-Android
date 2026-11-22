@@ -735,7 +735,8 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
     com.fariin.app.ui.components.GlassColumnPage(false, Modifier.background(c.bgSecondary), bar = {
         Box(Modifier.fillMaxWidth().background(c.bgSecondary).statusBarsPadding()) {
             when (step) {
-                1 -> bar("Add Members", onBack) { TextAction("Next", picked.isNotEmpty()) { step = 2 } }
+                // Skip with nobody ticked (iOS NewGroupView: a group may start with only me), Next once someone is.
+                1 -> bar("Add Members", onBack) { TextAction(if (picked.isEmpty()) "Skip" else "Next", true) { step = 2 } }
                 3 -> com.fariin.app.ui.components.FloatingTopBar("Permissions", onBack = { step = 2 }, container = c.bgSecondary)
                 else -> bar("New Group", { step = 1 }) {
                     TextAction("Create", title.isNotBlank() && !busy) {
