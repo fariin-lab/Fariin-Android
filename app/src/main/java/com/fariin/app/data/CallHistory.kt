@@ -110,6 +110,21 @@ object CallHistory {
         return if (rest == 0) "$hours hr" else "$hours hr $rest min"
     }
 
+    /**
+     * iOS callGroupAgain: why a group row's tap may not call the group, said before any call screen,
+     * or null to go ahead. A closed group says its notice; only admins may start one (joining a
+     * running call is open to every member); a group of one says so. An unknown group goes ahead.
+     */
+    fun groupCallRefusal(conv: Conversation?, me: String, live: Boolean): String? {
+        if (conv == null) return null
+        if (conv.ended) return "This group has ended."
+        if (conv.fariinLocked()) return GroupMod.noticeText(mapOf("type" to "group",
+            "mod" to mapOf("state" to conv.modState, "until" to conv.modUntilMillis)))
+        if (!live && conv.onlyAdminsCall && me !in conv.admins) return "Only admins can start a call in this group."
+        if (conv.users.size <= 1) return "You're the only one in this group."
+        return null
+    }
+
     private fun sameDay(a: Long, b: Long): Boolean {
         val ca = Calendar.getInstance().apply { timeInMillis = a }
         val cb = Calendar.getInstance().apply { timeInMillis = b }

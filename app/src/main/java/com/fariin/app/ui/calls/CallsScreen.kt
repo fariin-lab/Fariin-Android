@@ -227,6 +227,17 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
     StopGroupCallsOnChange(active)
     val liveAll by com.fariin.app.ui.call.LiveGroupCalls.calls.collectAsState()
     val live = if (missedOnly || q.isNotEmpty()) emptyList() else liveAll
+    // iOS callGroupAgain: a group row that may not call says why first, as a Can't Call alert.
+    var cantCall by remember { mutableStateOf<String?>(null) }
+    fun dial(call: CallEntry, video: Boolean) {
+        val g = call.groupCid
+        // A call already up comes forward in callBack, so only a fresh group call is checked.
+        if (g != null && !com.fariin.app.call.CallManager.ui.value.status.live && com.fariin.app.call.GroupCall.ui.value.cid == null) {
+            val why = CallHistory.groupCallRefusal(groups.firstOrNull { it.id == g }, me, liveAll.any { it.cid == g })
+            if (why != null) { cantCall = why; return }
+        }
+        callBack(ctx, call, video)
+    }
     // Select mode (iOS edit mode): run ids (a run's newest call) and "link:<roomId>" for links.
     var selecting by rememberSaveable { mutableStateOf(false) }
     var picked by remember { mutableStateOf(setOf<String>()) }
@@ -236,7 +247,7 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
     var pendingCall by remember { mutableStateOf<Pair<CallEntry, Boolean>?>(null) }
     fun leaveSelect() { selecting = false; picked = emptySet() }
     // Hidden behind another tab, its dialogs (windows of their own) close, as when the tab went.
-    WhileOpen(active, Unit) { on -> if (!on) { askDelete = false; linkFailed = false; pendingCall = null } }
+    WhileOpen(active, Unit) { on -> if (!on) { askDelete = false; linkFailed = false; pendingCall = null; cantCall = null } }
     BackWhileOpen(active, selecting) { leaveSelect() }
     fun toggle(id: String) { picked = if (id in picked) picked - id else picked + id }
     fun deletePicked() {
@@ -270,12 +281,17 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
         com.fariin.app.ui.components.GlassAlert(onDismissRequest = { pendingCall = null }, containerColor = c.card,
             title = { Text(if (video) "Video call" else "Voice call") },
             text = { Text("${if (video) "Video call" else "Call"} ${call.name}?") },
-            confirmButton = { androidx.compose.material3.TextButton({ pendingCall = null; callBack(ctx, call, video) }) { Text("Call", color = c.accent) } },
+            confirmButton = { androidx.compose.material3.TextButton({ pendingCall = null; dial(call, video) }) { Text("Call", color = c.accent) } },
             dismissButton = { androidx.compose.material3.TextButton({ pendingCall = null }) { Text("Cancel", color = c.accent) } })
+    }
+    cantCall?.let { why ->
+        com.fariin.app.ui.components.GlassAlert(onDismissRequest = { cantCall = null }, containerColor = c.card,
+            title = { Text("Can't Call") }, text = { Text(why) },
+            confirmButton = { androidx.compose.material3.TextButton({ cantCall = null }) { Text("OK", color = c.accent) } })
     }
     var info by remember { mutableStateOf<CallRun?>(null) }
     info?.let { r ->
-        CallInfoScreen(r, me, onBack = { info = null }, onCall = { video -> callBack(ctx, r.latest, video) })
+        CallInfoScreen(r, me, onBack = { info = null }, onCall = { video -> dial(r.latest, video) })
         return
     }
     val hasHistory = calls.isNotEmpty() || allLinks.isNotEmpty() || liveEntry != null
@@ -390,7 +406,7 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
                                     Box(Modifier.background(c.bg)) {
                                         // The live call is not a record: it cannot be picked or deleted.
                                         PickableRow(selecting && !isLive, run.id in picked, onToggle = { toggle(run.id) }) {
-                                            CallRow(run, me, now, verified, isLive, onInfo = { openInfo(run) },
+                                            CallRow(run, me, now, verified, isLive, onInfo = { openInfo(run) }, onCall = { dial(run.latest, run.latest.video) },
                                                 onLongClick = { if (!isLive) menu = true })
                                         }
                                         if (selecting && isLive) Box(Modifier.matchParentSize().clickable(
@@ -566,13 +582,13 @@ private val ReturnGreen = Color(0xFF34C759)
  * direction + length, video glyph, then the time and (i). The live call shows Return instead.
  */
 @Composable
-private fun CallRow(run: CallRun, me: String, now: Long, verified: Boolean, live: Boolean, onInfo: () -> Unit, onLongClick: () -> Unit) {
+private fun CallRow(run: CallRun, me: String, now: Long, verified: Boolean, live: Boolean, onInfo: () -> Unit, onCall: () -> Unit, onLongClick: () -> Unit) {
     val c = Fariin.colors
     val call = run.latest
     val count = run.entries.size
     val ctx = LocalContext.current
     Row(
-        Modifier.fillMaxWidth().listPress(onLongClick = onLongClick) { callBack(ctx, call, call.video) }
+        Modifier.fillMaxWidth().listPress(onLongClick = onLongClick) { onCall() }
             .padding(start = 16.dp, end = if (live) 16.dp else 4.dp, top = 9.dp, bottom = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -611,7 +627,7 @@ private fun CallRow(run: CallRun, me: String, now: Long, verified: Boolean, live
             // iOS Return (owner 2026-10-13): green pill, filled phone (or camera) 4 from a bold "Return";
             // it does what the row's tap does, bringing the call forward.
             Row(Modifier.height(34.dp).clip(CircleShape).background(ReturnGreen)
-                .clickable { callBack(ctx, call, call.video) }.padding(horizontal = 14.dp),
+                .clickable { onCall() }.padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Icon(if (call.video) ImageVector.cachedVector(R.drawable.ic_video_fill) else ImageVector.cachedVector(R.drawable.ic_tab_calls), contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                 Text("Return", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
