@@ -117,8 +117,12 @@ object AccountReport {
         val uid = user.uid
         val db = com.fariin.app.Fb.db
         // Every read is capped: on a weak connection one can hang for good and the row spun forever.
-        val me = try { kotlinx.coroutines.withTimeout(8_000) { db.collection("users").document(uid).get().await().data } ?: emptyMap() }
-            catch (_: Exception) { throw IllegalStateException("Could not load everything. Check your connection and try again.") }
+        // iOS writes the file from the profile it already holds; here the phone's saved copy when the
+        // server does not answer, and the error only when there is none.
+        val meRef = db.collection("users").document(uid)
+        val me = (try { kotlinx.coroutines.withTimeout(8_000) { meRef.get().await().data ?: emptyMap() } } catch (_: Exception) { null }
+            ?: try { meRef.get(com.google.firebase.firestore.Source.CACHE).await().data } catch (_: Exception) { null })
+            ?: throw IllegalStateException("Could not load everything. Check your connection and try again.")
         val thisId = DeviceRegistry.thisDeviceId(context)
         val devices = kotlinx.coroutines.withTimeoutOrNull(8_000) { try {
             db.collection("users").document(uid).collection("devices").get().await().documents.map { d ->
