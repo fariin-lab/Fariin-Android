@@ -4141,7 +4141,16 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ThreadRow(
                     // A failed post has no eye count (iOS: views nil while failed).
                     if (m.deleted || m.sendState == Message.SendState.FAILED) null else com.fariin.app.channel.ChannelRules.shownViews(m.views, m.authorId, ui.me),
             ) {
-                Column(Modifier.fillMaxWidth().combinedClickableLong { env.openPostMenu(m) { MessageRow(ui, m, g, is24h, {}) {} } }) {
+                // iOS: a double tap on a post reacts too. My quick reaction, or the channel's first
+                // one when its own list leaves mine out; a second double tap takes mine back.
+                val quick = rememberQuickReaction()
+                val mineNow = ch.mine(m.id)
+                Column(Modifier.fillMaxWidth().combinedClickableLong { env.openPostMenu(m) { MessageRow(ui, m, g, is24h, {}) {} } }
+                    .doubleTapToReact(ch.canReact && canReactTo(m), key = m.id + (mineNow ?: "")) {
+                        val pick = if (ch.info.reactMode == "some" && !com.fariin.app.channel.ChannelRules.containsEmoji(ch.pickable, quick))
+                            ch.pickable.firstOrNull() else quick
+                        if (mineNow != null) ch.onReact(m, null) else if (pick != null) ch.onReact(m, pick)
+                    }) {
                     MessageRow(ui, m, g, is24h, { env.failed(it) }, tick) { env.view(it) }
                     // A text post carries its reactions inside the bubble; the rest under it.
                     // A photo, video or album post draws its bar inside its bubble (MediaRow), as text posts do.
