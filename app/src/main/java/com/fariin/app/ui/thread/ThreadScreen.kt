@@ -1271,7 +1271,17 @@ private fun ThreadContent(
                 if (by != null && by != uiNow.value.me && com.fariin.app.data.ChatRestrictions.restrictedByMe(conv, uiNow.value.me)) restrictAnswer = true
                 else android.widget.Toast.makeText(ctxR, "This request is no longer open", android.widget.Toast.LENGTH_SHORT).show()
             }
-            rowEnv.react = { m ->
+            rowEnv.react = react@{ m ->
+                // The group rules are read here, from the live chat: the rows' copy of it leaves out
+                // the group's doc, so an admin's "no reactions" set after the open never reached them.
+                val live = uiNow.value
+                val heldBack = com.fariin.app.data.GroupAdmins.reactionsHeldBack(live.groupDoc, live.me)
+                val muted = live.isGroup && live.groupDoc.isNotEmpty() &&
+                    com.fariin.app.data.MemberRestrict.isMuted(live.groupDoc, live.me, System.currentTimeMillis().toDouble())
+                // iOS uikitQuickReact: held back from reactions alone is said, not a dead tap (muted has its own bar).
+                if (heldBack && !muted) android.widget.Toast.makeText(ctxR, "An admin has turned off reactions for you.", android.widget.Toast.LENGTH_SHORT).show()
+                // A guest of a public group is not a member: no reaction (iOS canReact guest == nil).
+                if (heldBack || muted || live.groupGuest != null) return@react
                 rowView.lightTap()   // iOS: a light tap with the quick reaction
                 // The pill shows now, not when the sealed write comes back (ReactNow).
                 val next = MessageRules.nextReaction(ReactNow.mine(m, uiNow.value.me), quickReaction)
@@ -4122,7 +4132,7 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ThreadRow(
                             }
                         }
                     }
-                    .doubleTapToReact(canReact(m, ui), key = m.id + ReactNow.mine(m, ui.me)) { env.react(m) }) {
+                    .doubleTapToReact(canReactTo(m), key = m.id + ReactNow.mine(m, ui.me)) { env.react(m) }) {
                     MessageRow(ui, m, g, is24h, { env.failed(it) }, tick) { env.view(it) }
                     // iOS: a pill opens who reacted (channels keep their own chips).
                     ReactionChips(ReactNow.shown(m, ui.me), ui, m.authorId == ui.me) { env.reactors(m) }

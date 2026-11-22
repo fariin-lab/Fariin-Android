@@ -756,15 +756,18 @@ internal fun mayReplyHere(ui: ThreadUi): Boolean =
     com.fariin.app.data.GroupAdmins.announcementBlock(ui.groupDoc, ui.me) == null
 
 /** iOS: a photo, a video or an album can be saved; a view-once photo never. */
+/** The message half of canReact (no group rules): what a row can test without the group's doc. */
+internal fun canReactTo(m: Message): Boolean =
+    !m.deleted && m.sendState == null && !m.isSystem && !m.isCall && !MessageRules.isStoryReaction(m) &&
+        com.fariin.app.data.PinRules.notice(m.text) == null && !MessageRules.isUnsupportedFeature(m.text)
+
 /**
  * iOS canReact: never a deleted, unsent, system or call message, nor a story-reaction message, a
  * "pinned a message" notice or a feature this build cannot show; not when an admin turned my
  * reactions off, nor while an admin has me muted in the group.
  */
 internal fun canReact(m: Message, ui: ThreadUi): Boolean =
-    !m.deleted && m.sendState == null && !m.isSystem && !m.isCall && !MessageRules.isStoryReaction(m) &&
-        com.fariin.app.data.PinRules.notice(m.text) == null && !MessageRules.isUnsupportedFeature(m.text) &&
-        !com.fariin.app.data.GroupAdmins.reactionsHeldBack(ui.groupDoc, ui.me) &&
+    canReactTo(m) && !com.fariin.app.data.GroupAdmins.reactionsHeldBack(ui.groupDoc, ui.me) &&
         !(ui.isGroup && ui.groupDoc.isNotEmpty() && com.fariin.app.data.MemberRestrict.isMuted(ui.groupDoc, ui.me, System.currentTimeMillis().toDouble()))
 
 internal fun canSaveToGallery(m: Message): Boolean = !m.deleted && !m.viewOnce && m.sendState == null && when (m.mediaKind) {
