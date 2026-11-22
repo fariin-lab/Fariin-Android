@@ -117,6 +117,16 @@ object NotifBuilder {
         else -> ""
     }
 
+    /** A card marker's words in a notification (iOS NotificationService.cardWord). */
+    fun cardWord(t: String): String = when {
+        t.startsWith("fariin-live:") -> "📍 Live location"
+        t.startsWith("fariin-location:") -> "📍 Location"
+        t.startsWith("fariin-contact:") -> "👤 Contact"
+        t.startsWith("fariin-poll:") -> "📊 Poll"
+        t.startsWith("fariin-pinned:") -> "📌 Pinned a message"
+        else -> "Message"
+    }
+
     /** The crypto's "could not open" answers: never shown, the server's hint stays instead. */
     private val SENTINELS = setOf("…", "🔒", "[old message]")
     fun usable(opened: String?): String? = opened?.takeIf { it.isNotBlank() && it !in SENTINELS }
@@ -177,10 +187,9 @@ object NotifBuilder {
         var text: String? = null
         if (p.cipher != null) text = usable(open(p.cipher, key, sender))
         if (text == null && p.isGroup) text = p.plainText
-        // A poll's marker is never shown raw: its question, as the app's safeText words it.
-        text?.let { t -> com.fariin.app.data.PollRules.parse(t)?.let { text = com.fariin.app.data.PollRules.safeText(it) } }
-        // A contact or location card says "Contact" / "Location", never its raw marker.
-        text?.let { t -> com.fariin.app.data.CardRules.previewWord(t)?.let { text = it } }
+        // A card message carries a marker, never words to show: the same words iOS uses
+        // (NotificationService.cardWord), and "Message" for a marker this build does not know.
+        text?.let { t -> if (t.startsWith("fariin-")) text = cardWord(t) }
         val shownSender = direct?.name?.takeIf { it.isNotEmpty() } ?: sn
 
         val line: String
