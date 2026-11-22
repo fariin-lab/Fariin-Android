@@ -3454,6 +3454,9 @@ private fun Composer(
                             if (boldable) boxBold = com.fariin.app.data.TextFormat.adjust(boxBold, boxValue.text, fv.text)
                                 .let { b -> val got = BoldClip.pasted(context, boxValue.text, fv.text); if (got.isEmpty()) b else com.fariin.app.data.TextFormat.normalize(b + got, fv.text.length) }
                             if (boldable && boxLinks.isNotEmpty()) boxLinks = com.fariin.app.data.TextFormat.adjustLinks(boxLinks, boxValue.text, fv.text)
+                            // Linked words pasted keep their link (iOS pastedBold reads links too).
+                            if (boldable) BoldClip.pastedLinks(context, boxValue.text, fv.text).takeIf { it.isNotEmpty() }?.let { got ->
+                                boxLinks = com.fariin.app.data.TextFormat.normalizeLinks(boxLinks + got, fv.text.length) }
                             boxValue = fv
                             draft = fv.text
                         },
