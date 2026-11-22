@@ -153,7 +153,7 @@ internal fun SubscriptionsPage(pop: () -> Unit, push: (String) -> Unit = {}) {
         if (!plusSubscribed()) PlusSubscribeButton(plan, Modifier.align(Alignment.BottomCenter)
             .padding(bottom = com.fariin.app.ui.shell.bottomBarInset()))
     }
-    opened?.let { start -> PlusFeatureSheet(shown, start) { opened = null } }
+    opened?.let { start -> PlusFeatureSheet(shown, start, plan) { opened = null } }
 }
 
 /** The page's rows, the same on the page and in the sheet (iOS PlusView's List). */
@@ -324,7 +324,7 @@ fun PlusPageSheet(onDismiss: () -> Unit) {
                 modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).clip(CircleShape)
                     .clickable { motion.close() }.padding(horizontal = 8.dp, vertical = 4.dp))
             if (!plusSubscribed()) PlusSubscribeButton(plan, Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp))
-            opened?.let { start -> PlusFeatureSheet(shown, start) { opened = null } }
+            opened?.let { start -> PlusFeatureSheet(shown, start, plan) { opened = null } }
         }
     }
 }
@@ -448,10 +448,22 @@ fun PlusLimitSheet(count: Int, free: Int, plus: Int, onDismiss: () -> Unit) {
 
 /** One page per shown feature, swiped sideways, opening on the tapped one; one button closes it. */
 @Composable
-private fun PlusFeatureSheet(features: List<PlusFeature>, start: String, onDismiss: () -> Unit) {
+private fun PlusFeatureSheet(features: List<PlusFeature>, start: String, plan: String, onDismiss: () -> Unit) {
     if (features.isEmpty()) { onDismiss(); return }
     val c = Fariin.colors
-    val motion = rememberSheetMotion { onDismiss() }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val activity = ctx as? android.app.Activity ?: (ctx as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
+    val billing = com.fariin.app.data.PlusBilling
+    // iOS PlusFeatureSheet: while the page sells Plus and a plan is in hand, the button carries the
+    // Subscribe words; a tap closes the sheet, then the purchase starts.
+    val picked = billing.plans.firstOrNull { it.basePlanId == plan } ?: billing.plans.firstOrNull()
+    val selling = plusSelling() && picked != null && !billing.busy
+    var buyAfter by remember { mutableStateOf(false) }
+    val motion = rememberSheetMotion {
+        onDismiss()
+        val p = picked
+        if (buyAfter && p != null && activity != null && plusSelling()) billing.buy(activity, p)
+    }
     val density = LocalDensity.current
     val windowH = LocalWindowInfo.current.containerSize.height
     val want = with(density) { (windowH - WindowInsets.statusBars.getTop(density) - 10.dp.toPx() - 500.dp.toPx() - WindowInsets.navigationBars.getBottom(density)).coerceAtLeast(0f) }
@@ -486,12 +498,10 @@ private fun PlusFeatureSheet(features: List<PlusFeature>, start: String, onDismi
                         .background(if (i == pager.currentPage) c.label else c.secondary.copy(alpha = 0.35f)))
                 }
             }
-            val cur = features.getOrNull(pager.currentPage)
-            @Suppress("UNUSED_VARIABLE") val shownNow = cur
-            val label = "Got It"
+            val label = picked?.takeIf { selling }?.let { "Subscribe for ${it.price} / ${if (it.period.endsWith("Y")) "year" else "month"}" } ?: "Got It"
             Box(Modifier.padding(horizontal = 20.dp).padding(bottom = 12.dp).fillMaxWidth().height(50.dp).clip(CircleShape)
-                .background(PlusBlue).clickable { motion.close() }, contentAlignment = Alignment.Center) {
-                Text(label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                .background(PlusBlue).clickable { buyAfter = selling; motion.close() }, contentAlignment = Alignment.Center) {
+                Text(label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1)
             }
         }
     }
