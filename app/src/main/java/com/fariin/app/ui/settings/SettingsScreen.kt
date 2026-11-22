@@ -477,7 +477,7 @@ private fun AppearancePage(push: (String) -> Unit, pop: () -> Unit) {
                 if (com.fariin.app.data.BubbleStyles.SHOWN) {
                     val bubbleV = com.fariin.app.data.BubbleStyles.version.intValue
                     val bubbleName = remember(bubbleV) { com.fariin.app.data.BubbleStyles.init(ctx); com.fariin.app.data.BubbleStyles.name(com.fariin.app.data.BubbleStyles.current()) }
-                    SettingsRow("Bubble Style", value = bubbleName, badge = NewBadgeSpots.APPEARANCE_BUBBLE_STYLES) { push(PAGE_BUBBLE_STYLE) }
+                    SettingsRow("Bubble Styles", value = bubbleName, badge = NewBadgeSpots.APPEARANCE_BUBBLE_STYLES) { push(PAGE_BUBBLE_STYLE) }
                 }
                 // Fariin Plus: one exclusive style on my profile (only while Plus is visible, feature not off).
                 if (PlusStore.visible && PlusStore.state("bubbleStyles") != PlusStore.State.OFF)
