@@ -412,6 +412,8 @@ fun NewChannelScreen(me: String, onBack: () -> Unit, onDone: (String) -> Unit) {
     var about by remember { mutableStateOf("") }
     var cid by remember { mutableStateOf<String?>(null) }
     var halfMade by remember { mutableStateOf<String?>(null) }
+    // The name that half-made group got: a retry after the name changed renames it (iOS).
+    var halfMadeTitle by remember { mutableStateOf("") }
     var creating by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var photo by remember { mutableStateOf<ByteArray?>(null) }
@@ -439,7 +441,14 @@ fun NewChannelScreen(me: String, onBack: () -> Unit, onDone: (String) -> Unit) {
                 }
                 try {
                     val my = com.fariin.app.Fb.db.collection("users").document(me).get().await()
-                    val id = halfMade ?: ChannelService.createGroupForChannel(name, my.getString("name") ?: "", my.getString("photoUrl")).also { halfMade = it }
+                    val title = name.trim().take(ChannelRules.NAME_MAX)
+                    val half = halfMade
+                    if (half != null && title != halfMadeTitle) {
+                        com.fariin.app.data.FirestorePeople(me, com.fariin.app.data.CryptoHub.get(appCtx)).renameGroup(half, title)
+                        halfMadeTitle = title
+                    }
+                    val id = half ?: ChannelService.createGroupForChannel(title, my.getString("name") ?: "", my.getString("photoUrl"))
+                        .also { halfMade = it; halfMadeTitle = title }
                     if (!ChannelService.makeChannelWithRetry(id)) { error = "Could not create the channel. Try again."; creating = false; return@launch }
                     halfMade = null
                     // The rest is best-effort: the channel stands without it, but the user is told what is missing.
