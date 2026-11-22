@@ -519,6 +519,7 @@ private fun ThreadContent(
     val memberTap by MemberTap.request.collectAsState()
     var memberPage by remember { mutableStateOf<com.fariin.app.ui.people.GroupPage?>(null) }
     DisposableEffect(ui.cid) { onDispose { MemberTap.request.value = null } }   // never carried into another chat
+    LaunchedEffect(ui.cid) { VoicePlayer.chatOpened(ui.cid) }   // a paused note of this chat closes (iOS)
     memberTap?.let { uid ->
         if (ui.isGroup && ui.channel == null && ui.groupDoc.isNotEmpty())
             com.fariin.app.ui.people.MemberCard(ui.cid, ui.me, uid, ui.groupDoc, onClose = { MemberTap.request.value = null },
