@@ -30,6 +30,9 @@ import com.fariin.app.call.GroupCall
 import com.fariin.app.call.GroupCallUi
 import com.fariin.app.call.GroupMember
 import com.fariin.app.call.GroupRing
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -230,6 +233,16 @@ class CallActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) { setShowWhenLocked(true); setTurnScreenOn(true) }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         CallManager.init(this)
+        // iOS: a call shrunk away opens back up for the No answer page, from the small window and
+        // from behind the app (minimize without picture in picture). Collected here, not in the
+        // screen, because a stopped screen does not recompose.
+        lifecycleScope.launch {
+            CallManager.ui.map { it.noAnswer }.distinctUntilChanged().collect { noAnswer ->
+                if (noAnswer && (inPip || !lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)))
+                    startActivity(Intent(this@CallActivity, CallActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+            }
+        }
         // A screen the system re-created (process restore, a configuration change) gets its first
         // intent back: it must never dial or join again (iOS 2026-11-08: one phone placed 14 calls).
         restored = savedInstanceState != null
@@ -284,11 +297,6 @@ class CallActivity : ComponentActivity() {
                     val pip = CallRouting.pipWanted(ui.status.phase, ui.cameraOn, ui.remoteCameraOn)
                     val pipTall = CallRouting.pipVideo(ui.cameraOn, ui.remoteCameraOn)
                     LaunchedEffect(pip, pipTall) { updatePip(pip) }
-                    // iOS: a call shrunk away opens back up for the No answer page.
-                    LaunchedEffect(ui.noAnswer) {
-                        if (ui.noAnswer && inPip) startActivity(Intent(this@CallActivity, CallActivity::class.java)
-                            .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP))
-                    }
                     if (inPip) { PipScreen(ui); return@FariinTheme }
                     // System back leaves the screen, never the call: it shrinks, as the minimize button.
                     androidx.activity.compose.BackHandler { if (ui.status.live) minimize() else finish() }
