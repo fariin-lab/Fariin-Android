@@ -1069,7 +1069,8 @@ fun ChatListScreen(
                             }
                             // My own channel: deleted for everyone, Undo for a few seconds (as its page).
                             single != null && singleKind == DeleteKind.DELETE_CHANNEL -> {
-                                com.fariin.app.data.LeaveUndo.start(single.id, single.displayName(me)) { ChatListActions.deleteOwnChannel(single.id) }
+                                com.fariin.app.data.LeaveUndo.start(single.id, single.displayName(me),
+                                    "Couldn't delete \"${single.displayName(me)}\". Check your connection and try again.") { ChatListActions.deleteOwnChannel(single.id) }
                                 Snack.show("Channel deleted.", "Undo", durationMs = com.fariin.app.data.LeaveUndo.WINDOW_MS) {
                                     com.fariin.app.data.LeaveUndo.undo()
                                 }
