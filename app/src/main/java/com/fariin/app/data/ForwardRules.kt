@@ -46,8 +46,8 @@ object ForwardRules {
     fun docOf(cid: String, me: String): Map<String, Any?>? =
         ThreadSeed.conv(cid) ?: runCatching { com.fariin.app.local.LocalCache.peekChats(me)?.firstOrNull { it.first == cid }?.second }.getOrNull()
 
-    /** iOS ForwardPicker.sendKind. */
-    fun kindOf(m: Message): GroupAdmins.SendKind? = when (m.type) {
+    /** iOS ForwardPicker.sendKind. A poll is a text message, so it is told by its marker. */
+    fun kindOf(m: Message): GroupAdmins.SendKind? = if (m.poll != null) GroupAdmins.SendKind.POLLS else when (m.type) {
         "sticker" -> GroupAdmins.SendKind.STICKERS
         "gif" -> GroupAdmins.SendKind.GIFS
         "video" -> GroupAdmins.SendKind.VIDEOS

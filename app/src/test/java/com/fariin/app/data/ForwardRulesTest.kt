@@ -53,6 +53,14 @@ class ForwardRulesTest {
         assertNull(ForwardRules.refusal(d, conv(d), me, listOf(msg("album")), share = true, nowMs = now))
     }
 
+    @Test fun pollOff() {
+        val d = doc("memberSend" to mapOf("polls" to false))
+        val poll = Message(id = "p", authorId = "x", createdAtMillis = 0.0, type = "text",
+            text = PollRules.markerText("abc", "Lunch?", listOf("Yes", "No"), false))
+        assertEquals("Polls are off in Team.", ForwardRules.refusal(d, conv(d), me, listOf(poll), nowMs = now))
+        assertNull(ForwardRules.refusal(d, conv(d), me, listOf(msg("text")), nowMs = now))
+    }
+
     @Test fun noteInSlowGroup() {
         val d = doc("slowMode" to 30)
         assertEquals("Slow mode is on in Team. Send without a comment, or send the comment later.",
