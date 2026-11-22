@@ -390,6 +390,7 @@ class ThreadRepository(
             if (me in ((data["users"] as? List<*>) ?: emptyList<Any>())) wasMember = true
             if (wasMember && !snap.metadata.isFromCache && FormerGroups.isFormer(cid, data, me)) { becomeFormer(data); return@run }
             val startBefore = if (Wire.isGroupCid(cid)) GroupManage.historyStart(_state.value.conv, me) else null
+            val clearedBefore = clearedAtOf(_state.value.conv)
             val receipts = Receipts.from(data, me, cid)
             // Only the chat list's summary moved (a send, the other side's counts, my own typing):
             // the open chat keeps its copy, so the whole chat does not rebuild for it.
@@ -398,6 +399,8 @@ class ThreadRepository(
             } else _state.update { it.copy(receipts = receipts, conv = data) }
             // Chat History for new members changed (or my join time arrived): the list is cut again.
             if (Wire.isGroupCid(cid) && msgReg != null && GroupManage.historyStart(data, me) != startBefore) rebuild()
+            // My Clear Chat / Delete for Me moved (here or on my other device): cut the chat again.
+            else if (msgReg != null && clearedAtOf(data) != clearedBefore) rebuild()
             if (data["e2ee"] == false) CryptoHub.notePlainGroup(cid)
             syncPins(PinRules.pinnedIds(data))
         }
@@ -637,6 +640,10 @@ class ThreadRepository(
         return m.album.isNotEmpty() && m.album.all { crypto.fileWillNotOpen(cid, it.enc) }
     }
 
+    /** My `clearedAt` mark in the chat doc [conv] (ms), 0 when I never cleared it. */
+    private fun clearedAtOf(conv: Map<String, Any?>): Double =
+        ((conv["clearedAt"] as? Map<*, *>)?.get(me) as? Number)?.toDouble() ?: 0.0
+
     @Synchronized
     private fun rebuild(loaded: Boolean? = null) {
         // The maps as they are now: the listener thread may change them while this runs.
@@ -655,6 +662,9 @@ class ThreadRepository(
         // Chat History for new members hidden before I joined (iOS historyStart): the chat starts
         // when I came in, as a new group would. My own messages are always there.
         val historyStart = if (Wire.isGroupCid(cid)) GroupManage.historyStart(_state.value.conv, me) else null
+        // iOS isClearedForMe: my Clear Chat / Delete for Me mark (`clearedAt.<me>`, server ms) hides
+        // every sent, server-stamped message at or before it, also when my other device set it.
+        val clearedAt = clearedAtOf(_state.value.conv)
         // Messages from before this phone's keys: left out, ONE notice at the newest one's place (iOS).
         val keysSince = crypto.keysSince()
         var newestUnopened: Message? = null
@@ -667,6 +677,7 @@ class ThreadRepository(
         for (d in chSync?.docsOrNull() ?: (olderDocs.values + liveDocs.values)) {
             var m = parse(d)
             if (historyStart != null && m.hasServerTime && m.createdAtMillis < historyStart && m.authorId != me) continue
+            if (clearedAt > 0 && m.sendState == null && m.hasServerTime && m.createdAtMillis <= clearedAt) continue
             // Only a message that could not be opened (drawn as the lock) is worth parsing again: the
             // envelope check is heavy, and rebuild runs on every change (mid phones).
             if (m.text == Wire.LOCKED && Wire.isGroupCid(cid)) {
@@ -705,6 +716,7 @@ class ThreadRepository(
         if (chSync == null) for (m in dbOlder.values) {
             if (all.containsKey(m.rowId) || liveDocs.containsKey(m.id) || olderDocs.containsKey(m.id)) continue
             if (historyStart != null && m.createdAtMillis < historyStart && m.authorId != me) continue
+            if (clearedAt > 0 && m.hasServerTime && m.createdAtMillis <= clearedAt) continue
             if (Disappearing.isExpired(m, now) || HiddenMessages.isHidden(m.id)) continue
             if (wontOpenHere(m, keysSince)) continue
             if (m.authorId != me && BlockList.hides(m.authorId, m.createdAtMillis)) continue
