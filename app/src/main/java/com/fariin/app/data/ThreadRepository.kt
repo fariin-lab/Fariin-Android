@@ -1719,25 +1719,28 @@ class ThreadRepository(
             forwarded, fwdSource)
     }
 
-    /** iOS ChatService.sendGif: the public GIPHY link and its size, `text` empty; the list says "GIF". */
+    /** iOS ChatService.sendGif: the public GIPHY link and its size; `text` is the caption sealed like
+     *  a text (empty when none, "Add Caption" 2026-11-21); the list says "GIF" either way. */
     /** A poll option's picture, stored like a photo in this chat (MediaSender.pollImage). */
     suspend fun uploadPollImage(jpeg: ByteArray): PollImage =
         // This phone already has the picture: seed the cache so the bubble draws it at once (iOS).
         sender.pollImage(jpeg).also { media?.store(it.url, jpeg) }
 
-    fun sendGif(g: StickerGifRules.Gif, reply: Message?) {
+    fun sendGif(g: StickerGifRules.Gif, reply: Message?, caption: String = "") {
         val tap = System.currentTimeMillis().toDouble()
         val clientId = UUID.randomUUID().toString().uppercase()
         val ref = reply?.let { ReplyQuoteRules.ref(it) }
+        // The caption at most the photo caption's length (iOS Limits.captionMaxChars), plain words.
+        val words = caption.trim().take(com.fariin.app.media.MediaRules.CAPTION_CHARS)
         pending[clientId] = Message(
-            id = clientId, authorId = me, text = "", type = "gif", createdAtMillis = tap, hasServerTime = false,
+            id = clientId, authorId = me, text = words, type = "gif", createdAtMillis = tap, hasServerTime = false,
             clientTs = tap, clientId = clientId, sendState = Message.SendState.SENDING, replyTo = ref,
             imageUrl = g.url, width = g.width, height = g.height,
         )
         rebuild()
         runMediaSend(clientId) {
             writeLooseMessage(hashMapOf("type" to "gif", "imageUrl" to g.url, "width" to g.width, "height" to g.height),
-                null, "GIF", ref, clientId, tap)
+                words.ifEmpty { null }, "GIF", ref, clientId, tap)
         }
     }
 

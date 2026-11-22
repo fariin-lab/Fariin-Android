@@ -136,7 +136,8 @@ data class ThreadActions(
     val onForwardManyTo: (List<Message>, List<String>) -> Unit = { _, _ -> },
     /** The sticker panel: a built-in sticker or a GIF, with the reply it answers (or null). */
     val onSendSticker: (com.fariin.app.data.StickerRef, Message?) -> Unit = { _, _ -> },
-    val onSendGif: (com.fariin.app.data.StickerGifRules.Gif, Message?) -> Unit = { _, _ -> },
+    /** The GIF, the message replied to, and its caption ("" = none; iOS sendGif `caption`). */
+    val onSendGif: (com.fariin.app.data.StickerGifRules.Gif, Message?, String) -> Unit = { _, _, _ -> },
     /** One poll option's picture (512 px JPEG), sealed for this chat and stored; null where not wired. */
     val onPollImage: (suspend (ByteArray) -> com.fariin.app.data.PollImage)? = null,
     /** "Try Again" after the messages failed to load: the listeners are made again. */
