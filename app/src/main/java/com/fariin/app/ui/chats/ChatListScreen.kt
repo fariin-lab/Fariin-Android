@@ -795,13 +795,13 @@ fun ChatListScreen(
                     query.isNotBlank() -> Centered(null, "No results", null)
                     showArchive -> Centered(fi(R.drawable.ic_archive), "Nothing archived", "Chats you archive and stories you hide will show here.")
                     folder != null -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Text("Nothing here right now", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label)
+                        // iOS's words since the tabs redesign: one line and the way to change the folder;
+                        // the tabs above are the way back.
+                        Text("No chats in this folder right now.", fontSize = 15.sp, color = c.secondary,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(horizontal = 32.dp))
                         Spacer(Modifier.height(16.dp))
                         Text("Edit Folder", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.accent,
                             modifier = Modifier.clip(CircleShape).clickable { folderEdit = folder }.padding(horizontal = 16.dp, vertical = 10.dp))
-                        Text("Show All Chats", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.accent,
-                            modifier = Modifier.clip(CircleShape).clickable { com.fariin.app.data.ChatFoldersStore.select(com.fariin.app.data.ChatFolder.ALL.id) }
-                                .padding(horizontal = 16.dp, vertical = 10.dp))
                     }
                     filter == FILTER_UNREAD -> Centered(ImageVector.cachedVector(R.drawable.ic_sf_checkmark_circle), "No unread chats", "You're all caught up.")
                     filter == FILTER_GROUPS -> Centered(fi(R.drawable.ic_gs_group_type), "No groups yet", "Groups you join will appear here.",
