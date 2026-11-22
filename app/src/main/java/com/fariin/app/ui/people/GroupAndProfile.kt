@@ -427,7 +427,10 @@ fun UsernameScreen(api: PeopleApi, current: String, onBack: () -> Unit) {
                     try { api.claimUsername(draft); onBack() } catch (e: Exception) {
                         val msg = e.message ?: ""
                         status = if (msg.contains("taken", true)) NameStatus.Taken else NameStatus.Problem(msg.ifEmpty { "Couldn't save. Try again." })
-                        api.usernameChangeStatus()?.let { lock = it.takeIf { s -> !s.canChange } }
+                        // iOS refreshLock: a lock that lands now clears the red line; the lock line says it.
+                        val l = api.usernameChangeStatus()?.takeIf { s -> !s.canChange }
+                        if (l != null && lock == null) { status = NameStatus.Quiet; suggestions = emptyList() }
+                        if (l != null) lock = l
                     }
                     claiming = false
                 }
