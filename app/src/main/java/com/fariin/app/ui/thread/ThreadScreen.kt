@@ -3003,7 +3003,8 @@ private fun Composer(
     var boxValue by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(draft, androidx.compose.ui.text.TextRange(draft.length))) }
     if (boxValue.text != draft) boxValue = androidx.compose.ui.text.input.TextFieldValue(draft, androidx.compose.ui.text.TextRange(draft.length))
     // Taken once: a composer drawn again later (after Select or Search) must not get old words back.
-    LaunchedEffect(refill?.first) { refill?.let { if (prefill == null) draft = it.second; onRefilled() } }
+    // iOS: words put in from outside drop the @ picks (a stale pick could tag the wrong person later).
+    LaunchedEffect(refill?.first) { refill?.let { if (prefill == null) { draft = it.second; picks = emptyMap() }; onRefilled() } }
     // Every change outside an edit is the chat's draft (sent = cleared below).
     LaunchedEffect(draft) { if (prefill == null && !wasEditing) { kept = draft; onDraft(draft) } }
 
