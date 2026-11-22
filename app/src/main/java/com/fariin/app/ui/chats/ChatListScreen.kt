@@ -1632,7 +1632,7 @@ internal fun ChatRow(
                         Icon(ImageVector.cachedVector(R.drawable.ic_sf_pin_fill), contentDescription = "Pinned", tint = c.tertiary, modifier = Modifier.size(16.dp))
                     }
                     // Never beside a call: it is a record, not a message with a sent / read state (iOS).
-                    if (conv.lastIsMine(me) && !conv.isChannel && !ChatList.lastIsCall(conv)) Ticks(conv, me)
+                    if (conv.lastIsMine(me) && !conv.isChannel && !ChatList.lastIsCall(conv) && !ChatList.clearedByMe(conv, me)) Ticks(conv, me)
                     // Someone reacted to my message: one grey heart, never the emoji itself (iOS).
                     Appear(preview.heart, resize = false) {
                         Icon(ImageVector.cachedVector(R.drawable.ic_sf_heart_fill), contentDescription = "Reaction", tint = c.secondary, modifier = Modifier.size(15.dp))

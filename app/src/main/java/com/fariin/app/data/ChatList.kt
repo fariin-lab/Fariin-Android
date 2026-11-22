@@ -139,6 +139,10 @@ object ChatList {
         }
     }
 
+    /** iOS clearedByMe: the last message is from before my Clear Chat, so the row does not show it. */
+    fun clearedByMe(c: Conversation, me: String): Boolean =
+        c.updatedAtMillis > 0 && c.updatedAtMillis <= (c.clearedAt[me] ?: 0.0)
+
     /** iOS lastIsCall: 📞 / 📹 are call records (🎥 is a video message). */
     fun lastIsCall(c: Conversation): Boolean =
         c.lastMessageCipher.startsWith("📞 ") || c.lastMessageCipher.startsWith("📹 ")
@@ -228,6 +232,8 @@ object ChatList {
             val heart = c.lastReactionBy != me && c.lastReactionToAuthor == me
             return reactionParts(c, line, heart)
         }
+        // Clear Chat in a group I am still in (iOS clearedByMe): the row stays, its last line does not.
+        if (clearedByMe(c, me)) return RowPreview("")
         // A blank server line on a chat with messages: the last line this phone saw (iOS 44d1d83c3).
         if (c.lastMessageCipher.isEmpty() && c.lastSender.isNotEmpty() && c.lastImageUrl.isNullOrEmpty()) {
             LastSeenLine.get(c.id)?.let { saved -> return rowPreview(c.copy(lastMessageCipher = saved), me, decryptor, senderName) }
