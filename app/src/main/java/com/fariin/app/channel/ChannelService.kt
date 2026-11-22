@@ -86,6 +86,9 @@ object ChannelService {
     /** Drops the saved preview, so it no longer says I am in it (iOS GroupDirectory.noteLeft). */
     fun forgetPreview(cid: String) = PreviewDisk.remove(cid)
 
+    /** Sign-out (iOS GroupDirectory.PreviewDisk.wipe): the kept pages say if I am in or asked to join. */
+    fun wipePreviews() = PreviewDisk.wipe()
+
     /** Public group previews kept on disk as the server sent them (public data only), newest 200. */
     private object PreviewDisk {
         private fun prefs() = com.google.firebase.FirebaseApp.getInstance().applicationContext.getSharedPreferences("fariin_group_previews", android.content.Context.MODE_PRIVATE)
@@ -99,6 +102,7 @@ object ChannelService {
             }
         }
         fun remove(cid: String) { runCatching { prefs().edit().remove(cid).apply() } }
+        fun wipe() { runCatching { prefs().edit().clear().apply() } }
         fun get(cid: String): Map<*, *>? = runCatching { prefs().getString(cid, null)?.let { plain(org.json.JSONObject(it)) as? Map<*, *> } }.getOrNull()
         private fun plain(v: Any?): Any? = when (v) {
             is org.json.JSONObject -> v.keys().asSequence().associateWith { plain(v.opt(it)) }

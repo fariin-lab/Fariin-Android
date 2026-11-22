@@ -208,6 +208,7 @@ object SessionEnd {
         com.fariin.app.local.SendQueue.wipe()
         com.fariin.app.local.Cursors.reset()   // delivery marks sent, by chat id: the next account writes its own
         com.fariin.app.crypto.SafetyKeyLog.wipe()   // the next account starts its own key record (iOS)
+        com.fariin.app.channel.ChannelService.wipePreviews()   // kept public group pages hold my member/requested state (iOS)
         com.fariin.app.channel.ExploreCache.wipe(c)   // Explore's kept lists are per account (iOS SessionWipe)
         com.fariin.app.call.CallLinks.reset()
         com.fariin.app.data.StickerFavorites.wipe(c)   // the account keeps its backup
