@@ -57,6 +57,8 @@ data class RequestBar(val kind: Kind, val otherUid: String, val handle: String, 
         CANNOT,
         /** CANNOT, while the server is still asked whether they have a key: nothing drawn yet. */
         ASKING,
+        /** Requests are off, but they wrote first and I have not answered: Delete and Accept only. */
+        NEW_PERSON,
     }
 }
 
@@ -75,14 +77,17 @@ internal fun RequestBarView(bar: RequestBar, me: String, title: String, onBack: 
     Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
         when (bar.kind) {
-            RequestBar.Kind.INCOMING -> {
-                // The words open the safety page (iOS "Stay safe").
-                Text(buildAnnotatedString {
-                    append("Accept message request from $title? ")
-                    withStyle(SpanStyle(color = c.accent, fontWeight = FontWeight.SemiBold)) { append("Stay safe") }
-                }, fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center,
-                    modifier = Modifier.clickable { openWebLink(ctx, android.net.Uri.parse("https://fariin.com/safety#help")) })
-                Spacer(Modifier.height(10.dp))
+            RequestBar.Kind.INCOMING, RequestBar.Kind.NEW_PERSON -> {
+                // The words open the safety page (iOS "Stay safe"). A new person with requests off
+                // gets the two buttons alone (iOS newPersonComposer).
+                if (bar.kind == RequestBar.Kind.INCOMING) {
+                    Text(buildAnnotatedString {
+                        append("Accept message request from $title? ")
+                        withStyle(SpanStyle(color = c.accent, fontWeight = FontWeight.SemiBold)) { append("Stay safe") }
+                    }, fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center,
+                        modifier = Modifier.clickable { openWebLink(ctx, android.net.Uri.parse("https://fariin.com/safety#help")) })
+                    Spacer(Modifier.height(10.dp))
+                }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Pill("Delete", c.label.copy(alpha = 0.07f), c.red, Modifier.weight(1f)) {
                         if (busy) return@Pill
@@ -152,18 +157,26 @@ internal fun requestBarFor(
     if (conv == null || conv.isGroup || otherUid.isEmpty() || closed) return null
     val handle = ""   // the key sheet says the name when there is no @handle
     val stance = com.fariin.app.data.Requests.stance(conv, me)
-    fun bar(k: RequestBar.Kind) = RequestBar(k, otherUid, handle, hasKey)
-    if (stance == com.fariin.app.data.Requests.Stance.INCOMING) return bar(RequestBar.Kind.INCOMING)
-    if (keyAccepted) return null
-    if (stance == com.fariin.app.data.Requests.Stance.AWAITING_REPLY) return bar(RequestBar.Kind.AWAITING)
-    // iOS cannotMessageThem: their "messages" audience is closed, the admin switch enforces the key,
-    // and there is no chat between us yet (an accepted request, or a message, counts).
     val policy = com.fariin.app.data.MsgPolicy
-    if (!policy.chatKeyRequired(otherUid)) return null
-    if ((com.fariin.app.data.Audience.of(otherPrivacy["messages"]) ?: com.fariin.app.data.Audience.EVERYONE) ==
-        com.fariin.app.data.Audience.EVERYONE) return null
-    val history = if (conv.startedBy.isNotEmpty()) conv.accepted
-        else conv.lastMessageCipher.isNotEmpty() || messages.any { !it.isSystem }
-    if (history) return null
-    return bar(if (keyResolved || !policy.chatKeyVisible) RequestBar.Kind.CANNOT else RequestBar.Kind.ASKING)
+    // iOS otherHasKey: a key the admin panel hides is offered nowhere.
+    fun bar(k: RequestBar.Kind) = RequestBar(k, otherUid, handle, hasKey && policy.chatKeyVisible)
+    if (stance == com.fariin.app.data.Requests.Stance.INCOMING) return bar(RequestBar.Kind.INCOMING)
+    if (!keyAccepted) {
+        if (stance == com.fariin.app.data.Requests.Stance.AWAITING_REPLY) return bar(RequestBar.Kind.AWAITING)
+        // iOS cannotMessageThem: their "messages" audience is closed, the admin switch enforces the key,
+        // and there is no chat between us yet (an accepted request, or a message, counts).
+        val closedToMe = policy.chatKeyRequired(otherUid) &&
+            (com.fariin.app.data.Audience.of(otherPrivacy["messages"]) ?: com.fariin.app.data.Audience.EVERYONE) !=
+                com.fariin.app.data.Audience.EVERYONE
+        val history = if (conv.startedBy.isNotEmpty()) conv.accepted
+            else conv.lastMessageCipher.isNotEmpty() || messages.any { !it.isSystem }
+        if (closedToMe && !history)
+            return bar(if (keyResolved || !policy.chatKeyVisible) RequestBar.Kind.CANNOT else RequestBar.Kind.ASKING)
+    }
+    // iOS newPersonUnanswered: requests are off, so the chat reads open, but it is still their
+    // unanswered request underneath. Delete or Accept only; Accept brings the composer.
+    if (stance == com.fariin.app.data.Requests.Stance.OPEN &&
+        com.fariin.app.data.Requests.rawStance(conv, me) == com.fariin.app.data.Requests.Stance.INCOMING)
+        return bar(RequestBar.Kind.NEW_PERSON)
+    return null
 }
