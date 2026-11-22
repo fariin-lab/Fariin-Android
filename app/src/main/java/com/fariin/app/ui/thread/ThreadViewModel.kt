@@ -130,7 +130,8 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     val presenceLine = if (conv == null || conv.isGroup || receipts.iBlocked || minute < 0) null else
         com.fariin.app.data.Presence.line(
             mine = s.myPrivacy, theirs = s.otherPrivacy,
-            contactOfMine = conv.lastMessageCipher.isNotEmpty() && (conv.startedBy.isEmpty() || conv.accepted),
+            // iOS PrivacyPrefs.isContact: a request chat counts once accepted; an old chat once it has a message.
+            contactOfMine = if (conv.startedBy.isNotEmpty()) conv.accepted else conv.lastMessageCipher.isNotEmpty(),
             online = s.otherOnline, lastActiveMillis = s.otherLastActive,
             nowMillis = System.currentTimeMillis().toDouble(),
             legacySwitch = app.getSharedPreferences("fariin_privacy", Context.MODE_PRIVATE).getBoolean("shareLastSeen", true),
