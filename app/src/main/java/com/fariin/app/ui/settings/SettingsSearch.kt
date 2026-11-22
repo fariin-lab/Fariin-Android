@@ -59,6 +59,8 @@ internal const val PAGE_SETTINGS_SEARCH = "settings:search"
 internal object SettingsIndex {
     /** The account has two-step on (set by the Settings page): only then is it findable, as its row. */
     @Volatile var hasTwoStep = false
+    /** The account has an address a password can belong to (set by the Account page): only then is Password findable. */
+    @Volatile var hasPassword = true
 
     data class Entry(val title: String, val icon: String?, val keywords: String, val page: String,
                      val path: List<String> = emptyList(), val isPage: Boolean = false) {
@@ -97,7 +99,7 @@ internal object SettingsIndex {
         // Account
         val acc = listOf(ACC)
         page("Email address", acc, "email address change mail sign in", PAGE_EMAIL)
-        row("Password", acc, "password change set sign in", PAGE_ACCOUNT)
+        if (hasPassword) row("Password", acc,"password change set sign in", PAGE_ACCOUNT)
         page("Username", acc, "username handle @ who can find me contact me", PAGE_CONTACT_USERNAME)
         page("Passkeys", acc, "passkeys passkey fingerprint face sign in key", PAGE_PASSKEYS)
         if (hasTwoStep) page("Two-step verification", acc, "two step twostep verification 2fa additional password code security", PAGE_TWOSTEP)

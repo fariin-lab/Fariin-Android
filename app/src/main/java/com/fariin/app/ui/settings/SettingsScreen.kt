@@ -395,6 +395,7 @@ private fun AccountPage(
     val hasEmail = demo || runCatching {
         !com.fariin.app.Fb.auth.currentUser?.email.isNullOrEmpty()
     }.getOrDefault(false)
+    androidx.compose.runtime.SideEffect { SettingsIndex.hasPassword = hasEmail }
     val barScroll = rememberScrollState()
     // Delete Account lives in the ••• menu at the top (iOS SettingsView toolbar Menu), not as a red row
     // beside Log out, where one could be taken for the other (owner 2026-11-08).
