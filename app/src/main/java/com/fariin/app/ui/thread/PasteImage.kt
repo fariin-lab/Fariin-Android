@@ -4,6 +4,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.net.Uri
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.text.contextmenu.builder.item
 import androidx.compose.foundation.text.contextmenu.data.TextContextMenuItem
 import androidx.compose.foundation.text.contextmenu.data.TextContextMenuKeys
 import androidx.compose.foundation.text.contextmenu.modifier.appendTextContextMenuComponents
@@ -77,12 +78,12 @@ internal fun Modifier.pastePictures(context: Context, onPictures: ((List<Pair<Ur
         .appendTextContextMenuComponents {
             // Builders run before the filters, so this clears what an earlier menu kept.
             fieldPaste[0] = null
-            if (PasteImage.hasPicture(context)) item(PastePictureKey, "Paste") {
+            if (PasteImage.hasPicture(context)) item(PastePictureKey, "Paste") { session ->
                 val pics = PasteImage.pictures(context, MediaRules.MEDIA_PER_PICK)
                 val words = fieldPaste[0]
-                if (pics != null) { close(); onPictures(pics) }
-                else if (words != null) words.onClick.invoke(this)
-                else close()
+                if (pics != null) { session.close(); onPictures(pics) }
+                else if (words != null) words.onClick.invoke(session)
+                else session.close()
             }
         }
         .onPreviewKeyEvent { e ->
