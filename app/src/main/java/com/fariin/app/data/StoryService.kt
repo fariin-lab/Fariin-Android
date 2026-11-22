@@ -209,7 +209,7 @@ class StoryService(
         /** A group story (iOS StoryAudienceTag.group): the group is the audience and [choice] is unused. */
         group: GroupStoryPost? = null,
     ): String {
-        if (me.isEmpty()) throw PostRefused("Not signed in.")
+        if (me.isEmpty()) throw PostRefused("You're logged out, so this story wasn't posted. Log in and try again.")
         // The phone's half is over: My Story says "Uploading…" from here (iOS markSending).
         StoryOutbox.sending.value = true
         try {
@@ -341,9 +341,9 @@ class StoryService(
         myFriends: StoryListDoc,
         hiddenFrom: Set<String>,
     ) {
-        if (me.isEmpty() || story.authorUid != me) throw PostRefused("This isn't your story.")
-        if (story.groupId != null) throw PostRefused("A group story's viewers are its group.")
-        if (story.oneTime) throw PostRefused("A one-time story's viewers can't be changed.")
+        if (me.isEmpty() || story.authorUid != me) throw PostRefused("You're not signed in to the account that posted this story.")
+        if (story.groupId != null) throw PostRefused("A group story is always seen by the group's members.")
+        if (story.oneTime) throw PostRefused("A one-time story keeps the audience it was sent to.")
         val custom = choice == StoryAudienceChoice.CUSTOM
         if (custom && lists.isEmpty()) throw PostRefused(EMPTY_AUDIENCE)
         val contacts = StoryRules.contacts(me, convs)
