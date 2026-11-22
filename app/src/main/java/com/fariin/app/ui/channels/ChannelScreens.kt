@@ -630,7 +630,7 @@ private fun TypePage(cid: String, title: String, onDone: () -> Unit) {
         linkNote = "Checking…"
         delay(400)
         val r = ChannelService.checkLink(cid, link)
-        linkNote = r ?: "fariin.com/$link is available."
+        linkNote = r ?: "This link is free to use."
         linkOk = r == null
     }
     Column(Modifier.fillMaxSize().background(c.bgSecondary).statusBarsPadding().imePadding().navigationBarsPadding()) {

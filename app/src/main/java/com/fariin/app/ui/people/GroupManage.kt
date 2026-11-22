@@ -1076,7 +1076,7 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
         note = "Checking…"
         delay(400)
         val r = com.fariin.app.channel.ChannelService.checkLink(cid, typed)
-        note = r ?: "fariin.com/$typed is available."
+        note = r ?: "This link is free to use."
         ok = r == null
     }
     fun explainSave() {

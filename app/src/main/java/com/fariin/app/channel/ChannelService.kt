@@ -211,12 +211,19 @@ object ChannelService {
             val d = call("checkGroupUsername", mapOf("cid" to cid, "username" to name))
             when {
                 d?.get("available") == true -> null
-                d?.get("code") == "USERNAME_TAKEN" -> "This link is already taken."
+                d?.get("code") == "USERNAME_TAKEN" -> "Another group or person already has this link."
                 // A locked name, word for word (owner 2026-11-12, iOS f94ddfaef): the server's own sentence.
                 d?.get("code") == "USERNAME_RESERVED" -> "Sorry, this username is invalid."
-                else -> (d?.get("message") as? String)?.takeIf { it.isNotBlank() } ?: "Sorry, this username is invalid."
+                else -> linkWords(d?.get("reason") as? String) ?: "This link can't be used."
             }
-        } catch (_: Exception) { "Couldn't check the link. Try again." }
+        } catch (_: Exception) { "Couldn't check right now. Try again." }
+    }
+
+    /** iOS GroupDirectory.groupWords: the server's username words as link words. */
+    private fun linkWords(s: String?): String? {
+        if (s.isNullOrEmpty() || s == "taken") return null
+        if (s == "Sorry, this username is invalid.") return s
+        return s.replace("Usernames", "Links").replace("username", "link")
     }
 
     /** Public under `name`, or private with "" (setGroupUsername). */

@@ -275,7 +275,7 @@ object ChannelRules {
     fun linkProblem(name: String): String? {
         if (name.isEmpty()) return null
         if (!Regex("^[A-Za-z0-9_]+$").matches(name)) return "Use only letters, numbers and _."
-        if (name.length < LINK_MIN) return "A link must have at least $LINK_MIN characters."
+        if (name.length < LINK_MIN) return "A link needs at least $LINK_MIN characters."
         if (name.length > LINK_MAX) return "A link can have at most $LINK_MAX characters."
         if (name.first() == '_' || name.last() == '_') return "A link can't start or end with _."
         if (!name.first().isLetter()) return "A link must start with a letter."
