@@ -211,7 +211,9 @@ fun CallScreen(
     // The header and the capsule fade: in over 0.2 s, away over 0.28 s, ease in and out (iOS).
     val shown by animateFloatAsState(if (chrome.visible) 1f else 0f,
         tween(if (chrome.visible) 200 else 280, easing = EaseInOut), label = "chrome")
-    val local = ui.localVideo
+    // A weak-signal pause stops my camera but leaves cameraOn set (my choice): draw my video only while
+    // it really runs (iOS localPreviewLive), so a paused camera shows my photo and no Flip.
+    val local = ui.localVideo.takeIf { ui.myVideoLive }
     // iOS showsTile: in a connected video call the card stays put, with my photo in it while my camera
     // is off (it used to vanish, found testing alice <-> bobby on two emulators).
     val connectedVideo = (s.video || ui.remoteCameraOn) && (s.phase == CallPhase.ACTIVE || s.phase == CallPhase.RECONNECTING)
@@ -236,10 +238,11 @@ fun CallScreen(
     LaunchedEffect(shareLayout) { if (shareLayout) chrome.visible = false }
     LaunchedEffect(shareLayout) { if (shareLayout) swapped = false }
     val mineBig = !shareLayout && !shareFull && (localFull || (swapped && cardUp))
+    val myPhoto = rememberMyPhoto()
     Box(Modifier.fillMaxSize().background(Backdrop)) {
         // One renderer for the big picture whoever is in it, so a swap only moves the tracks.
         val bigTrack = if (shareLayout || shareFull) null else if (mineBig) local else remoteVideo
-        val bigDemo = !shareLayout && !shareFull && bigTrack == null && (if (mineBig) swapped else demoVideo)
+        val bigDemo = !shareLayout && !shareFull && bigTrack == null && (if (mineBig) swapped && ui.localVideo == null else demoVideo)
         when {
             bigTrack != null -> VideoView(bigTrack, mirror = mineBig && ui.frontCamera, modifier = Modifier.fillMaxSize())
             bigDemo && mineBig -> DemoVideo(Modifier.fillMaxSize(), MeA, MeB)
@@ -257,10 +260,10 @@ fun CallScreen(
         // first, then the photo, then the controls (index 0), as on iOS.
         if (showFace) Box(Modifier.fillMaxSize().semantics { isTraversalGroup = true; traversalIndex = -1f },
             contentAlignment = Alignment.Center) {
-            Avatar(ui.peerPhoto, 180.dp, Modifier
+            Avatar(if (mineBig && swapped) myPhoto else ui.peerPhoto, 180.dp, Modifier
                 .shadow(26.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.45f), spotColor = Color.Black.copy(alpha = 0.45f))
                 .border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape)
-                .semantics { contentDescription = ui.peerName })
+                .semantics { contentDescription = if (mineBig && swapped) "You" else ui.peerName })
         }
         // No answer (owner 2026-11-22, iOS 61435b6f8): the name and the reason sit under the centred
         // photo, 22 under its edge; the bottom half starts at the screen's middle, the photo's centre.
@@ -289,7 +292,7 @@ fun CallScreen(
                 } else null,
                 // My camera is the big view (the tile was tapped): the flip glyph lived only on the
                 // small card, so it moves to the header's free circle (owner 2026-11-12, iOS 7191449d2).
-                right = if (mineBig && local != null && ui.cameraOn) {
+                right = if (mineBig && local != null && ui.myVideoLive) {
                     { HeaderCircle(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_flip_camera), "Flip camera", 48.dp) { chrome.touch(); onFlip() } }
                 } else null,
                 // The No answer sheet carries the name and the reason itself (design B, owner 2026-11-09).
@@ -323,7 +326,7 @@ fun CallScreen(
         if (cardUp && !shareLayout) {
             SelfCard(grown = chrome.visible, chrome = chrome,
                 label = if (swapped) ui.peerName else "Your video",
-                onFlip = if (!swapped && local != null && ui.cameraOn) { { chrome.touch(); onFlip() } } else null,
+                onFlip = if (!swapped && local != null && ui.myVideoLive) { { chrome.touch(); onFlip() } } else null,
                 // TWO STAGES (iOS tapTile): the small card only brings the controls back; a tap on the
                 // grown card swaps the pictures, and the next one swaps them back.
                 onTap = { if (chrome.visible) swapped = !swapped; chrome.touch() },
@@ -399,7 +402,7 @@ private fun ShareLayout(ui: CallUi, chrome: Chrome, remote: VideoTrack?, local: 
                 // Them: their camera, never their screen (it rides on that same track). Me: my live camera.
                 ShareTile(remote.takeIf { ui.remoteCameraOn && !ui.remoteScreen }, false, ui.peerName, ui.peerPhoto, tileH) { chrome.tap(true) }
                 // My own tile showed the grey person (owner 2026-11-08, screen share): my profile photo.
-                ShareTile(local.takeIf { ui.cameraOn && !ui.sharing }, ui.frontCamera, "You", rememberMyPhoto(), tileH) { chrome.tap(true) }
+                ShareTile(local.takeIf { ui.myVideoLive && !ui.sharing }, ui.frontCamera, "You", rememberMyPhoto(), tileH) { chrome.tap(true) }
             }
         }
     }
@@ -864,7 +867,7 @@ fun PipScreen(ui: CallUi) {
     BoxWithConstraints(Modifier.fillMaxSize().background(PipFill), contentAlignment = Alignment.Center) {
         val roomy = maxHeight >= 180.dp
         val remote = ui.remoteVideo.takeIf { ui.remoteCameraOn }
-        val local = ui.localVideo.takeIf { ui.cameraOn }
+        val local = ui.localVideo.takeIf { ui.myVideoLive }
         val demoThem = ui.peerUid == "demo" && ui.remoteCameraOn
         val bigIsMine = remote == null && !demoThem && local != null
         when {
