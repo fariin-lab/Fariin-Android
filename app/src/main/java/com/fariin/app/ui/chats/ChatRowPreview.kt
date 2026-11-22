@@ -56,6 +56,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -65,15 +66,21 @@ import kotlinx.coroutines.flow.stateIn
  * and whether it is video. One shared reading of the call state for every row, not one per row.
  */
 internal object LiveCallRow {
-    data class Live(val peer: String, val video: Boolean)
+    /** [groupCid]: a group call I am in (iOS LiveGroupCallCid); then [peer] is empty. */
+    data class Live(val peer: String, val video: Boolean, val groupCid: String? = null)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    val live: StateFlow<Live?> = CallManager.ui.map { u ->
+    // iOS liveCallCid: the 1:1 call first, else the group call I am in the room of.
+    val live: StateFlow<Live?> = CallManager.ui.combine(com.fariin.app.call.GroupCall.ui) { u, g ->
         val up = u.status.phase == CallPhase.ACTIVE || u.status.phase == CallPhase.RECONNECTING ||
             (u.status.phase == CallPhase.OUTGOING && u.status.isCaller)
-        if (up && u.peerUid.isNotEmpty()) Live(u.peerUid, u.status.video) else null
+        if (up && u.peerUid.isNotEmpty()) Live(u.peerUid, u.status.video)
+        // iOS draws a group call's row with the 1:1 call's kind, so always "Voice call".
+        else g.cid?.takeIf { g.joined && g.linkRoom == null }?.let { Live("", false, it) }
     }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(), null)
 
-    fun cid(me: String, live: Live?): String? = live?.let { if (me.isEmpty()) null else CallWire.convId(me, it.peer) }
+    fun cid(me: String, live: Live?): String? = live?.let {
+        it.groupCid ?: if (me.isEmpty()) null else CallWire.convId(me, it.peer)
+    }
 }
 
 /** iOS `.green`: what "live" reads as across the app (the call bar, the answer button). */
