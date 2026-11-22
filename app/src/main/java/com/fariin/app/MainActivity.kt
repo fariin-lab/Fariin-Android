@@ -149,6 +149,8 @@ class MainActivity : ComponentActivity() {
                     val initial = remember { auth.currentUser?.uid }
                     val uid by auth.uid.collectAsState(initial = initial)
                     val me = uid
+                    // A new signed-in account gets its own update check (iOS AppUpdateGate).
+                    LaunchedEffect(me) { if (me != null) com.fariin.app.system.AppUpdateGate.onForeground(applicationContext) }
                     // Sign-out: the keys leave memory (the stored key stays, keys are per uid).
                     LaunchedEffect(me) {
                         if (me == null) {
