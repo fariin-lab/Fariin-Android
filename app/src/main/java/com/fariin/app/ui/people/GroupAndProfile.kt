@@ -342,9 +342,9 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
             Spacer(Modifier.height(8.dp))
             Spacer(Modifier.height(8.dp))
             SettingsSection {
-                Field(first, "First name") { first = it.take(40) }
+                Field(first, "First name") { first = com.fariin.app.data.MessageLength.takeChars(it, 40) }
                 Box(Modifier.fillMaxWidth().padding(start = 16.dp).height(0.5.dp).background(c.separator))
-                Field(last, "Last name") { last = it.take(40) }
+                Field(last, "Last name") { last = com.fariin.app.data.MessageLength.takeChars(it, 40) }
             }
             // iOS Bio: one paragraph, 140 characters, the count shown for the last 20.
             val left = com.fariin.app.data.ProfileWrites.BIO_CHARS - about.length

@@ -62,6 +62,18 @@ object MessageLength {
         return out
     }
 
+    /**
+     * The first [n] characters as a person sees them (iOS String.prefix counts an emoji as one).
+     * Plain take(n) counts UTF-16 units and can cut an emoji in half.
+     */
+    fun takeChars(s: String, n: Int): String {
+        if (s.length <= n) return s
+        val bi = java.text.BreakIterator.getCharacterInstance()
+        bi.setText(s)
+        val end = bi.next(n)
+        return if (end == java.text.BreakIterator.DONE) s else s.substring(0, end)
+    }
+
     /** The nearest character boundary at or before [i] (never inside a surrogate pair or an emoji). */
     private fun boundaryAtOrBefore(s: String, i: Int): Int {
         if (i <= 0) return 0
