@@ -52,10 +52,23 @@ class VideoPrep(
             // 100 MB cap still sends.
             val seconds = (cut?.let { it.last - it.first } ?: lengthMs(context, uri)) / 1000.0
             val first = minOf(bitrateFor(shortSide), fitBitrate(seconds))
-            val ok = transcode(context, uri, out, cut, shortSide = shortSide, bitrate = first, onProgress = onProgress) ||
+            var ok = transcode(context, uri, out, cut, shortSide = shortSide, bitrate = first, onProgress = onProgress) ||
                 (cut != null && transcode(context, uri, out, cut, resize = false, onProgress = onProgress))
-            val file = if (ok && out.length() > 0) out else copyOriginal(context, uri, out) ?: return null
-            if (file.length() > MAX_BYTES) { file.delete(); return null }
+            // iOS sendVideo: an HD export over the cap is made again at standard quality.
+            if (ok && shortSide >= 1080 && out.length() > MAX_BYTES) {
+                out.delete()
+                ok = transcode(context, uri, out, cut, shortSide = 540, bitrate = minOf(bitrateFor(540), fitBitrate(seconds)), onProgress = onProgress)
+            }
+            val file = if (ok && out.length() > 0) out else copyOriginal(context, uri, out)
+            if (file == null) {
+                com.fariin.app.ui.components.Snack.show("Couldn't process this video. Try a shorter clip or a different video.", long = true)
+                return null
+            }
+            if (file.length() > MAX_BYTES) {
+                // iOS words: the size it reached, since weight fails and not length.
+                com.fariin.app.ui.components.Snack.show("This video is ${file.length() / 1_048_576} MB, and the most that can be sent is ${MAX_BYTES / 1_048_576} MB. Try a shorter clip.", long = true)
+                file.delete(); return null
+            }
             return describe(file)
         }
 
