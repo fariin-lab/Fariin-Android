@@ -182,7 +182,15 @@ private fun VerifyScanner(onClose: () -> Unit, onCode: (String) -> Unit) {
     val ctx = LocalContext.current
     val owner = LocalLifecycleOwner.current
     var hasCamera by remember { mutableStateOf(ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }
-    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> hasCamera = ok; if (!ok) onClose() }
+    // A refusal closes the scanner and says why; refused for good, with a way to Settings.
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        hasCamera = ok
+        if (!ok) {
+            com.fariin.app.ui.components.PermissionDenied.explain(ctx, Manifest.permission.CAMERA,
+                "Fariin needs the camera to scan their code.")
+            onClose()
+        }
+    }
     androidx.compose.runtime.LaunchedEffect(Unit) { if (!hasCamera) ask.launch(Manifest.permission.CAMERA) }
     var done by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
