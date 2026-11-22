@@ -45,6 +45,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.text.font.FontFamily
@@ -3228,6 +3234,43 @@ private fun Composer(
     DisposableEffect(Unit) { onDispose { onRecording(false) } }
     var locked by remember { mutableStateOf(false) }
     androidx.compose.runtime.SideEffect { lockedNow[0] = locked }
+    // The words in the field go out: Send's tap, its effect menu and a hardware Return all come here.
+    // onSend holds slow mode and the group's rules, and saves an open edit instead of sending.
+    fun sendTyped() {
+        val t = draft
+        val ids = mentions?.let { com.fariin.app.data.MentionRules.forSend(t.trim(), picks, it.members) } ?: emptyList()
+        // The runs measured on the words as sent (trimmed), as iOS does.
+        val fmt = if (boldable) com.fariin.app.data.TextFormat.serialize(
+            com.fariin.app.data.TextFormat.forTrimmed(boxBold, t), t.trim().length,
+            com.fariin.app.data.TextFormat.linksForTrimmed(boxLinks, t)) else null
+        picks = emptyMap()
+        boxBold = emptyList()
+        boxLinks = emptyList()
+        draft = ""
+        onSend(t, ids, fmt)
+    }
+    // iOS pressesBegan: a HARDWARE keyboard's Return (or Cmd+Return) sends; Shift or Alt+Return
+    // makes a new line. The on-screen keyboard's Enter is never caught here: it types a new line.
+    // Nothing to send (or the mic is busy): the key types a new line as always. The key's release
+    // after a send is swallowed too, so the field never sees half a press.
+    val returnSent = remember { booleanArrayOf(false) }
+    fun hardwareReturn(e: androidx.compose.ui.input.key.KeyEvent): Boolean {
+        val k = e.key
+        if (k != androidx.compose.ui.input.key.Key.Enter && k != androidx.compose.ui.input.key.Key.NumPadEnter) return false
+        if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyUp) return returnSent[0].also { returnSent[0] = false }
+        if (e.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) return false
+        val n = e.nativeKeyEvent
+        val hardware = n.deviceId != android.view.KeyCharacterMap.VIRTUAL_KEYBOARD &&
+            (n.flags and android.view.KeyEvent.FLAG_SOFT_KEYBOARD) == 0 && n.device?.isVirtual == false
+        if (!hardware || n.repeatCount > 0) return false
+        if (e.isShiftPressed || e.isAltPressed || e.isCtrlPressed) return false
+        // An input method still composing a word owns the key.
+        if (boxValue.composition != null) return false
+        if ((draft.isBlank() && !sendsWithoutText) || recording || locked) return false
+        sendTyped()
+        returnSent[0] = true
+        return true
+    }
     var reviewing by remember { mutableStateOf(false) }
     var review by remember { mutableStateOf<VoiceRecorder.Review?>(null) }
     // A note kept from the last visit comes back paused, ready to listen to, send, bin or carry on.
@@ -3485,6 +3528,8 @@ private fun Composer(
                             // the keyboard rose over the panel and both stood stacked (owner 2026-11-08). Close it.
                             .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial); if (emojiOpen) { panelToKeys = true; emojiOpen = false } } }
                             .boldMenuItem(boldable, hasSelection = { !boxValue.selection.collapsed }, onBold = boldBar.onBold, onLink = openLink)
+                            // A hardware keyboard's Return sends (iOS); the on-screen one is untouched.
+                            .onPreviewKeyEvent { hardwareReturn(it) }
                             // Screen readers: the placeholder is a separate Text, so the field names itself.
                             .semantics { contentDescription = placeholder },
                     )
@@ -3527,19 +3572,7 @@ private fun Composer(
                 }
             } else if ((draft.isNotBlank() || sendsWithoutText) && !recording) {
                 var fxMenu by remember { mutableStateOf(false) }
-                val sendNow = {
-                        val t = draft
-                        val ids = mentions?.let { com.fariin.app.data.MentionRules.forSend(t.trim(), picks, it.members) } ?: emptyList()
-                        // The runs measured on the words as sent (trimmed), as iOS does.
-                        val fmt = if (boldable) com.fariin.app.data.TextFormat.serialize(
-                            com.fariin.app.data.TextFormat.forTrimmed(boxBold, t), t.trim().length,
-                            com.fariin.app.data.TextFormat.linksForTrimmed(boxLinks, t)) else null
-                        picks = emptyMap()
-                        boxBold = emptyList()
-                        boxLinks = emptyList()
-                        draft = ""
-                        onSend(t, ids, fmt)
-                }
+                val sendNow = { sendTyped() }
                 val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
                 val holdable = effects != com.fariin.app.data.PlusStore.State.OFF && prefill == null && draft.isNotBlank()
                 Box(
