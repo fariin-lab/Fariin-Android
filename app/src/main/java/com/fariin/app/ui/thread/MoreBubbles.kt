@@ -140,7 +140,7 @@ internal fun FileBody(m: Message, isMe: Boolean, width: Dp, meta: @Composable ()
             Column(Modifier.weight(1f)) {
                 Text(name, fontSize = 16.sp, color = ink, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.MiddleEllipsis)
                 Text(
-                    (m.fileSize?.let { MediaRules.fileSizeLabel(it) } ?: "") + if (busy) " · Uploading" else "",
+                    MediaRules.bubbleSizeLabel(m.fileSize) + if (busy) " · Uploading" else "",
                     fontSize = 13.sp, color = sub,
                 )
             }

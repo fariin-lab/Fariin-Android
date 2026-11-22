@@ -129,12 +129,41 @@ object MediaRules {
         return base.take(120).ifEmpty { "File" }
     }
 
-    /** "245 KB", "3.4 MB", "980 bytes" (iOS ByteCountFormatter .file, decimal units). */
-    fun fileSizeLabel(bytes: Long): String = when {
-        bytes < 1000 -> "$bytes bytes"
-        bytes < 1_000_000 -> "${(bytes / 1000.0).roundToInt()} KB"
-        bytes < 1_000_000_000 -> String.format(java.util.Locale.US, "%.1f MB", bytes / 1_000_000.0)
-        else -> String.format(java.util.Locale.US, "%.1f GB", bytes / 1_000_000_000.0)
+    /**
+     * iOS ByteCountFormatter (.file): decimal units, "Zero KB", "1 byte", "980 bytes", "245 KB",
+     * "3.4 MB", "1.23 GB". KB has no decimals, MB one, GB two; a trailing ".0" is dropped ("2 MB"),
+     * and a size that rounds up to the next unit is said in that unit (999,999 bytes is "1 MB").
+     * Used where iOS uses ByteCountFormatter: storage pages, backups, the phone-full sheet.
+     */
+    fun fileSizeLabel(bytes: Long): String {
+        if (bytes == 0L) return "Zero KB"
+        if (bytes < 0) return "-" + fileSizeLabel(-bytes)
+        if (bytes == 1L) return "1 byte"
+        if (bytes < 1000) return "$bytes bytes"
+        val units = listOf("KB" to 0, "MB" to 1, "GB" to 2, "TB" to 2)
+        var value = bytes / 1000.0
+        for ((i, u) in units.withIndex()) {
+            val scale = 10.0.pow(u.second)
+            val rounded = Math.round(value * scale) / scale
+            if (rounded < 1000 || i == units.size - 1) {
+                val text = String.format(java.util.Locale.US, "%." + u.second + "f", rounded)
+                    .let { if (it.contains('.')) it.trimEnd('0').trimEnd('.') else it }
+                return "$text ${u.first}"
+            }
+            value /= 1000.0
+        }
+        return "$bytes bytes"
+    }
+
+    /**
+     * The file bubble's size (iOS MessageRowModelBuilder fileBody): binary units, "512 B", "245 KB",
+     * "3.4 MB", always one decimal for MB; "Document" when the size is not known.
+     */
+    fun bubbleSizeLabel(bytes: Long?): String = when {
+        bytes == null -> "Document"
+        bytes >= 1_048_576 -> String.format(java.util.Locale.US, "%.1f MB", bytes / 1_048_576.0)
+        bytes >= 1024 -> String.format(java.util.Locale.US, "%.0f KB", bytes / 1024.0)
+        else -> "$bytes B"
     }
 
     /** The short type word in the file icon: "PDF", "DOCX", ... or "FILE". */
