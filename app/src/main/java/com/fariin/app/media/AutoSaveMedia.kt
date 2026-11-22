@@ -85,6 +85,10 @@ object AutoSaveMedia {
         if (!savesMedia(app, cid) || GallerySaver.needsPermission(app)) return
         if (sentAtMs != null && sentAtMs < maxOf(sinceMs(app, cid), System.currentTimeMillis() - WINDOW_MS)) return
         if (!claim(app, id)) return
+        // Nothing from a message request nobody has accepted (iOS isUnansweredRequest). The id stays
+        // claimed, so accepting later does not pour the old pictures in.
+        val conv = com.fariin.app.data.CryptoHub.listedConversation(cid)
+        if (conv != null && !conv.isGroup && conv.startedBy.isNotEmpty() && !conv.accepted) return
         scope.launch {
             if (!GallerySaver.save(app, file, isVideo)) release(app, id)
         }
