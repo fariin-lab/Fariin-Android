@@ -45,9 +45,7 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.fariin.app.MainActivity
 import com.fariin.app.R
-import com.fariin.app.data.ChatList
 import com.fariin.app.data.Conversation
-import com.fariin.app.data.MessageDecryptor
 import com.fariin.app.local.AtRest
 import com.fariin.app.push.FariinMessagingService
 import com.fariin.app.push.NotifStore
@@ -62,26 +60,24 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
  * The home screen widget "Recent" (Kulan-iOS FariinWidget ChatsWidget, with Android's own header):
- * "Fariin" and the number of unread chats, a New Chat button, and the newest chats (4 on the large
- * size, 2 on the small one) with face, name, a short line and the unread count.
+ * "Fariin", a New Chat button, and the newest chats (4 on the large size, 2 on the small one) with
+ * face and name. Names only, as on iOS: no message words and no unread counts on the home screen.
  *
  * Fed only by what the app already has: the live chat list (MainActivity's chat list hook, the
  * same place ChatShortcuts is published) and a chat push that arrives while the list is not live.
- * The words are opened by the chat list's own decryptor on a background thread, never by the
- * widget's drawing. Kept on disk sealed with the Keystore key ([AtRest]) so a reboot still draws
- * it; with App Lock on nothing but the count is written. No polling: the widget redraws only when
+ * Kept on disk sealed with the Keystore key ([AtRest]) so a reboot still draws it; with App Lock
+ * on nothing but the lock is written. No polling: the widget redraws only when
  * the app has something new (updatePeriodMillis 0).
  */
 object FariinWidget {
-    private const val FILE = "widget-v1.bin"
-    private const val PREFS_PUSH = "fariin_push"
-    private const val PREVIEW_KEY = "notif.preview"
+    private const val FILE = "widget-v2.bin"
+    /** The older file also kept message words and counts: deleted on first load. */
+    private const val OLD_FILE = "widget-v1.bin"
     private const val PAUSE_MS = 1_500L
     private const val FACE_PX = 96
 
@@ -89,42 +85,17 @@ object FariinWidget {
     private var pending: Job? = null
     @Volatile private var current: HomeWidgetRules.Snapshot? = null
     @Volatile private var lastShown: String? = null
-    /** The last live list, to redraw at once when App Lock or Message Preview is switched. */
-    @Volatile private var lastInput: Triple<String, List<Conversation>, MessageDecryptor>? = null
+    /** The last live list, to redraw at once when App Lock is switched. */
+    @Volatile private var lastInput: Pair<String, List<Conversation>>? = null
     private val faces = LruCache<String, Bitmap>(12)
     private val listeners = mutableListOf<SharedPreferences.OnSharedPreferenceChangeListener>()
 
-    /**
-     * Message Preview, as the notifications follow it. Not set on this phone (a new sign-in clears
-     * it) means not known yet: the words stay hidden until [adoptPreview] reads the account's choice,
-     * since the server may already send this account plain notifications.
-     */
-    fun showPreview(c: Context): Boolean {
-        val p = c.applicationContext.getSharedPreferences(PREFS_PUSH, Context.MODE_PRIVATE)
-        return p.contains(PREVIEW_KEY) && p.getBoolean(PREVIEW_KEY, true)
-    }
-
-    @Volatile private var adoptedFor: String? = null
-
-    /** The account's Message Preview (users.notifPreview, absent = on), kept on this phone once, the
-     *  way the Notifications page adopts it. Writing it redraws the widget (the prefs listener). */
-    private suspend fun adoptPreview(app: Context, me: String) {
-        val p = app.getSharedPreferences(PREFS_PUSH, Context.MODE_PRIVATE)
-        if (p.contains(PREVIEW_KEY) || adoptedFor == me) return
-        val doc = runCatching { com.fariin.app.Fb.db.collection("users").document(me).get().await() }.getOrNull() ?: return
-        adoptedFor = me
-        val v = doc.getBoolean("notifPreview") ?: true
-        if (!p.contains(PREVIEW_KEY) && com.fariin.app.Fb.auth.currentUser?.uid == me) p.edit().putBoolean(PREVIEW_KEY, v).apply()
-    }
-
-    /** App start: follow the two switches the widget obeys (Settings writes them, we only listen). */
+    /** App start: follow the App Lock switch (Settings writes it, we only listen). */
     fun init(c: Context) {
         val app = c.applicationContext
         if (listeners.isNotEmpty()) return
-        val onPush = SharedPreferences.OnSharedPreferenceChangeListener { _, k -> if (k == PREVIEW_KEY) switched(app) }
         val onLock = SharedPreferences.OnSharedPreferenceChangeListener { _, k -> if (k == AppLock.ENABLED) switched(app) }
-        listeners += onPush; listeners += onLock   // held here: the prefs keep only weak references
-        app.getSharedPreferences(PREFS_PUSH, Context.MODE_PRIVATE).registerOnSharedPreferenceChangeListener(onPush)
+        listeners += onLock   // held here: the prefs keep only weak references
         app.getSharedPreferences("fariin_security", Context.MODE_PRIVATE).registerOnSharedPreferenceChangeListener(onLock)
         // Dark mode switched: the cards follow on their own, but text colours are fixed when the
         // widget is drawn (before Android 12), so draw it again.
@@ -143,15 +114,15 @@ object FariinWidget {
     fun placedNow(c: Context) {
         val input = lastInput ?: return
         lastShown = null
-        publish(c.applicationContext, input.first, input.second, input.third, pause = 0)
+        publish(c.applicationContext, input.first, input.second, pause = 0)
     }
 
     private fun switched(app: Context) {
         val input = lastInput
-        if (input != null) { publish(app, input.first, input.second, input.third, pause = 0); return }
+        if (input != null) { publish(app, input.first, input.second, pause = 0); return }
         // No live list in this run: hide on disk what the switch now hides, then redraw.
         scope.launch {
-            val s = HomeWidgetRules.masked(load(app), AppLock.enabled(app), showPreview(app))
+            val s = HomeWidgetRules.masked(load(app), AppLock.enabled(app))
             save(app, s); redraw(app, s, force = true)
         }
     }
@@ -161,20 +132,15 @@ object FariinWidget {
     } catch (_: Exception) { false }
 
     /** The chat list changed (MainActivity). A short pause first: the list moves in small steps. */
-    fun publish(c: Context, me: String, convs: List<Conversation>, decryptor: MessageDecryptor, pause: Long = PAUSE_MS) {
+    fun publish(c: Context, me: String, convs: List<Conversation>, pause: Long = PAUSE_MS) {
         val app = c.applicationContext
-        lastInput = Triple(me, convs, decryptor)
+        lastInput = me to convs
         pending?.cancel()
         pending = scope.launch {
             delay(pause)
             if (!placed(app)) return@launch   // no widget on the home screen: no work at all
-            adoptPreview(app, me)
             val now = System.currentTimeMillis()
-            val s = withContext(Dispatchers.Default) {
-                HomeWidgetRules.snapshot(convs, me, AppLock.enabled(app), showPreview(app), now) { conv ->
-                    ChatList.previewLine(conv, me, decryptor) { null }
-                }
-            }
+            val s = withContext(Dispatchers.Default) { HomeWidgetRules.snapshot(convs, me, AppLock.enabled(app), now) }
             current = s
             if (HomeWidgetRules.signature(s) == lastShown) return@launch
             // Faces first, so the redraw has them (saved for the notifications too).
@@ -186,13 +152,12 @@ object FariinWidget {
         }
     }
 
-    /** A chat push was shown (FariinMessagingService). [line] = the words the notification showed, or null. */
-    fun notePush(c: Context, cid: String, line: String?) {
+    /** A chat push was shown (FariinMessagingService): that chat moves to the top. No words, no count. */
+    fun notePush(c: Context, cid: String) {
         val app = c.applicationContext
         scope.launch {
             if (!placed(app)) return@launch
-            val s = HomeWidgetRules.bump(load(app), cid, line, showPreview(app) && !AppLock.enabled(app), System.currentTimeMillis())
-                ?: return@launch
+            val s = HomeWidgetRules.bump(load(app), cid, System.currentTimeMillis()) ?: return@launch
             current = s
             save(app, s)
             redraw(app, s)
@@ -204,10 +169,9 @@ object FariinWidget {
         val app = c.applicationContext
         pending?.cancel()
         lastInput = null
-        adoptedFor = null
         current = HomeWidgetRules.Snapshot()
         faces.evictAll()
-        runCatching { File(app.noBackupFilesDir, FILE).delete() }
+        runCatching { File(app.noBackupFilesDir, FILE).delete(); File(app.noBackupFilesDir, OLD_FILE).delete() }
         scope.launch { redraw(app, HomeWidgetRules.Snapshot(), force = true) }
     }
 
@@ -221,6 +185,7 @@ object FariinWidget {
 
     internal fun load(app: Context): HomeWidgetRules.Snapshot {
         current?.let { return it }
+        runCatching { File(app.noBackupFilesDir, OLD_FILE).delete() }
         val f = File(app.noBackupFilesDir, FILE)
         val s = try {
             if (!f.exists()) HomeWidgetRules.Snapshot()
@@ -249,7 +214,7 @@ object FariinWidget {
         // Signed in but nothing kept yet (placed before the app opened its list): ask to open it.
         val known = if (!kept.signedIn && com.fariin.app.Fb.auth.currentUser != null)
             HomeWidgetRules.Snapshot(signedIn = true, locked = true) else kept
-        val s = HomeWidgetRules.masked(known, AppLock.enabled(app), showPreview(app))
+        val s = HomeWidgetRules.masked(known, AppLock.enabled(app))
         return Shown(s, s.rows.map { face(app, it.photo, it.group) })
     }
 
@@ -352,10 +317,6 @@ private fun Header(s: HomeWidgetRules.Snapshot, compact: Boolean, open: Action, 
             Image(ImageProvider(R.mipmap.ic_launcher_round), contentDescription = null, modifier = GlanceModifier.size(22.dp))
             Spacer(GlanceModifier.width(8.dp))
             Text("Fariin", style = TextStyle(color = label, fontSize = 16.sp, fontWeight = FontWeight.Bold), maxLines = 1)
-            if (s.signedIn && s.unreadChats > 0) {
-                Spacer(GlanceModifier.width(6.dp))
-                Badge(HomeWidgetRules.countLabel(s.unreadChats), muted = false)
-            }
         }
         if (s.signedIn) {
             Box(GlanceModifier.size(if (compact) 32.dp else 36.dp).background(ImageProvider(R.drawable.widget_button)).clickable(newChat),
@@ -371,24 +332,7 @@ private fun ChatRow(r: HomeWidgetRules.Row, compact: Boolean, face: Bitmap?, ope
     Row(GlanceModifier.fillMaxWidth().padding(vertical = if (compact) 3.dp else 4.dp).clickable(open), verticalAlignment = Alignment.CenterVertically) {
         if (face != null) Image(ImageProvider(face), contentDescription = null, modifier = GlanceModifier.size(if (compact) 32.dp else 40.dp))
         Spacer(GlanceModifier.width(10.dp))
-        Column(GlanceModifier.defaultWeight()) {
-            Text(r.name, style = TextStyle(color = label, fontSize = 14.sp, fontWeight = FontWeight.Medium), maxLines = 1)
-            r.preview?.takeIf { it.isNotEmpty() }?.let {
-                Text(it, style = TextStyle(color = secondary, fontSize = 13.sp), maxLines = 1)
-            }
-        }
-        when {
-            r.unread > 0 -> { Spacer(GlanceModifier.width(8.dp)); Badge(HomeWidgetRules.countLabel(r.unread), r.muted) }
-            r.markedUnread -> { Spacer(GlanceModifier.width(8.dp)); Box(GlanceModifier.size(10.dp).background(ImageProvider(
-                if (r.muted) R.drawable.widget_badge_muted else R.drawable.widget_badge))) {} }
-        }
-    }
-}
-
-@Composable
-private fun Badge(text: String, muted: Boolean) {
-    Box(GlanceModifier.height(20.dp).background(ImageProvider(if (muted) R.drawable.widget_badge_muted else R.drawable.widget_badge))
-        .padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
-        Text(text, style = TextStyle(color = ColorProvider(if (muted) R.color.widget_on_badge_muted else R.color.widget_on_badge), fontSize = 12.sp, fontWeight = FontWeight.Bold), maxLines = 1)
+        Text(r.name, style = TextStyle(color = label, fontSize = 14.sp, fontWeight = FontWeight.Medium), maxLines = 1,
+            modifier = GlanceModifier.defaultWeight())
     }
 }

@@ -86,7 +86,6 @@ import com.fariin.app.push.Push
 import com.fariin.app.push.PushRouter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
@@ -402,12 +401,12 @@ class MainActivity : ComponentActivity() {
             com.fariin.app.data.ChatHistoryPreloader.refresh(list, me, openChat)
         } }
         DisposableEffect(me) { onDispose { com.fariin.app.data.ChatHistoryPreloader.stopAll() } }
-        // The home screen widget: the same list, its previews opened again once a missing key lands.
+        // The home screen widget: the same list (names and faces only).
         // Collected here, not keyed on the drawn state: the list keeps changing while the app is
         // behind the home screen, where nothing is drawn.
-        LaunchedEffect(vm, decryptor) {
-            vm.state.combine(com.fariin.app.data.CryptoHub.keysEpoch) { s, _ -> s }.collect { s ->
-                if (!s.loading) com.fariin.app.system.FariinWidget.publish(applicationContext, me, s.chats, decryptor)
+        LaunchedEffect(vm) {
+            vm.state.collect { s ->
+                if (!s.loading) com.fariin.app.system.FariinWidget.publish(applicationContext, me, s.chats)
             }
         }
         val entry by nav.currentBackStackEntryAsState()

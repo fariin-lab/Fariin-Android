@@ -26,65 +26,39 @@ class HomeWidgetRulesTest {
         assertEquals(listOf("b", "d"), HomeWidgetRules.choose(convs, me, HomeWidgetRules.SMALL_ROWS).map { it.id })
     }
 
-    @Test fun unreadChatsCountsChatsNotMessages() {
-        val convs = listOf(chat("a", 1.0, unread = 5), chat("b", 2.0, unread = 1), chat("c", 3.0),
-            chat("blk", 4.0, unread = 3).copy(blockedBy = mapOf(me to true)))
-        assertEquals(2, HomeWidgetRules.unreadChats(convs, me))
+    @Test fun snapshotKeepsNamesOnly() {
+        val s = HomeWidgetRules.snapshot(listOf(chat("a", 2.0, unread = 3, name = "Bobby")), me, locked = false, now = 100)
+        assertTrue(s.signedIn); assertFalse(s.locked)
+        assertEquals("a", s.rows[0].cid); assertEquals("Bobby", s.rows[0].name)
+        // No message words and no counts in what is kept on disk.
+        val kept = HomeWidgetRules.encode(s)
+        assertFalse(kept.contains("pv")); assertFalse(kept.contains("\"u\""))
     }
 
-    @Test fun snapshotKeepsNamesWordsAndCounts() {
-        val s = HomeWidgetRules.snapshot(listOf(chat("a", 2.0, unread = 3, name = "Bobby")), me, locked = false,
-            showPreview = true, now = 100) { "hello\nthere" }
-        assertFalse(s.locked)
-        assertEquals(1, s.unreadChats)
-        assertEquals("Bobby", s.rows[0].name)
-        assertEquals("hello there", s.rows[0].preview)
-        assertEquals(3, s.rows[0].unread)
+    @Test fun appLockKeepsOnlyTheLock() {
+        val s = HomeWidgetRules.snapshot(listOf(chat("a", 2.0, unread = 3)), me, locked = true, now = 1)
+        assertTrue(s.locked); assertTrue(s.rows.isEmpty())
     }
 
-    @Test fun appLockKeepsOnlyTheCountAndNeverOpensWords() {
-        var opened = 0
-        val s = HomeWidgetRules.snapshot(listOf(chat("a", 2.0, unread = 3)), me, locked = true, showPreview = true, now = 1) { opened++; "secret" }
-        assertTrue(s.locked)
-        assertTrue(s.rows.isEmpty())
-        assertEquals(1, s.unreadChats)
-        assertEquals(0, opened)
-        assertFalse(HomeWidgetRules.encode(s).contains("Name"))
+    @Test fun maskHidesWhatTheLockNowHides() {
+        val s = HomeWidgetRules.snapshot(listOf(chat("a", 2.0)), me, false, 1)
+        val locked = HomeWidgetRules.masked(s, locked = true)
+        assertTrue(locked.locked); assertTrue(locked.rows.isEmpty())
+        assertEquals(s, HomeWidgetRules.masked(s, false))
+        val keptLocked = HomeWidgetRules.snapshot(listOf(chat("a", 2.0)), me, true, 1)
+        assertTrue(HomeWidgetRules.masked(keptLocked, false).rows.isEmpty())
+        assertEquals(HomeWidgetRules.Snapshot(), HomeWidgetRules.masked(s.copy(signedIn = false), false))
     }
 
-    @Test fun previewOffKeepsNamesDropsWords() {
-        var opened = 0
-        val s = HomeWidgetRules.snapshot(listOf(chat("a", 2.0)), me, locked = false, showPreview = false, now = 1) { opened++; "secret" }
-        assertEquals("Name a", s.rows[0].name)
-        assertNull(s.rows[0].preview)
-        assertEquals(0, opened)
-    }
-
-    @Test fun maskHidesWhatASwitchNowHides() {
-        val s = HomeWidgetRules.snapshot(listOf(chat("a", 2.0, unread = 1)), me, false, true, 1) { "words" }
-        val locked = HomeWidgetRules.masked(s, locked = true, showPreview = true)
-        assertTrue(locked.locked); assertTrue(locked.rows.isEmpty()); assertEquals(1, locked.unreadChats)
-        assertNull(HomeWidgetRules.masked(s, locked = false, showPreview = false).rows[0].preview)
-        assertEquals(s, HomeWidgetRules.masked(s, false, true))
-        // Written while locked: turning the lock off later does not bring back what was never kept.
-        val keptLocked = s.copy(locked = true, rows = emptyList())
-        assertTrue(HomeWidgetRules.masked(keptLocked, false, true).rows.isEmpty())
-        assertEquals(HomeWidgetRules.Snapshot(), HomeWidgetRules.masked(s.copy(signedIn = false), false, true))
-    }
-
-    @Test fun pushBumpsTheRowUnlessTheLiveListJustWrote() {
-        val s = HomeWidgetRules.snapshot(listOf(chat("a", 5.0), chat("b", 2.0, unread = 1)), me, false, true, now = 1_000) { "old" }
-        assertNull(HomeWidgetRules.bump(s, "b", "new", true, now = 1_000 + 2_000))   // live list already has it
+    @Test fun pushMovesTheChatUpUnlessTheLiveListJustWrote() {
+        val s = HomeWidgetRules.snapshot(listOf(chat("a", 5.0), chat("b", 2.0)), me, false, now = 1_000)
+        assertNull(HomeWidgetRules.bump(s, "b", now = 1_000 + 2_000))   // live list already has it
         val later = 1_000 + HomeWidgetRules.LIVE_GRACE_MS + 1
-        val b = HomeWidgetRules.bump(s, "b", "new", true, later)!!
+        val b = HomeWidgetRules.bump(s, "b", later)!!
         assertEquals(listOf("b", "a"), b.rows.map { it.cid })
-        assertEquals(2, b.rows[0].unread)
-        assertEquals("new", b.rows[0].preview)
-        assertEquals(1, b.unreadChats)   // b was already unread
-        val a = HomeWidgetRules.bump(b, "a", null, showPreview = false, now = later)!!
-        assertEquals(2, a.unreadChats)
-        assertNull(a.rows[0].preview)
-        assertNull(HomeWidgetRules.bump(b, "zzz", "x", true, later))
+        assertNull(HomeWidgetRules.bump(b, "b", later))     // already first
+        assertNull(HomeWidgetRules.bump(b, "zzz", later))   // not on the widget
+        assertNull(HomeWidgetRules.bump(HomeWidgetRules.snapshot(emptyList(), me, true, 1), "a", later))
     }
 
     @Test fun rowsFillTheHeight() {
@@ -96,11 +70,9 @@ class HomeWidgetRulesTest {
         assertEquals(2, HomeWidgetRules.rowsFor(40f))
     }
 
-    @Test fun codecRoundTripsAndLabelCaps() {
-        val s = HomeWidgetRules.snapshot(listOf(chat("a", 5.0, unread = 120).copy(convType = "group", title = "Trip")), me, false, true, 42) { "hi" }
+    @Test fun codecRoundTrips() {
+        val s = HomeWidgetRules.snapshot(listOf(chat("a", 5.0, unread = 120).copy(convType = "group", title = "Trip")), me, false, 42)
         assertEquals(s, HomeWidgetRules.decode(HomeWidgetRules.encode(s)))
         assertEquals(HomeWidgetRules.Snapshot(), HomeWidgetRules.decode("not json"))
-        assertEquals("99+", HomeWidgetRules.countLabel(120))
-        assertEquals("7", HomeWidgetRules.countLabel(7))
     }
 }

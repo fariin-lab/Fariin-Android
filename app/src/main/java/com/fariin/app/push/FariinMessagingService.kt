@@ -142,7 +142,7 @@ class FariinMessagingService : FirebaseMessagingService() {
             if (route is InAppRoute.InApp) {
                 InAppNotify.present(c, route)
                 val s = (decision as NotifDecision.Show).spec
-                if (s.opensChat) com.fariin.app.system.FariinWidget.notePush(c, s.key, if (s.plain) null else s.line)
+                if (s.opensChat) com.fariin.app.system.FariinWidget.notePush(c, s.key)
             } else if (decision is NotifDecision.Show) {
                 val s = decision.spec
                 val photos = if (s.plain) listOf(null, null) else kotlinx.coroutines.coroutineScope {
@@ -153,8 +153,8 @@ class FariinMessagingService : FirebaseMessagingService() {
                 // (a channel post's count lives in the app, as on iOS; in front the list syncs it).
                 AppBadge.notePush(c, me, s.opensChat && !s.isChannel && !com.fariin.app.AppLifecycle.inFront)
                 NotificationPoster.post(c, s, photos[0], photos[1], me)
-                // The home screen widget: one more unread for that chat (words only as the notification showed them).
-                if (s.opensChat) com.fariin.app.system.FariinWidget.notePush(c, s.key, if (s.plain) null else s.line)
+                // The home screen widget: that chat moves to the top (names only, no words or counts).
+                if (s.opensChat) com.fariin.app.system.FariinWidget.notePush(c, s.key)
             }
             ack.await()
         }
