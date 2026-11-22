@@ -84,8 +84,8 @@ object PostQuoteRules {
     fun isEmpty(a: PostQuotesAnswer): Boolean = a.items.isEmpty() && a.hidden <= 0
 
     /** The words on the post's card: its text, else what kind of post it is. */
-    fun cardText(text: String?, type: String?, isAlbum: Boolean): String =
-        PollRules.cardWords(text.orEmpty(), kindName(type, isAlbum)).ifEmpty { kindName(type, isAlbum) }
+    fun cardText(text: String?, type: String?, isAlbum: Boolean, fileName: String? = null): String =
+        PollRules.cardWords(text.orEmpty(), kindName(type, isAlbum, fileName)).ifEmpty { kindName(type, isAlbum, fileName) }
 
     /** A row's eye count: "1 view", "1.2K views". */
     fun viewsLine(n: Int): String = compact(n) + if (n == 1) " view" else " views"
@@ -93,9 +93,15 @@ object PostQuoteRules {
     /** The locked row under the list; null when every quote is public. */
     fun hiddenLine(n: Int): String? = if (n <= 0) null else grouped(n) + " in private chats and groups"
 
-    /** The post at the top, when it has no words. */
-    fun kindName(type: String?, isAlbum: Boolean): String = when {
+    /** Audio file endings, as iOS MusicFiles.extensions. */
+    private val audioExtensions = setOf("mp3", "m4a", "aac", "wav", "flac", "ogg", "oga", "opus", "aif", "aiff", "caf", "m4b")
+
+    /** The post at the top, when it has no words. A song file says its name, "Song" without one
+     *  (iOS 2026-11-21). iOS also says "Playlist · N songs"; Android has no playlist posts yet. */
+    fun kindName(type: String?, isAlbum: Boolean, fileName: String? = null): String = when {
         isAlbum || type == "album" -> "Album"
+        type == "file" && fileName.orEmpty().substringAfterLast('.', "").lowercase() in audioExtensions ->
+            fileName.orEmpty().substringBeforeLast('.').ifEmpty { "Song" }
         type == "image" -> "Photo"
         type == "video" -> "Video"
         else -> "Post"

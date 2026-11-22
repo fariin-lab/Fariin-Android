@@ -301,7 +301,7 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
     val card = SourceCard(
         title = title.ifEmpty { "Channel" }, photoUrl = photoUrl, verified = verified,
         // A text post's words as its bubble shows them; a picture's or video's caption.
-        text = PostQuoteRules.cardText(if (m.mediaKind == null) m.bodyText else m.text, m.type, album),
+        text = PostQuoteRules.cardText(if (m.mediaKind == null) m.bodyText else m.text, m.type, album, m.fileName),
         kindIcon = when {
             album -> ImageVector.cachedVector(R.drawable.ic_sf_photo_on_rectangle)
             m.type == "image" -> ImageVector.cachedVector(R.drawable.ic_sf_photo)
