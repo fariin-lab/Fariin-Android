@@ -2614,6 +2614,14 @@ private fun MediaRow(
                 // it cannot stream), by the Videos auto-download rule or a tap; play only once it is here.
                 val clip = rememberGatedFile(if (ready && !busy && !streams) m.videoUrl else null, m.enc, com.fariin.app.media.AutoDownload.Kind.VIDEOS, m.fileSize)
                 val here = ready && clip.state == Fetch.DONE
+                // Settings > Chats > Save to Photos (iOS AutoSaveToPhotos.consider): a received clip that
+                // came down here goes to the gallery too, not only once it is opened. The viewer's id, so once.
+                val clipSaveCtx = LocalContext.current
+                LaunchedEffect(clip.file) {
+                    val f = clip.file ?: return@LaunchedEffect
+                    if (!isMe && !m.viewOnce && threadCid.isNotEmpty())
+                        com.fariin.app.media.AutoSaveMedia.save(clipSaveCtx, "$threadCid/${m.id}/v/${m.id}", f, isVideo = true, sentAtMs = m.createdAtMillis)
+                }
                 PictureBox(m, local ?: m.thumbUrl, if (local != null) null else m.thumbEnc, maxW, RectangleShape, captionW, busy || !ready, onOpen = {
                     m.videoUrl?.let { onView(Viewing.Video(it, m.enc, msg = m)) }
                 }, overlay = { VideoOverlay(m, here && !busy, showDuration = here || busy || !ready || clip.state == Fetch.FAILED); capsule() },
