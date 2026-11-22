@@ -3250,7 +3250,10 @@ private fun Composer(
     androidx.compose.runtime.SideEffect { lockedNow[0] = locked }
     // The words in the field go out: Send's tap, its effect menu and a hardware Return all come here.
     // onSend holds slow mode and the group's rules, and saves an open edit instead of sending.
+    // When the last typed message went (uptime ms): the mic refuses a touch for 2 s after (iOS lastSendAt).
+    val lastSendAt = remember { longArrayOf(-com.fariin.app.media.VoiceRecordRules.AFTER_SEND_MS) }
     fun sendTyped() {
+        lastSendAt[0] = android.os.SystemClock.uptimeMillis()
         val t = draft
         val ids = mentions?.let { com.fariin.app.data.MentionRules.forSend(t.trim(), picks, it.members) } ?: emptyList()
         // The runs measured on the words as sent (trimmed), as iOS does.
@@ -3667,6 +3670,8 @@ private fun Composer(
                                 val down = awaitFirstDown()
                                 val downAt = down.uptimeMillis
                                 var upAt = downAt
+                                // Not in the moment after a send: a double tap on Send lands on the mic (iOS).
+                                if (com.fariin.app.media.VoiceRecordRules.refusedAfterSend(downAt, lastSendAt[0])) return@awaitEachGesture
                                 if (callBlocks()) return@awaitEachGesture
                                 // A member an admin restricted from voice cannot start one (iOS): the
                                 // rules refuse the send, so the whole recording was for nothing.

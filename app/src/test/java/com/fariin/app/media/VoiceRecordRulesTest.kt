@@ -46,6 +46,12 @@ class VoiceRecordRulesTest {
         assertEquals("Can't record voice messages during a call.", VoiceRecordRules.CALL_BLOCKED)
     }
 
+    @Test fun noMicRightAfterASend() {
+        assertTrue(VoiceRecordRules.refusedAfterSend(nowMs = 11_000, lastSendMs = 10_000))
+        assertFalse(VoiceRecordRules.refusedAfterSend(nowMs = 12_000, lastSendMs = 10_000))
+        assertFalse(VoiceRecordRules.refusedAfterSend(nowMs = 500, lastSendMs = -VoiceRecordRules.AFTER_SEND_MS))
+    }
+
     @Test fun lockedSendNeedsASecond() {
         assertFalse(VoiceRecordRules.canSendLocked(0.6))
         assertTrue(VoiceRecordRules.canSendLocked(1.0))

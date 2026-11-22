@@ -56,6 +56,11 @@ object VoiceRecordRules {
 
     const val CALL_BLOCKED = "Can't record voice messages during a call."
 
+    /** iOS refuses the mic for 2 s after a send: a double tap on Send lands on the mic that replaced it. */
+    const val AFTER_SEND_MS = 2_000L
+
+    fun refusedAfterSend(nowMs: Long, lastSendMs: Long): Boolean = nowMs - lastSendMs in 0 until AFTER_SEND_MS
+
     /** Send from the locked bar: under a second there is nothing to send (iOS sendRecording). */
     fun canSendLocked(elapsed: Double): Boolean = elapsed >= MediaRules.VOICE_MIN_SECONDS
 
