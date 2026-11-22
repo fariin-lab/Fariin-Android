@@ -2217,9 +2217,12 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
         }
         // Stickers and GIFs (StickerGifBubbles.kt): the name, Forwarded and the quote above them.
         if (m.isSticker || m.isGif) {
+            // iOS bareMedia: no name over a sticker or GIF with no caption, quoted post, reply or Forwarded line.
+            val named = showSender && g.first && (m.deleted || m.forwarded || m.replyTo != null ||
+                (m.isGif && (m.text.isNotEmpty() || m.quoteId?.let { com.fariin.app.data.QuoteRules.isQid(it) } == true)))
             val header: @Composable () -> Unit = {
                 Column {
-                    if (showSender && g.first) SenderLine(ui, m.authorId)
+                    if (named) SenderLine(ui, m.authorId)
                     if (m.forwarded) ForwardedTag(m, isMe, ui.channel != null, ui.cid)
                     m.replyTo?.let { ReplyQuote(it, ui, isMe) }
                 }
@@ -2246,7 +2249,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                         }
                     }
                 })
-                GifRow(m, shape, fill, (showSender && g.first) || m.forwarded || m.replyTo != null, header,
+                GifRow(m, shape, fill, named || m.forwarded || m.replyTo != null, header,
                     onOpen = m.imageUrl?.let { u -> { onView(Viewing.Photo(u, m.enc, msg = m)) } },
                     wideDp = if (words != null) minOf(maxW.value, if (ui.channel != null) maxW.value else 350f) else null, words = words) {
                     Meta(m, tick, isMe, is24h, onMedia = true)
@@ -2478,7 +2481,11 @@ private fun MediaRow(
 ) {
     val c = Fariin.colors
     val caption = m.text.takeIf { it.isNotEmpty() }
-    val header = (showSender && g.first) || m.forwarded || m.replyTo != null
+    // iOS bareMedia: no name band over a picture with no caption, quoted post, reply or Forwarded
+    // line (the avatar beside the run says who sent it). With words on it, the name stays.
+    val named = showSender && g.first && (m.deleted || caption != null || m.forwarded || m.replyTo != null ||
+        m.quoteId?.let { com.fariin.app.data.QuoteRules.isQid(it) } == true)
+    val header = named || m.forwarded || m.replyTo != null
     val ink = if (isMe) Color.White else c.label
     // A rough caption width, only so a short picture does not squeeze a caption (iOS minW).
     // A quoted post's card under the picture (iOS aa4c290ec, 2026-11-21): the bubble takes the full
@@ -2507,7 +2514,7 @@ private fun MediaRow(
         content = {
         if (header) {
             Column(Modifier.layoutId("head").padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 4.dp)) {
-                if (showSender && g.first) {
+                if (named) {
                     SenderLine(ui, m.authorId)
                 }
                 if (m.forwarded) ForwardedTag(m, isMe, ui.channel != null, ui.cid)
