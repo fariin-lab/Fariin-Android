@@ -175,7 +175,8 @@ object Forwarder {
         data class Album(val parts: List<MediaSender.AlbumPart>) : Payload()
         data class Voice(val bytes: ByteArray) : Payload()
         data class Doc(val prep: FilePrep) : Payload()
-        data class Sticker(val ref: com.fariin.app.data.StickerRef) : Payload()
+        /** [png]: a sticker somebody made, opened from the source chat (iOS StickerSend.minePNG). */
+        data class Sticker(val ref: com.fariin.app.data.StickerRef, val png: ByteArray? = null) : Payload()
         data class Gif(val gif: com.fariin.app.data.StickerGifRules.Gif) : Payload()
         object Text : Payload()
     }
@@ -193,7 +194,11 @@ object Forwarder {
         }
         // A sticker or a GIF has no words and no media kind: it went down the text path, sent
         // nothing, and still said "Forwarded" (overnight test 2026-11-10). Each goes as itself.
-        if (m.isSticker) return Payload.Sticker(com.fariin.app.data.StickerRef(m.stickerPack!!, m.stickerId!!, m.stickerEmoji.orEmpty(), m.stickerAnimated))
+        if (m.isSticker) {
+            val ref = com.fariin.app.data.StickerRef(m.stickerPack!!, m.stickerId!!, m.stickerEmoji.orEmpty(), m.stickerAnimated)
+            // One somebody made is a sealed PNG of this chat: opened here, sealed again for the target.
+            return Payload.Sticker(ref, if (ref.packId == com.fariin.app.data.StickerFavorites.MINE) bytes(m.imageUrl, m.enc) else null)
+        }
         if (m.isGif) return Payload.Gif(com.fariin.app.data.StickerGifRules.Gif(m.id, m.imageUrl!!, m.width ?: 200.0, m.height ?: 200.0))
         return when (m.mediaKind) {
             // iOS forwards a photo at .high quality.
@@ -243,10 +248,13 @@ object Forwarder {
             Payload.Text -> ThreadRepository(target, me, crypto, CoroutineScope(SupervisorJob() + Dispatchers.IO))
                 .sendForwardedText(m.text, fwd, fwdChannelJson, source,
                     fmt = com.fariin.app.data.TextFormat.serialize(m.bold, m.text.length, m.links), clientId = clientId, quote = m.quoteId)
-            is Payload.Sticker -> ThreadRepository(target, me, crypto, CoroutineScope(SupervisorJob() + Dispatchers.IO))
-                .sendSticker((payload as Payload.Sticker).ref, null)
+            // Written now with the forward's flag, source and clientId (iOS StickerSend.forward / sendGif):
+            // the composer's send ran in the background, said nothing on a failure and lost "Forwarded".
+            is Payload.Sticker -> (payload as Payload.Sticker).let { p ->
+                ThreadRepository(target, me, crypto, CoroutineScope(SupervisorJob() + Dispatchers.IO))
+                    .forwardSticker(p.ref, p.png, m.width, m.height, fwd, source, clientId) }
             is Payload.Gif -> ThreadRepository(target, me, crypto, CoroutineScope(SupervisorJob() + Dispatchers.IO))
-                .sendGif((payload as Payload.Gif).gif, null)
+                .forwardGif((payload as Payload.Gif).gif, m.text, fwd, source, clientId)
         }
     }
 }

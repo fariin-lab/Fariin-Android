@@ -1624,28 +1624,65 @@ class ThreadRepository(
             stickerAnimated = false, localPath = file.absolutePath,
         )
         rebuild()
-        runMediaSend(clientId) {
-            val members = if (Wire.isGroupCid(cid)) freshMembers() else null
-            val fields = hashMapOf<String, Any>(
-                "type" to "sticker", "stickerPack" to s.packId, "stickerId" to s.stickerId,
-                "animated" to false, "width" to w, "height" to h, "uploading" to true,
-            )
-            if (s.emoji.isNotEmpty()) fields["emoji"] = s.emoji
-            writeLooseMessage(fields, StickerGifRules.OLD_BUILD_MARKER, StickerGifRules.stickerLabel(s.emoji), ref, clientId, tap)
-            val msg = convRef.collection("messages").document(clientId)
-            try {
-                val (cipher, meta) = if (members != null) crypto.sealBytesForGroup(png, members, cid) else crypto.encryptBytes(cid, png)
-                val sref = com.google.firebase.storage.FirebaseStorage.getInstance().reference
-                    .child(com.fariin.app.media.MediaRules.imagePath(cid, clientId))
-                sref.putBytes(cipher, com.google.firebase.storage.StorageMetadata.Builder()
-                    .setContentType("application/octet-stream").build()).await()
-                val url = sref.downloadUrl.await().toString()
-                msg.update(mapOf("imageUrl" to url, "enc" to meta.asMap(), "uploading" to false)).await()
-            } catch (e: Exception) {
-                runCatching { msg.delete().await() }
-                throw e
-            }
+        runMediaSend(clientId) { writeMineSticker(s, png, w, h, ref, clientId, tap) }
+    }
+
+    /** The write of a sticker I made: the message with `uploading`, then its sealed PNG attached. */
+    private suspend fun writeMineSticker(s: StickerRef, png: ByteArray, w: Double, h: Double, ref: Message.ReplyRef?,
+                                         clientId: String, tap: Double, forwarded: Boolean = false,
+                                         fwdSource: Message.ForwardSource? = null) {
+        val members = if (Wire.isGroupCid(cid)) freshMembers() else null
+        val fields = hashMapOf<String, Any>(
+            "type" to "sticker", "stickerPack" to s.packId, "stickerId" to s.stickerId,
+            "animated" to false, "width" to w, "height" to h, "uploading" to true,
+        )
+        if (s.emoji.isNotEmpty()) fields["emoji"] = s.emoji
+        writeLooseMessage(fields, StickerGifRules.OLD_BUILD_MARKER, StickerGifRules.stickerLabel(s.emoji), ref, clientId, tap,
+            forwarded, fwdSource)
+        val msg = convRef.collection("messages").document(clientId)
+        try {
+            val (cipher, meta) = if (members != null) crypto.sealBytesForGroup(png, members, cid) else crypto.encryptBytes(cid, png)
+            val sref = com.google.firebase.storage.FirebaseStorage.getInstance().reference
+                .child(com.fariin.app.media.MediaRules.imagePath(cid, clientId))
+            sref.putBytes(cipher, com.google.firebase.storage.StorageMetadata.Builder()
+                .setContentType("application/octet-stream").build()).await()
+            val url = sref.downloadUrl.await().toString()
+            msg.update(mapOf("imageUrl" to url, "enc" to meta.asMap(), "uploading" to false)).await()
+        } catch (e: Exception) {
+            runCatching { msg.delete().await() }
+            throw e
         }
+    }
+
+    /**
+     * A forwarded sticker (iOS StickerSend.forward): a built-in one again by name; one somebody made
+     * as its PNG, opened from the source chat by the caller and sealed again for this one. Written
+     * now, a failure thrown to the forward sheet. The chat list says "😂 Sticker" with no mark (iOS).
+     */
+    suspend fun forwardSticker(s: StickerRef, png: ByteArray?, width: Double?, height: Double?, forwarded: Boolean,
+                               fwdSource: Message.ForwardSource?, clientId: String) {
+        val tap = System.currentTimeMillis().toDouble()
+        if (s.packId == StickerFavorites.MINE) {
+            writeMineSticker(s, png ?: error("sticker not readable"), width ?: 512.0, height ?: 512.0, null, clientId, tap, forwarded, fwdSource)
+            return
+        }
+        val fields = hashMapOf<String, Any>(
+            "type" to "sticker", "stickerPack" to s.packId, "stickerId" to s.stickerId,
+            "animated" to s.animated, "width" to 512.0, "height" to 512.0,
+            "imageUrl" to StickerGifRules.stickerPublicUrl(s.packId, s.stickerId),
+        )
+        if (s.emoji.isNotEmpty()) fields["emoji"] = s.emoji
+        writeLooseMessage(fields, s.emoji.ifEmpty { StickerGifRules.OLD_BUILD_MARKER },
+            StickerGifRules.stickerLabel(s.emoji), null, clientId, tap, forwarded, fwdSource)
+    }
+
+    /** A forwarded GIF (iOS forwardMessage): its caption sealed along, "↪ GIF" in the list when forwarded. */
+    suspend fun forwardGif(g: StickerGifRules.Gif, caption: String, forwarded: Boolean,
+                           fwdSource: Message.ForwardSource?, clientId: String) {
+        val t = caption.trim()
+        writeLooseMessage(hashMapOf("type" to "gif", "imageUrl" to g.url, "width" to g.width, "height" to g.height),
+            t.ifEmpty { null }, ForwardMark.markIf(forwarded, "GIF"), null, clientId, System.currentTimeMillis().toDouble(),
+            forwarded, fwdSource)
     }
 
     /** iOS ChatService.sendGif: the public GIPHY link and its size, `text` empty; the list says "GIF". */
@@ -1673,7 +1710,8 @@ class ThreadRepository(
     /** One message whose words are not the preview (a sticker, a GIF): the fields, the sealed
      *  [text] (null = empty), the clear [label] for the chat list, the badge for everyone else. */
     private suspend fun writeLooseMessage(fields: Map<String, Any>, text: String?, label: String,
-                                          reply: Message.ReplyRef?, clientId: String, clientTs: Double) {
+                                          reply: Message.ReplyRef?, clientId: String, clientTs: Double,
+                                          forwarded: Boolean = false, fwdSource: Message.ForwardSource? = null) {
         val members = if (Wire.isGroupCid(cid)) freshMembers() else null
         val other = Wire.otherUid(cid, me)
         if (members == null) seedDirect(other)
@@ -1684,6 +1722,15 @@ class ThreadRepository(
         msg["clientTs"] = clientTs
         msg["clientId"] = clientId
         if (reply != null) msg["replyTo"] = replyMap(reply, seal(reply.text, members))
+        if (forwarded) {
+            msg["forwarded"] = true
+            // Where it came from (iOS sealedForwardSource): a plain group's seal hands the JSON back,
+            // so the map goes. A failed seal drops only this.
+            fwdSource?.let { src ->
+                val j = src.json()
+                runCatching { seal(j, members) }.getOrNull()?.let { msg["fwd"] = if (it == j) src.map() else it }
+            }
+        }
         val batch = db.batch()
         batch.set(convRef.collection("messages").document(clientId), msg)
         val conv = hashMapOf<String, Any>("lastMessage" to label, "lastSender" to me, "updatedAt" to FieldValue.serverTimestamp())
