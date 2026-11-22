@@ -109,6 +109,11 @@ private class LinkState(roomId: String, key: String, name: String, approval: Boo
     var approval by mutableStateOf(approval)
     var video by mutableStateOf(video)
     val url: String? get() = CallLinkKey.ofText(key)?.url(video ?: true)
+    // iOS M-095: what the server last confirmed, and whether a save is on its way, per setting.
+    var approvalSaved: Boolean? = null
+    var approvalSaving = false
+    var videoSaved: Boolean? = null
+    var videoSaving = false
 }
 
 /**
@@ -230,20 +235,41 @@ private fun LinkBody(s: LinkState, onUsed: () -> Unit, onDeleted: (() -> Unit)?,
             HorizontalDivider(thickness = 0.5.dp, color = c.separator)
             SettingRow("Call Name", s.name.ifEmpty { "None" }) { editing = true }
             SwitchRow("Admin Approval", "New people wait until you let them in", s.approval) { on ->
-                val before = s.approval
+                // iOS M-095: one save at a time, the newest value sent when it ends; a refusal goes
+                // back to what the server last confirmed. Two quick flips no longer race.
+                if (s.approvalSaved == null) s.approvalSaved = s.approval
                 s.approval = on
-                scope.launch {
-                    try { CallLinks.setApproval(s.roomId, on) } catch (_: Exception) { s.approval = before; error = "Couldn't change setting" }
+                if (!s.approvalSaving) {
+                    s.approvalSaving = true
+                    scope.launch {
+                        while (true) {
+                            val want = s.approval ?: break
+                            if (want == s.approvalSaved) break
+                            try { CallLinks.setApproval(s.roomId, want); s.approvalSaved = want }
+                            catch (_: Exception) { s.approval = s.approvalSaved ?: want; error = "Couldn't change setting"; break }
+                        }
+                        s.approvalSaving = false
+                    }
                 }
             }
             Text("Call Type", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = c.accent,
                 modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp))
             for ((label, video) in listOf("Video" to true, "Voice" to false)) {
                 Row(Modifier.fillMaxWidth().clickable(enabled = s.video != null && s.video != video) {
-                    val before = s.video
+                    // The same one-at-a-time save as Admin Approval (iOS M-095).
+                    if (s.videoSaved == null) s.videoSaved = s.video
                     s.video = video
-                    scope.launch {
-                        try { CallLinks.setVideo(s.roomId, video) } catch (_: Exception) { s.video = before; error = "Couldn't change setting" }
+                    if (!s.videoSaving) {
+                        s.videoSaving = true
+                        scope.launch {
+                            while (true) {
+                                val want = s.video ?: break
+                                if (want == s.videoSaved) break
+                                try { CallLinks.setVideo(s.roomId, want); s.videoSaved = want }
+                                catch (_: Exception) { s.video = s.videoSaved ?: want; error = "Couldn't change setting"; break }
+                            }
+                            s.videoSaving = false
+                        }
                     }
                 }.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(selected = s.video == video, onClick = null, modifier = Modifier.padding(8.dp))
