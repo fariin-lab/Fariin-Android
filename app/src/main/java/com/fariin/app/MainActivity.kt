@@ -307,6 +307,8 @@ class MainActivity : ComponentActivity() {
         // Disappearing messages that ran out while the app was closed leave the phone's history.
         LaunchedEffect(me) {
             com.fariin.app.local.LocalDb.purgeExpired(me)
+            // Once per account: opened view-once rows filed before the stub rule lose their content.
+            com.fariin.app.local.LocalDb.stubSpentOnceRows(me)
             com.fariin.app.local.LocalDb.warmSummaries(me)
             com.fariin.app.local.InboxSync.kick(ctx, me)
             // Phase 4's one-time copy of every private chat (off until config/features.historyPull):
