@@ -409,7 +409,13 @@ class MainActivity : ComponentActivity() {
             }
         }
         val entry by nav.currentBackStackEntryAsState()
-        val openCid = if (entry?.destination?.route == THREAD_ROUTE) entry?.arguments?.getString("cid") else null
+        // The official chat is its own page: it counts as the open chat too, so its notes give no
+        // banner while it is read and its notifications go when it opens (iOS activeChatId).
+        val openCid = when (entry?.destination?.route) {
+            THREAD_ROUTE -> entry?.arguments?.getString("cid")
+            "official" -> com.fariin.app.data.OfficialChannel.CID
+            else -> null
+        }
         LaunchedEffect(openCid) {
             openChat = openCid
             PushRouter.activeChatId = if (started) openCid else null
