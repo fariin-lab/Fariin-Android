@@ -47,17 +47,23 @@ object StoryTaps {
     }
 
     /**
-     * Where the area sits on a card [cw] x [ch] (iOS tapRect). The fractions are of the file; this
-     * viewer shows the file fitted in the card, so with an [StoryTapTarget.aspect] they are laid over
-     * the fitted picture. Without one they are laid over the card, as iOS does for older stories.
-     * [floor]: the smallest side a finger can still hit (iOS 24 pt).
+     * Where the area sits on a card [cw] x [ch] (iOS tapRect). The fractions are of the file, so
+     * with an [StoryTapTarget.aspect] they are laid over the picture as this viewer draws it:
+     * a photo (StoryPhoto) as tall as the card or taller fills it and is cropped, a shorter one is
+     * shown whole; a [video] is always shown whole. Without an aspect they are laid over the card,
+     * as iOS does for older stories. [floor]: the smallest side a finger can still hit (iOS 24 pt).
      */
-    fun rect(t: StoryTapTarget, cw: Float, ch: Float, floor: Float): Rect {
+    fun rect(t: StoryTapTarget, cw: Float, ch: Float, floor: Float, video: Boolean = false): Rect {
         var left = 0f; var top = 0f
         var mw = cw; var mh = ch
         val a = t.aspect
         if (a != null && a > 0 && cw > 1 && ch > 1) {
-            if (cw / a <= ch) { mw = cw; mh = (cw / a).toFloat() } else { mw = (ch * a).toFloat(); mh = ch }
+            // StoryPhoto's rule: height over width at least the card's (less 0.02) = Crop, else Fit.
+            val fills = !video && 1.0 / a >= ch / cw - 0.02
+            val fit = minOf(cw.toDouble(), ch * a)
+            val fill = maxOf(cw.toDouble(), ch * a)
+            mw = (if (fills) fill else fit).toFloat()
+            mh = (mw / a).toFloat()
             left = (cw - mw) / 2; top = (ch - mh) / 2
         }
         val w = maxOf(floor, (mw * t.w).toFloat())

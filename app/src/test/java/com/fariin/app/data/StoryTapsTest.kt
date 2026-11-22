@@ -32,12 +32,32 @@ class StoryTapsTest {
         assertEquals(720f, r.width, 0.01f)
     }
 
-    @Test fun aspectLaysOverTheFittedPicture() {
-        // A 1:2.5 file fitted in a 1000 x 2000 card: 800 x 2000, 100 in from each side.
+    @Test fun aTallerPhotoFillsTheCardAndIsCropped() {
+        // A 1:2.5 file (a text story) in a 1000 x 2000 card: drawn 1000 x 2500, 250 off the top.
         val r = StoryTaps.rect(StoryTaps.from(raw)!!, 1000f, 2000f, 24f)
         assertEquals(500f, r.center.x, 0.01f)
+        assertEquals(0.6f * 2500f - 250f, r.center.y, 0.01f)
+        assertEquals(720f, r.width, 0.01f)
+        assertEquals(250f, r.height, 0.01f)
+    }
+
+    @Test fun aTallerVideoIsShownWhole() {
+        // The same shape as a video: fitted, 800 x 2000, 100 in from each side.
+        val r = StoryTaps.rect(StoryTaps.from(raw)!!, 1000f, 2000f, 24f, video = true)
+        assertEquals(500f, r.center.x, 0.01f)
+        assertEquals(1200f, r.center.y, 0.01f)
         assertEquals(576f, r.width, 0.01f)
         assertEquals(200f, r.height, 0.01f)
+    }
+
+    @Test fun aLandscapePhotoIsShownWholeAcrossTheMiddle() {
+        // A 4:3 file in a 1000 x 2000 card: 1000 x 750, 625 down from the top.
+        val t = StoryTaps.from(raw + ("aspect" to 4.0 / 3.0))!!
+        val r = StoryTaps.rect(t, 1000f, 2000f, 24f)
+        assertEquals(500f, r.center.x, 0.01f)
+        assertEquals(625f + 0.6f * 750f, r.center.y, 0.01f)
+        assertEquals(720f, r.width, 0.01f)
+        assertEquals(75f, r.height, 0.01f)
     }
 
     @Test fun tinyAreasKeepAFloorAndTheBubbleFlipsNearTheBottom() {

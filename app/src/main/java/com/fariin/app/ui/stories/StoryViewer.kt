@@ -1472,7 +1472,7 @@ private fun StoryPage(
             // iOS repostTapArea: a repost's middle column pauses it and shows the original author;
             // their face and name open the profile.
             val taps = remember(story.id, waitsForPlay) { story.taps + listOfNotNull(story.repostOf?.takeIf { !waitsForPlay }?.let { REPOST_TAP }) }
-            if (taps.isNotEmpty()) StoryTapLayer(taps, card.width, card.height, armed,
+            if (taps.isNotEmpty()) StoryTapLayer(taps, card.width, card.height, story.isVideo, armed,
                 onArm = { armed = it }, onOpen = { url -> armed = null; onLink(url) },
                 person = story.repostOf?.let { r -> (r.authorName.ifEmpty { "Reposted" }) to authorPhoto(r.authorUid) },
                 onPerson = { armed = null; story.repostOf?.let { onRepostAuthor(it.authorUid) } })
@@ -2058,6 +2058,7 @@ private fun StoryTapLayer(
     taps: List<StoryTapTarget>,
     cw: Float,
     ch: Float,
+    video: Boolean,
     armed: StoryTapTarget?,
     onArm: (StoryTapTarget?) -> Unit,
     onOpen: (String) -> Unit,
@@ -2067,7 +2068,7 @@ private fun StoryTapLayer(
     val d = LocalDensity.current
     val floor = with(d) { 24.dp.toPx() }
     taps.forEach { t ->
-        val r = StoryTaps.rect(t, cw, ch, floor)
+        val r = StoryTaps.rect(t, cw, ch, floor, video)
         Box(
             Modifier.offset { IntOffset(r.left.roundToInt(), r.top.roundToInt()) }
                 .size(with(d) { r.width.toDp() }, with(d) { r.height.toDp() })
@@ -2078,7 +2079,7 @@ private fun StoryTapLayer(
     }
     val a = armed ?: return
     Box(Modifier.fillMaxSize().clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { onArm(null) })
-    val r = StoryTaps.rect(a, cw, ch, floor)
+    val r = StoryTaps.rect(a, cw, ch, floor, video)
     val bubbleH = with(d) { (VISIT_ROW + VISIT_TAIL).dp.toPx() }
     val gap = with(d) { 8.dp.toPx() }
     val margin = with(d) { 60.dp.toPx() }
