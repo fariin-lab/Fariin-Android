@@ -60,17 +60,18 @@ object TextFormat {
 
     /** The links in `fmt`, in text order: bad addresses, runs outside the text and later overlaps dropped. */
     fun parseLinks(json: String?, textLength: Int): List<Link> {
-        if (json.isNullOrEmpty() || textLength <= 0 || !json.contains("\"l\"")) return emptyList()
+        if (json.isNullOrEmpty() || textLength <= 0 || !json.contains("\"l\"") || json.length > 40_000) return emptyList()
         val a = runCatching { JSONArray(json) }.getOrNull() ?: return emptyList()
         val found = ArrayList<Link>()
-        for (i in 0 until a.length()) {
+        for (i in 0 until minOf(a.length(), 1000)) {
             val r = a.optJSONArray(i) ?: continue
             if (r.length() < 4 || r.optString(2) != LINK) continue
             val loc = (r.opt(0) as? Number)?.toInt() ?: continue
             val len = (r.opt(1) as? Number)?.toInt() ?: continue
-            if (loc < 0 || len <= 0 || loc.toLong() + len > textLength) continue
+            // iOS normalizedLinks: a link running past the words is cut at their end.
+            if (loc < 0 || len <= 0 || loc >= textLength) continue
             val url = cleanUrl(r.optString(3)) ?: continue
-            found.add(Link(loc, loc + len, url))
+            found.add(Link(loc, loc + minOf(len, textLength), url))
         }
         return normalizeLinks(found, textLength)
     }
@@ -124,19 +125,20 @@ object TextFormat {
     }
 
     /**
-     * Reads `fmt` (already opened). A run reaching outside the text is dropped whole (the text
-     * is not what the runs were made for); a malformed value reads as no bold at all.
+     * Reads `fmt` (already opened), as iOS TextFormat.parse: a run starting or as long as more than
+     * the text is dropped, one that only runs past its end is cut there; a malformed value reads as
+     * no bold at all.
      */
     fun parse(json: String?, textLength: Int): List<Span> {
-        if (json.isNullOrEmpty() || textLength <= 0) return emptyList()
+        if (json.isNullOrEmpty() || textLength <= 0 || json.length > 40_000) return emptyList()
         val a = runCatching { JSONArray(json) }.getOrNull() ?: return emptyList()
         val out = ArrayList<Span>()
-        for (i in 0 until a.length()) {
+        for (i in 0 until minOf(a.length(), 1000)) {
             val r = a.optJSONArray(i) ?: continue
             if (r.length() < 3 || r.optString(2) != BOLD) continue
             val loc = (r.opt(0) as? Number)?.toInt() ?: continue
             val len = (r.opt(1) as? Number)?.toInt() ?: continue
-            if (loc < 0 || len <= 0 || loc.toLong() + len > textLength) continue
+            if (loc < 0 || len <= 0 || loc > textLength || len > textLength) continue
             out.add(Span(loc, loc + len))
         }
         return normalize(out, textLength)

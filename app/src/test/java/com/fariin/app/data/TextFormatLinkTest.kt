@@ -36,8 +36,9 @@ class TextFormatLinkTest {
         assertEquals(listOf(TextFormat.Span(0, 5)), TextFormat.parse(fmt, 16))
         // The bad address goes; of two overlapping links the earlier stays.
         assertEquals(listOf(TextFormat.Link(6, 11, "https://fariin.com")), TextFormat.parseLinks(fmt, 16))
-        // A link reaching past the words is dropped whole.
-        assertTrue(TextFormat.parseLinks("""[[6,20,"l","https://a.com"]]""", 16).isEmpty())
+        // A link reaching past the words is cut at their end (iOS normalizedLinks); one after them goes.
+        assertEquals(listOf(TextFormat.Link(6, 16, "https://a.com")), TextFormat.parseLinks("""[[6,20,"l","https://a.com"]]""", 16))
+        assertTrue(TextFormat.parseLinks("""[[16,2,"l","https://a.com"]]""", 16).isEmpty())
     }
 
     @Test fun roundTrip() {
