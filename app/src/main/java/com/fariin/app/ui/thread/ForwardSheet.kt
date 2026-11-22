@@ -57,7 +57,7 @@ import com.fariin.app.R
 
 /**
  * The forward picker (iOS ForwardPicker): "Forward to", a search field, the chats newest first,
- * a tick on each picked row (up to five, Limits.forwardChatsAtOnce), and Send. A channel I do not
+ * a tick on each picked row (as many as Limits.forwardChatsAtOnce allows, 0 = no limit), and Send. A channel I do not
  * run and a request still waiting are not offered (the rules would refuse the send).
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -79,8 +79,10 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
     val chosen = remember { mutableStateListOf<String>() }
     // A group that would not take this from me says why at the tap (iOS ForwardPicker.refusal).
     var refused by remember { mutableStateOf<String?>(null) }
+    // iOS refusedTitle: "Too many chats" for the chat-count limit, else "Can't send here".
+    var refusedTitle by remember { mutableStateOf("Can't send here") }
     refused?.let { why ->
-        com.fariin.app.ui.components.GlassAlert(onDismissRequest = { refused = null }, title = "Can't send here", message = why,
+        com.fariin.app.ui.components.GlassAlert(onDismissRequest = { refused = null; refusedTitle = "Can't send here" }, title = refusedTitle, message = why,
             actions = listOf(com.fariin.app.ui.components.GlassAlertAction("OK") {}))
     }
     val chats = remember {
@@ -128,7 +130,10 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
                             if (!on) com.fariin.app.data.ForwardRules.refusal(com.fariin.app.data.ForwardRules.docOf(conv.id, me), conv, me, preview)
                                 ?.let { refused = it; return@clickable }
                             if (pickOne) { onSend(listOf(conv.id)); onDismiss(); return@clickable }
-                            if (on) chosen.remove(conv.id) else if (chosen.size < MediaRules.FORWARD_CHATS_AT_ONCE) chosen += conv.id
+                            if (on) chosen.remove(conv.id)
+                            else if (chosen.size < MediaRules.FORWARD_CHATS_AT_ONCE) chosen += conv.id
+                            // The tick past the limit says why, as iOS does, instead of doing nothing.
+                            else { refusedTitle = "Too many chats"; refused = "You can forward to up to ${MediaRules.FORWARD_CHATS_AT_ONCE} chats at once." }
                         }.padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
