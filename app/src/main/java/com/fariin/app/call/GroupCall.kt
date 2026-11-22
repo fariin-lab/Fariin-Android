@@ -195,13 +195,17 @@ object GroupCallWire {
         }
     }
 
+    /** iOS joinNotice "Call is full", title and message on two lines. */
+    const val FULL_NOTICE = "Call is full\nThis call has reached its limit. Try again later."
+
     /** iOS joinNotice words for the server's refusals. */
     fun joinNotice(message: String?): String = when {
         message == null -> "Call failed"
-        message.contains("full") -> "This call is full."
+        message.contains("full") -> FULL_NOTICE
         message.contains("admins-only") -> "Only admins can start a call in this group."
         message.contains("group-ended") || message.contains("group-restricted") -> "Calls are off in this group."
-        message.contains("Not a member") || message.contains("removed") -> "You can't join this call."
+        message.contains("removed") -> "You can't rejoin this call"
+        message.contains("Not a member") -> "You can't join this call."
         else -> "Call failed"
     }
 }
@@ -560,9 +564,9 @@ object GroupCall {
         val m = e.message ?: ""
         return when {
             code == com.google.firebase.functions.FirebaseFunctionsException.Code.NOT_FOUND -> "This call link is no longer valid"
-            m.contains("full") -> "This call is full."
+            m.contains("full") -> GroupCallWire.FULL_NOTICE
             m.contains("denied") -> "Request denied"
-            m.contains("removed") -> "You can't join this call."
+            m.contains("removed") -> "You can't rejoin this call"
             else -> "Call failed"
         }
     }

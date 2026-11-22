@@ -261,7 +261,7 @@ object CallLinkWire {
     /** The join screen's line under the title. */
     fun peopleLine(p: LinkPeek): String = when {
         p.gone -> "This call link is no longer valid"
-        p.full -> "This call is full."
+        p.full -> "Call is full"
         p.count == 0 -> "No one is in the call yet"
         p.names.isEmpty() -> if (p.count == 1) "1 person is in the call" else "${p.count} people are in the call"
         p.count <= p.names.size -> p.names.joinToString(", ") + if (p.count == 1) " is in the call" else " are in the call"
