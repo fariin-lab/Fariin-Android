@@ -1127,7 +1127,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             Text(conv["title"] as? String ?: "Group", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
                 val faces = users.take(3)
-                if (conv["hideMembers"] != true && faces.isNotEmpty()) {
+                if ((conv["hideMembers"] != true || appAdmin) && faces.isNotEmpty()) {
                     Box(Modifier.size(width = (22 + 14 * (faces.size - 1)).dp, height = 24.dp)) {
                         faces.forEachIndexed { i, u ->
                             Box(Modifier.offset(x = (14 * i).dp).size(24.dp).clip(CircleShape).background(c.bgSecondary).padding(1.5.dp)) {
@@ -1209,7 +1209,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             // iOS: All Media between the settings and the members, for a member, when there is some.
             if (iAmMember) SharedMediaCard(cid, shared) { allMedia = true }
             // iOS hideMembers (set by Fariin staff only): no list, faces or labels, only the count.
-            val membersHidden = conv["hideMembers"] == true
+            // Fariin staff still see them, as on iOS (AdminStore.isAdmin).
+            val membersHidden = conv["hideMembers"] == true && !appAdmin
             if (membersHidden) Text("${users.size} Member${if (users.size == 1) "" else "s"}",
                 style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = c.secondary,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 14.dp))

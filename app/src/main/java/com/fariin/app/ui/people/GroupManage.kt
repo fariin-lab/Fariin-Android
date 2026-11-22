@@ -202,7 +202,15 @@ internal fun GroupManageRows(conv: Map<String, Any?>, me: String, cid: String = 
     }
     }
     // iOS GroupSettingsView people section: Members, Administrators, Banned Users (Remove members right).
-    com.fariin.app.ui.settings.SettingsSection {
+    // Not on a group whose members Fariin staff hid (hideMembers), for anyone but staff, the owner
+    // and admins included (iOS 2026-10-27). A channel keeps it: its admins manage its admins.
+    val staffOnly = conv["hideMembers"] == true && conv["channel"] != true
+    val appAdmin by androidx.compose.runtime.produceState(false, me, staffOnly) {
+        value = staffOnly && me.isNotEmpty() && runCatching {
+            com.fariin.app.Fb.db.collection("admins").document(me).get().await().exists()
+        }.getOrDefault(false)
+    }
+    if (!staffOnly || appAdmin) com.fariin.app.ui.settings.SettingsSection {
     SettingsRow("Members", icon = painterResource(R.drawable.ic_gs_members), value = "${team.users.size}",
         badge = NewBadgeSpots.GROUP_SETTINGS_MEMBERS) { open(GroupPage.Members) }
     SettingsRow("Administrators", icon = painterResource(R.drawable.ic_gs_admins), value = "${team.sortedAdmins().size}",
