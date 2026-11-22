@@ -229,12 +229,18 @@ object ChatBackup {
     suspend fun restore(ctx: Context, uid: String, token: String, found: Found, password: String?): String? {
         val c = CryptoHub.get(ctx)
         val key = BackupArchive.unlock(c, found.header, BackupStoreKey.find(ctx, uid), password)
-            ?: return if (password != null) "That password doesn't open this backup." else "Enter your backup password."
+            ?: return when {
+                // No password lock and no key for it here (iOS noKey): typing cannot help.
+                !found.header.hasPassword -> "This phone can't open the backup. It needs this account's Google phone backup, or a backup password set before the last backup."
+                password != null -> "That password doesn't open this backup."
+                else -> "Enter your backup password or 64-digit key."
+            }
         val cache = HashMap<String, ByteArray>()
         for ((name, id) in found.files) runCatching { cache[name] = Drive.download(token, id) }
         val whole = BackupArchive.restore(c, uid, key) { cache[it] }
         // Only a whole restore closes the offer: a dropped connection must leave Restore there to try again.
-        if (!whole) return "Some chats couldn't be restored. Check your connection and tap Restore again."
+        if (!whole) return if (BackupArchive.otherAccount) "This backup belongs to another Fariin account."
+            else "Some chats couldn't be restored. Check your connection and tap Restore again."
         LocalDb.setMeta(uid, "restore.checked", found.made.toString())
         LocalDb.setMeta(uid, "restored", found.made.toString())
         markAnswered(uid)

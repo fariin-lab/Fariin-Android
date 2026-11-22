@@ -283,6 +283,8 @@ fun ChatBackupGate(me: String) {
     var pw by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
+    // As iOS needsPassword: the key here did not open it, so the password field comes up.
+    var askPw by remember { mutableStateOf(false) }
 
     // The restore question answered (any way): the history pull it held back starts now.
     androidx.compose.runtime.LaunchedEffect(step) {
@@ -334,7 +336,7 @@ fun ChatBackupGate(me: String) {
                 text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Backup from " + android.text.format.DateUtils.getRelativeDateTimeString(ctx, f.made,
                         android.text.format.DateUtils.MINUTE_IN_MILLIS, android.text.format.DateUtils.WEEK_IN_MILLIS, 0) + " · " + sizeWords(f.size))
-                    if (f.needsPassword) Column(Modifier.fillMaxWidth()) {
+                    if (f.needsPassword || askPw) Column(Modifier.fillMaxWidth()) {
                         CardField(pw, "Backup password or 64-digit key", secret = true) { pw = it.take(64) }
                     }
                     if (busy) Text("Restoring…", color = c.secondary)
@@ -346,6 +348,7 @@ fun ChatBackupGate(me: String) {
                     scope.launch {
                         note = ChatBackup.restore(ctx, me, token ?: return@launch, f, pw.ifEmpty { null })
                         busy = false
+                        if (note != null && f.header.hasPassword) askPw = true
                         if (note == null) step = "card"
                     }
                 }) { Text("Restore", color = c.accent) } },
