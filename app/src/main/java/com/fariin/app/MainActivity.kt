@@ -730,7 +730,9 @@ class MainActivity : ComponentActivity() {
         if (intent != null && intent.getStringExtra(PushRouter.EXTRA_OPEN_CID).isNullOrEmpty()) {
             val plainKind = intent.getStringExtra("kind")
             val plain = intent.getStringExtra("cid")
-            if (plainKind != "call" && plainKind != "story" && plain != null && com.fariin.app.channel.ChannelRules.safeId(plain)) {
+            // A missed call's push (kind "call" with the call row's `mid`) opens its chat, as on iOS.
+            val ring = plainKind == "call" && intent.getStringExtra("mid").isNullOrEmpty()
+            if (!ring && plainKind != "story" && plain != null && com.fariin.app.channel.ChannelRules.safeId(plain)) {
                 intent.removeExtra("cid")
                 intent.putExtra(PushRouter.EXTRA_OPEN_CID, plain)
                 val plainMid = intent.getStringExtra("mid")
