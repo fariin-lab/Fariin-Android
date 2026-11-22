@@ -134,6 +134,7 @@ internal fun AttachSheet(
     val c = Fariin.colors
     val context = LocalContext.current
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    val hostView = androidx.compose.ui.platform.LocalView.current
     val sheetScope = androidx.compose.runtime.rememberCoroutineScope()
     // The iOS sheet's own motion (FariinSheet: its curve, the finger-tracked drag, the rubber band,
     // the release by speed), with the iOS detents: it opens at half, the grid's upward scroll or a
@@ -214,6 +215,10 @@ internal fun AttachSheet(
     val toggle = { it: RecentMedia.Item ->
         if (it.uri in picked) { picked.remove(it.uri); videos.remove(it.uri) }
         else if (picked.size < MediaRules.MEDIA_PER_PICK) { picked += it.uri; if (it.isVideo) videos += it.uri }
+        // iOS: past the pick limit a warning buzz, not a silent tap.
+        else hostView.performHapticFeedback(if (android.os.Build.VERSION.SDK_INT >= 30) android.view.HapticFeedbackConstants.REJECT
+            else android.view.HapticFeedbackConstants.LONG_PRESS)
+        Unit
     }
     // Camera: the phone's own camera app (iOS UIImagePickerController .camera); the photo joins the
     // chosen ones, so caption, editor and Send work as for a picked photo.
