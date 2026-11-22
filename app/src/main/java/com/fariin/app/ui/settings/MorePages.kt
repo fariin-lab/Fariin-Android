@@ -564,9 +564,12 @@ private fun ChatsSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
             SwitchRow("Automatically Archive", archive, last = true, badge = NewBadgeSpots.CHATS_AUTO_ARCHIVE) { archive = it; com.fariin.app.data.UnknownChatArchiver.setOn(p, it) }
         }
         // iOS ChatsSettingsView: the last row, red, with what it does written under it.
+        // iOS: greyed and dead while it runs or when there is no chat to clear.
+        val canClear = !clearing && com.fariin.app.data.CryptoHub.listedAll().isNotEmpty()
         SettingsSection(footer = "Deletes every message, photo, video and call from all your devices. It cannot be undone.") {
-            SettingsRow("Clear Chat History", trailing = Trailing.NONE, titleColor = Fariin.colors.red, last = true,
-                badge = NewBadgeSpots.CHATS_CLEAR_HISTORY) { if (!clearing) confirmClear = true }
+            SettingsRow("Clear Chat History", trailing = Trailing.NONE,
+                titleColor = if (canClear) Fariin.colors.red else Fariin.colors.red.copy(alpha = 0.4f), last = true,
+                badge = NewBadgeSpots.CHATS_CLEAR_HISTORY) { if (canClear) confirmClear = true }
         }
     }
     if (confirmClear) YesNo("Clear Chat History?",
