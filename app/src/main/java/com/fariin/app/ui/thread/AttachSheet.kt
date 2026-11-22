@@ -259,9 +259,15 @@ internal fun AttachSheet(
     androidx.compose.runtime.LaunchedEffect(Unit) {
         if (cameraFirst) { if (mediaOff != null) { com.fariin.app.ui.components.Snack.show(mediaOff); onDismiss() } else openCamera() }
     }
-    val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    // Several files at once, as iOS (allowsMultipleSelection): each goes out as its own message,
+    // every bubble first and then the uploads in pick order (sendDocuments).
+    val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         // Kept for the Files page's Recent list (iOS RecentFiles), then sent.
-        if (uri != null) { RecentFiles.record(context, uri); onSendFile(uri); motion.close() }
+        uris.forEach { RecentFiles.record(context, it) }
+        when {
+            uris.size == 1 -> { onSendFile(uris[0]); motion.close() }
+            uris.size > 1 -> { onSendFiles(uris); motion.close() }
+        }
     }
     val onePhoto = picked.size == 1 && picked[0] !in videos
     if (!onePhoto || !allowViewOnce) viewOnce = false

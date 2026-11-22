@@ -1345,8 +1345,8 @@ class ThreadRepository(
                 rebuild()
             }
             val skipped = listOfNotNull(
-                unreadable.takeIf { it > 0 }?.let { n -> if (n == 1) "1 photo couldn't be read, so it was skipped." else "$n photos couldn't be read, so they were skipped." },
-                tooLarge.takeIf { it > 0 }?.let { n -> if (n == 1) "1 photo is over ${FilePrep.MAX_BYTES / (1024 * 1024)} MB, so it was skipped." else "$n photos are over ${FilePrep.MAX_BYTES / (1024 * 1024)} MB, so they were skipped." },
+                unreadable.takeIf { it > 0 }?.let { n -> if (n == 1) "1 file couldn't be read, so it was skipped." else "$n files couldn't be read, so they were skipped." },
+                tooLarge.takeIf { it > 0 }?.let { n -> if (n == 1) "1 file is over ${FilePrep.MAX_BYTES / (1024 * 1024)} MB, so it was skipped." else "$n files are over ${FilePrep.MAX_BYTES / (1024 * 1024)} MB, so they were skipped." },
             )
             if (skipped.isNotEmpty()) onRefused(skipped.joinToString(" "))
             // One after another: each send's message is written before the next one starts.
