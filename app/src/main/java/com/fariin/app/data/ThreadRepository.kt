@@ -1664,16 +1664,13 @@ class ThreadRepository(
                                          clientId: String, tap: Double, forwarded: Boolean = false,
                                          fwdSource: Message.ForwardSource? = null) {
         val members = if (Wire.isGroupCid(cid)) freshMembers() else null
-        val fields = hashMapOf<String, Any>(
-            "type" to "sticker", "stickerPack" to s.packId, "stickerId" to s.stickerId,
-            "animated" to false, "width" to w, "height" to h, "uploading" to true,
-        )
-        if (s.emoji.isNotEmpty()) fields["emoji"] = s.emoji
+        val fields = StickerForwardRules.mineFields(s, w, h)
         writeLooseMessage(fields, StickerGifRules.OLD_BUILD_MARKER, StickerGifRules.stickerLabel(s.emoji), ref, clientId, tap,
             forwarded, fwdSource)
         val msg = convRef.collection("messages").document(clientId)
         try {
-            val (cipher, meta) = if (members != null) crypto.sealBytesForGroup(png, members, cid) else crypto.encryptBytes(cid, png)
+            val (cipher, meta) = StickerForwardRules.sealPng(png, members,
+                { p, ms -> crypto.sealBytesForGroup(p, ms, cid) }, { p -> crypto.encryptBytes(cid, p) })
             val sref = com.google.firebase.storage.FirebaseStorage.getInstance().reference
                 .child(com.fariin.app.media.MediaRules.imagePath(cid, clientId))
             sref.putBytes(cipher, com.google.firebase.storage.StorageMetadata.Builder()
@@ -1694,16 +1691,11 @@ class ThreadRepository(
     suspend fun forwardSticker(s: StickerRef, png: ByteArray?, width: Double?, height: Double?, forwarded: Boolean,
                                fwdSource: Message.ForwardSource?, clientId: String) {
         val tap = System.currentTimeMillis().toDouble()
-        if (s.packId == StickerFavorites.MINE) {
+        if (StickerForwardRules.needsSourcePng(s)) {
             writeMineSticker(s, png ?: error("sticker not readable"), width ?: 512.0, height ?: 512.0, null, clientId, tap, forwarded, fwdSource)
             return
         }
-        val fields = hashMapOf<String, Any>(
-            "type" to "sticker", "stickerPack" to s.packId, "stickerId" to s.stickerId,
-            "animated" to s.animated, "width" to 512.0, "height" to 512.0,
-            "imageUrl" to StickerGifRules.stickerPublicUrl(s.packId, s.stickerId),
-        )
-        if (s.emoji.isNotEmpty()) fields["emoji"] = s.emoji
+        val fields = StickerForwardRules.packFields(s)
         writeLooseMessage(fields, s.emoji.ifEmpty { StickerGifRules.OLD_BUILD_MARKER },
             StickerGifRules.stickerLabel(s.emoji), null, clientId, tap, forwarded, fwdSource)
     }
@@ -1754,15 +1746,8 @@ class ThreadRepository(
         msg["clientTs"] = clientTs
         msg["clientId"] = clientId
         if (reply != null) msg["replyTo"] = replyMap(reply, seal(reply.text, members))
-        if (forwarded) {
-            msg["forwarded"] = true
-            // Where it came from (iOS sealedForwardSource): a plain group's seal hands the JSON back,
-            // so the map goes. A failed seal drops only this.
-            fwdSource?.let { src ->
-                val j = src.json()
-                runCatching { seal(j, members) }.getOrNull()?.let { msg["fwd"] = if (it == j) src.map() else it }
-            }
-        }
+        // Where it came from (iOS sealedForwardSource): a failed seal drops only `fwd`.
+        if (forwarded) msg.putAll(StickerForwardRules.forwardFields(fwdSource) { seal(it, members) })
         val batch = db.batch()
         batch.set(convRef.collection("messages").document(clientId), msg)
         val conv = hashMapOf<String, Any>("lastMessage" to label, "lastSender" to me, "updatedAt" to FieldValue.serverTimestamp())

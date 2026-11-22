@@ -197,7 +197,7 @@ object Forwarder {
         if (m.isSticker) {
             val ref = com.fariin.app.data.StickerRef(m.stickerPack!!, m.stickerId!!, m.stickerEmoji.orEmpty(), m.stickerAnimated)
             // One somebody made is a sealed PNG of this chat: opened here, sealed again for the target.
-            return Payload.Sticker(ref, if (ref.packId == com.fariin.app.data.StickerFavorites.MINE) bytes(m.imageUrl, m.enc) else null)
+            return Payload.Sticker(ref, com.fariin.app.data.StickerForwardRules.sourcePng(ref) { bytes(m.imageUrl, m.enc) })
         }
         if (m.isGif) return Payload.Gif(com.fariin.app.data.StickerGifRules.Gif(m.id, m.imageUrl!!, m.width ?: 200.0, m.height ?: 200.0))
         return when (m.mediaKind) {
