@@ -63,6 +63,7 @@ import com.fariin.app.ui.photo.FariinPhotoFetcher
 import com.fariin.app.ui.theme.Fariin
 import com.fariin.app.ui.theme.FariinTheme
 import com.fariin.app.ui.thread.ForwardSheet
+import com.fariin.app.ui.thread.forwardable
 import com.google.firebase.auth.FirebaseAuth
 import java.io.File
 import java.util.UUID
@@ -96,19 +97,29 @@ class ShareActivity : ComponentActivity() {
             startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             finish(); return
         }
-        val target = intent.getStringExtra(ShortcutManagerCompat.EXTRA_SHORTCUT_ID)
+        var target = intent.getStringExtra(ShortcutManagerCompat.EXTRA_SHORTCUT_ID)
         val shared = mutableStateOf<Shared?>(null)
-        lifecycleScope.launch {
-            val s = withContext(Dispatchers.IO) { read(intent) }
-            if (s.empty) { Toast.makeText(this@ShareActivity, "Nothing to share", Toast.LENGTH_SHORT).show(); finish() }
-            else shared.value = s
-        }
         // The chat list for the picker: what the app already holds, or the phone's saved copy.
-        lifecycleScope.launch(Dispatchers.IO) {
+        val listing = lifecycleScope.launch(Dispatchers.IO) {
             if (CryptoHub.listedAll().isEmpty()) {
                 val saved = LocalCache.loadChats(me).map { (id, d) -> Conversation.fromFirestore(id, d) }
                 if (saved.isNotEmpty()) CryptoHub.noteListed(saved)
             }
+        }
+        lifecycleScope.launch {
+            // A Direct Share chat must be one the picker would offer (not blocked, not an unanswered
+            // request, not a channel I only follow). If not, say so and show the normal picker.
+            target?.let { id ->
+                listing.join()
+                val conv = CryptoHub.listedConversation(id)
+                if (conv == null || !forwardable(conv, me)) {
+                    Toast.makeText(this@ShareActivity, "You can't send to this chat.", Toast.LENGTH_SHORT).show()
+                    target = null
+                }
+            }
+            val s = withContext(Dispatchers.IO) { read(intent) }
+            if (s.empty) { Toast.makeText(this@ShareActivity, "Nothing to share", Toast.LENGTH_SHORT).show(); finish() }
+            else shared.value = s
         }
         setContent {
             setSingletonImageLoaderFactory { ctx -> ImageLoader.Builder(ctx).components { add(FariinPhotoFetcher.Factory()) }.build() }
