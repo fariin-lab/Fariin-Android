@@ -195,6 +195,8 @@ data class ThreadUi(
     val requestBar: RequestBar? = null,
     /** My one first message to a stranger (iOS requestStance .firstMessage): text only. */
     val knock: Boolean = false,
+    /** My first message went to a stranger and they have not accepted (iOS requestStance .awaitingReply). */
+    val awaiting: Boolean = false,
     /** A channel: posts drawn as the channel speaking, views, counts-only reactions, follower bar. */
     val channel: com.fariin.app.ui.channels.ChannelThreadUi? = null,
     /** A chat that may be a channel I visit, its answer not back yet: drawn as a loading ring. */
@@ -664,7 +666,8 @@ private fun ThreadContent(
             message = if (offline) "No internet connection. Check your connection and try again."
                 else ui.sendBlocked ?: (if (ui.notAMember) "You're no longer a member of this group" else null)
                     ?: (if (ui.isGroup && ui.groupDoc.isNotEmpty() && com.fariin.app.data.MemberRestrict.isMuted(ui.groupDoc, ui.me,
-                        System.currentTimeMillis().toDouble())) com.fariin.app.data.MemberRestrict.MUTED_BAR else null),
+                        System.currentTimeMillis().toDouble())) com.fariin.app.data.MemberRestrict.MUTED_BAR else null)
+                    ?: requestRefusal(ui, fm),
             actions = listOf(
                 com.fariin.app.ui.components.GlassAlertAction("Resend", com.fariin.app.ui.components.GlassAlertStyle.Bold) { onRetry(fm) },
                 com.fariin.app.ui.components.GlassAlertAction("Delete", com.fariin.app.ui.components.GlassAlertStyle.Red) { actions.onDeleteForMe(fm) },
@@ -4107,4 +4110,28 @@ internal fun ChannelPostRow(info: com.fariin.app.channel.ChannelInfo, m: Message
         com.fariin.app.ui.channels.LocalPostSelecting provides true) {
         MessageRow(ui, m, ThreadLogic.RowGeometry(showDate = false, first = true, last = true, gapDp = 0), is24h, {}) { onOpen() }
     }
+}
+
+/**
+ * iOS refusal(for:): why a send to someone new was refused, in the request's own words. The chat
+ * key comes first, then where the request stands. Null when no request rule explains it.
+ */
+private fun requestRefusal(ui: ThreadUi, m: Message): String? {
+    if (ui.isGroup) return null
+    val bar = ui.requestBar
+    if (bar?.kind == RequestBar.Kind.CANNOT) {
+        return if (bar.hasKey) "${ui.title} only accepts messages from people who know their Chat Key."
+            else "You can't message ${ui.title}"
+    }
+    if (ui.awaiting) return "You can send more once ${ui.title} accepts."
+    if (ui.knock) {
+        // A first message of the right shape was refused for the day's budget; any other shape
+        // broke the rule itself (plain text, at most FIRST_MESSAGE_LIMIT characters).
+        val shortText = m.type.isNullOrEmpty() && m.imageUrl == null && m.videoUrl == null && m.audioUrl == null &&
+            m.fileUrl == null && m.localPath == null && m.localUri == null && m.album.isEmpty() && m.replyTo == null &&
+            m.text.codePointCount(0, m.text.length) <= com.fariin.app.data.Requests.FIRST_MESSAGE_LIMIT
+        return if (shortText) "That's today's limit for message requests. Try again tomorrow."
+            else "${ui.title} only accepts message requests. Your first message must be a short text."
+    }
+    return null
 }
