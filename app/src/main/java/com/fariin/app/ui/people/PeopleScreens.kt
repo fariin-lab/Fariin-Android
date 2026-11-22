@@ -834,7 +834,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             }
             Spacer(Modifier.height(20.dp))
             lastCall?.let { call -> CallLogCard(call, me) }
-            person?.about?.takeIf { it.isNotEmpty() }?.let { bio ->
+            // iOS gatedAbout: an old bio's blank lines become one paragraph, trimmed, within the limit.
+            person?.about?.let { com.fariin.app.data.ProfileWrites.oneParagraph(it).trim() }?.takeIf { it.isNotEmpty() }?.let { bio ->
                 SettingsSection { Text(bio, fontSize = 17.sp, color = c.label, modifier = Modifier.fillMaxWidth().padding(16.dp)) }
             }
             person?.links?.let { ProfileLinkChips(it, Modifier.padding(horizontal = 16.dp).padding(bottom = 12.dp)) }
