@@ -223,7 +223,7 @@ private fun Tile(label: String, m: GroupStats.Metric, modifier: Modifier) {
 /** Thirty days as a line or stacked bars. Touch and drag picks a day and the caption shows its values. */
 @Composable
 private fun DayChart(title: String, line: Boolean, series: List<GroupStats.Series>, colors: List<Color>, days: List<LocalDate>,
-                     dayText: (LocalDate) -> String) {
+                     dayText: (LocalDate) -> String, showsNow: Boolean = true) {
     val c = Fariin.colors
     var selected by remember(days) { mutableStateOf<Int?>(null) }
     val measurer = rememberTextMeasurer()
@@ -231,7 +231,8 @@ private fun DayChart(title: String, line: Boolean, series: List<GroupStats.Serie
     val n = days.size
     StatsCard(title) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(GroupStats.caption(series, days, selected, line, dayText), fontSize = 13.sp, color = c.secondary, maxLines = 1,
+            // A line that is not a running total (views, reactions) shows the period's totals, not "Now" (iOS showsNow).
+            Text(GroupStats.caption(series, days, selected, line && showsNow, dayText), fontSize = 13.sp, color = c.secondary, maxLines = 1,
                 overflow = TextOverflow.Ellipsis)
             val chartHeight = if (series.size > 1) 200.dp else 180.dp
             val legend = series.size > 1
@@ -533,11 +534,11 @@ private fun ChannelStatsBody(s: GroupStats.ChannelData) {
     if (!s.followers.isEmpty) DayChart("Followers", false, s.followers.series, listOf(blue, orange), s.followers.days, dayText)
     if (!s.notifications.isEmpty) DayChart("Notifications", false, s.notifications.series, listOf(blue, orange), s.notifications.days, dayText)
     if (s.hours.isNotEmpty()) BinsCard("Views by Hours", s.hours, setOf("0", "6", "12", "18"), GroupStats.busiestHour(s.hours))
-    if (!s.interactions.isEmpty) DayChart("Views and Reactions", true, s.interactions.series, listOf(blue, orange), s.interactions.days, dayText)
+    if (!s.interactions.isEmpty) DayChart("Views and Reactions", true, s.interactions.series, listOf(blue, orange), s.interactions.days, dayText, showsNow = false)
     val palette = ChartColors.palette(dark)
     if (!s.emoji.isEmpty) DayChart("Reactions", false, s.emoji.series, s.emoji.series.indices.map { palette[it % palette.size] }, s.emoji.days, dayText)
     if (!s.stories.isEmpty) DayChart("Story Views and Reactions", true, s.stories.series,
-        listOf(blue, orange, ChartColors.teal(dark)).take(s.stories.series.size), s.stories.days, dayText)
+        listOf(blue, orange, ChartColors.teal(dark)).take(s.stories.series.size), s.stories.days, dayText, showsNow = false)
     if (s.recentPosts.isNotEmpty()) PostsCard("Recent Posts", s.recentPosts, dayText)
 }
 
@@ -609,7 +610,7 @@ private fun PostStatsBody(s: com.fariin.app.data.PostStats.Data) {
             Spacer(Modifier.height(6.dp))
         }
     }
-    if (!s.interactions.isEmpty) DayChart("Interactions", true, s.interactions.series, listOf(ChartColors.blue, ChartColors.orange(dark)), s.interactions.days, dayText)
+    if (!s.interactions.isEmpty) DayChart("Interactions", true, s.interactions.series, listOf(ChartColors.blue, ChartColors.orange(dark)), s.interactions.days, dayText, showsNow = false)
     val palette = ChartColors.palette(dark)
     if (!s.emoji.isEmpty) DayChart("Reactions", false, s.emoji.series, s.emoji.series.indices.map { palette[it % palette.size] }, s.emoji.days, dayText)
 }
