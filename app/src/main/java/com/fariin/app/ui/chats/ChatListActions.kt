@@ -94,7 +94,8 @@ object ChatListActions {
 
     /** Delete for me: the chat empties and leaves my list until something new arrives (iOS deleteForMe). */
     suspend fun deleteForMe(me: String, c: Conversation): Boolean =
-        merge(me, c.id, mapOf("clearedAt" to mapOf(me to System.currentTimeMillis().toDouble()), "unreadCount" to mapOf(me to 0)))
+        // Server time, not the phone's (iOS): the mark is compared with server stamps on all my devices.
+        merge(me, c.id, mapOf("clearedAt" to mapOf(me to com.fariin.app.data.ServerClock.nowMsSynced()), "unreadCount" to mapOf(me to 0)))
             // The phone's own copy of the chat goes too (device-storage phase 1).
             .also { ok -> if (ok) { com.fariin.app.local.LocalDb.clearChat(me, c.id); com.fariin.app.local.LocalCache.forgetThread(me, c.id) } }
 
