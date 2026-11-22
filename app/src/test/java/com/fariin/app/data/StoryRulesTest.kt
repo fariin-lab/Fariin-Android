@@ -80,6 +80,16 @@ class StoryRulesTest {
         assertEquals(listOf("a"), st.others.map { it.key })
     }
 
+    @Test fun customListKeepsAGlowOnlyMember() {
+        // iOS glowReach: a hand-picked person I have a Glow with stays without a chat; a stranger does not.
+        val (to, mode) = StoryPrivacyRules.resolve(setOf("a"), StoryAudienceChoice.CUSTOM, setOf("a", "g", "zz"),
+            StoryPrivacyRules.defaultMyFriends, hidden = emptySet(), glowReach = setOf("g"))
+        assertEquals(setOf("a", "g"), to)
+        assertEquals("only", mode)
+        assertEquals(setOf("a"), StoryPrivacyRules.resolve(setOf("a"), StoryAudienceChoice.CUSTOM, setOf("a", "g"),
+            StoryPrivacyRules.defaultMyFriends, hidden = emptySet()).first)
+    }
+
     @Test fun payloadHasTheIosFields() {
         val p = StoryRules.payload(me, false, "S1", "hi", StoryAudienceChoice.MY_CHATS, "all", setOf("a"), "EXP", "NOW", "blur")
         assertEquals("image", p["type"])

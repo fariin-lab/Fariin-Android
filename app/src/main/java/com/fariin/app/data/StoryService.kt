@@ -243,7 +243,8 @@ class StoryService(
             capture = captureSwitch && media.repostOf == null   // never on a repost (iOS)
         } else {
             val glow = glowAudience(choice, convs)
-            val (reached, how) = StoryPrivacyRules.resolve(StoryRules.contacts(me, convs), choice, people, myFriends, hiddenFrom, glow.first, glow.second)
+            val (reached, how) = StoryPrivacyRules.resolve(StoryRules.contacts(me, convs), choice, people, myFriends, hiddenFrom, glow.first, glow.second,
+                glowReach(convs))
             recipients = reached
             mode = if (everyone) "everyone" else how
             replies = if (custom) StoryPrivacyRules.listsAllowReplies(lists)
@@ -322,10 +323,19 @@ class StoryService(
         val g = Glow.state.value
         val people = StoryPrivacyRules.glowersRecipients(StoryPrivacyStore.glowers.value, g.relationship)
         if (people.isEmpty()) throw PostRefused(if (g.known) StoryPrivacyRules.GLOW_EMPTY else StoryPrivacyRules.GLOW_UNKNOWN)
-        val blocked = convs.asSequence().filter { !it.isGroup }
+        return people to blockedEither(convs)
+    }
+
+    /** Blocked either way: chats with a block on them, and my account block list. */
+    private fun blockedEither(convs: List<Conversation>): Set<String> =
+        convs.asSequence().filter { !it.isGroup }
             .filter { c -> val them = c.otherUid(me); them.isNotEmpty() && (c.isBlockedByMe(me) || c.isBlockedByMe(them)) }
             .map { it.otherUid(me) }.toSet() + BlockList.snapshot.entries.keys
-        return people to blocked
+
+    /** iOS glowReach: my Glow relationship less anyone blocked, so a Glow never gets round a block. */
+    private fun glowReach(convs: List<Conversation>): Set<String> {
+        val rel = Glow.state.value.relationship
+        return if (rel.isEmpty()) emptySet() else rel - blockedEither(convs)
     }
 
     /**
@@ -349,7 +359,7 @@ class StoryService(
         val contacts = StoryRules.contacts(me, convs)
         val people = if (custom) lists.flatMap { it.members }.toSet() else emptySet()
         val glow = glowAudience(choice, convs)
-        val (recipients, how) = StoryPrivacyRules.resolve(contacts, choice, people, myFriends, hiddenFrom, glow.first, glow.second)
+        val (recipients, how) = StoryPrivacyRules.resolve(contacts, choice, people, myFriends, hiddenFrom, glow.first, glow.second, glowReach(convs))
         val everyone = choice == StoryAudienceChoice.EVERYONE
         if (recipients.isEmpty() && (contacts.isNotEmpty() || choice == StoryAudienceChoice.GLOWERS)) throw PostRefused(EMPTY_AUDIENCE)
         val replies = if (custom) StoryPrivacyRules.listsAllowReplies(lists)

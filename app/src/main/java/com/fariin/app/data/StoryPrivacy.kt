@@ -166,6 +166,9 @@ object StoryPrivacyRules {
         hidden: Set<String>,
         glowers: Set<String> = emptySet(),
         blocked: Set<String> = emptySet(),
+        /** My Glow relationship less anyone blocked either way (iOS glowReach): a hand-picked list
+         *  keeps a person I have a Glow with even with no chat. */
+        glowReach: Set<String> = emptySet(),
     ): Pair<Set<String>, String> {
         // Glowers travels as an explicit list and may reach people I have never chatted with
         // (iOS resolveAudience glowReach), never anyone blocked either way.
@@ -181,7 +184,7 @@ object StoryPrivacyRules {
             else -> emptySet()
         }
         val pool = if (choice == StoryAudienceChoice.EVERYONE) contacts - hidden else contacts
-        if (included.isNotEmpty()) return included.intersect(contacts) to MODE_ONLY
+        if (included.isNotEmpty()) return included.intersect(contacts + glowReach) to MODE_ONLY
         if (choice.needsPeople) return emptySet<String>() to MODE_ONLY
         if (excluded.isNotEmpty()) return (pool - excluded) to MODE_EXCEPT
         return pool to MODE_ALL
