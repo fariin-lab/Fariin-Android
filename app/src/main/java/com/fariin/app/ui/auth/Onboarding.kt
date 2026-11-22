@@ -112,7 +112,9 @@ fun OnboardingPage(
     suspend fun freeOf(cands: List<String>, want: Int): List<String> {
         val out = ArrayList<String>()
         for (cand in cands.take(6)) {
-            if (runCatching { api.checkUsername(cand).first }.getOrDefault(false) || quickLookup(cand) == HandleState.Free) out += cand
+            // Only the server's yes counts (iOS freeHandles): a missing usernames doc says nothing
+            // about reserved words or a name still held after a release.
+            if (runCatching { api.checkUsername(cand).first }.getOrDefault(false)) out += cand
             if (out.size == want) break
         }
         return out
