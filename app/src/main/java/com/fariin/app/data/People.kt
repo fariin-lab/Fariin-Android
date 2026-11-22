@@ -158,7 +158,7 @@ class FirestorePeople(
                 uids.map { u -> async { withTimeoutOrNull(5_000) { db.collection("users").document(u).get().await() } } }.awaitAll()
             }.mapNotNull { s -> s?.data?.takeUnless(Person::hidden)?.let { Person.from(s.id, it) } }
                 // Their photo only when their Profile Picture privacy lets me see it (iOS newPersonRow).
-                .map { p -> if (Person.allows(p.privacy, "photo", isContact(p.uid))) p else p.copy(photoUrl = null) }
+                .map { p -> if (Person.allows(p.privacy, "photo", mayViewPhotoOf(p.uid))) p else p.copy(photoUrl = null) }
         } catch (_: Exception) { emptyList() }
     }
 
@@ -170,7 +170,7 @@ class FirestorePeople(
             if (uid == me) p else {
                 val contact = isContact(uid)
                 p.copy(about = if (Person.allows(p.privacy, "bio", contact)) p.about else "",
-                    photoUrl = if (Person.allows(p.privacy, "photo", contact)) p.photoUrl else null)
+                    photoUrl = if (Person.allows(p.privacy, "photo", mayViewPhotoOf(uid))) p.photoUrl else null)
             }
         }
     } catch (_: Exception) { null }
@@ -437,6 +437,10 @@ class FirestorePeople(
         CryptoHub.listedConversation(Wire.directCid(me, uid))?.let {
             !it.isGroup && (if (it.startedBy.isNotEmpty()) it.accepted else it.lastMessageCipher.isNotEmpty())
         } ?: false
+
+    /** iOS PrivacyPrefs.mayViewPhotoOf, the test storage.rules makes: our 1:1 is accepted, or they started it. */
+    private fun mayViewPhotoOf(uid: String): Boolean =
+        CryptoHub.listedConversation(Wire.directCid(me, uid))?.let { !it.isGroup && (it.accepted || it.startedBy == uid) } ?: false
 
     /** ChatService.createGroup (a plain group, e2ee false, as iOS makes them now). */
     override suspend fun createGroup(title: String, members: List<String>, photo: ByteArray?, permissions: Map<String, Boolean>): String {

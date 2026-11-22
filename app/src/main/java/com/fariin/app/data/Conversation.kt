@@ -167,7 +167,7 @@ data class Conversation(
         // (ProfilePhotoIndex, iOS photoUrl(for:)): a member on an old build left the mirror stale.
         val mirror = photos[other]?.takeIf { it.isNotEmpty() }
         if (isGroup) return mirror
-        return ProfilePhotoIndex.newer(mirror, ProfilePhotoIndex.photo(other, contact = startedBy.isEmpty() || accepted))
+        return ProfilePhotoIndex.newer(mirror, ProfilePhotoIndex.photo(other, contact = accepted || startedBy == other))
     }
 
     fun displayName(me: String): String =
