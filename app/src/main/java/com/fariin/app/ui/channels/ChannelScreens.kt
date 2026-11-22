@@ -91,6 +91,7 @@ private val newChannelScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutin
  * country's, then everyone's. A tap opens the channel to look at before following; Follow follows
  * from the list and turns into a grey "Following".
  */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit) {
     val c = Fariin.colors
@@ -108,6 +109,22 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
     // A skeleton only when nothing was kept and the answer is not back within 0.3 s.
     var skeleton by remember { mutableStateOf(false) }
     var toast by remember { mutableStateOf<String?>(null) }
+    // Pull to refresh asks the server again for the tab on screen (iOS .refreshable, force).
+    var refreshing by remember { mutableStateOf(false) }
+    val noteScroll = rememberScrollState()
+    val refresh: () -> Unit = {
+        refreshing = true
+        scope.launch {
+            if (groupsTab) {
+                try { groupRows = com.fariin.app.channel.ExploreCache.fetchGroups(ctx, me); groupsFailed = false } catch (_: Exception) { groupsFailed = true }
+                groupsLoading = false
+            } else if (!com.fariin.app.ui.debug.DemoChats.active) {
+                try { rows = com.fariin.app.channel.ExploreCache.fetchChannels(ctx, me); failed = false } catch (_: Exception) { failed = true }
+                loading = false
+            }
+            refreshing = false
+        }
+    }
     val justFollowed = remember { mutableStateListOf<String>() }
     val justJoined = remember { mutableStateListOf<String>() }
     // The Join pill's own states (JoinPill.kt): waiting on the server, requested, refusals so far.
@@ -164,7 +181,11 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                 val shown = local + serverHits.filter { h -> local.none { it.cid == h.cid } }
                     .map { DiscoveredChannel(it.cid, it.handle, it.title, it.photoUrl, "", it.memberCount, verified = it.verified) }
                 // Skeleton, notes and the list fade into each other (iOS pops 91).
-                Box(Modifier.fillMaxSize().fadeOnChange(Triple(loading && rows.isEmpty(), rows.isEmpty(), shown.isEmpty()))) {
+                androidx.compose.material3.pulltorefresh.PullToRefreshBox(refreshing, onRefresh = refresh, modifier = Modifier.fillMaxSize()) {
+                // A note or the skeleton scrolls too, so the pull works with no rows (a list inside a scroll would not).
+                val listShown = !(loading && rows.isEmpty()) && !(failed && rows.isEmpty()) && shown.isNotEmpty()
+                Box(Modifier.fillMaxSize().then(if (listShown) Modifier else Modifier.verticalScroll(noteScroll))
+                    .fadeOnChange(Triple(loading && rows.isEmpty(), rows.isEmpty(), shown.isEmpty()))) {
                 when {
                     loading && rows.isEmpty() -> if (skeleton) ExploreSkeleton(squircle = true)
                     failed && rows.isEmpty() -> Note("Couldn't load channels. Check your connection and try again.")
@@ -204,11 +225,15 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                     }}
                 }
                 }
+                }
             } else {
                 val local = if (q.isEmpty()) groupRows else groupRows.filter { it.title.contains(q, ignoreCase = true) || it.handle.contains(q, ignoreCase = true) }
                 val shown = local + serverHits.filter { h -> local.none { it.cid == h.cid } }
                     .map { com.fariin.app.channel.DiscoveredGroup(it.cid, it.handle, it.title, it.photoUrl, it.memberCount, it.verified, "") }
-                Box(Modifier.fillMaxSize().fadeOnChange(Pair(groupsLoading && groupRows.isEmpty(), groupRows.isEmpty()))) {
+                val listShown = !(groupsLoading && groupRows.isEmpty()) && !(groupsFailed && groupRows.isEmpty()) && shown.isNotEmpty()
+                androidx.compose.material3.pulltorefresh.PullToRefreshBox(refreshing, onRefresh = refresh, modifier = Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxSize().then(if (listShown) Modifier else Modifier.verticalScroll(noteScroll))
+                    .fadeOnChange(Pair(groupsLoading && groupRows.isEmpty(), groupRows.isEmpty()))) {
                 when {
                     groupsLoading && groupRows.isEmpty() -> if (skeleton) ExploreSkeleton(squircle = false)
                     groupsFailed && groupRows.isEmpty() -> Note("Couldn't load groups. Check your connection and try again.")
@@ -244,6 +269,7 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                             }
                         }
                     }}
+                }
                 }
                 }
             }
