@@ -726,9 +726,10 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             if (uid != me) com.fariin.app.ui.components.FloatingTextAction("Edit") { nickname = true }
             if (glowOn) com.fariin.app.ui.glow.GlowOverflow(glowDoor) { close ->
                 if (fromChat || addToGroup != null) androidx.compose.material3.HorizontalDivider(color = c.separator)
+                // iOS moreMenuItems order: Change Wallpaper first, then Share Profile.
+                if (fromChat) ChangeWallpaperItem { close(); wallpaper() }
                 if (shareProfile != null) ShareProfileItem { close(); shareProfile() }
                 if (addToGroup != null) AddToGroupItem { close(); addToGroup() }
-                if (fromChat) ChangeWallpaperItem { close(); wallpaper() }
                 if (exportChat != null) ExportChatItem { close(); exportChat() }
                 if (clearMine != null) ClearMineItem { close(); clearMine() }
             }
@@ -892,14 +893,15 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     // Over the page, under the menus and the photo viewer: the photo's melting copy.
     com.fariin.app.ui.components.ProfileMeltOverlay(melt, 100.dp) { Avatar(shownPhoto, 100.dp) }
     com.fariin.app.ui.components.GlassMenu(moreOpen, moreAnchor, buildList {
+        // iOS moreMenuItems order: Change Wallpaper, Share Profile, Gift, Export, Clear Messages.
+        if (fromChat) add(com.fariin.app.ui.components.GlassMenuItem("Change Wallpaper",
+            androidx.compose.ui.res.painterResource(R.drawable.ic_wallpaper)) { wallpaper() })
         if (shareProfile != null) add(com.fariin.app.ui.components.GlassMenuItem("Share Profile",
             androidx.compose.ui.res.painterResource(R.drawable.ic_link_share)) { shareProfile() })
         if (uid != me && !blocked && cid.contains("_") && uid.isNotEmpty() && com.fariin.app.data.PlusStore.giftsShown) add(com.fariin.app.ui.components.GlassMenuItem("Gift Fariin Plus",
             androidx.compose.ui.res.painterResource(R.drawable.ic_gift)) { giftOpen = true })
         if (addToGroup != null) add(com.fariin.app.ui.components.GlassMenuItem("Add to a Group",
             androidx.compose.ui.res.painterResource(R.drawable.ic_add_member)) { addToGroup() })
-        if (fromChat) add(com.fariin.app.ui.components.GlassMenuItem("Change Wallpaper",
-            androidx.compose.ui.res.painterResource(R.drawable.ic_wallpaper)) { wallpaper() })
         if (exportChat != null) add(com.fariin.app.ui.components.GlassMenuItem("Export Chat",
             androidx.compose.ui.res.painterResource(R.drawable.ic_save_down)) { exportChat() })
         if (clearMine != null) add(com.fariin.app.ui.components.GlassMenuItem("Clear Messages",
