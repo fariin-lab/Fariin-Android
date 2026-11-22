@@ -52,7 +52,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -101,7 +100,6 @@ fun OfficialChatScreen(onBack: () -> Unit, onInfo: (() -> Unit)? = null) {
     val c = Fariin.colors
     val view by OfficialChannel.view.collectAsState()
     val context = LocalContext.current
-    val uri = LocalUriHandler.current
     val scope = rememberCoroutineScope()
     val is24h = DateFormat.is24HourFormat(context)
     var pendingReject by remember { mutableStateOf<String?>(null) }
@@ -154,7 +152,8 @@ fun OfficialChatScreen(onBack: () -> Unit, onInfo: (() -> Unit)? = null) {
     }
     fun tap(b: AnnouncementButton) {
         when (b.action) {
-            AnnouncementButton.LINK -> try { uri.openUri(b.value) } catch (_: Exception) {}
+            // In the in-app browser, as a link in a chat (iOS WebLink.open), not handed to another app.
+            AnnouncementButton.LINK -> com.fariin.app.ui.thread.openWebLink(context, android.net.Uri.parse(b.value))
             // iOS OfficialChatView .screen: the named Settings page (Invite Friends = the share sheet).
             AnnouncementButton.SCREEN -> if (b.value == "invite") {
                 com.fariin.app.ui.settings.shareInvite(context, inviteHandle)
@@ -439,7 +438,23 @@ private fun AnnouncementCard(a: Announcement, time: String, buttons: List<Announ
             }
             if (a.body.isNotEmpty()) {
                 Spacer(Modifier.size(4.dp))
-                Text(a.body, style = MaterialTheme.typography.bodyLarge, color = c.label)
+                // Web addresses in the words are links that open in the in-app browser (iOS linked);
+                // while selecting, a tap ticks the card instead.
+                val ctx = LocalContext.current
+                val linkStyle = androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(color = c.accent,
+                    textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline))
+                val body = remember(a.body, linkStyle, ticked != null) {
+                    androidx.compose.ui.text.buildAnnotatedString {
+                        append(a.body)
+                        for (sp in com.fariin.app.data.TextLinks.find(a.body)) {
+                            if (sp.kind != com.fariin.app.data.TextLinks.Kind.WEB) continue
+                            addLink(androidx.compose.ui.text.LinkAnnotation.Clickable("web", linkStyle) {
+                                if (ticked != null) onToggle() else com.fariin.app.ui.thread.openWebLink(ctx, android.net.Uri.parse(sp.target))
+                            }, sp.start, sp.end)
+                        }
+                    }
+                }
+                Text(body, style = MaterialTheme.typography.bodyLarge, color = c.label)
             }
         }
         for (b in buttons) {
