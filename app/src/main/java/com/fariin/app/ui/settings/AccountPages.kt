@@ -39,6 +39,10 @@ object AccountReport {
     fun joinedMs(me: Map<String, Any?>, authCreatedMs: Long?): Long? =
         (me["createdAt"] as? Timestamp)?.toDate()?.time ?: authCreatedMs
 
+    /** Chats: not cleared by me, and no groups while groups are switched off (iOS Flags.groupsEnabled). */
+    fun chatCount(convs: List<com.fariin.app.data.Conversation>, uid: String, groupsOn: Boolean): Int =
+        convs.count { !it.isCleared(uid) && (groupsOn || !it.isGroup) }
+
     /** Pure: the file's text. */
     fun build(
         now: Long, uid: String, name: String, handle: String, about: String, email: String?, joinedMs: Long?, hasPhoto: Boolean,
@@ -131,7 +135,7 @@ object AccountReport {
         val text = build(
             System.currentTimeMillis(), uid, profile.name, profile.handle, profile.about, user.email, joined, profile.photoUrl != null,
             user.providerData.map { it.providerId }.filter { it != "firebase" }, Presence.privacyOf(me), devices, blocked,
-            CryptoHub.listedAll().count { !it.isCleared(uid) }, fmt = { df.format(Date(it)) }, links = profile.links,
+            chatCount(CryptoHub.listedAll(), uid, com.fariin.app.data.AppFeatures.groups), fmt = { df.format(Date(it)) }, links = profile.links,
             glow = if (com.fariin.app.data.AppFeatures.glow)
                 ((me["glowerCount"] as? Number)?.toInt() ?: 0) to ((me["glowingCount"] as? Number)?.toInt() ?: 0) else null,
         )

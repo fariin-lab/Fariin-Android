@@ -116,6 +116,14 @@ class SettingsPagesTest {
         assertEquals(null, AccountReport.joinedMs(emptyMap(), null))
     }
 
+    @Test fun accountReportChatCountLeavesGroupsOutWhenOff() {
+        val one = Conversation(id = "a_b", users = listOf("me", "b"), updatedAtMillis = 10.0)
+        val cleared = Conversation(id = "a_c", users = listOf("me", "c"), updatedAtMillis = 10.0, clearedAt = mapOf("me" to 20.0))
+        val group = Conversation(id = "g", users = listOf("me", "d"), convType = "group", updatedAtMillis = 10.0)
+        assertEquals(2, AccountReport.chatCount(listOf(one, cleared, group), "me", groupsOn = true))
+        assertEquals(1, AccountReport.chatCount(listOf(one, cleared, group), "me", groupsOn = false))
+    }
+
     @Test fun noEmDashesInPageWords() {
         val words = listOf(PrivacyRules.footer("lastSeen"), PrivacyRules.footer("groups"), PrivacyRules.footer("calls")) +
             AccountDeletion.reasons.map { it.second } + SettingsRules.lessData.map { it.second } + AppLock.delays.map { it.second }
