@@ -1134,15 +1134,49 @@ object GroupCall {
     private var requestsReg: ListenerRegistration? = null
 
     /** iOS listenRequests: everyone at the link's door, oldest first. */
+    /**
+     * iOS M-070: a waiting joiner renews the knock every minute (its `at` moves). One that has not
+     * moved for three minutes on THIS phone's clock is someone who left without a clean exit, and
+     * is hidden; a phone clock that is off cannot hide a fresh one.
+     */
+    private var requestDocs: List<Pair<LinkRequest, Long?>> = emptyList()
+    private val requestSeen = HashMap<String, Pair<Long?, Long>>()   // uid to (at, when seen here)
+    private var requestExpiry: Job? = null
+    private const val REQUEST_FRESH_MS = 180_000L
+
     private fun listenRequests(tag: String, roomId: String) {
         requestsReg?.remove()
+        requestDocs = emptyList(); requestSeen.clear(); requestExpiry?.cancel(); requestExpiry = null
         requestsReg = db.collection("callLinks").document(roomId).collection("requests").whereEqualTo("status", "pending")
             .addSnapshotListener { s, _ ->
                 if (_ui.value.cid != tag || s == null) return@addSnapshotListener
-                val list = s.documents.sortedBy { it.getTimestamp("at")?.toDate()?.time ?: 0L }
-                    .map { LinkRequest(it.id, it.getString("name") ?: "Member", it.getString("photoUrl")) }
-                _ui.value = _ui.value.copy(requests = list)
+                val now = android.os.SystemClock.elapsedRealtime()
+                val docs = s.documents.sortedBy { it.getTimestamp("at")?.toDate()?.time ?: 0L }
+                    .map { LinkRequest(it.id, it.getString("name") ?: "Member", it.getString("photoUrl")) to it.getTimestamp("at")?.toDate()?.time }
+                val seen = HashMap<String, Pair<Long?, Long>>()
+                for ((r, at) in docs) {
+                    val old = requestSeen[r.uid]
+                    seen[r.uid] = if (old != null && old.first == at) old else at to now
+                }
+                requestSeen.clear(); requestSeen.putAll(seen)
+                requestDocs = docs
+                refreshRequests(tag)
             }
+    }
+
+    /** iOS refreshPendingRequests: the live knocks, and a wake-up when the next one goes stale. */
+    private fun refreshRequests(tag: String) {
+        if (_ui.value.cid != tag) return
+        val now = android.os.SystemClock.elapsedRealtime()
+        val live = requestDocs.map { it.first }.filter { r -> requestSeen[r.uid]?.let { now - it.second < REQUEST_FRESH_MS } ?: true }
+        if (live != _ui.value.requests) _ui.value = _ui.value.copy(requests = live)
+        requestExpiry?.cancel(); requestExpiry = null
+        val next = live.mapNotNull { requestSeen[it.uid]?.second }.minOrNull() ?: return
+        val wait = maxOf(1_000L, REQUEST_FRESH_MS - (now - next) + 500)
+        requestExpiry = scope.launch {
+            delay(wait)
+            if (requestsReg != null) refreshRequests(tag)
+        }
     }
 
     /** iOS answerRequest: the card goes at once; it comes back with a note if the server says no. */
@@ -1301,6 +1335,7 @@ object GroupCall {
         adhocWritten = false; adhocJoining = false; adhocMembers = emptyList()
         stopWaiting()
         requestsReg?.remove(); requestsReg = null
+        requestExpiry?.cancel(); requestExpiry = null
         groupReg?.remove(); groupReg = null
         team = null; linkKey = null; passRole = CallRole.PARTICIPANT; sawMicBlocked = false; firstSeen.clear(); screenSince.clear(); cameraWaitSince.clear()
         ticks?.cancel(); ticks = null
