@@ -171,12 +171,14 @@ private fun ChatResetButton(cid: String, shared: Boolean) {
     // A group's (shared): a plain wallpaper for the whole group (iOS resetWallpaperOnly).
     val sharedOne = com.fariin.app.data.SharedWallpapers.active(ctx, cid)
     val canWall = (shared || ChatLookStore.hasOwnWallpaper(ctx, cid) || sharedOne != null) && ChatLookStore.wallpaper(ctx, cid) != ChatWallpaper.None
-    if (!canBubble && !canWall) return
     // Fariin Plus: the one who set a shared wallpaper chooses "Reset for Me" or "Remove for Both".
+    // As iOS canRemoveForBoth: also when this phone uses its own wallpaper over it now.
     val me = com.fariin.app.Fb.auth.currentUser?.uid.orEmpty()
+    val setByMe = !shared && me.isNotEmpty() && com.fariin.app.data.SharedWallpapers.value(ctx, cid)?.by == me
+    if (!canBubble && !canWall && !setByMe) return
     var menu by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    if (sharedOne != null && sharedOne.by == me) {
+    if (setByMe) {
         Box {
             com.fariin.app.ui.components.FloatingTextAction("Reset") { menu = true }
             com.fariin.app.ui.components.GlassDropdown(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
