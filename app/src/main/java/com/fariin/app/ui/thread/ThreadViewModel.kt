@@ -94,6 +94,16 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     // from a profile or a photo builds the chat again, and by then the count is 0 because it was read;
     // saved with the page, the line stays where it was. The scroll still restores the reader's place.
     val dividerAt = androidx.compose.runtime.saveable.rememberSaveable(cid) { mutableStateOf(unreadAtOpen) }
+    // iOS openReadPass: a chat the cached list does not hold yet (a notification or a link tapped
+    // before the list loaded) takes its unread count from the server's chat doc, until the first
+    // server answer for the messages places the divider. Only a count above 0 is taken; not channels.
+    val unlistedAtOpen = remember(cid) { CryptoHub.listedConversation(cid) == null }
+    LaunchedEffect(s.conv, s.synced) {
+        if (!unlistedAtOpen || s.synced || dividerAt.value > 0 || s.conv.isEmpty()) return@LaunchedEffect
+        val c = Conversation.fromFirestore(cid, s.conv)
+        if (c.isChannel) return@LaunchedEffect
+        c.unread(me).takeIf { it > 0 }?.let { dividerAt.value = it }
+    }
     // Message requests in a 1:1 (iOS requestStance / cannotMessageThem / otherHasKey / keyAccepted).
     val otherUid = if (conv?.isGroup == true) "" else com.fariin.app.crypto.Wire.otherUid(cid, me)
     val keyAccepted = androidx.compose.runtime.saveable.rememberSaveable(cid) { mutableStateOf(false) }
