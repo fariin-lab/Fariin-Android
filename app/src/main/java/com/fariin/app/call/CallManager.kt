@@ -147,6 +147,10 @@ object CallManager {
     private var ringShown: String? = null
     /** A camera showed in this call, mine or theirs (iOS everVideo): the chat row then says video call. */
     private var everVideo = false
+    /** The speaker default for video ran this call (iOS videoSpeakerDefaultApplied). */
+    private var videoSpeakerDone = false
+    /** The person picked a route on the speaker button this call (iOS speakerChosenByUser). */
+    private var routeChosen = false
 
     fun init(context: Context) {
         if (::app.isInitialized) return
@@ -170,7 +174,9 @@ object CallManager {
         }
         // iOS noteVideo: any camera coming on during the call, mine or theirs, is remembered.
         main.launch {
-            ui.collect { u -> if (u.status.live && (u.cameraOn || u.remoteCameraOn)) everVideo = true }
+            ui.collect { u ->
+                if (u.status.live && (u.cameraOn || u.remoteCameraOn)) { everVideo = true; videoSpeakerDefault(u) }
+            }
         }
         // The calling sound from the dial to the pick-up, and the chime when their camera comes on (iOS).
         main.launch {
@@ -832,6 +838,11 @@ object CallManager {
 
     /** A route from the speaker button or its list: through Telecom when the system call is up. */
     fun setRoute(to: AudioRoute) {
+        routeChosen = true   // their pick: the video speaker default never undoes it (iOS audit M-010)
+        applyRoute(to)
+    }
+
+    private fun applyRoute(to: AudioRoute) {
         // The button answers the tap at once (owner 2026-11-05: "that tap has delay"); the system's
         // route callback then confirms it, or puts back the real route if the switch did not happen.
         edit { it.copy(route = it.route.copy(current = to), speaker = to == AudioRoute.SPEAKER) }
@@ -842,6 +853,21 @@ object CallManager {
         edit { it.copy(route = it.route.copy(current = to), speaker = to == AudioRoute.SPEAKER) }
         CallTelecom.setLocalRoute(to)
         if (::app.isInitialized && (to == AudioRoute.SPEAKER || to == AudioRoute.EARPIECE)) CallAudio.setSpeaker(app, to == AudioRoute.SPEAKER)
+    }
+
+    /**
+     * iOS applyVideoAudioPolicy: a voice call where a camera comes on (mine or theirs) moves to the
+     * speaker ONCE, unless the person picked a route themselves. A headset or Bluetooth always wins;
+     * then it waits for a later camera. A camera going off never moves the sound back.
+     */
+    private fun videoSpeakerDefault(u: CallUi) {
+        if (videoSpeakerDone || routeChosen) return
+        if (u.status.video) { videoSpeakerDone = true; return }   // a video call starts on the speaker already
+        if (u.status.phase != CallPhase.ACTIVE && u.status.phase != CallPhase.RECONNECTING) return
+        val r = u.route
+        if (AudioRoute.BLUETOOTH in r.available || AudioRoute.HEADSET in r.available || r.current != AudioRoute.EARPIECE) return
+        videoSpeakerDone = true
+        applyRoute(AudioRoute.SPEAKER)
     }
 
     private fun setStartRoute(video: Boolean) {
@@ -1172,7 +1198,7 @@ object CallManager {
         negotiationVersion = 0; appliedRestart = 0; restartRequestsSeen = 0; restartRequestsSent = 0
         engineIceAt = 0L; relayRefreshTries = 0; relayRefreshTriedAt = 0L
         lastPeerBeat = 0.0; peerBeatChangedAt = 0L; myBeatAckedAt = 0L
-        everVideo = false
+        everVideo = false; videoSpeakerDone = false; routeChosen = false
     }
 
     // ================================================================== helpers
