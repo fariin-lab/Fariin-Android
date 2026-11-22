@@ -198,6 +198,8 @@ data class ThreadUi(
      *  messages fetched by id for pins older than the loaded page. */
     val pinnedIds: List<String> = emptyList(),
     val pinned: Map<String, Message> = emptyMap(),
+    /** My Clear Chat / Clear Messages mark (ms): pins to messages up to it are not shown (iOS isClearedHere). */
+    val clearedAtMs: Double = 0.0,
     /** May I pin and unpin here (a 1:1 always; a group the Pin messages right). */
     val canPin: Boolean = false,
     /** The chat's disappearing timer in seconds (`disappearSeconds`, 0 = off). */
@@ -1755,10 +1757,18 @@ private fun ThreadContent(
     }
 }
 
-/** iOS visiblePinIds: pins I can see (not hidden for me, not a tombstone), in pin order. */
-private fun visiblePins(ui: ThreadUi): List<String> = ui.pinnedIds.filter { id ->
-    !com.fariin.app.data.HiddenMessages.isHidden(id) &&
-        (ui.messages.firstOrNull { it.id == id } ?: ui.pinned[id])?.deleted != true
+/**
+ * iOS visiblePinIds: pins I can see (not hidden for me, not a tombstone), in pin order; not a
+ * message I cleared here (Clear Chat / Clear Messages) and not one whose timer ran out.
+ */
+private fun visiblePins(ui: ThreadUi): List<String> {
+    val now = System.currentTimeMillis().toDouble()
+    return ui.pinnedIds.filter { id ->
+        val m = ui.messages.firstOrNull { it.id == id } ?: ui.pinned[id]
+        !com.fariin.app.data.HiddenMessages.isHidden(id) && m?.deleted != true &&
+            !(m != null && ui.clearedAtMs > 0 && m.createdAtMillis <= ui.clearedAtMs) &&
+            !(m?.expiresAtMillis?.let { it <= now } ?: false)
+    }
 }
 
 /** The round tick at the start of a row in select mode. */
