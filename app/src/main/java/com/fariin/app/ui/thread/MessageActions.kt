@@ -215,7 +215,7 @@ internal fun MessageMenu(
             // My own words: change the style my next messages carry, right from here (owner 2026-11-07).
             // Not in a channel, nor in a group whose owner or admin turned styles off.
             if (com.fariin.app.data.BubbleStyles.SHOWN && m.authorId == ui.me && !card && m.text.isNotEmpty() &&
-                m.mediaKind == null && m.poll == null && !m.isCall && !m.isSystem && !m.viewOnce && ui.cid != com.fariin.app.data.OfficialChannel.CID &&
+                m.mediaKind == null && m.type != "sticker" && m.poll == null && !m.isCall && !m.isSystem && !m.viewOnce && ui.cid != com.fariin.app.data.OfficialChannel.CID &&
                 !bubbleStylesOff(ui.channel != null, ui.groupDoc, ui.isGroup))
                 add(MenuItem("Bubble Style", null, iconRes = com.fariin.app.R.drawable.ic_set_appearance, badge = NewBadgeSpots.CHAT_MENU_BUBBLE_STYLE) { com.fariin.app.ui.settings.BubbleStyleSheet.open.value = true })
             // iOS canEdit: not while an admin has me muted in this group.
