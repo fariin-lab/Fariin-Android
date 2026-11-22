@@ -210,8 +210,9 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
         dismissButton = { androidx.compose.material3.TextButton({ askClear = false }) { Text("Cancel", color = c.accent) } },
         containerColor = c.card)
     if (askDelete) com.fariin.app.ui.components.GlassAlert(onDismissRequest = { askDelete = false },
-        title = { Text("Delete Channel?") },
-        text = { Text("This deletes the channel and all its posts for every follower.") },
+        // iOS GroupInfoView: the channel's name in the title, one warning line, a red Delete.
+        title = { Text("Delete “${info.title.ifEmpty { "this channel" }}”?") },
+        text = { Text("Every post goes for all its followers. This can't be undone.") },
         confirmButton = { androidx.compose.material3.TextButton({
             askDelete = false
             // As Delete Group: gone at once, Undo for a few seconds, then the server deletes it.
@@ -224,7 +225,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                 com.fariin.app.data.LeaveUndo.undo()
             }
             onLeft()
-        }) { Text("Delete Channel", color = c.red) } },
+        }) { Text("Delete", color = c.red) } },
         dismissButton = { androidx.compose.material3.TextButton({ askDelete = false }) { Text("Cancel", color = c.accent) } },
         containerColor = c.card)
     var reported by remember { mutableStateOf(false) }
