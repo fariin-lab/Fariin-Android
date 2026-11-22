@@ -1201,7 +1201,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 // someone waits; a member's Disappearing Messages row stays here, read-only.
                 // No Chat Bubble row (owner 2026-11-07): bubble styles live in Settings > Appearance and the chat's wallpaper sheet.
                 SettingsRow("Sounds & Notifications", icon = painterResource(com.fariin.app.R.drawable.ic_notifications),
-                    value = contactNotifValue(muteUntil)) { soundsOpen = true }
+                    // iOS settingsCard words: "Off" while muted, else "On".
+                    value = if (muteUntil > System.currentTimeMillis()) "Off" else "On") { soundsOpen = true }
                 SettingsRow("Storage Used", icon = painterResource(com.fariin.app.R.drawable.ic_set_storage), last = !iAmAdmin && timer <= 0 && !showStats,
                     value = storageBytes?.let { if (it > 0) android.text.format.Formatter.formatShortFileSize(storageCtx, it) else "None" },
                     badge = NewBadgeSpots.GROUP_INFO_STORAGE) {
