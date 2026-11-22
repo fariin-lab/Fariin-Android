@@ -669,11 +669,13 @@ object GroupCall {
     private fun linkNotice(e: Exception): String {
         val code = (e as? com.google.firebase.functions.FirebaseFunctionsException)?.code
         val m = e.message ?: ""
+        // iOS joinNotice, by the server's code first: any other refusal of a link is "Request denied",
+        // and a rate limit (same code as full, another message) stays "Call failed".
         return when {
-            code == com.google.firebase.functions.FirebaseFunctionsException.Code.NOT_FOUND -> "This call link is no longer valid"
-            m.contains("full") -> GroupCallWire.FULL_NOTICE
-            m.contains("denied") -> "Request denied"
-            m.contains("removed") -> "You can't rejoin this call"
+            code == FirebaseFunctionsException.Code.PERMISSION_DENIED && m.contains("removed") -> "You can't rejoin this call"
+            code == FirebaseFunctionsException.Code.RESOURCE_EXHAUSTED && m.contains("full") -> GroupCallWire.FULL_NOTICE
+            code == FirebaseFunctionsException.Code.NOT_FOUND -> LINK_GONE
+            code == FirebaseFunctionsException.Code.PERMISSION_DENIED -> "Request denied"
             else -> "Call failed"
         }
     }
