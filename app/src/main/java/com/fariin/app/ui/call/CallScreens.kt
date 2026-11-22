@@ -1885,7 +1885,9 @@ private fun NotHereYet(g: GroupCallUi, meId: String?) {
     SheetSection {
         Column {
             rows.forEach { i ->
-                val (name, photo) = people[i.uid] ?: ("User" to null)
+                val (profileName, photo) = people[i.uid] ?: ("User" to null)
+                // The name I saved for them wins on my screen (iOS notConnectedRow).
+                val name = com.fariin.app.data.ContactNames.name(i.uid) ?: profileName
                 val status = com.fariin.app.call.LinkInvite.status(i, now)
                 val waiting = nudgedAt[i.uid]?.let { now - it < 60_000 } == true
                 Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
