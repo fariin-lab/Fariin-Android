@@ -200,6 +200,7 @@ object SessionEnd {
         WipeStep("widget") { c, _ -> com.fariin.app.system.FariinWidget.clear(c) },
         WipeStep("last seen lines") { c, _ -> com.fariin.app.data.LastSeenLine.clear(c) },
         WipeStep("photo outbox") { c, _ -> com.fariin.app.local.PhotoOutbox.wipe(c) },
+        WipeStep("file outbox") { c, _ -> com.fariin.app.local.FileOutbox.wipe(c) },
         // The origin index names files of this account's chats (MediaOrigin): it goes with them.
         WipeStep("media origin") { _, _ -> com.fariin.app.media.MediaOrigin.removeAll() },
         WipeStep("profile photo index") { _, _ -> com.fariin.app.data.ProfilePhotoIndex.clear() },

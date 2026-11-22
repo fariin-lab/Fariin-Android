@@ -75,6 +75,7 @@ object AppFeatures {
         UploadedEmoji.init(c)
         ChatCardsStore.init(c)
         com.fariin.app.local.PhotoOutbox.init(c)
+        com.fariin.app.local.FileOutbox.init(c)
         HiddenLooks.init(c)
     }
 

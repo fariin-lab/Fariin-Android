@@ -19,6 +19,7 @@ class SessionEndWipeTest {
         "widget",
         "last seen lines",
         "photo outbox",
+        "file outbox",
         "media origin",
         "profile photo index",
         "played voice",
