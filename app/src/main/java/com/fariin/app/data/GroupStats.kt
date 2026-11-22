@@ -103,7 +103,7 @@ object GroupStats {
             val now = (m["now"] as? Number)?.toDouble() ?: return
             val ch = change(now, (m["prev"] as? Number)?.toDouble())
             if (now == 0.0 && ch == null) return
-            out += ChannelTile(label, number().format(kotlin.math.round(now).toLong()), ch)
+            out += ChannelTile(label, plain(now), ch)
         }
         add("Followers", o["followers"])
         val n = dict(o["enabledNotifications"])
@@ -352,7 +352,9 @@ object GroupStats {
         }
     }
 
-    private fun plain(v: Double): String = if (v == floor(v)) number().format(v.toLong()) else String.format(Locale.getDefault(), "%.1f", v)
+    /** A whole number as before; a channel's mean keeps one decimal at most ("412.5"), as iOS. */
+    private fun plain(v: Double): String = NumberFormat.getNumberInstance(Locale.getDefault())
+        .apply { minimumFractionDigits = 0; maximumFractionDigits = 1 }.format(v)
 
     /** "Oct 19 - Oct 26": the week the Overview covers. */
     fun period(nowMs: Double, zone: ZoneId = ZoneId.systemDefault(), pattern: String = "MMM d", locale: Locale = Locale.getDefault()): String {
