@@ -934,11 +934,21 @@ fun ChatListScreen(
                                 }
                             }
                         } else {
-                            val oneToOne = shown.filter { !it.isGroup && !it.isChannel }
-                            val groupsHit = shown.filter { it.isGroup && !it.isChannel }
-                            val channelsHit = shown.filter { it.isChannel }
-                            // "Activity" is found like a chat title.
-                            val activityHit = activity?.let { it.at > 0 } == true && "Activity".contains(q, ignoreCase = true)
+                            // Things searched before come first in each section; the rest keep the
+                            // list's order (iOS ChatSearchPage recentFirst).
+                            val recentRank = HashMap<String, Int>()
+                            SearchRecents.entries.forEachIndexed { i, e -> recentRank.putIfAbsent(e.key, i) }
+                            fun List<com.fariin.app.data.Conversation>.recentFirst() = sortedBy { recentRank[it.id] ?: Int.MAX_VALUE }
+                            // A group or channel I am in, found by its @name and not by its title,
+                            // goes with my groups as my chat (iOS, the "waraa3" case).
+                            val shownIds = shown.mapTo(HashSet()) { it.id }
+                            val byName = groupHits.mapNotNull { h -> state.all.firstOrNull { it.id == h.cid }
+                                ?.takeIf { it.id !in shownIds && (h.isMember || (it.isGroup && me in it.users)) } }.distinctBy { it.id }
+                            val oneToOne = shown.filter { !it.isGroup && !it.isChannel }.recentFirst()
+                            val groupsHit = shown.filter { it.isGroup && !it.isChannel }.recentFirst() + byName.filter { !it.isChannel }
+                            val channelsHit = shown.filter { it.isChannel }.recentFirst() + byName.filter { it.isChannel }
+                            // "Activity" is found like a chat title, by the same word-start match.
+                            val activityHit = activitySearchHit
                             if (oneToOne.isNotEmpty() || officialShown || activityHit) {
                                 item(key = "h-s-chats") { SectionHeader("Chats") }
                                 if (activityHit) activityItem()
