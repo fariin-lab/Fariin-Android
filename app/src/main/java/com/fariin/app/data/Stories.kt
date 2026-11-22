@@ -163,6 +163,8 @@ object StoryList {
             if (key.startsWith(StoryGroup.GROUP_PREFIX)) {
                 val gid = key.removePrefix(StoryGroup.GROUP_PREFIX)
                 val conv = convs.firstOrNull { it.id == gid }
+                // Suspended or disabled by Fariin: its stories leave the row (iOS rebuild).
+                if (conv?.fariinLocked() == true) continue
                 others += StoryGroup(
                     key, conv?.displayName(me) ?: sorted.last().groupName ?: "",
                     conv?.displayPhoto(me) ?: sorted.last().groupPhoto, sorted, watermarks[key],
