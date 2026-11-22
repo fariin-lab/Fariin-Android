@@ -2116,7 +2116,9 @@ private fun SenderLine(ui: ThreadUi, uid: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         // iOS personName: "User" when the group has no name on file for them.
         Text(ui.names[uid]?.takeIf { it.isNotEmpty() } ?: "User", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = tint, maxLines = 1,
-            overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)
+                // iOS didTapSender: a tap on the name opens the member's card, as the avatar does.
+                .clickable(enabled = uid != ui.me, onClickLabel = "Member") { MemberTap.request.value = uid })
         // iOS SenderChrome.verified: the member's tick at 15 after the name (gold for a company).
         val ctx = LocalContext.current
         LaunchedEffect(uid) { com.fariin.app.data.VerifiedPeople.warm(ctx.applicationContext, uid) }
