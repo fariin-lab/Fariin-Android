@@ -216,7 +216,8 @@ private fun CallBar(live: LiveCall, conv: Conversation?, title: String) {
     val sub = GroupCallWords.barSubtitle(people.size)
     val shape = RoundedCornerShape(26.dp)
     Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 2.dp).fillMaxWidth().heightIn(min = 52.dp).floating(shape)
-        .clickable { CallActivity.startGroup(ctx, live.cid, title, video = false) }
+        // A video chat is joined with my camera on, as iOS joinLiveGroupCall passes the call's video flag.
+        .clickable { CallActivity.startGroup(ctx, live.cid, title, video = live.video) }
         .semantics { contentDescription = "$heading in $title, $sub. Join" }
         .padding(start = 10.dp, end = 8.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         if (people.isEmpty()) {
