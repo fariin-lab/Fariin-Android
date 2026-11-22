@@ -113,10 +113,11 @@ object BubbleStyles {
     const val NONE = "__none__"
     fun chatKey(cid: String) = "bubbleStyle.chat.$cid"
 
-    /** Sign-out: every chat's own style goes (they name the old account's chats); my pick stays. */
+    /** Sign-out: every chat's own style goes (they name the old account's chats), and my pick for all
+     *  chats with its decorations too (iOS removeAccountKeys): the next account starts plain. */
     fun wipeChats(c: android.content.Context) {
         val p = c.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
-        val keys = p.all.keys.filter { it.startsWith("bubbleStyle.chat.") }
+        val keys = p.all.keys.filter { it.startsWith("bubbleStyle.chat.") || it == KEY || it == DECOR_KEY }
         if (keys.isNotEmpty()) p.edit().apply { keys.forEach { remove(it) } }.apply()
         version.intValue++
     }
