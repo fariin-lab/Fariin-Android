@@ -162,6 +162,11 @@ fun MainShell(
             com.fariin.app.data.OfficialChannel.listEntry(officialView, me), groupsOn = com.fariin.app.data.AppFeatures.groups)
     }
     LaunchedEffect(me, badgeTotal) { badgeTotal?.let { com.fariin.app.push.AppBadge.sync(context.applicationContext, me, it) } }
+    // While this list is alive it already counts every new message; a push must not add it again.
+    androidx.compose.runtime.DisposableEffect(me) {
+        com.fariin.app.push.AppBadge.listLive = true
+        onDispose { com.fariin.app.push.AppBadge.listLive = false }
+    }
     // The call history, read here so the Calls tab's missed badge counts from any tab (iOS
     // MainShell callsRepo). Each chat's calls are re-read only when that chat moves.
     val callsRepo = remember { com.fariin.app.data.CallsRepository() }

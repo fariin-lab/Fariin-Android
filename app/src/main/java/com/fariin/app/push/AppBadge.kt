@@ -39,8 +39,12 @@ object AppBadge {
 
     /** A message push with the app in the background. The push has no count on Android, so the
      *  last known total plus this message (AppBadgeRules.afterPush). */
+    /** True while the chat list is being listened to (MainShell on screen or kept in the back). Its
+     *  total already holds a new message, so a push adding one more counted it twice. */
+    @Volatile var listLive: Boolean = false
+
     fun notePush(c: Context, me: String, countsHere: Boolean) {
-        if (me.isEmpty() || !countsHere) return
+        if (me.isEmpty() || !countsHere || listLive) return
         prefs(c).edit().putInt(me, com.fariin.app.data.AppBadgeRules.afterPush(lastKnown(c, me), true)).apply()
     }
 
