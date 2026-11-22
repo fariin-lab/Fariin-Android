@@ -1787,8 +1787,8 @@ private fun ThreadContent(
                         com.fariin.app.data.GroupAdmins.slows(doc, ui.me)) com.fariin.app.data.MessageLength.splitForBubbles(whole) else emptyList()
                     val rest = if (parts.size > 1) parts.drop(1).joinToString("\n\n") else null
                     val t = if (rest != null) parts[0] else whole
-                    // A group's text carries no format runs (they are a channel post's), so the first part goes plain.
-                    val fmt = if (rest != null) null else wholeFmt
+                    // The first part keeps its own bold and links (iOS slices them per part).
+                    val fmt = if (rest != null) com.fariin.app.data.TextFormat.forParts(wholeFmt, whole.trim(), parts)[0] else wholeFmt
                     // Links typed or added through Format > Link both count (iOS).
                     val anyLink = com.fariin.app.data.GroupAdmins.hasLink(t) ||
                         (fmt != null && com.fariin.app.data.TextFormat.parseLinks(fmt, t.length).isNotEmpty())
