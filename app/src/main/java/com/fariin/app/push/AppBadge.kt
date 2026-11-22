@@ -29,10 +29,10 @@ object AppBadge {
     fun lastKnown(c: Context, me: String): Int = prefs(c).getInt(me, 0)
 
     /** The chat list changed while the app runs: its total, from AppBadgeRules.total. */
-    fun sync(c: Context, me: String, total: Int) {
+    fun sync(c: Context, me: String, total: Int, force: Boolean = false) {
         if (me.isEmpty()) return
         val t = maxOf(0, total)
-        if (prefs(c).getInt(me, -1) == t) return
+        if (!force && prefs(c).getInt(me, -1) == t) return
         prefs(c).edit().putInt(me, t).apply()
         refresh(c, me)
     }
@@ -45,7 +45,7 @@ object AppBadge {
 
     fun notePush(c: Context, me: String, countsHere: Boolean) {
         if (me.isEmpty() || !countsHere || listLive) return
-        prefs(c).edit().putInt(me, com.fariin.app.data.AppBadgeRules.afterPush(lastKnown(c, me), true)).apply()
+        prefs(c).edit().putInt(me, com.fariin.app.data.AppBadgeRules.afterPush(lastKnown(c, me), true, listLive)).apply()
     }
 
     /** Sign-out: the account's number goes with it. */

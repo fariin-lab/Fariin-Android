@@ -163,9 +163,21 @@ fun MainShell(
     }
     LaunchedEffect(me, badgeTotal) { badgeTotal?.let { com.fariin.app.push.AppBadge.sync(context.applicationContext, me, it) } }
     // While this list is alive it already counts every new message; a push must not add it again.
-    androidx.compose.runtime.DisposableEffect(me) {
+    // And on every start and resume the number is set from the list once, so a too-high number left
+    // by an older run snaps back when the app opens, not only at the next list change.
+    val badgeNow = androidx.compose.runtime.rememberUpdatedState(badgeTotal)
+    val badgeLife = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(me, badgeLife) {
         com.fariin.app.push.AppBadge.listLive = true
-        onDispose { com.fariin.app.push.AppBadge.listLive = false }
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME)
+                badgeNow.value?.let { com.fariin.app.push.AppBadge.sync(context.applicationContext, me, it, force = true) }
+        }
+        badgeLife.lifecycle.addObserver(obs)
+        onDispose {
+            badgeLife.lifecycle.removeObserver(obs)
+            com.fariin.app.push.AppBadge.listLive = false
+        }
     }
     // The call history, read here so the Calls tab's missed badge counts from any tab (iOS
     // MainShell callsRepo). Each chat's calls are re-read only when that chat moves.

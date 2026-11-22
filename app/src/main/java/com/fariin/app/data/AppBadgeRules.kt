@@ -29,5 +29,7 @@ object AppBadgeRules {
      * A push that arrived with the app in the background: the push carries no count on Android, so
      * the last total this phone knew plus this one message. Not for a chat that is open now.
      */
-    fun afterPush(lastKnown: Int, countsHere: Boolean): Int = maxOf(0, lastKnown) + if (countsHere) 1 else 0
+    fun afterPush(lastKnown: Int, countsHere: Boolean, listLive: Boolean = false): Int =
+        // A live chat list already holds the new message in its total: adding one counted it twice.
+        maxOf(0, lastKnown) + if (countsHere && !listLive) 1 else 0
 }

@@ -59,4 +59,15 @@ class AppBadgeRulesTest {
         assertEquals(4, AppBadgeRules.afterPush(4, countsHere = false))
         assertEquals(1, AppBadgeRules.afterPush(-3, countsHere = true))
     }
+
+    @Test fun livelistNeverCountsAPushTwice() {
+        // List live: the list already says 2 for Maya's 2 texts; her 2 pushes add nothing.
+        var t = 2
+        repeat(2) { t = AppBadgeRules.afterPush(t, countsHere = true, listLive = true) }
+        assertEquals(2, t)
+        // No list (the push started the app): 2 pushes from 0 make 2.
+        var u = 0
+        repeat(2) { u = AppBadgeRules.afterPush(u, countsHere = true, listLive = false) }
+        assertEquals(2, u)
+    }
 }
