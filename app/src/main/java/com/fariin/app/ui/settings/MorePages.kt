@@ -277,7 +277,8 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
             }
             for ((i, d) in others.withIndex()) Box(Modifier.clickable { info = d to false }) { DeviceLine(d, false, now, i == others.lastIndex) }
         }
-        if (others.size > 1) SettingsSection { SettingsRow("Sign out all other devices", trailing = Trailing.NONE, titleColor = Fariin.colors.red, last = true) { all = true } }
+        // iOS shows it as soon as there is any other device, one included.
+        if (others.isNotEmpty()) SettingsSection { SettingsRow("Sign out all other devices", trailing = Trailing.NONE, titleColor = Fariin.colors.red, last = true) { all = true } }
         SettingsSection(header = "Automatic sign-out", footer = "A device not opened for this long signs itself out. The one you are using stays signed in.") {
             var menu by remember { mutableStateOf(false) }
             Box {
