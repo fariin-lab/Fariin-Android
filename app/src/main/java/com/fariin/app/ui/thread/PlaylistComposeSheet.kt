@@ -113,10 +113,10 @@ internal fun PlaylistComposeSheet(uris: List<Uri>, onDismiss: () -> Unit,
         if (u != null) {
             loadingCover = true
             scope.launch {
-                // Shrunk to the cover's size as a JPEG, which also drops the camera's metadata (iOS coverJPEG).
+                // Upright and shrunk to the cover's size, rebuilt from pixels so the camera's metadata
+                // stays behind (iOS coverJPEG), through the photo send's own decode.
                 val jpeg = withContext(Dispatchers.IO) {
-                    runCatching { ctx.contentResolver.openInputStream(u)?.use { it.readBytes() } }.getOrNull()
-                        ?.let { MusicTags.artJpeg(it, MusicRules.COVER_PIXELS) }
+                    runCatching { com.fariin.app.media.PhotoPrep.cover(ctx, u, MusicRules.COVER_PIXELS) }.getOrNull()
                 }
                 loadingCover = false
                 if (jpeg != null && jpeg.isNotEmpty()) coverPick = jpeg

@@ -23,6 +23,15 @@ class PhotoPrep(val jpeg: ByteArray, val width: Int, val height: Int, val blurha
             return prepare(q) { side -> BitmapDecode.fromBytes(bytes, side)?.let { flatten(it) } }
         }
 
+        /**
+         * A playlist cover from a picked photo (iOS PlaylistDraft.coverJPEG): upright (EXIF applied),
+         * rebuilt from pixels so no camera metadata goes along, the long side at most [maxSide], JPEG 0.8.
+         */
+        fun cover(context: Context, uri: Uri, maxSide: Int): ByteArray? {
+            val b = BitmapDecode.fromUri(context, uri, maxSide)?.let { flatten(it) } ?: return null
+            return jpeg(b, 80).also { b.recycle() }
+        }
+
         private fun prepare(q: MediaRules.PhotoQuality, decodeAt: (Int) -> Bitmap?): PhotoPrep? {
             var out: ByteArray? = null
             var bmp: Bitmap? = null
