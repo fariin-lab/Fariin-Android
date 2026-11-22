@@ -25,11 +25,13 @@ object PostStats {
 
     /** Fire and forget; errors are ignored (a share not counted is not worth a word to the user). */
     fun noteShare(cid: String, mid: String, to: List<String>) {
-        if (to.isEmpty() || !com.fariin.app.channel.ChannelRules.safeId(cid)) return
+        // Like iOS: no blanks, never the channel itself, each chat once, at most 20.
+        val targets = to.filter { it.isNotEmpty() && it != cid }.distinct().take(20)
+        if (targets.isEmpty() || mid.isEmpty() || !com.fariin.app.channel.ChannelRules.safeId(cid)) return
         scope.launch {
             runCatching {
                 fns().getHttpsCallable("notePostShare").withTimeout(15, TimeUnit.SECONDS)
-                    .call(mapOf("cid" to cid, "mid" to mid, "to" to to.distinct().take(20))).await()
+                    .call(mapOf("cid" to cid, "mid" to mid, "to" to targets)).await()
             }
         }
     }
@@ -54,7 +56,8 @@ object PostStats {
             for ((e, n) in (r["reactions"] as? Map<*, *>).orEmpty()) {
                 val k = e as? String ?: continue
                 val cnt = GroupStats.int(n); if (cnt <= 0) continue
-                val name = if (k.startsWith("custom:") || k.length > 16) "Custom" else k
+                // "ce_" and "cu_" keys are one "Custom" series, as on iOS.
+                val name = if (com.fariin.app.ui.thread.CustomReaction.isCustom(k)) "Custom" else k
                 m[name] = (m[name] ?: 0) + cnt
             }
             m
