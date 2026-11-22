@@ -739,7 +739,8 @@ object GroupRules {
      * member becomes one; when I own the group, an admin (else the first member) becomes the owner
      * with "<name> is now the owner"; then "<me> left".
      */
-    fun leavePlan(me: String, myName: String, data: Map<String, Any?>): LeavePlan {
+    fun leavePlan(me: String, myName: String, data: Map<String, Any?>,
+                  nowMs: Double = System.currentTimeMillis().toDouble()): LeavePlan {
         val users = (data["users"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
         val admins = (data["admins"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
         val names = (data["names"] as? Map<*, *>)?.mapNotNull { (k, v) -> (k as? String)?.let { it to (v as? String ?: "") } }?.toMap() ?: emptyMap()
@@ -762,6 +763,11 @@ object GroupRules {
         }
         val left = "$myName left"
         notices.add(left)
+        // iOS canNotice: no lines when the message rule would refuse mine (admins-only group and I
+        // am not staff, muted, or the group closed), so a refused line cannot refuse the leave.
+        val canNotice = GroupAdmins.announcementBlock(data, me) == null &&
+            !MemberRestrict.isMuted(data, me, nowMs) && !GroupMod.blocksSending(data, nowMs)
+        if (!canNotice) return LeavePlan(update, emptyList(), ownerHeir)
         update["lastMessage"] = left
         update["lastSender"] = me
         return LeavePlan(update, notices, ownerHeir)

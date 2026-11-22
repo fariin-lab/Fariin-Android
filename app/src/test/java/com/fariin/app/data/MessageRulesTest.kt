@@ -125,6 +125,16 @@ class MessageRulesTest {
         assertEquals("A, B and 2 others", GroupRules.addedWho(listOf("A", "B", "C", "D")))
     }
 
+    @Test fun leavingAnAdminsOnlyGroupWritesNoLines() {
+        // iOS canNotice: the message rule would refuse my line, so the leave goes without it.
+        val data = mapOf<String, Any?>("type" to "group", "users" to listOf(me, "a", "b"), "admins" to listOf("b"),
+            "createdBy" to "b", "onlyAdminsSend" to true)
+        val plan = GroupRules.leavePlan(me, "Abdi", data)
+        assertTrue(plan.notices.isEmpty())
+        assertNull(plan.update["lastMessage"])
+        assertEquals(listOf("Abdi left"), GroupRules.leavePlan("b", "Bilan", data).notices.takeLast(1))
+    }
+
     @Test fun messageParsesReactions() {
         val m = Message.fromFirestore("x", mapOf("authorId" to "a", "text" to "", "reactions" to mapOf("a" to "enc1:zz", "b" to "enc1:yy")),
             "grp") { _, uid -> if (uid == "a") "👍" else "" }
