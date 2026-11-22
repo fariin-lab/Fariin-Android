@@ -651,10 +651,16 @@ class MainActivity : ComponentActivity() {
     /** A tapped "wants to talk" notification (app was closed): its data keys open the invitation. */
     private fun takeLinkNudge(i: android.content.Intent?) {
         val e = i?.extras ?: return
-        if (e.getString("type") != "linknudge") return
+        val type = e.getString("type")
+        if (type != "linknudge" && type != com.fariin.app.data.GroupNudgeRules.TYPE) return
         val d = e.keySet().mapNotNull { k -> e.getString(k)?.let { k to it } }.toMap()
         i.removeExtra("type")
-        com.fariin.app.call.GroupRing.onLinkNudge(applicationContext, d)
+        if (type == "linknudge") { com.fariin.app.call.GroupRing.onLinkNudge(applicationContext, d); return }
+        // "Wants you back in the call" (server groupCallNudge), its body or its Join: the invitation.
+        val n = com.fariin.app.data.GroupNudgeRules.parse(d) ?: return
+        i.removeExtra("cid")
+        com.fariin.app.push.NotificationPoster.clearGroupNudge(applicationContext, n.cid)
+        com.fariin.app.call.GroupRing.onGroupNudge(applicationContext, n)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -745,7 +751,9 @@ class MainActivity : ComponentActivity() {
             val plain = intent.getStringExtra("cid")
             // A missed call's push (kind "call" with the call row's `mid`) opens its chat, as on iOS.
             val ring = plainKind == "call" && intent.getStringExtra("mid").isNullOrEmpty()
-            if (!ring && plainKind != "story" && plain != null && com.fariin.app.channel.ChannelRules.safeId(plain)) {
+            // A group call nudge opens the call's invitation (takeLinkNudge), not the group chat.
+            val nudge = intent.getStringExtra("type") == com.fariin.app.data.GroupNudgeRules.TYPE
+            if (!ring && !nudge && plainKind != "story" && plain != null && com.fariin.app.channel.ChannelRules.safeId(plain)) {
                 intent.removeExtra("cid")
                 intent.putExtra(PushRouter.EXTRA_OPEN_CID, plain)
                 val plainMid = intent.getStringExtra("mid")

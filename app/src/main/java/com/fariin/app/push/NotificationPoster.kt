@@ -309,6 +309,42 @@ object NotificationPoster {
         nmc.notify(if (rid.isNotEmpty()) "$pre-$cid/$mid/$rid" else "$pre-$cid/$mid", ID, n)
     }
 
+    /**
+     * "Wants you back in the call" (server groupCallNudge) when the push reached the app: the
+     * server's words, one per group (tag). A tap and Join do the same: the call's invitation
+     * (MainActivity reads the same keys a system-drawn one carries). [quiet] = in front with In-App
+     * Preview off or the App Lock page up: in the list only, the tone is ours.
+     */
+    @SuppressLint("MissingPermission")
+    fun postGroupNudge(c: Context, title: String, body: String, nudge: com.fariin.app.data.GroupNudge, quiet: Boolean) {
+        ensureChannels(c)
+        val nmc = NotificationManagerCompat.from(c)
+        if (!nmc.areNotificationsEnabled()) return
+        val open = Intent(c, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            nudge.extras().forEach { (k, v) -> putExtra(k, v) }
+        }
+        val tap = PendingIntent.getActivity(c, ("n${nudge.cid}").hashCode(), open,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val n = NotificationCompat.Builder(c, NotifChannel.CALLS.id)
+            .setSmallIcon(R.drawable.ic_stat_fariin)
+            .setColor(Color.rgb(0x1E, 0x88, 0xE5))
+            .setContentTitle(title)
+            .setContentText(body)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setContentIntent(tap)
+            .addAction(if (nudge.video) R.drawable.ic_call_video else R.drawable.ic_call_voice, "Join", tap)
+            .setAutoCancel(true)
+            .setSilent(quiet)
+            .build()
+        nmc.notify(nudgeTag(nudge.cid), ID, n)
+    }
+
+    fun nudgeTag(cid: String) = "groupnudge-$cid"
+
+    /** Opened or joined: the group's nudge leaves the list. */
+    fun clearGroupNudge(c: Context, cid: String) = NotificationManagerCompat.from(c).cancel(nudgeTag(cid), ID)
+
     /** "Posted a new story" with the app open: one per author (tag), a tap opens the Stories tab. */
     @SuppressLint("MissingPermission")
     fun postStory(c: Context, title: String, body: String, author: String) {

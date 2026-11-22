@@ -91,7 +91,14 @@ private fun Card(b: InAppBanner) {
     val px = LocalDensity.current.density
     val dragY = remember(b) { Animatable(0f) }
     val felt = remember(b) { booleanArrayOf(false) }
-    fun open() { InAppNotify.dismiss(); PushRouter.pendingOpen.value = b.cid }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    // A group call nudge opens the call's invitation (Ignore / Join), not the chat (iOS open()).
+    fun open() {
+        InAppNotify.dismiss()
+        val n = b.nudge
+        if (n != null) { com.fariin.app.push.NotificationPoster.clearGroupNudge(ctx, n.cid); com.fariin.app.call.GroupRing.onGroupNudge(ctx, n) }
+        else PushRouter.pendingOpen.value = b.cid
+    }
     // Down is rubber-banded and capped at 50, up is free (iOS rubberBanded, coefficient 0.55).
     fun banded(y: Float): Float = if (y <= 0f) y else (1f - 1f / (y * 0.55f / 50f + 1f)) * 50f
     Row(
@@ -105,7 +112,7 @@ private fun Card(b: InAppBanner) {
             // Read out when it lands (a polite live region), as one item that opens the chat.
             .semantics(mergeDescendants = true) {
                 liveRegion = LiveRegionMode.Polite
-                onClick(label = "Open chat") { open(); true }
+                onClick(label = if (b.nudge != null) "Join" else "Open chat") { open(); true }
             }
             .pointerInput(b) {
                 detectVerticalDragGestures(
@@ -145,6 +152,15 @@ private fun Card(b: InAppBanner) {
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(b.body, color = Fariin.colors.secondary, fontSize = 15.sp, lineHeight = 18.sp,
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        // The nudge's Join pill (iOS showNudge): the same as a tap on the card.
+        if (b.nudge != null) {
+            Spacer(Modifier.width(8.dp))
+            Text("Join", color = androidx.compose.ui.graphics.Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .background(androidx.compose.ui.graphics.Color(0xFF34C759), RoundedCornerShape(50))
+                    .clickable { open() }
+                    .padding(horizontal = 16.dp, vertical = 7.dp))
         }
     }
 }
