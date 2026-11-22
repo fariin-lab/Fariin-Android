@@ -135,7 +135,7 @@ class MessageRulesTest {
         val plan = GroupRules.leavePlan(me, "Abdi", data)
         assertTrue(plan.notices.isEmpty())
         assertNull(plan.update["lastMessage"])
-        assertEquals(listOf("Abdi left"), GroupRules.leavePlan("b", "Bilan", data).notices.takeLast(1))
+        assertEquals(listOf("Bilan left"), GroupRules.leavePlan("b", "Bilan", data).notices.takeLast(1))
     }
 
     @Test fun messageParsesReactions() {

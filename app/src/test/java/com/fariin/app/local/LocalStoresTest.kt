@@ -123,7 +123,8 @@ class LocalStoresTest {
     }
 
     @Test fun presenceWritesNoTimeWhenHidden() {
-        assertEquals(mapOf("online" to false), Presence.fields(online = true, share = false))
+        // Already hidden before: no time, nothing to delete (the first hidden write deletes it once).
+        assertEquals(mapOf("online" to false), Presence.fields(online = true, share = false, wasSharing = false))
         assertEquals(setOf("online", "lastActive"), Presence.fields(online = true, share = true).keys)
         assertEquals(true, Presence.fields(online = true, share = true)["online"])
         assertFalse(Presence.shares(mapOf("lastSeen" to "nobody")))

@@ -7,9 +7,7 @@ import org.junit.Test
 /** A long text split in bubbles keeps each part's own bold and links (iOS ThreadView.send). */
 class TextFormatPartsTest {
     @Test fun eachPartGetsItsOwnRuns() {
-        val whole = "aaaa bbbb
-
-cccc dddd"
+        val whole = "aaaa bbbb\n\ncccc dddd"
         val fmt = TextFormat.serialize(listOf(TextFormat.Span(0, 4), TextFormat.Span(7, 18)), whole.length,
             listOf(TextFormat.Link(16, 20, "https://fariin.com")))
         val parts = listOf("aaaa bbbb", "cccc dddd")
