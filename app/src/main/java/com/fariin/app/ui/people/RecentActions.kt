@@ -110,6 +110,8 @@ internal fun RecentActionsPage(cid: String, me: String, onBack: () -> Unit) {
     var actors by remember(cid) { mutableStateOf<Set<String>?>(null) }
     var showFilter by remember { mutableStateOf(false) }
     val filtering = kinds != null || actors != null
+    // A channel reads its own words (iOS ChannelWords): followers, posts, channel.
+    val isChannel = doc["channel"] == true
 
     @Suppress("UNCHECKED_CAST")
     fun strMap(k: String) = (doc[k] as? Map<*, *>)?.entries?.mapNotNull { (a, b) -> (a as? String)?.let { it to (b as? String ?: "") } }?.toMap() ?: emptyMap()
@@ -135,7 +137,7 @@ internal fun RecentActionsPage(cid: String, me: String, onBack: () -> Unit) {
     LaunchedEffect(cid) { if (events.isEmpty()) load(false) }
 
     if (showFilter) RecentActionsFilterSheet(AdminLog.filterPeople(doc["createdBy"] as? String ?: "",
-        (doc["admins"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(), events), kinds, actors, name, photo,
+        (doc["admins"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(), events), kinds, actors, name, photo, isChannel,
         onClose = { showFilter = false }) { k, a -> kinds = k; actors = a }
 
     val is24h = DateFormat.is24HourFormat(ctx)
@@ -188,7 +190,7 @@ internal fun RecentActionsPage(cid: String, me: String, onBack: () -> Unit) {
                                         ActionRow(e, name, photo, AdminLog.timeText(e.atMs, is24h, locale),
                                             AdminLog.detail(e, events, (doc["avatarUrl"] as? String)?.ifEmpty { null },
                                                 GroupRules.description(doc).ifEmpty { null }, name, untilText),
-                                            doc["avatarUrl"] as? String)
+                                            doc["avatarUrl"] as? String, isChannel)
                                     }
                                 }
                             }
@@ -218,9 +220,12 @@ private fun DatePill(text: String) {
 
 @Composable
 private fun ActionRow(e: AdminLog.Event, name: (String) -> String, photo: (String) -> String?, time: String,
-                      more: AdminLog.Detail, groupPhoto: String?) {
+                      more: AdminLog.Detail, groupPhoto: String?, isChannel: Boolean) {
     val c = Fariin.colors
-    val words = AdminLog.action(e, name(e.target))
+    // A channel's words on the whole line (iOS), but never inside the person's name.
+    val them = name(e.target)
+    val words = AdminLog.action(e, them)
+        .map { if (it.bold && it.text == them) it else it.copy(text = com.fariin.app.data.ChannelWords.forChat(isChannel, it.text)) }
     Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(Modifier.padding(top = 1.dp)) {
             if (e.by == "fariin") OfficialAvatar(42.dp) else Avatar(photo(e.by), 42.dp)
@@ -239,20 +244,21 @@ private fun ActionRow(e: AdminLog.Event, name: (String) -> String, photo: (Strin
             Text(buildAnnotatedString {
                 words.forEach { p -> if (p.bold) withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(p.text) } else append(p.text) }
             }, fontSize = 15.sp, color = c.label)
-            if (!more.isEmpty) DetailBlock(more, groupPhoto)
+            if (!more.isEmpty) DetailBlock(more, groupPhoto, isChannel)
         }
     }
 }
 
 @Composable
-private fun DetailBlock(d: AdminLog.Detail, groupPhoto: String?) {
+private fun DetailBlock(d: AdminLog.Detail, groupPhoto: String?, isChannel: Boolean) {
     val c = Fariin.colors
+    val w: (String) -> String = { com.fariin.app.data.ChannelWords.forChat(isChannel, it) }
     Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         d.quote?.let { q ->
             Row(Modifier.height(androidx.compose.foundation.layout.IntrinsicSize.Min)) {
                 Box(Modifier.width(3.dp).fillMaxHeight().clip(RoundedCornerShape(1.5.dp)).background(c.blue))
                 Column(Modifier.padding(start = 10.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    d.quoteLabel?.let { Text(it, fontSize = 12.sp, color = c.secondary) }
+                    d.quoteLabel?.let { Text(w(it), fontSize = 12.sp, color = c.secondary) }
                     Text(q, fontSize = 15.sp, color = c.label, maxLines = 4, overflow = TextOverflow.Ellipsis)
                 }
             }
@@ -260,10 +266,10 @@ private fun DetailBlock(d: AdminLog.Detail, groupPhoto: String?) {
         d.photoUrl?.let { url ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Avatar(url.ifEmpty { groupPhoto }, 44.dp, kind = com.fariin.app.ui.components.AvatarKind.GROUP)
-                Text("Current group photo", fontSize = 12.sp, color = c.secondary)
+                Text(if (isChannel) "Current channel photo" else "Current group photo", fontSize = 12.sp, color = c.secondary)
             }
         }
-        d.note?.let { Text(it, fontSize = 13.sp, color = c.secondary) }
+        d.note?.let { Text(w(it), fontSize = 13.sp, color = c.secondary) }
         if (d.bullets.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             d.bullets.forEach { b ->
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -365,7 +371,7 @@ private fun RecentActionsSkeleton() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RecentActionsFilterSheet(people: List<String>, startKinds: Set<AdminLog.Kind>?, startActors: Set<String>?,
-                                     name: (String) -> String, photo: (String) -> String?, onClose: () -> Unit,
+                                     name: (String) -> String, photo: (String) -> String?, isChannel: Boolean, onClose: () -> Unit,
                                      apply: (Set<AdminLog.Kind>?, Set<String>?) -> Unit) {
     val c = Fariin.colors
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -392,7 +398,7 @@ private fun RecentActionsFilterSheet(people: List<String>, startKinds: Set<Admin
                         onClick = { kinds = if (k in kinds) kinds - k else kinds + k }) {
                         Icon(kindIcon(k), null, tint = c.label, modifier = Modifier.size(24.dp))
                         Spacer(Modifier.width(14.dp))
-                        Text(k.title, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
+                        Text(com.fariin.app.data.ChannelWords.forChat(isChannel, k.title), fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
                     }
                 }
             }
