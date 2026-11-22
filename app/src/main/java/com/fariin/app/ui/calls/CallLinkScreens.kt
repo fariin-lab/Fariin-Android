@@ -217,7 +217,8 @@ private fun LinkBody(s: LinkState, onUsed: () -> Unit, onDeleted: (() -> Unit)?,
             Button(
                 onClick = {
                     onUsed()
-                    s.url?.let { CallActivity.startLink(ctx, s.key, s.video ?: true) }
+                    // iOS join(): the pre-join screen first, never straight into the room.
+                    s.url?.let { CallActivity.startLobby(ctx, s.key, s.video ?: true) }
                 },
                 enabled = s.url != null,
                 colors = ButtonDefaults.buttonColors(containerColor = c.blue, contentColor = Color.White),
