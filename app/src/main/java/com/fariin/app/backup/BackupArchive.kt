@@ -61,7 +61,10 @@ object BackupArchive {
             val wire: String? = when {
                 stored == "{}" || stored.isEmpty() -> stored
                 else -> runCatching {
-                    LocalJson.decodeMessage(org.json.JSONObject(stored))?.let { Canonical.encode(WireBody.toWire(it, cid)) }
+                    LocalJson.decodeMessage(org.json.JSONObject(stored))?.let {
+                        // An opened view-once keeps "{}" (iOS files it so): its photo's link and key never ride along.
+                        if (it.viewOnce && it.consumed) "{}" else Canonical.encode(WireBody.toWire(it, cid))
+                    }
                 }.getOrNull()
             }
             if (wire == null) { dropped.add(cid); return@eachRawMessage }
