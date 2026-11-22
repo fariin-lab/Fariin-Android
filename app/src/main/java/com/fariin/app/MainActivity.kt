@@ -395,7 +395,9 @@ class MainActivity : ComponentActivity() {
         LaunchedEffect(vm) { androidx.compose.runtime.snapshotFlow { chatsState.value.chats to com.fariin.app.data.ContactNames.version }.collect { (list, _) ->
             if (list.isNotEmpty()) withContext(Dispatchers.Default) { NotifStore.saveChats(applicationContext, me, list) }
             // Recent chats as conversation shortcuts: share sheet, launcher, notification settings.
-            if (list.isNotEmpty()) com.fariin.app.system.ChatShortcuts.publish(applicationContext, me, list)
+            // Every chat doc too, so a deleted, blocked or left chat's shortcut goes everywhere.
+            val allChats = chatsState.value.all
+            if (list.isNotEmpty() || allChats.isNotEmpty()) com.fariin.app.system.ChatShortcuts.publish(applicationContext, me, list, allChats)
             // The chats about to be opened, warmed (iOS ChatHistoryPreloader).
             com.fariin.app.data.ChatHistoryPreloader.refresh(list, me, openChat)
         } }

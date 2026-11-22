@@ -50,6 +50,15 @@ class SystemIntegrationTest {
         assertEquals(listOf("Person 12", "Person 11", "Person 10"), chosen.take(3).map { it.title })
     }
 
+    @Test fun shortcutsDropDeletedAndBlockedChats() {
+        val gone = dm("a", "Amina", 100.0).copy(clearedAt = mapOf(me to 100.0))
+        val blocked = dm("b", "Bobby", 200.0).copy(blockedBy = mapOf(me to true))
+        val back = dm("c", "Carol", 300.0).copy(clearedAt = mapOf(me to 250.0))   // a new message after the delete
+        val list = listOf(gone, blocked, back)
+        assertEquals(listOf(back.id), ChatShortcuts.choose(list, me).map { it.cid })
+        assertEquals(setOf(gone.id, blocked.id), ChatShortcuts.dropped(list, me))
+    }
+
     @Test fun shortcutSignatureFollowsNamesAndOrder() {
         val a = ChatShortcuts.choose(listOf(dm("a", "Amina", 1.0), dm("b", "Bobby", 2.0)), me)
         val b = ChatShortcuts.choose(listOf(dm("a", "Amina", 3.0), dm("b", "Bobby", 2.0)), me)

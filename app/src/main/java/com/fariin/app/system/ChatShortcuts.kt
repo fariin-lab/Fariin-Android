@@ -54,11 +54,11 @@ object ChatShortcuts {
     /**
      * Which chats get a shortcut, in rank order: pinned chats first, then the newest. Left out:
      * channels (one can not share into a channel I only follow), requests not answered yet,
-     * archived and blocked chats, chats with no name (a half-loaded row).
+     * deleted, archived and blocked chats, chats with no name (a half-loaded row).
      */
     fun choose(convs: List<Conversation>, me: String, max: Int = MAX_PUBLISHED): List<Entry> =
         convs.asSequence()
-            .filter { !it.isChannel && !it.isBlockedByMe(me) && !it.isArchived(me) }
+            .filter { !it.isChannel && !it.isBlockedByMe(me) && !it.isArchived(me) && !it.isCleared(me) }
             .filter { it.users.isEmpty() || me in it.users }
             .filter { it.isGroup || it.startedBy.isEmpty() || it.accepted }
             .map { Entry(it.id, it.displayName(me), it.isGroup, if (it.isGroup) null else it.otherUid(me),
@@ -68,20 +68,38 @@ object ChatShortcuts {
             .take(max)
             .toList()
 
+    /**
+     * Chats whose shortcut must go everywhere, notification settings too: deleted for me, blocked,
+     * or a group I left. They stay gone until the chat comes back to my list.
+     */
+    fun dropped(convs: List<Conversation>, me: String): Set<String> =
+        convs.filter { it.isCleared(me) || it.isBlockedByMe(me) || (it.isGroup && it.users.isNotEmpty() && me !in it.users) }
+            .map { it.id }.toSet()
+
     /** Only republish when the chosen chats, their order, names or photos changed. */
     fun signature(list: List<Entry>): String = list.joinToString("|") { "${it.cid}:${it.title}:${it.photo ?: ""}" }
 
-    /** The chat list changed (MainActivity): publish the recent chats in the background. */
-    fun publish(c: Context, me: String, convs: List<Conversation>) {
+    /** The chat list changed (MainActivity): publish the recent chats in the background. [all] is
+     *  every chat doc, deleted ones too (the shown list leaves them out), for [dropped]. */
+    fun publish(c: Context, me: String, convs: List<Conversation>, all: List<Conversation> = convs) {
         val app = c.applicationContext
+        if (com.fariin.app.Fb.auth.currentUser?.uid != me) return   // signing out: the old list must not come back
         val list = choose(convs, me)
-        val sig = "$me#" + signature(list)
+        val drop = dropped(all, me)
+        val sig = "$me#" + signature(list) + "#" + drop.sorted().joinToString(",")
         if (sig == lastSignature) return
         lastSignature = sig
         scope.launch {
             val faces = list.map { e -> async { e.photo?.let { runCatching { FariinMessagingService.loadAvatar(app, it) }.getOrNull() } } }.awaitAll()
             val shortcuts = list.mapIndexed { i, e -> build(app, e.cid, e.title, e.isGroup, e.personUid, faces[i], rank = i) }
+            // Signed out while the faces loaded: clear() already ran, publish nothing.
+            if (com.fariin.app.Fb.auth.currentUser?.uid != me) return@launch
             try {
+                // A deleted, blocked or left chat leaves notification settings and the share sheet too.
+                val known = ShortcutManagerCompat.getShortcuts(app,
+                    ShortcutManagerCompat.FLAG_MATCH_DYNAMIC or ShortcutManagerCompat.FLAG_MATCH_CACHED).map { it.id }.toSet()
+                val remove = drop.filter { it in known }
+                if (remove.isNotEmpty()) ShortcutManagerCompat.removeLongLivedShortcuts(app, remove)
                 // Shortcuts of chats that left the list go from the launcher; long-lived ones stay
                 // known to the system for their notification settings (removeDynamic, not remove).
                 val keep = shortcuts.map { it.id }.toSet()
