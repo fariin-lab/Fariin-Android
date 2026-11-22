@@ -11,7 +11,7 @@ class StoryLinkCardRulesTest {
         assertEquals(StoryLinkCardRules.Pill.JOIN, StoryLinkCardRules.pill("https://fariin.com/vee", "1,204 followers"))
         assertEquals(StoryLinkCardRules.Pill.JOIN, StoryLinkCardRules.pill("https://fariin.com/vee", "1 follower"))
         assertEquals(StoryLinkCardRules.Pill.JOIN, StoryLinkCardRules.pill("https://fariin.com/g/abcd1234", "12 members"))
-        assertEquals(StoryLinkCardRules.Pill.JOIN, StoryLinkCardRules.pill("https://www.fariin.com/news", "2.5K members"))
+        assertEquals(StoryLinkCardRules.Pill.JOIN, StoryLinkCardRules.pill("https://www.fariin.com/fariintv", "2.5K members"))
         // A public channel opened by its @name: the chat card line our own cards carry.
         assertEquals(StoryLinkCardRules.Pill.JOIN, StoryLinkCardRules.pill("https://fariin.com/vee", "Channel invite · 9 followers"))
     }
