@@ -168,8 +168,10 @@ fun MainShell(
     val badgeNow = androidx.compose.runtime.rememberUpdatedState(badgeTotal)
     val badgeLife = androidx.lifecycle.compose.LocalLifecycleOwner.current
     androidx.compose.runtime.DisposableEffect(me, badgeLife) {
-        com.fariin.app.push.AppBadge.listLive = true
+        // Live only while started: behind the home screen Compose stops recomposing, so the list
+        // total cannot move and each push must add its own one.
         val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            com.fariin.app.push.AppBadge.listLive = e.targetState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
             if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME)
                 badgeNow.value?.let { com.fariin.app.push.AppBadge.sync(context.applicationContext, me, it, force = true) }
         }

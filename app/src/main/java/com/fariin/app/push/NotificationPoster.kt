@@ -396,7 +396,7 @@ object NotificationPoster {
     fun clear(c: Context, cid: String) {
         NotificationManagerCompat.from(c).cancel(cid, ID)
         // The last chat notification gone: the summary (and its number) goes too.
-        com.fariin.app.Fb.auth.currentUser?.uid?.let { AppBadge.refresh(c, it) }
+        com.fariin.app.Fb.auth.currentUser?.uid?.let { AppBadge.refresh(c, it, except = cid) }
     }
 
     fun clearAll(c: Context) {

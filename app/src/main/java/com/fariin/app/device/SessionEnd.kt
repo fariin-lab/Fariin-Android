@@ -119,7 +119,7 @@ object SessionEnd {
     /** Texts still in this account's send queue (they are wiped with the account on log out). */
     fun unsentCount(): Int {
         val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return 0
-        return runCatching { com.fariin.app.local.SendQueue.all(uid).size }.getOrDefault(0)
+        return runCatching { com.fariin.app.local.SendQueue.all(uid).count { !it.refused } }.getOrDefault(0)
     }
 
     /** How many texts a remote sign-out dropped, for its notice; 0 once the notice is read. */

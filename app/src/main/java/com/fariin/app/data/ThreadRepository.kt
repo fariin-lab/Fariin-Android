@@ -808,6 +808,9 @@ class ThreadRepository(
     private var sweepJob: Job? = null
     /** Texts already shown failed by the sweep: they stay failed until their echo lands (iOS). */
     private val sweptSends = ConcurrentHashMap.newKeySet<String>()
+    /** When this repository started the current try of a send: a queued text from an earlier run
+     *  gets its grace from now, not from the old tap time (it showed red at once on open). */
+    private val sweepFrom = ConcurrentHashMap<String, Double>()
 
     /**
      * iOS sweepStuckSends: a text of mine never spins "sending" for ever. With no network it shows
@@ -822,7 +825,7 @@ class ThreadRepository(
             if (m.sendState != Message.SendState.SENDING || m.authorId != me || m.hasServerTime ||
                 m.mediaKind != null || !(m.type == null || m.type == "text")) return@map m
             val id = m.clientId ?: m.id
-            val at = (m.clientTs ?: m.createdAtMillis) + grace
+            val at = maxOf(m.clientTs ?: m.createdAtMillis, sweepFrom[id] ?: 0.0) + grace
             if (id in sweptSends || at <= now) { sweptSends += id; m.copy(sendState = Message.SendState.FAILED) }
             else { next = minOf(next, at); m }
         }
@@ -1011,7 +1014,7 @@ class ThreadRepository(
             bold = TextFormat.parse(e.fmt, e.text.length),
             links = TextFormat.parseLinks(e.fmt, e.text.length),
         )
-        sweptSends.remove(e.clientId)   // a new try: sending again until the sweep says otherwise
+        sweptSends.remove(e.clientId); sweepFrom[e.clientId] = System.currentTimeMillis().toDouble()   // a new try: sending again until the sweep says otherwise
         rebuild()
         // Refused in an earlier run (iOS Entry.refused): drawn failed with Retry and Delete, never sent.
         if (e.refused) { SendQueue.end(e.clientId); return null }

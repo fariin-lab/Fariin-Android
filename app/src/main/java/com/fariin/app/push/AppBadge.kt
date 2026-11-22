@@ -53,12 +53,13 @@ object AppBadge {
 
     /** Posts the group summary with the total, or takes it down when no message notification is left. */
     @SuppressLint("MissingPermission")   // checked through areNotificationsEnabled
-    fun refresh(c: Context, me: String) {
+    fun refresh(c: Context, me: String, except: String? = null) {
         if (me.isEmpty()) return
         val nmc = NotificationManagerCompat.from(c)
         val key = group(me)
         val children = try {
-            nmc.activeNotifications.count { it.notification.group == key && it.tag != SUMMARY_TAG }
+            // `except`: a chat just cancelled still shows here for a moment (cancel is not instant).
+            nmc.activeNotifications.count { it.notification.group == key && it.tag != SUMMARY_TAG && it.tag != except }
         } catch (_: Exception) { return }
         if (children == 0 || !nmc.areNotificationsEnabled()) {
             nmc.cancel(SUMMARY_TAG, SUMMARY_ID)
