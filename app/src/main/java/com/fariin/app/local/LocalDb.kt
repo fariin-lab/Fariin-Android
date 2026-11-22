@@ -408,10 +408,12 @@ object LocalDb {
         }.getOrDefault(emptyList())
     }
 
-    /** Every message row, oldest first, handed to [each] one at a time (a big history never sits in memory whole). */
+    /** Every message row, oldest first, handed to [each] one at a time (a big history never sits in memory whole).
+     *  A disappearing message whose time is up never goes into a backup, even before the purge ran. */
     fun eachRawMessage(uid: String, each: (Map<String, Any?>) -> Unit) {
         val db = db(uid) ?: return
-        db.rawQuery("SELECT ${MESSAGE_COLUMNS.joinToString()} FROM messages ORDER BY created_at, cid, id", null).use { c ->
+        db.rawQuery("SELECT ${MESSAGE_COLUMNS.joinToString()} FROM messages WHERE expires_at IS NULL OR expires_at > ? ORDER BY created_at, cid, id",
+            arrayOf(System.currentTimeMillis().toString())).use { c ->
             while (c.moveToNext()) each(MESSAGE_COLUMNS.mapIndexed { i, k -> k to cell(c, i) }.toMap())
         }
     }
