@@ -602,7 +602,9 @@ private fun Details(name: String, about: String, creating: Boolean, error: Strin
                 verticalAlignment = Alignment.CenterVertically) {
                 val shape = RoundedCornerShape(16.dp)
                 Box {
-                    Box(Modifier.size(56.dp).clip(shape).background(c.fieldFill).clickable(onClickLabel = "Set Channel Photo") { photoMenu = true },
+                    Box(Modifier.size(56.dp).clip(shape).background(c.fieldFill).clickable(onClickLabel = if (photo == null) "Set Channel Photo" else "Change Channel Photo") {
+                        // No photo yet: straight to the library, no menu (iOS). With one, the menu to change or remove it.
+                        if (photo == null) picker.launch() else photoMenu = true },
                         contentAlignment = Alignment.Center) {
                         val bmp = remember(photo) { photo?.let { com.fariin.app.media.BitmapDecode.fromBytes(it, 200)?.asImageBitmap() } }
                         if (bmp != null) androidx.compose.foundation.Image(bmp, "Channel photo",
