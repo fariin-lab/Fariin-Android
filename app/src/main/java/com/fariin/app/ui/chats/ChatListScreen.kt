@@ -514,7 +514,7 @@ fun ChatListScreen(
                         onPin = {
                             val on = !selectedConvs.all { it.isPinned(me) }
                             if (!on || !ChatListActions.pinsFull(me, state.chats, selectedConvs.count { !it.isPinned(me) })) {
-                                act(if (on) "Pinned" else "Unpinned") { ChatListActions.setPinned(me, it, on) }
+                                act(if (on) "Pinned" else "Unpinned") { ChatListActions.setPinned(me, it, on, state.chats) }
                             }
                         },
                         // All muted: Unmute at once. Else the bar opens the 1 hour ... Always menu.

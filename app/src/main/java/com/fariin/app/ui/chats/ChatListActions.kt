@@ -43,10 +43,16 @@ object ChatListActions {
         return try { doc(cid).set(fields, SetOptions.merge()).await(); true } catch (_: Exception) { false }
     }
 
-    /** A new pin goes to the top: its rank is now, above every older pin (iOS pinOrder). */
-    suspend fun setPinned(me: String, c: Conversation, on: Boolean): Boolean =
+    /**
+     * A new pin goes to the top (iOS setPinned): its rank is now, or one above the highest pin in
+     * [chats] when that one is higher (a pin moved by hand on my other device can be).
+     */
+    suspend fun setPinned(me: String, c: Conversation, on: Boolean, chats: List<Conversation> = emptyList()): Boolean =
         if (c.isFollower(me)) (me == DemoChats.ME || com.fariin.app.channel.ChannelService.setFlag(c.id, "pinned", on))
-        else if (on) merge(me, c.id, mapOf("pinnedBy" to mapOf(me to true), "pinOrder" to mapOf(me to System.currentTimeMillis().toDouble())))
+        else if (on) {
+            val top = chats.filter { it.id != c.id && it.isPinned(me) }.maxOfOrNull { it.pinRank(me) } ?: 0.0
+            merge(me, c.id, mapOf("pinnedBy" to mapOf(me to true), "pinOrder" to mapOf(me to maxOf(top + 1, System.currentTimeMillis().toDouble()))))
+        }
         else merge(me, c.id, mapOf("pinnedBy" to mapOf(me to false)))
 
     suspend fun setArchived(me: String, c: Conversation, on: Boolean): Boolean =
