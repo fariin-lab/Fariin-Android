@@ -314,12 +314,15 @@ fun StoryViewer(
         repostScope.launch {
             val draft = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 runCatching {
-                    val f = java.io.File(repostCtx.cacheDir, "edit-${st.id}.jpg")
+                    val f = java.io.File(repostCtx.cacheDir, if (st.isVideo) "edit-${st.id}.mp4" else "edit-${st.id}.jpg")
                     val c = java.net.URL(st.mediaUrl).openConnection() as java.net.HttpURLConnection
                     try {
                         if (c.responseCode != 200) return@runCatching null
                         c.inputStream.use { i -> f.outputStream().use { i.copyTo(it) } }
                     } finally { c.disconnect() }
+                    if (st.isVideo) return@runCatching StoryMedia.prepareVideo(repostCtx, android.net.Uri.fromFile(f))?.let { p ->
+                        StoryMedia.Prepared(p.jpeg, st.blurThumb.ifEmpty { p.blurThumb }, p.video, p.width, p.height, st.taps, st.repostOf)
+                    }
                     StoryMedia.preparePhoto(repostCtx, android.net.Uri.fromFile(f))?.let { p ->
                         // Its tap areas and repost credit stay with it while the picture is untouched.
                         StoryMedia.Prepared(p.jpeg, st.blurThumb.ifEmpty { p.blurThumb }, null, p.width, p.height, st.taps, st.repostOf)
@@ -370,7 +373,8 @@ fun StoryViewer(
             else repostDraft = draft
         }
     }
-    // Edit Story (iOS 2026-11-20): my photo story, opened in the editor as its flat picture.
+    // Edit Story (iOS 2026-11-20): my story opened in the editor, a photo as its flat picture and a
+    // clip as the posted file (iOS beginEditStory / editableClip).
     editDraft?.let { (st, d) ->
         StoryComposerDialog(me, d, conversations, editing = st,
             onClose = { editDraft = null; reposting.value = false },
@@ -1539,10 +1543,10 @@ private fun StoryPage(
                                 // My own story (iOS): Save, Edit viewers, and Share when it went to Everyone.
                                 if (mine) {
                                     item("Save", ImageVector.cachedVector(R.drawable.ic_save_down), null, "save")
-                                    // Edit Story (iOS 2026-11-20): photo stories for now; a clip keeps its picture.
+                                    // Edit Story (iOS 2026-11-20): a photo or a clip of mine.
                                     // Not a repost (its picture is somebody else's story) and not an expired one (iOS canEditCaption).
                                     // A group story too: iOS lets its author edit it (only the author, not the group's admins).
-                                    if (!story.isVideo && story.repostOf == null
+                                    if (story.repostOf == null
                                         && story.expiresAtMs > System.currentTimeMillis()) item("Edit Story", ImageVector.cachedVector(R.drawable.ic_sf_pencil), null, "edit")
                                     if (com.fariin.app.data.PostedStoriesRules.canEditViewers(story)) item("Edit Viewers", ImageVector.cachedVector(com.fariin.app.R.drawable.ic_gs_members), null, "viewers")
                                     if (com.fariin.app.data.PostedStoriesRules.canShare(story)) item("Share", ImageVector.cachedVector(R.drawable.ic_link_share), null, "share")
