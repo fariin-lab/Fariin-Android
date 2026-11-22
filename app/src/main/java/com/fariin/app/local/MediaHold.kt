@@ -56,7 +56,8 @@ object MediaHold {
         val media = ChatMedia(ctx, cid, crypto)
         for (w in wants(m)) {
             if (ChatMedia.isLocal(w.url) || media.cached(w.url) != null) continue
-            if (!AutoDownload.allowedNow(ctx, w.kind)) continue
+            // A single file's own size (not an album's tiles) against the iOS caps.
+            if (!AutoDownload.allowedNow(ctx, w.kind, if (m.album.isEmpty()) m.fileSize else null)) continue
             runCatching { media.file(w.url, w.enc, video = w.kind == AutoDownload.Kind.VIDEOS) }
         }
     }

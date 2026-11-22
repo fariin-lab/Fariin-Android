@@ -117,7 +117,7 @@ internal class GatedFile(val file: File?, val state: Fetch, val url: String? = n
  * then the bubble shows the inline thumbnail or BlurHash it already has (no bytes spent).
  */
 @Composable
-internal fun rememberGatedFile(url: String?, enc: EncMeta?, kind: AutoDownload.Kind?): GatedFile {
+internal fun rememberGatedFile(url: String?, enc: EncMeta?, kind: AutoDownload.Kind?, size: Long? = null): GatedFile {
     val media = chatMedia()
     val ctx = LocalContext.current
     var file by remember(url) { mutableStateOf(url?.let { media.peek(it) }) }
@@ -127,7 +127,7 @@ internal fun rememberGatedFile(url: String?, enc: EncMeta?, kind: AutoDownload.K
         // A picture already here is DONE without asking the network rules (a system call per bubble
         // on the chat's opening frame, trace 2026-11-15).
         if (url == null || file != null) mutableStateOf(Fetch.DONE) else {
-            val auto = ChatMedia.isLocal(url) || kind == null || AutoDownload.allowedNow(ctx, kind)
+            val auto = ChatMedia.isLocal(url) || kind == null || AutoDownload.allowedNow(ctx, kind, size)
             // A transfer already running (started by a tap, then scrolled away and back) is picked up.
             mutableStateOf(if (auto || ChatMedia.isFetching(url)) Fetch.LOADING else Fetch.WAITING)
         }
@@ -309,7 +309,7 @@ internal fun PictureBox(
     val placeholder = rememberPlaceholder(m.thumb, m.blurhash)
     // A video's poster is small and always comes down; the photo itself follows auto-download.
     val kind = if (m.mediaKind == Message.MediaKind.PHOTO) AutoDownload.Kind.PHOTOS else null
-    val got = rememberGatedFile(url, enc, kind)
+    val got = rememberGatedFile(url, enc, kind, m.fileSize)
     val bmp = rememberBitmap(got.file, px)
     // My own send: the picked picture from the first frame, until a prepared or server copy is open.
     val picked = rememberLocalPreview(m.localUri, m.mediaKind == Message.MediaKind.VIDEO, com.fariin.app.media.LocalPreview.LONE_SIDE)

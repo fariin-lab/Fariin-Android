@@ -2456,7 +2456,7 @@ private fun MediaRow(
                 }
                 // iOS MediaDownloadOverlay: a sealed clip comes down IN the bubble (sealed as one piece,
                 // it cannot stream), by the Videos auto-download rule or a tap; play only once it is here.
-                val clip = rememberGatedFile(if (ready && !busy && !streams) m.videoUrl else null, m.enc, com.fariin.app.media.AutoDownload.Kind.VIDEOS)
+                val clip = rememberGatedFile(if (ready && !busy && !streams) m.videoUrl else null, m.enc, com.fariin.app.media.AutoDownload.Kind.VIDEOS, m.fileSize)
                 val here = ready && clip.state == Fetch.DONE
                 PictureBox(m, local ?: m.thumbUrl, if (local != null) null else m.thumbEnc, maxW, RectangleShape, captionW, busy || !ready, onOpen = {
                     m.videoUrl?.let { onView(Viewing.Video(it, m.enc, msg = m)) }
