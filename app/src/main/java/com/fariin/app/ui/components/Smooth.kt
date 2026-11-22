@@ -125,16 +125,22 @@ fun rememberShowing(visible: Boolean): androidx.compose.animation.core.Animatabl
  */
 @Composable
 fun RevealUp(progress: androidx.compose.animation.core.Animatable<Float, androidx.compose.animation.core.AnimationVector1D>,
-             content: @Composable () -> Unit) {
-    val gone by androidx.compose.runtime.remember { androidx.compose.runtime.derivedStateOf { progress.value == 0f } }
+             content: @Composable () -> Unit) = RevealUp({ progress.value }, content)
+
+/** [RevealUp] driven by any 0..1 reading (read only in layout and draw), e.g. the keyboard's own rise. */
+@Composable
+fun RevealUp(progress: () -> Float, content: @Composable () -> Unit) {
+    // The newest reading: the caller makes a new lambda each composition, the derived state keeps one.
+    val latest = androidx.compose.runtime.rememberUpdatedState(progress)
+    val gone by androidx.compose.runtime.remember { androidx.compose.runtime.derivedStateOf { latest.value() == 0f } }
     if (gone) return
     // The progress is read only in layout and draw: one frame of the move is a re-layout, not a recompose.
     androidx.compose.ui.layout.Layout(content,
-        Modifier.clipToBounds().graphicsLayer { alpha = progress.value }) { measurables, cs ->
+        Modifier.clipToBounds().graphicsLayer { alpha = progress() }) { measurables, cs ->
         val ps = measurables.map { it.measure(cs.copy(minHeight = 0, maxHeight = androidx.compose.ui.unit.Constraints.Infinity)) }
         val w = ps.maxOfOrNull { it.width } ?: cs.minWidth
         val full = ps.maxOfOrNull { it.height } ?: 0
-        val h = kotlin.math.round(full * progress.value).toInt()
+        val h = kotlin.math.round(full * progress()).toInt()
         layout(w, h) { ps.forEach { it.place(0, h - full) } }
     }
 }

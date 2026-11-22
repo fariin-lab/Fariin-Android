@@ -386,6 +386,8 @@ private fun ThreadContent(
     var infoFor by remember { mutableStateOf<Message?>(null) }
     var reactorsFor by remember { mutableStateOf<String?>(null) }   // "who reacted": the row's id
     var replyTo by remember { mutableStateOf<Message?>(null) }
+    // The reply came from a swipe (no menu to wait for): the keyboard opens at once (owner 2026-11-22).
+    var replySwiped by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<Message?>(null) }
     // iOS dropDeletedReplyTarget: the message being replied to was deleted for everyone while the
     // reply bar was up; sending would copy its words into the quote, so the quote goes and says so.
@@ -569,7 +571,7 @@ private fun ThreadContent(
         // reaction that landed since (an expiresAt, say) would be missing from a held copy.
         val m = ui.messages.firstOrNull { it.rowId == m0.rowId } ?: m0
         MessageMenu(m, ui, onDismiss = { menuFor = null; menuLifted = null }, actions = actions.copy(onForward = { forwardFor = it }, onQuote = { quoteFor = it }),
-            onReply = { replyTo = it; editing = null }, onStartEdit = { editing = it; replyTo = null },
+            onReply = { replySwiped = false; replyTo = it; editing = null }, onStartEdit = { editing = it; replyTo = null },
             onCopy = { copyOf(m, it); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
             onInfo = { infoFor = it }, onDelete = { deleteFor = it },
             onSelect = { selected.clear(); selected.add(it.rowId); replyTo = null },
@@ -1274,7 +1276,7 @@ private fun ThreadContent(
             // A story-reaction emoji opens no menu (iOS customMenuActions returns none for it).
             rowEnv.openMenu = { m, src, preview -> if (!com.fariin.app.data.MessageRules.isStoryReaction(m)) { menuSource = src; menuPreview = preview; menuFor = m } }
             rowEnv.openPostMenu = { m, preview -> postPreview = preview; postMenuFor = m }
-            rowEnv.reply = { m -> replyTo = m; editing = null }
+            rowEnv.reply = { m -> replySwiped = true; replyTo = m; editing = null }
             rowEnv.swipeMenu = { m -> swipeMenu(m) }
             rowEnv.failed = { m -> failedFor = m }
             rowEnv.view = { v -> viewing = withChatGallery(v, uiNow.value.messages, uiNow.value.isGroup || uiNow.value.channel != null) }
@@ -1878,7 +1880,7 @@ private fun ThreadContent(
                     sendsWithoutText = (quoting != null && editing == null) || editing?.let { com.fariin.app.data.MessageRules.captionable(it) } == true,
                     // iOS beginReply / Edit: "you're about to type", so the keyboard opens for those too.
                     focusKey = quoting?.let { com.fariin.app.data.QuoteRules.draftKey(it) }
-                        ?: replyTo?.let { "reply:" + it.rowId } ?: editing?.let { "edit:" + it.rowId },
+                        ?: replyTo?.let { (if (replySwiped) "swipe:" else "reply:") + it.rowId } ?: editing?.let { "edit:" + it.rowId },
                     // The sticker panel's picks (iOS StickerSend.send / sendGif), held back like the rest.
                     me = ui.me,
                     onSticker = steady1 { s: com.fariin.app.data.StickerRef ->
@@ -3264,9 +3266,12 @@ private fun Composer(
     val fieldFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     LaunchedEffect(focusKey) {
         if (focusKey == null) return@LaunchedEffect
-        // A quote waits for the screen's slide; a reply or edit only for the menu to close.
-        val pushed = focusKey !is String || !(focusKey.startsWith("reply:") || focusKey.startsWith("edit:"))
-        kotlinx.coroutines.delay(if (pushed) 550 else 200)
+        // A quote waits for the screen's slide; a reply or edit only for the menu to close; a swipe
+        // reply has no menu, so the keys start at once and the reply card grows with them (owner
+        // 2026-11-22, his side-by-side video: card first, keys 0.2 s later read as two jumps).
+        val swiped = focusKey is String && focusKey.startsWith("swipe:")
+        val pushed = focusKey !is String || !(focusKey.startsWith("reply:") || focusKey.startsWith("edit:") || swiped)
+        if (!swiped) kotlinx.coroutines.delay(if (pushed) 550 else 200)
         runCatching { fieldFocus.requestFocus(); keyboard?.show() }
     }
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -3331,13 +3336,40 @@ private fun Composer(
                 val heldBanner = remember { arrayOfNulls<@Composable () -> Unit>(1) }
                 if (banner != null) heldBanner[0] = banner
                 val showing = com.fariin.app.ui.components.rememberShowing(banner != null)
+                // While the keys are coming up for this card (a swipe reply), the card grows WITH them,
+                // as the reference app: one motion, not the card and then the keys (owner 2026-11-22).
+                // Read only in layout and draw, so the keyboard's frames re-lay this out, not recompose.
+                val insetDensity = androidx.compose.ui.platform.LocalDensity.current
+                val keysNow = androidx.compose.foundation.layout.WindowInsets.ime
+                @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+                val keysGoal = androidx.compose.foundation.layout.WindowInsets.imeAnimationTarget
+                val wantCard = banner != null
+                val swipeKey = (focusKey as? String)?.startsWith("swipe:") == true
+                // Only a swipe reply that starts with the keys down follows them, until they are up
+                // (or 0.8 s with no keys, e.g. a hardware keyboard: then the card's own clock).
+                var followKeys by remember { mutableStateOf(false) }
+                LaunchedEffect(wantCard, swipeKey) {
+                    if (!(wantCard && swipeKey && keysNow.getBottom(insetDensity) == 0)) { followKeys = false; return@LaunchedEffect }
+                    followKeys = true
+                    kotlinx.coroutines.withTimeoutOrNull(800) {
+                        androidx.compose.runtime.snapshotFlow { keysNow.getBottom(insetDensity) to keysGoal.getBottom(insetDensity) }
+                            .first { (now, goal) -> goal > 0 && now >= goal }
+                    }
+                    followKeys = false
+                }
+                val cardProgress: () -> Float = {
+                    if (followKeys) {
+                        val goal = keysGoal.getBottom(insetDensity)
+                        if (goal > 0) (keysNow.getBottom(insetDensity).toFloat() / goal).coerceIn(0f, 1f) else 0f
+                    } else showing.value
+                }
                 val pillShape = RoundedCornerShape(20.dp)
                 Column(Modifier.weight(1f).floating(pillShape)
                     .drawBehind {
-                        val a = showing.value
+                        val a = cardProgress()
                         if (a > 0f) drawOutline(pillShape.createOutline(size, layoutDirection, this), c.card.copy(alpha = a))
                     }) {
-                com.fariin.app.ui.components.RevealUp(showing) { heldBanner[0]?.invoke() }
+                com.fariin.app.ui.components.RevealUp(cardProgress) { heldBanner[0]?.invoke() }
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = COMPOSER_BUTTON).smoothSize(),
                     verticalAlignment = Alignment.Bottom,
