@@ -1160,7 +1160,7 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
             }
         }
         if (audience) Box(Modifier.fillMaxSize().graphicsLayer { translationY = leaveSheet.value * box.height }) {
-            ShareStoryAudiencePage(me, conversations, onBack = { if (textStory) onClose() else audience = false }) { choice, picked, lists, capture ->
+            ShareStoryAudiencePage(me, conversations, repost = items.any { it.media.repostOf != null }, onBack = { if (textStory) onClose() else audience = false }) { choice, picked, lists, capture ->
                 if (flight != null) return@ShareStoryAudiencePage
                 // Every item, each its own story, in the post's order (iOS send: one sheet for all).
                 val outs: List<Pair<StoryMedia.Prepared, com.fariin.app.media.StoryVideoCut.Edit?>> =

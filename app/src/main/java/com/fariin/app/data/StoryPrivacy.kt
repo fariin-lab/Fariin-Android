@@ -195,12 +195,14 @@ object StoryPrivacyRules {
     }
 
     /** `captureProtected`: always on for a one-time story, else the Block screenshots switch. */
-    fun captureProtected(choice: StoryAudienceChoice, switchOn: Boolean): Boolean =
-        choice == StoryAudienceChoice.ONE_TIME || switchOn
+    /** Never on a repost (iOS): somebody else's story was already shown, so there is nothing to protect. */
+    fun captureProtected(choice: StoryAudienceChoice, switchOn: Boolean, repost: Boolean = false): Boolean =
+        !repost && (choice == StoryAudienceChoice.ONE_TIME || switchOn)
 
-    /** iOS captureFooter / captureLockedFooter. */
-    fun captureFooter(choice: StoryAudienceChoice): String =
-        if (choice == StoryAudienceChoice.ONE_TIME) "Always on for a one-time story." else "Screenshots and screen recordings come out blank."
+    /** iOS captureFooter / captureLockedFooter, and the repost footer. */
+    fun captureFooter(choice: StoryAudienceChoice, repost: Boolean = false): String =
+        if (repost) "A repost was already shared, so screenshots of it can't be blocked."
+        else if (choice == StoryAudienceChoice.ONE_TIME) "Always on for a one-time story." else "Screenshots and screen recordings come out blank."
 
     /**
      * May I reply to this story (iOS StoryViewer `canMessage`): the author lets replies in, and the

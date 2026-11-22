@@ -590,6 +590,8 @@ fun ShareStoryAudiencePage(
     myPhoto: String? = null,
     editing: Story? = null,
     busy: Boolean = false,
+    /** Posting a repost: Block screenshots is shown off and dimmed (iOS). */
+    repost: Boolean = false,
     onBack: () -> Unit,
     onPost: (choice: StoryAudienceChoice, oneTimePeople: Set<String>, lists: List<StoryListDoc>, captureProtected: Boolean) -> Unit,
 ) {
@@ -706,8 +708,8 @@ fun ShareStoryAudiencePage(
                         else "Only members of this group can see this story. It disappears after 24 hours.") {
                     GroupStoryRow(g, trailing = { Tick(true) })
                 }
-                SettingsSection(footer = StoryPrivacyRules.captureFooter(StoryAudienceChoice.MY_CHATS)) {
-                    SwitchRow("Block screenshots", blockShots, last = true) { blockShots = it }
+                SettingsSection(footer = StoryPrivacyRules.captureFooter(StoryAudienceChoice.MY_CHATS, repost)) {
+                    SwitchRow("Block screenshots", blockShots && !repost, enabled = !repost, last = true) { if (!repost) blockShots = it }
                 }
                 if (!g.isChannel) SettingsSection {
                     SwitchRow("Allow Replies", groupReplies, last = true) { groupReplies = it }
@@ -716,7 +718,7 @@ fun ShareStoryAudiencePage(
             PostStoryButton("Post Story", ready = !busy, busy = busy) {
                 // Handed to the upload for this one call (GroupStoryCompose); the audience row is not remembered.
                 com.fariin.app.data.GroupStoryCompose.during(com.fariin.app.data.GroupStoryPost(g, groupReplies)) {
-                    onPost(StoryAudienceChoice.MY_CHATS, emptySet(), emptyList(), blockShots)
+                    onPost(StoryAudienceChoice.MY_CHATS, emptySet(), emptyList(), blockShots && !repost)
                 }
             }
         } else run {
@@ -769,9 +771,9 @@ fun ShareStoryAudiencePage(
                     }
                 }
                 if (editing == null) {
-                    val lockOn = choice == StoryAudienceChoice.ONE_TIME
-                    SettingsSection(footer = StoryPrivacyRules.captureFooter(choice)) {
-                        SwitchRow("Block screenshots", StoryPrivacyRules.captureProtected(choice, blockShots), enabled = !lockOn, last = true) {
+                    val lockOn = choice == StoryAudienceChoice.ONE_TIME || repost
+                    SettingsSection(footer = StoryPrivacyRules.captureFooter(choice, repost)) {
+                        SwitchRow("Block screenshots", StoryPrivacyRules.captureProtected(choice, blockShots, repost), enabled = !lockOn, last = true) {
                             if (!lockOn) blockShots = it
                         }
                     }
@@ -788,7 +790,7 @@ fun ShareStoryAudiencePage(
                     }).apply()
                 }
                 onPost(choice, if (choice == StoryAudienceChoice.ONE_TIME) oneTime else emptySet(), chosenLists,
-                    StoryPrivacyRules.captureProtected(choice, blockShots))
+                    StoryPrivacyRules.captureProtected(choice, blockShots, repost))
             }
         }
     }

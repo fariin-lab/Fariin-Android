@@ -240,7 +240,7 @@ class StoryService(
             recipients = GroupStoryRights.audience(me, group.target.id)
             mode = "group"
             replies = group.allowsReplies || group.target.isChannel
-            capture = captureSwitch
+            capture = captureSwitch && media.repostOf == null   // never on a repost (iOS)
         } else {
             val glow = glowAudience(choice, convs)
             val (reached, how) = StoryPrivacyRules.resolve(StoryRules.contacts(me, convs), choice, people, myFriends, hiddenFrom, glow.first, glow.second)
@@ -248,7 +248,7 @@ class StoryService(
             mode = if (everyone) "everyone" else how
             replies = if (custom) StoryPrivacyRules.listsAllowReplies(lists)
                 else StoryPrivacyRules.allowsReplies(choice, myFriends, StoryPrivacyStore.glowers.value)
-            capture = StoryPrivacyRules.captureProtected(choice, captureSwitch)
+            capture = StoryPrivacyRules.captureProtected(choice, captureSwitch, repost = media.repostOf != null)
             // iOS "No one will see this": a list that resolves to nobody while I do have chats.
             if ((!choice.needsPeople || custom) && recipients.isEmpty() && StoryRules.contacts(me, convs).isNotEmpty())
                 throw PostRefused(EMPTY_AUDIENCE)
