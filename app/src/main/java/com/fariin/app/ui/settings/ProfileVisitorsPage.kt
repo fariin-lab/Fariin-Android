@@ -208,7 +208,8 @@ internal fun ProfileVisitorsPage(pop: () -> Unit) {
         }
         }
     }
-    if (plusPage) com.fariin.app.ui.settings.PlusGateSheet("profileVisitors") { plusPage = false }
+    // iOS: "See Who with Fariin Plus" opens the Plus page itself, not the feature sheet.
+    if (plusPage) com.fariin.app.ui.settings.PlusPageSheet { plusPage = false }
 }
 
 private fun lockedTitle(n: Int) = when (n) {
