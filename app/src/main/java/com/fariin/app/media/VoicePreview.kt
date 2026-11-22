@@ -16,8 +16,10 @@ import kotlinx.coroutines.launch
  * A private player for one file: the locked recording's listen-back and the one-time note's
  * page. Not [VoicePlayer], the shared engine that outlives screens: what plays here must stop
  * with its screen (iOS keeps the review and OneTimeVoicePage off the shared engine the same way).
+ * [noCapture]: no other app (a screen recorder) may record what plays, as iOS keeps a one-time
+ * note's sound out of a recording.
  */
-class VoicePreview {
+class VoicePreview(private val noCapture: Boolean = false) {
     data class State(val ready: Boolean = false, val playing: Boolean = false,
                      val positionMs: Long = 0, val durationMs: Long = 0, val ended: Boolean = false) {
         val progress: Float get() = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
@@ -36,7 +38,9 @@ class VoicePreview {
         val p = MediaPlayer()
         return try {
             p.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .apply { if (noCapture && android.os.Build.VERSION.SDK_INT >= 29) setAllowedCapturePolicy(AudioAttributes.ALLOW_CAPTURE_BY_NONE) }
+                .build())
             p.setDataSource(file.absolutePath)
             p.prepare()
             p.setOnCompletionListener {

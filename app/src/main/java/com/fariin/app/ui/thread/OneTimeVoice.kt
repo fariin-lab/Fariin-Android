@@ -96,7 +96,8 @@ internal fun OneTimeVoicePill(m: Message, cid: String, isMe: Boolean, meta: @Com
 private fun OneTimeVoicePage(m: Message, cid: String, onClose: () -> Unit) {
     val ctx = LocalContext.current
     val media = chatMedia()
-    val player = remember { VoicePreview() }
+    // Its sound stays out of other apps' recordings (FLAG_SECURE covers only the picture).
+    val player = remember { VoicePreview(noCapture = true) }
     val st by player.state.collectAsState()
     var failed by remember { mutableStateOf(false) }
     var file by remember { mutableStateOf<File?>(null) }
