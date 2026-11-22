@@ -224,7 +224,8 @@ object GroupManage {
      * again. It does not add them back. The rules: the Remove members right (or Add members, shrink only).
      */
     suspend fun unban(cid: String, uid: String) {
-        conv(cid).update(mapOf("bannedUids" to FieldValue.arrayRemove(uid), "updatedAt" to FieldValue.serverTimestamp())).await()
+        // No `updatedAt` (as iOS): not a message, so the group does not jump up the list.
+        conv(cid).update(mapOf("bannedUids" to FieldValue.arrayRemove(uid))).await()
     }
 
     // ---- Permissions ---------------------------------------------------------------------------
@@ -239,7 +240,9 @@ object GroupManage {
     /** setGroupPermission: membersCanAdd, membersCanEditInfo or onlyAdminsCall. No line. */
     suspend fun setPermission(cid: String, key: String, value: Boolean) {
         require(key in setOf("membersCanAdd", "membersCanEditInfo", "onlyAdminsCall"))
-        conv(cid).update(mapOf(key to value, "updatedAt" to FieldValue.serverTimestamp())).await()
+        // No `updatedAt` (iOS setGroupPermission): a setting is not a message; stamping it moved the
+        // group up the list and greyed read ticks until everyone opened it again.
+        conv(cid).update(key, value).await()
     }
 
     /** setMemberSend: every kind at once, with the "allowed all media" / "turned off all media" line. */
