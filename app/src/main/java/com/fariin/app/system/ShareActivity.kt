@@ -264,6 +264,9 @@ class ShareActivity : ComponentActivity() {
         var videos = 0
         for (u in streams) {
             val type = contentResolver.getType(u) ?: i.type
+            // One pick sends at most mediaPerMessage photos and videos (sendPick drops the rest
+            // without a word), so those past it are counted as left out here, where it is said.
+            if (ShareIntake.kindOf(type) == ShareIntake.Kind.MEDIA && media.size >= MediaRules.MEDIA_PER_PICK) { skipped++; continue }
             val copy = copyIn(this, u, type)
             if (copy == null) { skipped++; continue }
             if (ShareIntake.kindOf(type) == ShareIntake.Kind.MEDIA) { media += copy; if (type?.startsWith("video/") == true) videos++ }
