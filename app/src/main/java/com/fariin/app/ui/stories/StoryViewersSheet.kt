@@ -473,6 +473,13 @@ internal fun ViewersSheet(
     var again by remember(storyId) { mutableStateOf(RewatchCache.counts[storyId].orEmpty()) }
     val rewatchOn = com.fariin.app.data.PlusStore.state("storyRewatch") == com.fariin.app.data.PlusStore.State.ON &&
         !readOnly && story.authorUid == me && !com.fariin.app.data.OfficialStories.isOfficial(story)
+    // Locked storyRewatch (iOS updateRewatchHint, owner 2026-11-20): one quiet line with the Plus star
+    // under my own viewers, never on Replies; a tap opens the feature's gate.
+    val rewatchHint = com.fariin.app.data.PlusStore.visible &&
+        com.fariin.app.data.PlusStore.state("storyRewatch") == com.fariin.app.data.PlusStore.State.LOCKED &&
+        !readOnly && story.authorUid == me && !com.fariin.app.data.OfficialStories.isOfficial(story)
+    var rewatchGate by remember { mutableStateOf(false) }
+    if (rewatchGate) com.fariin.app.ui.settings.PlusGateSheet("storyRewatch") { rewatchGate = false }
     LaunchedEffect(storyId, rewatchOn) {
         if (!rewatchOn) { again = emptyMap(); return@LaunchedEffect }
         while (true) {
@@ -651,6 +658,15 @@ internal fun ViewersSheet(
                                     onSendMessage = { onSendMessage(v) },
                                     onToggleHidden = { StoryPrivacyStore.setHidden(setOf(v.uid), v.uid !in hidden) },
                                     onBlock = { onBlock(v) })
+                            }
+                            if (rewatchHint && rows.isNotEmpty()) item(key = "rewatchHint") {
+                                Row(Modifier.fillMaxWidth().height(52.dp).clickable { rewatchGate = true }
+                                    .semantics(mergeDescendants = true) { contentDescription = "See who watched your story again, Fariin Plus" },
+                                    horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                                    Text("See who watched your story again", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+                                    Spacer(Modifier.width(5.dp))
+                                    com.fariin.app.ui.settings.PlusBadgeImage(15.dp)
+                                }
                             }
                         }
                     }
