@@ -375,6 +375,8 @@ class RtcEngine(
 
     /** The network the saver was last applied for; null until the call is open. */
     private var saverOnWifi: Boolean? = null
+    /** Main thread: the call moved between Wi-Fi and cellular (feeds the weak-signal check). */
+    var onNetworkMoved: (() -> Unit)? = null
     private var netCallback: android.net.ConnectivityManager.NetworkCallback? = null
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
@@ -425,7 +427,13 @@ class RtcEngine(
             override fun onCapabilitiesChanged(n: android.net.Network, caps: android.net.NetworkCapabilities) {
                 val wifi = caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) ||
                     caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET)
-                mainHandler.post { if (netCallback === this && saverOnWifi != wifi) applyDataSaver(wifi) }
+                mainHandler.post {
+                    if (netCallback !== this || saverOnWifi == wifi) return@post
+                    // iOS path monitor: Wi-Fi to cellular (or back) is a real network move.
+                    val moved = com.fariin.app.data.WeakLinkPolicy.networkMoved(saverOnWifi, wifi)
+                    applyDataSaver(wifi)
+                    if (moved) onNetworkMoved?.invoke()
+                }
             }
         }
         if (runCatching { cm.registerDefaultNetworkCallback(cb) }.isSuccess) netCallback = cb
@@ -488,6 +496,7 @@ class RtcEngine(
     private var remoteVideoSeen = 0
 
     fun close() {
+        onNetworkMoved = null
         stopLinkSampler()
         unwatchNetwork()
         if (held) { held = false; audioModule?.setSpeakerMute(false); pc?.setAudioPlayout(true); pc?.setAudioRecording(true) }

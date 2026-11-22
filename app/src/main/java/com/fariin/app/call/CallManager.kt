@@ -709,6 +709,14 @@ object CallManager {
         engineIceAt = if (servers === iceServers) iceAt else System.currentTimeMillis()
         engine = e
         edit { it.copy(localVideo = e.localVideo, frontCamera = e.frontCamera) }
+        // iOS path monitor: Wi-Fi to cellular (or back) mid-call is a real move for the weak-signal
+        // check, stamped like a recovery: no verdict for 8 s, and an older pause is dropped.
+        e.onNetworkMoved = {
+            if (engine === e && (status.phase == CallPhase.ACTIVE || status.phase == CallPhase.RECONNECTING)) {
+                val nowMs = android.os.SystemClock.elapsedRealtime()
+                linkTransitionAt = nowMs; linkMovedAt = nowMs
+            }
+        }
         return e
     }
 

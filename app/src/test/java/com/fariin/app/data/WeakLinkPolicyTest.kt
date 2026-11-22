@@ -89,6 +89,21 @@ class WeakLinkPolicyTest {
         assertFalse(WeakLinkPolicy.moving(false, null, null, s(0)))
     }
 
+    @Test fun wifiCellularSwitchIsAMove() {
+        assertTrue(WeakLinkPolicy.networkMoved(lastWifi = true, wifiNow = false))
+        assertTrue(WeakLinkPolicy.networkMoved(lastWifi = false, wifiNow = true))
+        assertFalse(WeakLinkPolicy.networkMoved(lastWifi = true, wifiNow = true))
+        assertFalse(WeakLinkPolicy.networkMoved(lastWifi = null, wifiNow = false))
+    }
+
+    @Test fun switchHoldsThePauseForEightSecondsThenDropsAnOldPause() {
+        val switchedAt = s(20)
+        assertTrue(WeakLinkPolicy.moving(false, null, switchedAt, s(27)))
+        assertFalse(WeakLinkPolicy.moving(false, null, switchedAt, s(28)))
+        assertTrue(WeakLinkPolicy.staleAfterMove(pausedAtMs = s(10), movedAtMs = switchedAt))
+        assertFalse(WeakLinkPolicy.staleAfterMove(pausedAtMs = s(25), movedAtMs = switchedAt))
+    }
+
     @Test fun staleOnlyAfterARealMove() {
         assertTrue(WeakLinkPolicy.staleAfterMove(s(0), s(3)))
         assertFalse(WeakLinkPolicy.staleAfterMove(s(3), s(0)))

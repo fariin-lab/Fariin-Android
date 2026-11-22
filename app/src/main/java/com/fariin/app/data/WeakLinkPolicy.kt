@@ -61,6 +61,13 @@ class WeakLinkPolicy(
                 (restartAtMs != null && nowMs - restartAtMs < 10_000) ||
                 (transitionAtMs != null && nowMs - transitionAtMs < 8_000)
 
+        /**
+         * iOS path monitor: a switch between Wi-Fi and cellular is a real network move, stamped like a
+         * recovery (8 s with no verdict, and a pause made before it is dropped). The first reading
+         * (no network known yet) is not a move.
+         */
+        fun networkMoved(lastWifi: Boolean?, wifiNow: Boolean): Boolean = lastWifi != null && lastWifi != wifiNow
+
         /** A pause made before a real move (a recovery) is stale once the move is over: video comes back. */
         fun staleAfterMove(pausedAtMs: Long?, movedAtMs: Long?): Boolean =
             pausedAtMs != null && movedAtMs != null && movedAtMs > pausedAtMs
