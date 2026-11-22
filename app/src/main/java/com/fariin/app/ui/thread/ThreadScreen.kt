@@ -3988,7 +3988,8 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ThreadRow(
             // Ticking posts uses the select rows below, as in any chat (iOS: Select in a channel too).
             ch != null && !selecting -> androidx.compose.runtime.CompositionLocalProvider(
                 com.fariin.app.ui.channels.LocalPostViews provides
-                    if (m.deleted) null else com.fariin.app.channel.ChannelRules.shownViews(m.views, m.authorId, ui.me),
+                    // A failed post has no eye count (iOS: views nil while failed).
+                    if (m.deleted || m.sendState == Message.SendState.FAILED) null else com.fariin.app.channel.ChannelRules.shownViews(m.views, m.authorId, ui.me),
             ) {
                 Column(Modifier.fillMaxWidth().combinedClickableLong { env.openPostMenu(m) { MessageRow(ui, m, g, is24h, {}) {} } }) {
                     MessageRow(ui, m, g, is24h, { env.failed(it) }, tick) { env.view(it) }
