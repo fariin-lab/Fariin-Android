@@ -451,7 +451,7 @@ private fun ShotRow(
                         verticalAlignment = Alignment.CenterVertically) {
                         val time = ThreadLogic.timeLabel(s.timeMs, is24h)
                         Text(if (s.edited) "edited $time" else time, color = meta, fontSize = 11.sp)
-                        tickMark(s.tick)?.let { Text(" $it", color = meta, fontSize = 11.sp) }
+                        if (s.isMe) ShotTick(s.tick, if (s.tick != Tick.READ) meta else if (bare) Fariin.colors.blue else Color.White)
                     }
                 }
             }
@@ -501,11 +501,20 @@ private fun decodeSmall(f: java.io.File, maxPx: Int = 900): androidx.compose.ui.
     return android.graphics.BitmapFactory.decodeFile(f.path, opts)?.asImageBitmap()
 }
 
-private fun tickMark(t: Tick): String? = when (t) {
-    Tick.SENT -> "✓"
-    Tick.DELIVERED, Tick.READ -> "✓✓"
-    Tick.FAILED -> "!"
-    else -> null
+/** The chat's own drawn ticks (one sent, two delivered or read), the clock while sending, ! when it failed. */
+@Composable
+private fun ShotTick(t: Tick, tint: Color) {
+    val (icon, size) = when (t) {
+        Tick.SENT -> R.drawable.ic_tick_single to null
+        Tick.DELIVERED, Tick.READ -> R.drawable.ic_tick_double to null
+        Tick.SENDING -> R.drawable.ic_sf_clock to 13.dp
+        Tick.FAILED -> R.drawable.ic_sf_exclamation_circle to 13.dp
+        else -> return
+    }
+    Spacer(Modifier.width(3.dp))
+    val ink = if (t == Tick.FAILED) Fariin.colors.red else tint
+    // At the drawn size, as the chat's bubble draws them.
+    Image(painterResource(icon), null, if (size != null) Modifier.size(size) else Modifier, colorFilter = ColorFilter.tint(ink))
 }
 
 // Sender names use the chat's own colours (ThreadScreen senderColor), so the picture matches.
