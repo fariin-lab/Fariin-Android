@@ -45,7 +45,9 @@ class FariinMessagingService : FirebaseMessagingService() {
         if (message.data["kind"] != "call" && (alertBody == "Incoming call" || alertBody == "Incoming video call")) {
             com.fariin.app.Fb.auth.currentUser?.uid?.let { com.fariin.app.call.IncomingCallWatcher.onCallPush(applicationContext, it) }
         }
-        if (message.data["kind"] == "call") {
+        // A call ROW's push (a missed call, server onNewMessage) is kind "call" too, but carries the
+        // row's `mid`: it is a message notification like any other, not a ring.
+        if (message.data["kind"] == "call" && message.data["mid"].isNullOrEmpty()) {
             val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
             com.fariin.app.call.IncomingCallWatcher.onCallPush(applicationContext, me)
             return
