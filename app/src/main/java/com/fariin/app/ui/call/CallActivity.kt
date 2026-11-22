@@ -570,7 +570,7 @@ class CallActivity : ComponentActivity() {
         withMic(video, {
             if (video && !granted(Manifest.permission.CAMERA)) {
                 asking = true
-                permAlert = PermAlert(camera = true) { CallManager.dial(this, uid, name, photo, false) }
+                permAlert = PermAlert(camera = true, voiceInstead = { CallManager.dial(this, uid, name, photo, false) })
             } else CallManager.dial(this, uid, name, photo, video)
         }, {
             asking = true
