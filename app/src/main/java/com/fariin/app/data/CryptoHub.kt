@@ -62,6 +62,8 @@ object CryptoHub {
             listed[c.id] = c
             if (c.isGroup && c.e2eeOff) plainGroups.add(c.id)
         }
+        // Old blocks kept on the shared chat move to my private list (waits until that list loaded).
+        BlockList.migrate(convs)
     }
 
     fun listedConversation(cid: String): Conversation? = listed[cid]

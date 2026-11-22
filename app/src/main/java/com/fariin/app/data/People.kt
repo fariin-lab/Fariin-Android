@@ -278,7 +278,19 @@ class FirestorePeople(
             revokeStoryAudience(uid)
             return@ok
         }
-        val since = ref.get().await().getTimestamp("at")?.toDate()?.time ?: System.currentTimeMillis()
+        // Start of the span: the private entry's time; for a block kept only the old way, on the
+        // shared chat, that chat's blockedAt (iOS), so what they sent during it stays hidden.
+        val since = ref.get().await().getTimestamp("at")?.toDate()?.time ?: run {
+            val cid = Wire.directCid(me, uid)
+            CryptoHub.listedConversation(cid)?.blockedAt?.get(me)
+                ?: runCatching {
+                    when (val v = conv(cid).get().await().get("blockedAt.$me")) {
+                        is com.google.firebase.Timestamp -> v.toDate().time.toDouble()
+                        is Number -> v.toDouble()
+                        else -> null
+                    }
+                }.getOrNull()
+        }?.takeIf { it > 0 }?.toLong() ?: System.currentTimeMillis()
         val batch = db.batch()
         batch.set(db.collection("users").document(me).collection("blockHistory").document("${uid}_$since"), mapOf(
             "other" to uid, "from" to com.google.firebase.Timestamp(java.util.Date(since)), "to" to FieldValue.serverTimestamp()))
