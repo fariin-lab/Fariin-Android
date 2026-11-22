@@ -988,7 +988,11 @@ fun ChatListScreen(
                         Row(Modifier.fillMaxWidth().clickable {
                             // Kept under Recent (iOS RecentSearches record(group:)).
                             SearchRecents.recordGroup(appCtx, me, h)
-                            if (h.isChannel) channels.open(h.cid) else publicGroupOpen = h.cid
+                            // A group opens as its chat with Join at the foot; the sheet only when its preview fails.
+                            if (h.isChannel) channels.open(h.cid)
+                            else scope.launch { com.fariin.app.ui.people.GroupGuestPreviews.open(h.cid,
+                                openChat = { cid -> searching = false; query = ""; people.chat(cid) },
+                                openChannel = { channels.open(it) }, openSheet = { publicGroupOpen = it }) }
                         }.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                             Avatar(h.photoUrl, 54.dp, Modifier.padding(vertical = 9.dp), squircle = h.isChannel, kind = com.fariin.app.ui.components.AvatarKind.of(true, h.isChannel))
                             Spacer(Modifier.width(16.dp))

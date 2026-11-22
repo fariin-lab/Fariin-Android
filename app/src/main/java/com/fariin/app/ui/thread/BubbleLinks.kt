@@ -106,7 +106,7 @@ internal fun rememberBubbleLinkTap(ui: ThreadUi, onNotice: (String) -> Unit): (T
         onOpenChat = { nav.chat(it) }, onOpenChannel = { channelNav.open(it) }) }
     // A story link opens the story here when I may see it (iOS routes /s/ links to the viewer).
     var storyOpen by remember { mutableStateOf<com.fariin.app.data.StoryGroup?>(null) }
-    // A public group's or channel's @name (fariin.com/<name>): the group's join sheet, or the
+    // A public group's or channel's @name (fariin.com/<name>): the group's chat with Join, or the
     // channel itself (its posts, a Follow bar when I do not follow; its name opens the page).
     var publicGroup by remember { mutableStateOf<String?>(null) }
     publicGroup?.let { gid -> com.fariin.app.ui.people.PublicGroupSheet(gid, onClose = { publicGroup = null },
@@ -149,7 +149,9 @@ internal fun rememberBubbleLinkTap(ui: ThreadUi, onNotice: (String) -> Unit): (T
                     // Nobody's @name: it may be a public group's (the same namespace).
                     val groupCid = if (owner == null) com.fariin.app.data.PublicGroups.resolveGroup(h) else null
                     when {
-                        groupCid != null -> publicGroup = groupCid
+                        // Its chat with Join at the foot; the join sheet only when the preview fails.
+                        groupCid != null -> com.fariin.app.ui.people.GroupGuestPreviews.open(groupCid,
+                            openChat = { nav.chat(it) }, openChannel = { channelNav.open(it) }, openSheet = { publicGroup = it })
                         owner == null -> notFound = true
                         owner == u.me -> nav.myProfile()
                         !u.isGroup && u.cid.isNotEmpty() && owner == com.fariin.app.crypto.Wire.otherUid(u.cid, u.me) -> nav.contact(owner)

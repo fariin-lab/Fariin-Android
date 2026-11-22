@@ -55,7 +55,7 @@ private val ChannelBlue = Color(0xFF2392FE)
 /**
  * "Forwarded from <group or channel>" (iOS 2026-11-10), cut short at the line's end. A tap opens the
  * source at the post: this chat scrolls to it; a chat I am in or a channel I follow opens at it; a
- * public one I am not in opens its channel posts or the group's join sheet; a private one only says so.
+ * public one I am not in opens its channel posts or the group's chat with Join; a private one only says so.
  */
 @Composable
 private fun ForwardedFrom(src: Message.ForwardSource, isMe: Boolean, openCid: String) {
@@ -65,6 +65,7 @@ private fun ForwardedFrom(src: Message.ForwardSource, isMe: Boolean, openCid: St
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     var joinSheet by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     if (joinSheet) com.fariin.app.ui.people.PublicGroupSheet(src.cid,
         onClose = { joinSheet = false; com.fariin.app.data.QuoteStore.pendingJump.value = null },
         onOpenChat = { nav.chat(it) }, onOpenChannel = { channelNav.open(it) })
@@ -86,7 +87,9 @@ private fun ForwardedFrom(src: Message.ForwardSource, isMe: Boolean, openCid: St
             when {
                 src.isChannel -> channelNav.open(src.cid)
                 mine -> nav.chat(src.cid)
-                else -> joinSheet = true
+                // A public group I am not in: its chat with Join at the foot; the sheet only when its preview fails.
+                else -> scope.launch { com.fariin.app.ui.people.GroupGuestPreviews.open(src.cid,
+                    openChat = { nav.chat(it) }, openChannel = { channelNav.open(it) }, openSheet = { joinSheet = true }) }
             }
         }.padding(vertical = 2.dp)
         .semantics(mergeDescendants = true) { contentDescription = "Forwarded from ${src.title}" }) {

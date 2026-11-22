@@ -49,6 +49,24 @@ object GroupGuestPreviews {
         if (cache[cid] == null) ChannelService.savedPreview(cid)?.takeIf { !it.isChannel }?.let { cache[cid] = it.copy(isMember = false) }
     }
 
+    /**
+     * A public group I am not in opens as its chat, Join at the foot (iOS "THE CHAT, ALWAYS"), as
+     * Explore does. Only when its preview can't be had (offline, refused) does the join sheet open.
+     */
+    suspend fun open(cid: String, openChat: (String) -> Unit, openChannel: (String) -> Unit, openSheet: (String) -> Unit) {
+        if (cache[cid] != null && refused[cid] == null) { openChat(cid); return }
+        when (val r = ChannelService.preview(cid)) {
+            is ChannelService.PreviewResult.Found -> {
+                if (r.preview.isChannel) { openChannel(cid); return }
+                if (!r.preview.isMember) cache[cid] = r.preview
+                refused.remove(cid)
+                openChat(cid)
+            }
+            is ChannelService.PreviewResult.Refused -> { noteRefused(cid, r.text); openSheet(cid) }
+            is ChannelService.PreviewResult.Failed -> openSheet(cid)
+        }
+    }
+
     /** True for a join error that sticks (the server's "banned" words), kept like a refusal. */
     fun keepIfBanned(cid: String, words: String?): Boolean {
         if (words == null || !words.contains("banned", ignoreCase = true)) return false
