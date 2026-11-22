@@ -153,7 +153,10 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit,
             securityCheckupRoute(page, profile, demoProfile != null, push, pop, drop = { n -> stack = stack.dropLast(n) }) -> Unit
             moreRoute(page, push, pop) -> Unit
             lookRoute(page, push, pop) -> Unit
-            page == PAGE_SETTINGS_SEARCH -> SettingsSearchPage(push, pop)
+            page == PAGE_SETTINGS_SEARCH -> {
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                SettingsSearchPage(push, pop, invite = { shareInvite(ctx, profile?.handle) })
+            }
             page == PAGE_APP_ICON -> AppIconPage(pop)
             page == PAGE_SUBSCRIPTIONS -> SubscriptionsPage(pop, push)
             page == PAGE_PROFILE_VISITORS -> ProfileVisitorsPage(pop)

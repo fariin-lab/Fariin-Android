@@ -49,6 +49,8 @@ import com.fariin.app.ui.theme.Fariin
  */
 
 internal const val PAGE_SETTINGS_SEARCH = "settings:search"
+/** Not a page: Invite Friends shares in place, as its Settings row does (iOS action). */
+internal const val ACTION_INVITE = "settings:search:invite"
 
 /**
  * ⛔ EVERY SETTING, NOT JUST EVERY CARD (iOS SettingsIndex, owner 2026-11-05 + Android 2026-11-10:
@@ -99,6 +101,8 @@ internal object SettingsIndex {
         card(ST, "stories", "stories status story audience who can see", PAGE_STORIES)
         card(PR, "privacy", "privacy security who can see last seen blocked app lock", PAGE_PRIVACY)
         card(SD, "storage", "storage data cache download network usage media", PAGE_STORAGE)
+        // iOS action: done in place, so not listed with the pages while the field is empty.
+        add(Entry("Invite Friends", "invite", "invite friends share app link tell", ACTION_INVITE))
         card(HP, "help", "help about version support faq", PAGE_ABOUT)
         // Account
         val acc = listOf(ACC)
@@ -253,6 +257,7 @@ private fun indexIcon(key: String): Painter = when (key) {
     "stories" -> painterResource(R.drawable.ic_stories_stack)
     "privacy" -> painterResource(R.drawable.ic_privacy)
     "storage" -> vec(ImageVector.cachedVector(R.drawable.ic_sf_server))
+    "invite" -> painterResource(R.drawable.ic_invite_friends)
     else -> vec(ImageVector.cachedVector(R.drawable.ic_set_help))
 }
 
@@ -263,7 +268,7 @@ private val searchQuery = mutableStateOf("")
 internal fun openSettingsSearch(push: (String) -> Unit) { searchQuery.value = ""; push(PAGE_SETTINGS_SEARCH) }
 
 @Composable
-internal fun SettingsSearchPage(push: (String) -> Unit, pop: () -> Unit) {
+internal fun SettingsSearchPage(push: (String) -> Unit, pop: () -> Unit, invite: () -> Unit = {}) {
     val c = Fariin.colors
     var query by searchQuery
     val results = SettingsIndex.matching(query)
@@ -292,7 +297,8 @@ internal fun SettingsSearchPage(push: (String) -> Unit, pop: () -> Unit) {
             items(results, key = { it.id }) { e ->
                 Row(Modifier.fillMaxWidth().clickable {
                     focusManager.clearFocus()
-                    push(e.page)   // My Profile opens the My Profile page, as its row does
+                    if (e.page == ACTION_INVITE) invite()
+                    else push(e.page)   // My Profile opens the My Profile page, as its row does
                 }
                     .heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically) {

@@ -112,6 +112,14 @@ class SettingsIndexTest {
         assertEquals(600, SettingsIndex.score(e, SettingsIndex.fold("pp sounds")))
     }
 
+    @Test fun inviteFriendsIsAnActionNotAPage() {
+        val e = SettingsIndex.matching("invite").first()
+        assertEquals("Invite Friends", e.title)
+        assertEquals(ACTION_INVITE, e.page)
+        assertEquals(null, e.crumb)
+        assertTrue(SettingsIndex.matching("").none { it.title == "Invite Friends" })
+    }
+
     @Test fun idsAreUnique() {
         val ids = SettingsIndex.entries.map { it.id }
         assertEquals(ids.size, ids.toSet().size)
