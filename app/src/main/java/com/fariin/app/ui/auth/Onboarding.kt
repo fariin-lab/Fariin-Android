@@ -153,6 +153,9 @@ fun OnboardingPage(
         if (Usernames.sanitize(handle) == h && state == HandleState.Taken) ideas = free
     }
     LaunchedEffect(Unit) { if (!demo && handle.isNotEmpty()) scheduleCheck() }
+    // A name handed over by the sign-in fills a free username at once, as iOS does when its
+    // prefilled name lands; never over a username this account already holds.
+    LaunchedEffect(Unit) { if (!demo && handle.isEmpty() && name.isNotBlank()) schedulePrefill() }
 
     fun save() {
         val problem = HandleRules.saveProblem(name, handle, currentHandle)
