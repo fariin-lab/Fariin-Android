@@ -219,9 +219,11 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
                 if (needle.isEmpty()) {
                     item {
                         val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
-                        val actions = listOf(
-                            Triple("New group", onNewGroup, ImageVector.cachedVector(com.fariin.app.R.drawable.ic_gs_members)),
-                            Triple("New channel", channelNav.create, ImageVector.cachedVector(R.drawable.ic_sf_megaphone)),
+                        // New group and New channel only while making them is switched on (iOS Flags.groupCreateEnabled).
+                        val makes = com.fariin.app.data.AppFeatures.groupCreate
+                        val actions = listOfNotNull(
+                            Triple("New group", onNewGroup, ImageVector.cachedVector(com.fariin.app.R.drawable.ic_gs_members)).takeIf { makes },
+                            Triple("New channel", channelNav.create, ImageVector.cachedVector(R.drawable.ic_sf_megaphone)).takeIf { makes },
                             Triple("Invite friends", { com.fariin.app.ui.settings.shareInvite(ctx, myHandle) }, ImageVector.cachedVector(com.fariin.app.R.drawable.ic_link_share)),
                         )
                         card {
