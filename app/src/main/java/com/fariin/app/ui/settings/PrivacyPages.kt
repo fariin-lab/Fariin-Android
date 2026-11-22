@@ -185,7 +185,9 @@ private fun PrivacyPage(push: (String) -> Unit, pop: () -> Unit) {
     var relay by remember { mutableStateOf(calls.getBoolean("calls.alwaysRelay", false)) }
     ScrollPage("Privacy & Security", pop) {
         SettingsSection {
+            // Groups & Channels only while the panel has groups on (iOS Flags.groupsEnabled).
             for (key in listOf("lastSeen", "photo", "bio", "groups", "messages", "calls")) {
+                if (key == "groups" && !com.fariin.app.data.AppFeatures.groups) continue
                 SettingsRow(PrivacyRules.title(key), value = PrivacyRules.audience(map, key).label(key), last = key == "calls",
                     badge = PRIVACY_SPOTS[key]) {
                     push(if (key == "messages") PAGE_MESSAGES else PAGE_AUDIENCE + key)
