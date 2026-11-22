@@ -32,9 +32,18 @@ object SharedWallpapers {
         companion object {
             fun parse(raw: Any?): Value? {
                 val d = raw as? Map<*, *> ?: return null
-                val w = (d["w"] as? String)?.takeIf { it.isNotEmpty() } ?: return null
-                val at = (d["at"] as? Number)?.toLong() ?: return null
-                return Value(w, d["by"] as? String ?: "", at, d["n"] as? String, d["k"] as? String, d["kn"] as? String)
+                // As iOS PairWallpaper: w and by are needed, at reads 0 when missing.
+                val w = (d["w"] as? String)?.takeIf { it.isNotEmpty() && it.length <= 64 } ?: return null
+                val by = (d["by"] as? String)?.takeIf { it.isNotEmpty() } ?: return null
+                val at = (d["at"] as? Number)?.toLong() ?: 0L
+                val n = d["n"] as? String; val k = d["k"] as? String; val kn = d["kn"] as? String
+                // A photo only in the shape the server writes: "e:wp" + 13 digits, with the three seal fields.
+                if (w.startsWith("e:")) {
+                    val f = w.removePrefix("e:")
+                    if (f.length != 15 || !f.startsWith("wp") || !f.drop(2).all { it in '0'..'9' }) return null
+                    if (n.isNullOrEmpty() || k.isNullOrEmpty() || kn.isNullOrEmpty()) return null
+                }
+                return Value(w, by, at, n, k, kn)
             }
             fun decode(s: String?): Value? = s?.let { runCatching {
                 val o = org.json.JSONObject(it)
