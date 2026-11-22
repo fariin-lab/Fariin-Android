@@ -901,12 +901,19 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     }
     // Awaited, so the sheet's button spins until the server answers; then the sheet closes and the note shows.
     suspend fun callable(name: String, done: String): Boolean {
-        val ok = runCatching {
+        val res = runCatching {
             com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
                 .getHttpsCallable(name).call(mapOf("cid" to cid)).await()
-        }.isSuccess
-        com.fariin.app.ui.components.Snack.show(if (ok) done else "Could not do that. Check your connection and try again.")
-        return ok
+        }
+        // A refusal from the server says its own reason (iOS shows the error's words); else ours.
+        val refused = (res.exceptionOrNull() as? com.google.firebase.functions.FirebaseFunctionsException)?.takeIf {
+            it.code == com.google.firebase.functions.FirebaseFunctionsException.Code.PERMISSION_DENIED ||
+                it.code == com.google.firebase.functions.FirebaseFunctionsException.Code.FAILED_PRECONDITION ||
+                it.code == com.google.firebase.functions.FirebaseFunctionsException.Code.INVALID_ARGUMENT ||
+                it.code == com.google.firebase.functions.FirebaseFunctionsException.Code.NOT_FOUND
+        }?.message?.takeIf { it.isNotBlank() }
+        com.fariin.app.ui.components.Snack.show(if (res.isSuccess) done else refused ?: "Could not do that. Check your connection and try again.")
+        return res.isSuccess
     }
     // End and Delete: the contact page's bottom sheet with the group's photo and name on top.
     val groupPhoto = (conv["avatarUrl"] as? String)?.ifEmpty { null }
