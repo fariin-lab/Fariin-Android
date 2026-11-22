@@ -40,7 +40,7 @@ object AccountDeletion {
     /** Pure, tested: what is sent for a choice (nothing for no choice; text only for Other). */
     fun payload(code: String?, text: String): Map<String, Any> {
         if (code.isNullOrEmpty()) return emptyMap()
-        val t = text.trim().take(REASON_TEXT_MAX)
+        val t = MessageLength.takeChars(text.trim(), REASON_TEXT_MAX)   // an emoji counts as one, as iOS prefix
         return if (code == OTHER && t.isNotEmpty()) mapOf(Fields.REASON_CODE to code, Fields.REASON_TEXT to t)
             else mapOf(Fields.REASON_CODE to code)
     }

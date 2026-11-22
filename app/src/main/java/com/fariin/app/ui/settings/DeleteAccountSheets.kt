@@ -142,7 +142,7 @@ internal fun DeleteAccountFlow(profile: MyProfile?, onDone: () -> Unit, onSignOu
     }
 
     when (stage) {
-        1 -> ReasonSheet(code, text, onPick = { code = it }, onText = { text = it.take(AccountDeletion.REASON_TEXT_MAX) },
+        1 -> ReasonSheet(code, text, onPick = { code = it }, onText = { text = com.fariin.app.data.MessageLength.takeChars(it, AccountDeletion.REASON_TEXT_MAX) },
             onContinue = { stage = 2 }, onClosed = { if (stage == 1) closed() })
         2 -> ConfirmSheet(handle, fmt.format(Date(AccountDeletion.defaultDue())), busy, error,
             password = if (needsPassword) password else null, onPassword = { password = it },
