@@ -181,7 +181,7 @@ fun ChatListScreen(
     val storyHidden by com.fariin.app.data.StoryMutes.set.collectAsState()
     var storyOpen by remember { mutableStateOf<com.fariin.app.data.StoryGroup?>(null) }
     storyOpen?.let { g ->
-        com.fariin.app.ui.stories.StoryViewerDialog(me, listOf(g), 0, state.chats, onClose = { storyOpen = null })
+        com.fariin.app.ui.stories.StoryViewerDialog(me, listOf(g), 0, state.chats, onClose = { storyOpen = null }, deliveredToMe = true)
     }
     val people = com.fariin.app.ui.people.LocalPeopleNav.current
     val channels = com.fariin.app.ui.channels.LocalChannelNav.current

@@ -498,7 +498,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     }
     viewing?.let { (groups, start) ->
         // Live copies of the rings, so a story posted or deleted meanwhile is not stale when opened.
-        if (live || com.fariin.app.ui.debug.DemoChats.active) StoryViewerDialog(me, groups, start, conversations, onClose = { viewing = null; viewingOrigin = null }, origin = viewingOrigin)
+        if (live || com.fariin.app.ui.debug.DemoChats.active) StoryViewerDialog(me, groups, start, conversations, onClose = { viewing = null; viewingOrigin = null }, origin = viewingOrigin, deliveredToMe = true)
         else viewing = null
     }
     if (camera) {

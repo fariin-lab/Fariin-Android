@@ -203,10 +203,12 @@ object StoryPrivacyRules {
         if (choice == StoryAudienceChoice.ONE_TIME) "Always on for a one-time story." else "Screenshots and screen recordings come out blank."
 
     /**
-     * May I reply to this story (iOS StoryViewer `canMessage`): the author lets replies in and is one
-     * of my accepted 1:1 chats. Otherwise the viewer says [REPLY_LOCKED].
+     * May I reply to this story (iOS StoryViewer `canMessage`): the author lets replies in, and the
+     * story came to me through my own feed ([deliveredToMe]: the tray, a chat's ring, a reply quote)
+     * or the author is one of my accepted 1:1 chats. Otherwise the viewer says [REPLY_LOCKED].
      */
-    fun canReply(s: Story, contacts: Set<String>): Boolean = s.allowsReplies && s.groupId == null && s.authorUid in contacts
+    fun canReply(s: Story, contacts: Set<String>, deliveredToMe: Boolean = false): Boolean =
+        s.allowsReplies && s.groupId == null && (deliveredToMe || s.authorUid in contacts)
 
     const val REPLY_LOCKED = "You can’t reply to this story"
     /** The react bar (iOS StoryViewer emojis), its line, and the reply field's placeholder. */

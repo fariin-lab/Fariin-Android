@@ -179,6 +179,10 @@ fun StoryViewerDialog(
     onClose: () -> Unit,
     /** A card that is not the ring's own (Posted Stories' tile): the flight leaves and lands there. */
     origin: StoryOrigin? = null,
+    /** iOS deliveredToMe: these stories reached me through my feed (the tray, a chat's ring, a reply
+     *  quote), so the author put me in the audience and a reply is allowed without a chat. False for
+     *  a profile, a link, a mention or Glow. */
+    deliveredToMe: Boolean = false,
 ) {
     // Back reaches this window's own dispatcher too (owner 2026-11-04: the back swipe did nothing in a
     // story). Since 919d7a6 the app is off the predictive-back system, so the viewer's
@@ -263,7 +267,7 @@ fun StoryViewerDialog(
         }
         androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.people.LocalPeopleNav provides routed) {
             StoryViewer(me, groups, startGroup, conversations, onClose, onShown = { secure = it.captureProtected },
-                onBarsOverList = { overList = it }, backTick = backTick, origin = origin)
+                onBarsOverList = { overList = it }, backTick = backTick, origin = origin, deliveredToMe = deliveredToMe)
         }
     }
 }
@@ -282,6 +286,8 @@ fun StoryViewer(
     backTick: Int = 0,
     /** See [StoryViewerDialog]: the tapped card when it is not the ring's own slot. */
     origin: StoryOrigin? = null,
+    /** See [StoryViewerDialog]. */
+    deliveredToMe: Boolean = false,
 ) {
     com.fariin.app.ui.components.AppOrientation.KeepUpright()   // built upright (iOS: full screen stays upright)
     val service = remember(me) { StoryService(me) }
@@ -961,7 +967,7 @@ fun StoryViewer(
                     },
                     canReply = { s ->
                         if (s.groupId != null) com.fariin.app.data.GroupStoryRules.memberCanReply(s, me, convs)
-                        else com.fariin.app.data.StoryPrivacyRules.canReply(s, contacts)
+                        else com.fariin.app.data.StoryPrivacyRules.canReply(s, contacts, deliveredToMe)
                     },
                     ownerBar = { s -> s.groupId != null && com.fariin.app.data.GroupStoryRules.canSeeViews(s, me, convs) },
                     // iOS GroupStoryStaff: who may take a member's group story down, and the menu rows that follow.

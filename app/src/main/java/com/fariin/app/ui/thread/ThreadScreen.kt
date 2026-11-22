@@ -2383,7 +2383,7 @@ private fun StoryReplyHeader(ui: ThreadUi, m: Message, r: Message.ReplyRef, isMe
     val feed by com.fariin.app.data.LiveStories.state.collectAsState()
     val live = com.fariin.app.data.LiveStories.find(feed, r.id, r.authorId)
     var open by remember { mutableStateOf<com.fariin.app.data.StoryGroup?>(null) }
-    open?.let { sg -> com.fariin.app.ui.stories.StoryViewerDialog(ui.me, listOf(sg), 0, com.fariin.app.data.ChatsNow.list, onClose = { open = null }) }
+    open?.let { sg -> com.fariin.app.ui.stories.StoryViewerDialog(ui.me, listOf(sg), 0, com.fariin.app.data.ChatsNow.list, onClose = { open = null }, deliveredToMe = true) }
     Column(Modifier.padding(bottom = 4.dp), horizontalAlignment = if (isMe) Alignment.End else Alignment.Start) {
         Text(caption, fontSize = 12.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 2.dp))
@@ -2590,7 +2590,7 @@ private fun StoryReaction(ui: ThreadUi, m: Message, glyph: String, isMe: Boolean
     val feed by com.fariin.app.data.LiveStories.state.collectAsState()
     val live = if (r.storyThumb.isNullOrEmpty()) null else com.fariin.app.data.LiveStories.find(feed, r.id, r.authorId)
     var open by remember { mutableStateOf<com.fariin.app.data.StoryGroup?>(null) }
-    open?.let { sg -> com.fariin.app.ui.stories.StoryViewerDialog(ui.me, listOf(sg), 0, com.fariin.app.data.ChatsNow.list, onClose = { open = null }) }
+    open?.let { sg -> com.fariin.app.ui.stories.StoryViewerDialog(ui.me, listOf(sg), 0, com.fariin.app.data.ChatsNow.list, onClose = { open = null }, deliveredToMe = true) }
     Column(horizontalAlignment = if (isMe) Alignment.End else Alignment.Start) {
         Text(caption, fontSize = 12.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 2.dp))
@@ -2635,7 +2635,7 @@ private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
     // is live (iOS onTapStoryQuote). Not in select mode, where the tap ticks the row.
     val jump = LocalQuoteJump.current
     var story by remember { mutableStateOf<com.fariin.app.data.StoryGroup?>(null) }
-    story?.let { sg -> com.fariin.app.ui.stories.StoryViewerDialog(ui.me, listOf(sg), 0, com.fariin.app.data.ChatsNow.list, onClose = { story = null }) }
+    story?.let { sg -> com.fariin.app.ui.stories.StoryViewerDialog(ui.me, listOf(sg), 0, com.fariin.app.data.ChatsNow.list, onClose = { story = null }, deliveredToMe = true) }
     val tap: (() -> Unit)? = when {
         jump == null -> null
         !r.isStatus -> ({ jump(r.id) })
