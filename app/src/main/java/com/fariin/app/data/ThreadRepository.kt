@@ -990,9 +990,15 @@ class ThreadRepository(
                     Held.LOCAL -> { awaitServer(); SendQueue.remove(me, e.clientId); return@launch }
                     Held.NONE -> {}
                 }
+                // Deleted while it waited (iOS cancelTextSend): nothing is written.
+                var called = false
                 turn.withLock {
+                    if (e.clientId in cancelledTexts) { called = true; return@withLock }
                     if (Wire.isGroupCid(cid)) sendGroup(e.text, e.clientId, e.ts, ref, mentions = e.mentions, fmt = e.fmt) else sendDirect(e.text, e.clientId, e.ts, ref, fmt = e.fmt)
                 }
+                if (called) return@launch
+                // Deleted after its write was handed over: taken back (iOS cancelAnnounced).
+                if (cancelledTexts.remove(e.clientId)) { cancelAnnounced(e.clientId); return@launch }
                 // How long the server took to have it: a slow one is not a clock sample (ThreadOrder).
                 order.noteAck(e.clientId, System.currentTimeMillis() - e.ts)
                 SendQueue.remove(me, e.clientId)
@@ -2433,6 +2439,19 @@ class ThreadRepository(
         // deleteForMe on a failed message: queue entry, upload and bubble all go).
         m.clientId?.let { pending.remove(it); retryPhoto.remove(it); retryVoice.remove(it)
             if (m.sendState != null && !SendQueue.isInFlight(it)) { SendQueue.remove(me, it); retryMedia.remove(it); com.fariin.app.local.PhotoOutbox.remove(me, it) } }
+        // An unsent text still on its way (offline, waiting for the server) is called off too, as
+        // iOS cancelTextSend: a send not written yet stops before its write, and one Firestore already
+        // holds is deleted, so the message deleted here never reaches the other phone.
+        val id = m.clientId
+        // Never one the server already has (hasServerTime): an offline edit also marks it pending.
+        if (id != null && m.sendState != null && !m.hasServerTime && m.mediaKind == null && m.authorId == me) {
+            SendQueue.remove(me, id)
+            if (SendQueue.isInFlight(id)) cancelledTexts.add(id)
+            SendScope.launch(Dispatchers.IO) {
+                val held = runCatching { msgRef(m.id).get(Source.CACHE).await().exists() }.getOrDefault(false)
+                if (held) cancelAnnounced(m.id)
+            }
+        }
         // The chat's newest message: the chat list shows the one before it from now on (HiddenLast).
         val shown = _state.value.messages.filter { !it.isSystem && !HiddenMessages.isHidden(it.id) }
         if (shown.maxByOrNull { it.createdAtMillis }?.id == m.id) {
@@ -2668,6 +2687,9 @@ class ThreadRepository(
         /** The repository of each chat on screen, so a queue drain sends through it (its bubble
          *  turns from failed back to sending) rather than through a second copy. */
         private val open = ConcurrentHashMap<String, ThreadRepository>()
+
+        /** Unsent texts deleted while their send was still running (iOS cancelledTextSends). */
+        private val cancelledTexts = ConcurrentHashMap.newKeySet<String>()
 
         /** True while a chat is on screen (ChatHistoryPreloader leaves warming until it closes). */
         fun anyOpen(): Boolean = open.isNotEmpty()
