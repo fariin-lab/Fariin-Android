@@ -1453,6 +1453,8 @@ private fun ThreadContent(
             // The day of the topmost message while scrolling (iOS floating date pill), under the header.
             if (!search.active) FloatingDayPill(listState, ui.messages, now,
                 Modifier.align(Alignment.TopCenter).zIndex(1f).padding(top = with(density) { topBarPx.toDp() } + 8.dp))
+            // Customize screenshot (iOS offerCustomScreenshot): Android 14+, only while this chat shows.
+            ScreenshotOffer(ui, listState, is24h, bottomBarPx)
             // A reaction that just ARRIVED on one of my messages while I am scrolled up (iOS
             // reactionJumpButton): its emoji in a glass circle above the arrow; a tap goes to it.
             reactionJump?.takeIf { !atBottom && !search.active && !voiceRecording }?.let { (rid, emoji) ->
