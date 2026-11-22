@@ -229,7 +229,8 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
     // tab stays alive behind the others now, so they stop when it is hidden, not only when it goes.
     StopGroupCallsOnChange(active)
     val liveAll by com.fariin.app.ui.call.LiveGroupCalls.calls.collectAsState()
-    val live = if (missedOnly || q.isNotEmpty()) emptyList() else liveAll
+    // The admin panel's Group Calls switch hides the live rows too (iOS CallFeatures.groupCalls).
+    val live = if (missedOnly || q.isNotEmpty() || !com.fariin.app.data.AppFeatures.groupCalls) emptyList() else liveAll
     // iOS callGroupAgain: a group row that may not call says why first, as a Can't Call alert.
     var cantCall by remember { mutableStateOf<String?>(null) }
     fun dial(call: CallEntry, video: Boolean) {
