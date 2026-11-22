@@ -200,6 +200,9 @@ object ChatBackup {
             val slots = listed.groupingBy { it["slot"] as? String }.eachCount()
             prefs(ctx).edit().putLong("last.$uid", built.made).putLong("size.$uid", size)
                 .putString("what.$uid", "${built.count},${slots["image"] ?: 0},${slots["audio"] ?: 0},${slots["video"] ?: 0}").apply()
+            // The skipped backup was just replaced (iOS replacedBy): no Restore circle for it, and the
+            // daily backups may run again.
+            LocalDb.setMeta(uid, "restore.waiting", "")
             Result.Done
         } catch (e: Exception) { Result.Failed(words(e)) }
         finally { progress.value = null }
