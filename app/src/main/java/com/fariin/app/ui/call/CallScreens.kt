@@ -42,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import kotlinx.coroutines.tasks.await
 import androidx.compose.runtime.mutableIntStateOf
@@ -264,7 +265,7 @@ fun CallScreen(
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             val status = if (ui.held && s.live) "On hold" else CallMachine.label(s, now)
             CallHeader(
-                name = ui.peerName, status = status,
+                name = ui.peerName, status = status, markUid = ui.peerUid.takeIf { it != "demo" },
                 muted = ui.remoteMuted && connected, mutedLabel = "${ui.peerName.substringBefore(' ')} is muted",
                 left = if (onMinimize != null && s.phase != CallPhase.INCOMING && s.phase != CallPhase.ENDED) {
                     { HeaderCircle(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_collapse), "Minimize call", 48.dp) { chrome.touch(); onMinimize() } }
@@ -607,7 +608,7 @@ private val BarHeight = 80.dp
 private fun CallHeader(
     name: String, status: String, muted: Boolean, mutedLabel: String,
     left: (@Composable () -> Unit)?, modifier: Modifier = Modifier,
-    right: (@Composable () -> Unit)? = null, side: Dp = 48.dp, scrim: Boolean = true,
+    right: (@Composable () -> Unit)? = null, side: Dp = 48.dp, scrim: Boolean = true, markUid: String? = null,
 ) {
     Row(
         modifier.fillMaxWidth()
@@ -619,8 +620,12 @@ private fun CallHeader(
     ) {
         Box(Modifier.padding(top = (48.dp - side) / 2).size(side)) { left?.invoke() }
         Column(Modifier.weight(1f).padding(horizontal = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(name, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1,
-                overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+            // iOS VerifiedMark after the name: a call from a stranger is where a name gets trusted.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(name, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.weight(1f, fill = false))
+                if (!markUid.isNullOrEmpty()) CallVerifiedMark(markUid)
+            }
             Spacer(Modifier.height(3.dp))
             // Their mute is the word on its own line between the name and the clock (iOS, 2026-10-10).
             if (muted) Text("Muted", color = Color.White.copy(alpha = 0.9f), fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
@@ -629,6 +634,17 @@ private fun CallHeader(
         }
         Box(Modifier.padding(top = (48.dp - side) / 2).size(side)) { right?.invoke() }
     }
+}
+
+/** Their verified tick at 20 beside the name (iOS VerifiedMark in the call header). */
+@Composable
+private fun CallVerifiedMark(uid: String) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(uid) { com.fariin.app.data.VerifiedPeople.warm(ctx.applicationContext, uid) }
+    val kinds by com.fariin.app.data.VerifiedPeople.kinds.collectAsState()
+    val kind = com.fariin.app.data.VerifiedPeople.badge(kinds, uid) ?: return
+    val tint = if (com.fariin.app.data.VerifiedPeople.isGold(kind)) Color(0xFFE8B21E) else Color(0xFF2392FE)
+    com.fariin.app.ui.components.VerifiedSeal(tint, Modifier.padding(start = 6.dp).size(20.dp))
 }
 
 /** A header button: a white glyph in a dark glass circle. */
