@@ -1416,7 +1416,8 @@ private fun OverflowMenu(
         // A filter that already is a folder (by its rule) leaves the menu (iOS 2026-11-20).
         if (!folders.hasFolderFor("unread")) item("Unread", R.drawable.ic_menu_unread, filter == FILTER_UNREAD) { onFilter(FILTER_UNREAD) } else null,
         if (com.fariin.app.data.AppFeatures.groups && !folders.hasFolderFor("groups")) item("Groups", R.drawable.ic_gs_group_type, filter == FILTER_GROUPS) { onFilter(FILTER_GROUPS) } else null,
-        if (!folders.hasFolderFor("channels")) item("Channels", R.drawable.ic_sf_megaphone, filter == FILTER_CHANNELS) { onFilter(FILTER_CHANNELS) } else null,
+        // Channels sit with Groups: both gone while the panel has groups off (iOS menuFilterSection).
+        if (com.fariin.app.data.AppFeatures.groups && !folders.hasFolderFor("channels")) item("Channels", R.drawable.ic_sf_megaphone, filter == FILTER_CHANNELS) { onFilter(FILTER_CHANNELS) } else null,
         // People with folders: the tabs can be put away and brought back.
         if (folders.active) item(if (folders.tabsHidden) "Show Folder Tabs" else "Hide Folder Tabs", R.drawable.ic_story_folder) {
             folders.hideTabs(!folders.tabsHidden)
