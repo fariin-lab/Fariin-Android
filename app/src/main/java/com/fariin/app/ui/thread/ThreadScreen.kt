@@ -642,7 +642,11 @@ private fun ThreadContent(
     failedFor?.let { fm ->
         val offline = com.fariin.app.data.ConnectionStatus.state.collectAsState().value != com.fariin.app.data.ConnectionStatus.State.ONLINE
         com.fariin.app.ui.components.GlassAlert(onDismissRequest = { failedFor = null }, title = "Message not sent",
-            message = if (offline) "No internet connection. Check your connection and try again." else null,
+            // Online, a group's own reason when it is why the send was refused (iOS refusal(for:)).
+            message = if (offline) "No internet connection. Check your connection and try again."
+                else ui.sendBlocked ?: (if (ui.notAMember) "You're no longer a member of this group" else null)
+                    ?: (if (ui.isGroup && ui.groupDoc.isNotEmpty() && com.fariin.app.data.MemberRestrict.isMuted(ui.groupDoc, ui.me,
+                        System.currentTimeMillis().toDouble())) com.fariin.app.data.MemberRestrict.MUTED_BAR else null),
             actions = listOf(
                 com.fariin.app.ui.components.GlassAlertAction("Resend", com.fariin.app.ui.components.GlassAlertStyle.Bold) { onRetry(fm) },
                 com.fariin.app.ui.components.GlassAlertAction("Delete", com.fariin.app.ui.components.GlassAlertStyle.Red) { actions.onDeleteForMe(fm) },
@@ -1613,8 +1617,21 @@ private fun ThreadContent(
                 fun slow(): String? = editHold ?: if (!ui.isGroup || doc.isEmpty()) null else com.fariin.app.data.GroupAdmins.slowWait(doc, ui.me,
                     ui.messages.lastOrNull { it.authorId == ui.me && !it.isSystem }?.createdAtMillis, System.currentTimeMillis().toDouble())
                 val mediaOff = if (ui.isGroup && doc.isNotEmpty()) com.fariin.app.data.GroupAdmins.mediaOff(doc, ui.me) else null
+                // The slow-mode wait ticks while it lasts (iOS: a countdown in the empty field, and the
+                // mic and camera held before they open, not after).
+                var slowTick by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+                val slowLeft = slowTick.let {
+                    if (!ui.isGroup || doc.isEmpty() || editing != null) 0 else com.fariin.app.data.GroupAdmins.slowLeftSeconds(doc, ui.me,
+                        ui.messages.lastOrNull { it.authorId == ui.me && !it.isSystem }?.createdAtMillis, System.currentTimeMillis().toDouble())
+                }
+                if (slowLeft > 0) LaunchedEffect(slowLeft > 0) {
+                    while (true) { kotlinx.coroutines.delay(1000); slowTick = System.currentTimeMillis() }
+                }
                 val gatedSend: (String, List<String>, String?) -> Unit = { t, ids, fmt ->
-                    val links = if (com.fariin.app.data.GroupAdmins.hasLink(t)) held(com.fariin.app.data.GroupAdmins.SendKind.LINKS) else null
+                    // Links typed or added through Format > Link both count (iOS).
+                    val anyLink = com.fariin.app.data.GroupAdmins.hasLink(t) ||
+                        (fmt != null && com.fariin.app.data.TextFormat.parseLinks(fmt, t.length).isNotEmpty())
+                    val links = if (anyLink) held(com.fariin.app.data.GroupAdmins.SendKind.LINKS) else null
                     // Slow mode lets one message through per wait, so a text that splits into several
                     // bubbles (ThreadRepository.sendText) could not all go: said before, not refused after.
                     val long = if (editing == null && quoting == null && ui.isGroup && doc.isNotEmpty() &&
@@ -1628,7 +1645,11 @@ private fun ThreadContent(
                     onSendMedia = { uris, cap, once ->
                         val kinds = uris.map { if ((resolver.getType(it) ?: "").startsWith("video/")) com.fariin.app.data.GroupAdmins.SendKind.VIDEOS
                             else com.fariin.app.data.GroupAdmins.SendKind.PHOTOS }.distinct()
-                        val stop = slow() ?: kinds.firstNotNullOfOrNull { held(it) }
+                        // A pick that goes out as several albums is several messages: slow mode lets one through (iOS).
+                        val many = if (ui.isGroup && doc.isNotEmpty() && com.fariin.app.data.GroupAdmins.slows(doc, ui.me) &&
+                            uris.size > com.fariin.app.media.MediaRules.ALBUM_MAX_ITEMS)
+                            "Send one message at a time: one video, or up to ${com.fariin.app.media.MediaRules.ALBUM_MAX_ITEMS} photos as one album." else null
+                        val stop = slow() ?: many ?: kinds.firstNotNullOfOrNull { held(it) }
                         if (stop != null) actions.onNotice(stop) else { sendMotion.arm(SendMotion.Kind.MEDIA, ui.messages, sendAnim); onSendPick(uris, cap, once) }
                     },
                     onSendFile = { u -> val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.FILES); if (stop != null) actions.onNotice(stop) else onSendFile(u) },
@@ -1678,7 +1699,8 @@ private fun ThreadContent(
                     boldable = true,
                     onTyping = steady1(actions.onTyping),
                     onRecording = steady1 { r: Boolean -> voiceRecording = r }, onCapturing = steady1(actions.onRecordingVoice),
-                    voiceOff = held(com.fariin.app.data.GroupAdmins.SendKind.VOICE), onVoiceOff = steady1(actions.onNotice),
+                    voiceOff = held(com.fariin.app.data.GroupAdmins.SendKind.VOICE) ?: (if (slowLeft > 0) slow() else null),
+                    onVoiceOff = steady1(actions.onNotice),
                     onRowPlaced = steady1 { r: androidx.compose.ui.geometry.Rect? -> sendMotion.composerRow = r },
                     // Fariin Plus send effects: 1:1s and groups, not channels, not the first message
                     // in a chat, not while quoting or editing.
@@ -1686,12 +1708,13 @@ private fun ThreadContent(
                         else com.fariin.app.data.PlusStore.state("sendEffects"),
                     onPickFx = steady1 { id: String? -> if (id == null) fxPlusPage = true else fxNext.value = id },
                     onCamera = steady0 {
-                        val stop = editHold ?: held(com.fariin.app.data.GroupAdmins.SendKind.PHOTOS)
+                        val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.PHOTOS)
                         if (stop != null) actions.onNotice(stop) else { attachCamera = true; attachOpen = true }
                     },
                     initialDraft = actions.draft, onDraft = steady1 { d: String -> actions.onDraft(d); linkText = d },
                     // A channel's admin writes a "Broadcast", with the post-without-sound bell (iOS).
-                    placeholder = if (ch != null) "Broadcast" else "Message",
+                    placeholder = if (ch != null) "Broadcast"
+                        else if (slowLeft > 0) "Slow mode · %d:%02d".format(slowLeft / 60, slowLeft % 60) else "Message",
                     channelSilent = if (ch != null && ch.role == com.fariin.app.channel.ChannelRules.Role.ADMIN) {
                         LaunchedEffect(ui.cid) { com.fariin.app.channel.ChannelPosting.load(ui.cid) }
                         com.fariin.app.channel.ChannelPosting.isSilent(ui.cid)

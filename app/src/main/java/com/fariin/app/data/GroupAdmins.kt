@@ -185,9 +185,18 @@ object GroupAdmins {
         isGroup(d) && MemberRestrict.isRestricted(d, me, MemberRestrict.R.SEND_REACTIONS, nowMs)
 
     private val LINK = Regex("(?si).*(https?://|www[.]).*")
+    /** A bare domain ("fariin.com/x"), as the iOS link detector finds it. */
+    private val BARE = Regex("""(?i)(^|[^\w@.-])[a-z0-9-]+([.][a-z0-9-]+)*[.](com|net|org|io|app|dev|me|co|so|info|biz|tv|ly|gg|xyz|link|site|online|store|shop|us|uk|ca|de|fr|ke|et|ae|sa|tr)(/\S*)?(?![\w-])""")
 
-    /** firestore.rules memberSendOk's link test on a plain text. */
-    fun hasLink(text: String): Boolean = LINK.matches(text)
+    /** memberSendOk's link test, plus bare domains (iOS links-off check, ThreadView). */
+    fun hasLink(text: String): Boolean = LINK.matches(text) || BARE.containsMatchIn(text)
+
+    /** Seconds left of my slow-mode wait, 0 when I may send. */
+    fun slowLeftSeconds(d: Map<String, Any?>, me: String, lastMineMs: Double?, nowMs: Double): Int {
+        if (!slows(d, me) || lastMineMs == null) return 0
+        val left = lastMineMs + slowSeconds(d) * 1000.0 - nowMs
+        return if (left <= 0) 0 else kotlin.math.ceil(left / 1000.0).toInt()
+    }
 
     /** Announcement mode: a member may not send at all. iOS words. */
     fun announcementBlock(d: Map<String, Any?>, me: String): String? {
