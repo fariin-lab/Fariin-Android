@@ -489,7 +489,8 @@ class FirestorePeople(
                 saved = try {
                     val sref = FirebaseStorage.getInstance().reference.child("profiles/group_${ref.id}.jpg")
                     sref.putBytes(jpeg, StorageMetadata.Builder().setContentType("image/jpeg").build()).await()
-                    ref.update(mapOf("avatarUrl" to sref.downloadUrl.await().toString(), "updatedAt" to FieldValue.serverTimestamp())).await()
+                    // No updatedAt (iOS uploadGroupAvatar): a photo is not a message, so the chat does not jump.
+                    ref.update(mapOf("avatarUrl" to sref.downloadUrl.await().toString())).await()
                     true
                 } catch (_: Exception) { false }
                 if (saved) break
