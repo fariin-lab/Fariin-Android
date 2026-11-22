@@ -294,6 +294,7 @@ class CallActivity : ComponentActivity() {
                     LaunchedEffect(ui.status.phase, asking) {
                         if (ui.status.phase != CallPhase.IDLE) asking = false else if (!asking) finish()
                     }
+                    permAlert?.let { PermissionAlert(it) }
                     val pip = CallRouting.pipWanted(ui.status.phase, ui.cameraOn, ui.remoteCameraOn)
                     val pipTall = CallRouting.pipVideo(ui.cameraOn, ui.remoteCameraOn)
                     LaunchedEffect(pip, pipTall) { updatePip(pip) }
@@ -557,10 +558,39 @@ class CallActivity : ComponentActivity() {
         val name = i.getStringExtra(EXTRA_NAME) ?: ""
         val photo = i.getStringExtra(EXTRA_PHOTO)
         if (restored) { if (!CallManager.ui.value.status.live) finish(); return }
-        withMic(video, { CallManager.dial(this, uid, name, photo, video) }, {
-            Toast.makeText(this, "Allow microphone access to make calls.", Toast.LENGTH_LONG).show()
-            finish()
+        // iOS callPermissionsReady: a refused mic or camera places nothing and says where to fix it.
+        // A video call with the camera refused offers a voice call instead.
+        withMic(video, {
+            if (video && !granted(Manifest.permission.CAMERA)) {
+                asking = true
+                permAlert = PermAlert(camera = true) { CallManager.dial(this, uid, name, photo, false) }
+            } else CallManager.dial(this, uid, name, photo, video)
+        }, {
+            asking = true
+            permAlert = PermAlert(camera = false, voiceInstead = null)
         })
+    }
+
+    /** The "access is off" alert before a dial (iOS presentPermissionAlert). */
+    private class PermAlert(val camera: Boolean, val voiceInstead: (() -> Unit)?)
+    private var permAlert by mutableStateOf<PermAlert?>(null)
+
+    @androidx.compose.runtime.Composable
+    private fun PermissionAlert(a: PermAlert) {
+        val close = { permAlert = null; asking = false }
+        com.fariin.app.ui.components.GlassAlert(
+            onDismissRequest = close,
+            title = if (a.camera) "Camera Access Is Off" else "Microphone Access Is Off",
+            message = if (a.camera) "Allow Fariin to use the camera in Settings to make video calls."
+                else "Allow Fariin to use the microphone in Settings to make calls.",
+            dismissOnAction = false,
+            actions = listOfNotNull(
+                com.fariin.app.ui.components.GlassAlertAction("Settings", com.fariin.app.ui.components.GlassAlertStyle.Bold) {
+                    com.fariin.app.ui.components.PermissionDenied.openAppSettings(this); close()
+                },
+                a.voiceInstead?.let { v -> com.fariin.app.ui.components.GlassAlertAction("Voice Call") { permAlert = null; v() } },
+                com.fariin.app.ui.components.GlassAlertAction("Cancel") { close() },
+            ))
     }
 
     /** Debug demo: the share button walks the demo share on and off without the system dialog. */
