@@ -1075,6 +1075,9 @@ private fun ThreadContent(
     // The chat itself changed (a message came, was edited or deleted): results follow, the list stays put.
     LaunchedEffect(ui.messages) { if (search.active) search.update(ui.messages, force = true, navigate = false) }
     val pins = visiblePins(ui)
+    // iOS: the bar always starts on the newest pin (the last in pin order) whenever the pins change;
+    // a tap then walks on through the rest.
+    LaunchedEffect(pins) { pinIndex = (pins.size - 1).coerceAtLeast(0) }
     // The header and the pinned capsule float over the top of the chat (iOS): the messages run under
     // them and fade out behind a soft wash, and the list is padded by their height so nothing hides.
     // Started at the header's usual height (status bar + the 52 dp row) so the top fade is there on
