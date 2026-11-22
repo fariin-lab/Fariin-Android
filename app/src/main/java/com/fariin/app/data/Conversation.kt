@@ -102,6 +102,8 @@ data class Conversation(
     /** Mine as a follower (ChannelFollows, users/{me}/channels/{cid}); null when I am not one. */
     val followerRead: Int? = null,
     val followerMuted: Boolean = false,
+    /** When I followed this channel (my follow entry's `at`); 0 when not a follower. */
+    val followedAtMillis: Double = 0.0,
     /** A group's shared wallpaper (iOS groupWallpaper, `wallpaper`): "none", "g:..", "u:<link>"; null when never set. */
     val groupWallpaper: String? = null,
     /** `typing` read as iOS does: a "text-<s>" string or Bool true is typing, "audio-<s>" is recording;
@@ -254,7 +256,10 @@ data class Conversation(
     }
 
     fun displayUpdatedAt(me: String): Double = hiddenLastSince(me) ?: updatedAtMillis
-    fun listSortDate(me: String): Double = displayUpdatedAt(me)
+    /** iOS listSortDate: a channel just followed comes to the top, by its last post or the follow
+     *  time, whichever is newer. The row's time still says the last post. */
+    fun listSortDate(me: String): Double =
+        if (isFollower(me)) maxOf(displayUpdatedAt(me), followedAtMillis) else displayUpdatedAt(me)
     fun leaksBlocked(me: String): Boolean = hiddenLastSince(me) != null
 
     /** The newest line is a member's own words, sent in the clear in a group that switched. */

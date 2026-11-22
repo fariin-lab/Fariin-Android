@@ -257,7 +257,7 @@ object ChannelFollows {
         val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: ""
         // My pin and archive on a channel I follow live on MY follow entry (a follower may not write
         // the channel's document); the list reads them as it does a chat's own (2026-11-06).
-        conv.copy(followerRead = e.read, followerMuted = e.isMuted(),
+        conv.copy(followerRead = e.read, followerMuted = e.isMuted(), followedAtMillis = e.at,
             pinnedBy = if (uid.isEmpty()) conv.pinnedBy else conv.pinnedBy + (uid to e.pinned),
             archivedBy = if (uid.isEmpty()) conv.archivedBy else conv.archivedBy + (uid to e.archived))
     }
