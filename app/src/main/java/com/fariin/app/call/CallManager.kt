@@ -948,6 +948,12 @@ object CallManager {
         if (on) stopScreenShare(notice = if (_ui.value.sharing) "Screen sharing stopped" else null)
         edit { it.copy(held = on) }
         engine?.setMic(!on && !_ui.value.muted)
+        // iOS setHeld: the camera pauses too, so my face never goes out during the phone call.
+        // The wish to be on camera stays: unhold turns it back on.
+        if (_ui.value.cameraOn) {
+            engine?.setCamera(!on)
+            callId?.let { if (status.callDocCreated) signaling.update(it, CallWire.camsField(me, !on)) }
+        }
         broadcastMute()
     }
 
@@ -969,9 +975,11 @@ object CallManager {
         if (!_ui.value.cameraOn && _ui.value.sharePhase != SharePhase.OFF) return
         val on = !_ui.value.cameraOn
         edit { it.copy(cameraOn = on) }
-        engine?.setCamera(on)
+        // While held the choice is kept and nothing is sent (iOS cameraShouldRun); unhold starts it.
+        val send = on && !_ui.value.held
+        engine?.setCamera(send)
         if (on && ::app.isInitialized) CallService.start(app, CallService.Mode.CALL, true)
-        callId?.let { if (status.callDocCreated) signaling.update(it, CallWire.camsField(me, on)) }
+        callId?.let { if (status.callDocCreated) signaling.update(it, CallWire.camsField(me, send)) }
     }
 
     fun flipCamera() {
