@@ -1148,7 +1148,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             Spacer(Modifier.height(10.dp))
             Text(conv["title"] as? String ?: "Group", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
-                val faces = users.take(3)
+                // iOS countFaces: the first three, people with a photo first.
+                val faces = users.sortedBy { photos[it].isNullOrEmpty() }.take(3)
                 if ((conv["hideMembers"] != true || appAdmin) && faces.isNotEmpty()) {
                     Box(Modifier.size(width = (22 + 14 * (faces.size - 1)).dp, height = 24.dp)) {
                         faces.forEachIndexed { i, u ->
