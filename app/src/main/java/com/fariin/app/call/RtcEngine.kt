@@ -250,6 +250,40 @@ class RtcEngine(
         capturing = false
     }
 
+    // Weak-signal sampler (iOS linkMonitor + sampleLinkQuality): every [everyMs] it reads the stats
+    // and hands the main thread the selected pair's availableOutgoingBitrate (null = no estimate).
+    // One sampler at a time; close() stops it, and a read that lands after a stop is dropped.
+    private var linkTick: Runnable? = null
+
+    fun startLinkSampler(everyMs: Long, onSample: (Double?) -> Unit) {
+        if (linkTick != null) return
+        val tick = object : Runnable {
+            override fun run() {
+                if (linkTick !== this) return
+                val conn = pc ?: return
+                conn.getStats { report -> mainHandler.post { if (linkTick === this && pc === conn) onSample(outgoingBitrate(report)) } }
+                mainHandler.postDelayed(this, everyMs)
+            }
+        }
+        linkTick = tick
+        mainHandler.postDelayed(tick, everyMs)
+    }
+
+    fun stopLinkSampler() {
+        linkTick?.let { mainHandler.removeCallbacks(it) }
+        linkTick = null
+    }
+
+    /** The pair the transport actually selected; else the best succeeded pair (iOS, same order). */
+    private fun outgoingBitrate(report: livekit.org.webrtc.RTCStatsReport): Double? {
+        val stats = report.statsMap.values
+        fun bps(s: livekit.org.webrtc.RTCStats) = (s.members["availableOutgoingBitrate"] as? Number)?.toDouble()
+        val selectedId = stats.firstOrNull { it.type == "transport" }?.members?.get("selectedCandidatePairId") as? String
+        val selected = selectedId?.let { id -> stats.firstOrNull { it.type == "candidate-pair" && it.id == id } }
+        return selected?.let { bps(it) }
+            ?: stats.filter { it.type == "candidate-pair" && it.members["state"] == "succeeded" }.mapNotNull { bps(it) }.maxOrNull()
+    }
+
     private fun makeCapturer(): CameraVideoCapturer? {
         val en = Camera2Enumerator(context)
         val names = en.deviceNames
@@ -454,6 +488,7 @@ class RtcEngine(
     private var remoteVideoSeen = 0
 
     fun close() {
+        stopLinkSampler()
         unwatchNetwork()
         if (held) { held = false; audioModule?.setSpeakerMute(false); pc?.setAudioPlayout(true); pc?.setAudioRecording(true) }
         stopScreen()

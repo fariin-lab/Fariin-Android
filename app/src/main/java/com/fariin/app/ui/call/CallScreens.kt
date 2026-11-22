@@ -277,7 +277,10 @@ fun CallScreen(
         }
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             // iOS statusText: hold is said only while active; Ringing and Reconnecting keep their words.
-            val status = if (ui.held && s.phase == CallPhase.ACTIVE) "On hold" else CallMachine.label(s, now)
+            // The weak-signal words take the clock's place while my camera is down for the link (iOS).
+            val status = if (ui.held && s.phase == CallPhase.ACTIVE) "On hold"
+                else if (ui.videoPausedForNetwork && s.phase == CallPhase.ACTIVE) "Video paused, weak signal"
+                else CallMachine.label(s, now)
             CallHeader(
                 name = ui.peerName, status = status, markUid = ui.peerUid.takeIf { it != "demo" },
                 muted = ui.remoteMuted && connected, mutedLabel = "${ui.peerName.substringBefore(' ')} is muted",
@@ -327,11 +330,11 @@ fun CallScreen(
             ) {
                 val m = Modifier.fillMaxSize()
                 // My track stays published while the camera is off: only a camera that is on is drawn.
-                val cardTrack = if (swapped) remoteVideo else local?.takeIf { ui.cameraOn }
+                val cardTrack = if (swapped) remoteVideo else local?.takeIf { ui.myVideoLive }
                 when {
                     cardTrack != null -> CardVideoView(cardTrack, mirror = !swapped && ui.frontCamera, modifier = m)
                     // My camera is off: my photo holds the card (iOS tileContent).
-                    !swapped && !ui.cameraOn -> Box(m.background(TileFill), contentAlignment = Alignment.Center) {
+                    !swapped && !ui.myVideoLive -> Box(m.background(TileFill), contentAlignment = Alignment.Center) {
                         Avatar(rememberMyPhoto(), 64.dp)
                         Icon(ImageVector.cachedVector(R.drawable.ic_call_video_off), "Camera off", tint = Color.White.copy(alpha = 0.85f),
                             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp).size(18.dp))

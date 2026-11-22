@@ -11,6 +11,7 @@ import android.media.RingtoneManager
 import android.util.Log
 import com.fariin.app.crypto.FariinCrypto
 import com.fariin.app.data.CryptoHub
+import com.fariin.app.data.WeakLinkPolicy
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
@@ -58,7 +59,14 @@ data class CallUi(
     val remoteScreen: Boolean = false,
     /** One short line when my share ended without my Stop, or never got going (iOS screenShareNotice). */
     val shareNotice: String? = null,
+    /**
+     * My video is off because the LINK can not carry it, not because I turned it off (iOS
+     * videoPausedForNetwork). `cameraOn` stays true: it is the wish, restored when the link heals.
+     */
+    val videoPausedForNetwork: Boolean = false,
 ) {
+    /** My own tile draws my camera only while it is really going out (iOS localPreviewLive). */
+    val myVideoLive: Boolean get() = cameraOn && !videoPausedForNetwork
     /** My share has begun and owns my video (iOS screenSharing). */
     val sharing: Boolean get() = sharePhase == SharePhase.STARTING || sharePhase == SharePhase.LIVE
     /** A share can be started now: a connected call and nobody else sharing (iOS shareCircle canStart). */
@@ -181,6 +189,8 @@ object CallManager {
                 if (u.status.live && (u.cameraOn || u.remoteCameraOn)) { everVideo = true; videoSpeakerDefault(u) }
             }
         }
+        // iOS syncLinkMonitor: the weak-signal check runs only while my camera is on in a live call.
+        main.launch { ui.collect { syncLinkMonitor(it) } }
         // The calling sound from the dial to the pick-up, and the chime when their camera comes on (iOS).
         main.launch {
             var theirCam = false
@@ -738,8 +748,12 @@ object CallManager {
                 // iOS audit M-121: the camera (or the share, whose write carries `cams`) too.
                 if (back) {
                     if (_ui.value.sharing) broadcastScreen()
-                    else if (status.callDocCreated) signaling.update(id, CallWire.camsField(me, _ui.value.cameraOn && !_ui.value.held))
+                    else if (status.callDocCreated) signaling.update(id, CallWire.camsField(me, _ui.value.myVideoLive && !_ui.value.held))
                 }
+                // iOS linkTransitionAt / linkMovedAt: a recovery is a real move; a healed blip only
+                // holds the weak-signal verdict for a while.
+                val nowMs = android.os.SystemClock.elapsedRealtime()
+                if (back) { linkMovedAt = nowMs; linkTransitionAt = nowMs } else if (!first) linkTransitionAt = nowMs
                 if (first && status.connectedAtMs != null) {
                     CallTelecom.setActive(id)
                     if (!status.isCaller) engine?.sendAccept()
@@ -748,13 +762,17 @@ object CallManager {
                 }
             }
             PeerConnection.IceConnectionState.DISCONNECTED -> {
+                linkTransitionAt = android.os.SystemClock.elapsedRealtime()
                 // iOS 1:1 audit #7: a blip that heals within 1 s never shows "Reconnecting…".
                 after(1000) { if (callId == id && !mediaReady && status.phase == CallPhase.ACTIVE) enterReconnecting(id) }
             }
             PeerConnection.IceConnectionState.FAILED -> {
                 enterReconnecting(id)
                 if (status.isCaller) restartIce()
-                else { restartRequestsSent++; signaling.update(id, mapOf("restartRequest" to restartRequestsSent)) }
+                else {
+                    linkRestartAt = android.os.SystemClock.elapsedRealtime()
+                    restartRequestsSent++; signaling.update(id, mapOf("restartRequest" to restartRequestsSent))
+                }
             }
             else -> {}
         }
@@ -791,6 +809,7 @@ object CallManager {
     private fun restartIce() {
         val id = callId ?: return
         val e = engine ?: return
+        linkRestartAt = android.os.SystemClock.elapsedRealtime()
         main.launch {
             try {
                 e.restartIce()
@@ -988,7 +1007,10 @@ object CallManager {
         if (id != callId || !status.live) return
         // A share ENDS on hold (iOS): the person is on a phone call now, and their screen would show it.
         if (on) stopScreenShare(notice = if (_ui.value.sharing) "Screen sharing stopped" else null)
-        edit { it.copy(held = on) }
+        // Hold owns the pause while it lasts (iOS audit 2026-10-06 #1): a weak-signal pause gives way,
+        // and the link is judged fresh after unhold brings the camera back.
+        if (on) { linkPolicy.reset(); weakPausedAt = null }
+        edit { it.copy(held = on, videoPausedForNetwork = if (on) false else it.videoPausedForNetwork) }
         engine?.setMic(!on && !_ui.value.muted)
         // iOS setHeld: the camera pauses too, so my face never goes out during the phone call.
         // The wish to be on camera stays: unhold turns it back on.
@@ -1021,12 +1043,78 @@ object CallManager {
         // Owner 2026-10-10 (iOS shareBlocksCamera): my share and my camera never run together.
         if (!_ui.value.cameraOn && _ui.value.sharePhase != SharePhase.OFF) return
         val on = !_ui.value.cameraOn
-        edit { it.copy(cameraOn = on) }
+        // MANUAL WISH WINS (iOS setCamera): the weak-signal pause is dropped and its windows restart,
+        // so the check never turns back on a camera the person switched off.
+        linkPolicy.reset(); weakPausedAt = null
+        edit { it.copy(cameraOn = on, videoPausedForNetwork = false) }
         // While held the choice is kept and nothing is sent (iOS cameraShouldRun); unhold starts it.
         val send = on && !_ui.value.held
         engine?.setCamera(send)
         if (on && ::app.isInitialized) CallService.start(app, CallService.Mode.CALL, true)
         callId?.let { if (status.callDocCreated) signaling.update(it, CallWire.camsField(me, send)) }
+    }
+
+    // Weak-signal video fallback, 1:1 only (iOS CallService). Group calls step their layers down
+    // instead, so they have none. The numbers and both windows live in data/WeakLinkPolicy.
+    private val linkPolicy = WeakLinkPolicy()
+    private var linkEngine: RtcEngine? = null
+    private var linkTransitionAt: Long? = null
+    private var linkMovedAt: Long? = null
+    private var linkRestartAt: Long? = null
+    private var weakPausedAt: Long? = null
+
+    private fun syncLinkMonitor(u: CallUi) {
+        val e = engine
+        val want = e != null && u.cameraOn && !u.sharing &&
+            (u.status.phase == CallPhase.ACTIVE || u.status.phase == CallPhase.RECONNECTING)
+        if (want && linkEngine === e) return
+        linkEngine?.stopLinkSampler(); linkEngine = null
+        linkPolicy.reset()
+        if (!want || e == null) return
+        linkEngine = e
+        e.startLinkSampler(WeakLinkPolicy.SAMPLE_EVERY_MS) { bps -> applyLinkQuality(e, bps) }
+    }
+
+    private fun applyLinkQuality(from: RtcEngine, bps: Double?) {
+        // A read from the last call's connection is dropped.
+        if (engine !== from || !status.live) return
+        val u = _ui.value
+        if (!u.cameraOn || u.sharing) { linkPolicy.reset(); return }
+        if (u.held) { linkPolicy.reset(); return }
+        val now = android.os.SystemClock.elapsedRealtime()
+        val paused = u.videoPausedForNetwork
+        val moving = WeakLinkPolicy.moving(status.phase == CallPhase.RECONNECTING, linkRestartAt, linkTransitionAt, now)
+        if (moving && !paused) { linkPolicy.reset(); return }
+        if (!moving && paused && WeakLinkPolicy.staleAfterMove(weakPausedAt, linkMovedAt)) {
+            weakPausedAt = null; linkPolicy.reset(); resumeVideoAfterWeakLink(); return
+        }
+        when (linkPolicy.evaluate(bps, paused, now)) {
+            WeakLinkPolicy.Decision.PAUSE -> { if (pauseVideoForWeakLink()) weakPausedAt = now }
+            WeakLinkPolicy.Decision.RESUME -> { weakPausedAt = null; resumeVideoAfterWeakLink() }
+            WeakLinkPolicy.Decision.NONE -> {}
+        }
+    }
+
+    /** The camera stops and they get my photo, not a frozen face (iOS pauseVideoForWeakLink). */
+    private fun pauseVideoForWeakLink(): Boolean {
+        val u = _ui.value
+        if (!u.cameraOn || u.held || u.sharing) return false
+        step("video paused: weak signal")
+        edit { it.copy(videoPausedForNetwork = true) }
+        engine?.setCamera(false)
+        callId?.let { if (status.callDocCreated) signaling.update(it, CallWire.camsField(me, false)) }
+        return true
+    }
+
+    private fun resumeVideoAfterWeakLink() {
+        if (_ui.value.held) return
+        edit { it.copy(videoPausedForNetwork = false) }
+        // The wish again, not a blind restore: the camera may have been turned off meanwhile.
+        val u = _ui.value
+        if (!status.live || !u.cameraOn || u.sharing) return
+        step("video back: signal healthy")
+        engine?.setCamera(true)
+        callId?.let { if (status.callDocCreated) signaling.update(it, CallWire.camsField(me, true)) }
     }
 
     fun flipCamera() {
@@ -1206,7 +1294,10 @@ object CallManager {
         timers.forEach { it.cancel() }; timers.clear()
         listeners.forEach { it.remove() }; listeners.clear()
         engine?.close(); engine = null
-        edit { it.copy(remoteVideo = null, localVideo = null) }
+        linkEngine?.stopLinkSampler(); linkEngine = null
+        linkPolicy.reset()
+        linkTransitionAt = null; linkMovedAt = null; linkRestartAt = null; weakPausedAt = null
+        edit { it.copy(remoteVideo = null, localVideo = null, videoPausedForNetwork = false) }
         if (::app.isInitialized) {
             if (audioHoldMs > 0) main.launch {
                 delay(audioHoldMs)
