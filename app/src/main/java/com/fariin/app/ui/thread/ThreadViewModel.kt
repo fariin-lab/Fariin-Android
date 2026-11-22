@@ -554,6 +554,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         }
     }
     val uploadCancel = remember(vm, me) { UploadCancel(me, vm.repo::cancelMediaSend, vm.repo::cancelAlbumItem) }
+    var playlistPick by remember { mutableStateOf<Pair<List<android.net.Uri>, com.fariin.app.data.Message?>?>(null) }
     // The run of voice notes the player follows when one ends, also after this chat is left (iOS handOff).
     LaunchedEffect(ui.cid, ui.messages) { com.fariin.app.data.SharedMediaSource.noteLive(ui.cid, ui.messages) }
     LaunchedEffect(ui.cid, ui.messages) { vm.repo.media?.let { com.fariin.app.media.VoiceRun.publish(ui.cid, ui.messages, it) } }
@@ -562,7 +563,18 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
             onSendPhoto = { uri -> vm.repo.sendPhoto(app, uri) }, onSendVoice = { r, re -> vm.repo.sendVoice(r, re) }, actions = actions,
             onSendPick = { uris, caption, once, re -> vm.repo.sendPick(app, uris, caption, once, re) },
             onSendFile = { uri, re -> vm.repo.sendDocument(app, uri, re) { notice = it } },
-            onSendFiles = { uris, re -> vm.repo.sendDocuments(app, uris, re) { notice = it } })
+            onSendFiles = { uris, re ->
+                // Several songs: the playlist sheet first (iOS PlaylistComposeSheet); the gates already passed.
+                if (isPlaylistPick(app, uris)) playlistPick = uris to re
+                else vm.repo.sendDocuments(app, uris, re) { notice = it }
+            })
+    }
+    playlistPick?.let { (uris, re) ->
+        PlaylistComposeSheet(uris, onDismiss = { playlistPick = null }) { ordered, name, caption ->
+            playlistPick = null
+            if (ordered.size == 1) vm.repo.sendDocument(app, ordered[0], re) { notice = it }
+            else vm.repo.sendPlaylist(app, ordered, name, caption, re) { notice = it }
+        }
     }
     // The question itself: Not Now and the request simply waits; Use Chat Key opens the key sheet.
     if (keyAsk) com.fariin.app.ui.components.GlassAlert(
