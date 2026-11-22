@@ -1026,7 +1026,7 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
                     contentAlignment = Alignment.CenterStart,
                 ) {
                     if (cur.caption.isEmpty()) Text("Add a caption…", color = Color.White.copy(alpha = 0.65f), fontSize = 17.sp)
-                    BasicTextField(cur.caption, { cur.caption = it.take(com.fariin.app.data.StoryLimits.CAPTION_CHARS) }, textStyle = TextStyle(color = Color.White, fontSize = 17.sp),
+                    BasicTextField(cur.caption, { cur.caption = it.take(com.fariin.app.data.TextStoryRules.CHAR_LIMIT) }, textStyle = TextStyle(color = Color.White, fontSize = 17.sp),
                         cursorBrush = SolidColor(Color.White), maxLines = 4,
                         modifier = Modifier.fillMaxWidth().focusProperties { canFocus = captionArmed }
                             .onFocusChanged { captionFocused = it.isFocused })
