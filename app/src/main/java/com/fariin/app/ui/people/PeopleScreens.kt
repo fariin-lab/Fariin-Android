@@ -367,7 +367,8 @@ fun MessageRequestsScreen(api: PeopleApi, requests: List<Conversation>, onBack: 
     val scope = rememberCoroutineScope()
     val me = api.me
     var pendingDelete by remember { mutableStateOf<Conversation?>(null) }
-    var failed by remember { mutableStateOf(false) }
+    // Which answer failed, for the alert title (iOS "Couldn't accept" / "Couldn't delete").
+    var failed by remember { mutableStateOf<String?>(null) }
     var gone by remember { mutableStateOf(setOf<String>()) }
     // The first-time card (iOS introSheet): once per install, a moment after the page lands.
     val introCtx = androidx.compose.ui.platform.LocalContext.current
@@ -379,13 +380,13 @@ fun MessageRequestsScreen(api: PeopleApi, requests: List<Conversation>, onBack: 
             text = { Text("The conversation is deleted and they can’t send you another request for ${Requests.DECLINE_COOLDOWN_DAYS} days. This does not block them.") },
             confirmButton = { TextButton({
                 pendingDelete = null
-                scope.launch { if (api.declineRequest(conv.id)) gone = gone + conv.id else failed = true }
+                scope.launch { if (api.declineRequest(conv.id)) gone = gone + conv.id else failed = "Couldn't delete" }
             }) { Text("Delete", color = c.red) } },
             dismissButton = { TextButton({ pendingDelete = null }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
     }
-    if (failed) com.fariin.app.ui.components.GlassAlert(onDismissRequest = { failed = false }, title = { Text("Couldn't do that") },
+    failed?.let { title -> com.fariin.app.ui.components.GlassAlert(onDismissRequest = { failed = null }, title = { Text(title) },
         text = { Text("Check your connection and try again.") },
-        confirmButton = { TextButton({ failed = false }) { Text("OK", color = c.accent) } }, containerColor = c.card)
+        confirmButton = { TextButton({ failed = null }) { Text("OK", color = c.accent) } }, containerColor = c.card) }
     // Requests older than the live list's window (iOS needWholeList("requests")): read once when the
     // page opens, the live ones win where both have a chat.
     var older by remember { mutableStateOf<List<Conversation>>(emptyList()) }
@@ -423,11 +424,12 @@ fun MessageRequestsScreen(api: PeopleApi, requests: List<Conversation>, onBack: 
                     PersonRow(conv.displayPhoto(me), conv.displayName(me), "Wants to message you", onClick = { onOpenChat(conv.id) })
                     Row(Modifier.fillMaxWidth().padding(start = 72.dp, end = 16.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Pill("Accept", c.accent, c.onAccent) {
-                            scope.launch { if (api.acceptRequest(conv.id)) { gone = gone + conv.id; onOpenChat(conv.id) } else failed = true }
+                            // Stays on the page, as iOS: a list opened to clear it keeps going. Tap the row to open.
+                            scope.launch { if (api.acceptRequest(conv.id)) gone = gone + conv.id else failed = "Couldn't accept" }
                         }
                         Pill("Delete", c.fieldFill, c.red) { pendingDelete = conv }
                         Pill("Block", c.fieldFill, c.red) {
-                            scope.launch { if (api.setBlocked(other, true)) gone = gone + conv.id else failed = true }
+                            scope.launch { if (api.setBlocked(other, true)) gone = gone + conv.id else failed = "Couldn't block" }
                         }
                     }
                     HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 72.dp))
