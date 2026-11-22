@@ -460,6 +460,17 @@ fun StoryViewer(
         } else linkTap(TextLinks.Span(0, url.length, TextLinks.Kind.WEB, url))
     }
 
+    // A caption @mention (iOS storyActionMention): that person's profile over the story. My own
+    // name is plain text (iOS StoryMention.selfUsername); a name nobody holds says so.
+    val myHandle = remember(me) { com.fariin.app.data.MyProfileRepository().listen(me) }
+        .collectAsState(initial = null).value?.handle.orEmpty().lowercase()
+    val openMention: (String) -> Unit = { handle ->
+        scope.launch {
+            val u = runCatching { com.fariin.app.data.FirestorePeople(me, com.fariin.app.data.CryptoHub.crypto).byHandle(handle) }.getOrNull()
+            if (u != null) profileUid = u.uid else toast = "No Fariin user found"
+        }
+    }
+
     BackHandler(enabled = profileUid != null || sheetFor != null) {
         if (profileUid != null) profileUid = null else sheet.close()
     }
@@ -937,6 +948,7 @@ fun StoryViewer(
                     onEnd = { nextGroup() }, onBeforeStart = { previousGroup() },
                     onClose = { close() },
                     onLink = openLink,
+                    onMention = openMention, myHandle = myHandle,
                     onRepostAuthor = { uid -> profileUid = uid },
                     authorPhoto = { uid -> groups.firstOrNull { g -> g.stories.any { it.authorUid == uid } }?.photoUrl },
                     onDrag = { dy ->
@@ -1224,6 +1236,10 @@ private fun StoryPage(
     onClose: () -> Unit,
     /** A link on the story was asked for: its tap area's Visit link, or a link in the caption. */
     onLink: (String) -> Unit,
+    /** A caption @name was tapped (lowercased, no @). */
+    onMention: (String) -> Unit = {},
+    /** My own @name, lowercased: plain text in a caption. */
+    myHandle: String = "",
     onRepostAuthor: (String) -> Unit,
     authorPhoto: (String) -> String?,
     onDrag: (Float) -> Unit,
@@ -1620,20 +1636,34 @@ private fun StoryPage(
             // The caption: 16 white, 16 in from the sides and 14 off the card's bottom edge (iOS).
             if (story.caption.isNotEmpty()) {
                 // Its web addresses open on a tap (iOS StoryLinkOpener); the rest of it is the story's.
-                val linked = remember(story.caption) {
-                    val spans = TextLinks.find(story.caption).filter { it.kind == TextLinks.Kind.WEB }
+                val linked = remember(story.caption, myHandle) {
+                    val found = TextLinks.find(story.caption)
+                    val spans = found.filter { it.kind == TextLinks.Kind.WEB }
+                    val under = androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(
+                        textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline))
                     androidx.compose.ui.text.AnnotatedString.Builder(story.caption).apply {
-                        for (sp in spans) addLink(androidx.compose.ui.text.LinkAnnotation.Clickable(sp.target,
-                            androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(
-                                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline))) { onLink(sp.target) },
+                        for (sp in spans) addLink(androidx.compose.ui.text.LinkAnnotation.Clickable(sp.target, under) { onLink(sp.target) },
                             sp.start, sp.end)
+                        // @mentions, underlined like a link (iOS captionWithLinks): not inside a web or
+                        // email address, and never my own name.
+                        for (m in Regex("@([A-Za-z][A-Za-z0-9_.]{0,29})").findAll(story.caption)) {
+                            val name = m.groupValues[1].lowercase()
+                            if (name == myHandle) continue
+                            if (found.any { m.range.first < it.end && m.range.last + 1 > it.start }) continue
+                            addLink(androidx.compose.ui.text.LinkAnnotation.Clickable("@" + name, under) { onMention(name) },
+                                m.range.first, m.range.last + 1)
+                        }
                     }.toAnnotatedString()
                 }
-                Text(linked, color = Color.White, fontSize = 16.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                // A tap on the caption opens it up to 12 lines and back, and does not move the story (iOS).
+                var captionOpen by remember(story.id) { mutableStateOf(false) }
+                Text(linked, color = Color.White, fontSize = 16.sp, maxLines = if (captionOpen) 12 else 3, overflow = TextOverflow.Ellipsis,
                     style = TextStyle(shadow = androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.25f), blurRadius = 8f)),
                     modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth()
                         .graphicsLayer { alpha = chrome() * (2f - zoomScale).coerceIn(0f, 1f) }
-                        .padding(start = 16.dp, end = 16.dp, bottom = 14.dp))
+                        .padding(start = 16.dp, end = 16.dp, bottom = 14.dp)
+                        .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null) { captionOpen = !captionOpen })
             }
         }
 
