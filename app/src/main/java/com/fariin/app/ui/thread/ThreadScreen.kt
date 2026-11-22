@@ -782,7 +782,9 @@ private fun ThreadContent(
     LaunchedEffect(ui.messages.lastOrNull()?.rowId) {
         // At a restored place only my own new send (still on its way) brings the list down.
         if (heldPlace) { if (ui.messages.lastOrNull()?.let { it.authorId == ui.me && it.sendState != null } == true) heldPlace = false else return@LaunchedEffect }
-        if (stick || listState.firstVisibleItemIndex <= 1 || ui.messages.lastOrNull()?.authorId == ui.me) {
+        // Scrolled up, only my own send from this phone (still on its way) brings the list down, as
+        // on iOS. A message of mine from another device lands like anyone's: no jump, no count.
+        if (stick || listState.firstVisibleItemIndex <= 1 || ui.messages.lastOrNull()?.let { it.authorId == ui.me && it.sendState != null } == true) {
             // Someone else's message landing live: the list glides up to it (iOS), instead of every
             // row jumping in one frame. My own sends, the open and history loads still snap.
             // The default scroll spring took ~0.1 s on the Pixel; iOS's glide is ~0.25 s (owner's
