@@ -2168,7 +2168,12 @@ class ThreadRepository(
         return try {
             val ref = msgRef(m.id)
             val snap = ref.get().await()
-            if (!snap.exists()) return true
+            if (!snap.exists()) {
+                // iOS: already gone is success, but still clean up a pin or summary the doc left behind.
+                if (m.id in PinRules.pinnedIds(_state.value.conv)) try { unpin(m.id) } catch (_: Exception) {}
+                rewriteSummaryAfterDelete()
+                return true
+            }
             val data = snap.data ?: emptyMap()
             val blobs = buildList {
                 for (k in listOf("imageUrl", "videoUrl", "thumbUrl", "audioUrl", "fileUrl")) (data[k] as? String)?.let(::add)
