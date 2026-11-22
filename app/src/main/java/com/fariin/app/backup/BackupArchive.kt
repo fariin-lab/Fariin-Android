@@ -144,6 +144,7 @@ object BackupArchive {
     @Volatile var otherAccount = false
 
     fun restore(c: FariinCrypto, uid: String, key: ByteArray, fetch: (String) -> ByteArray?): Boolean {
+        otherAccount = false   // a new try: an earlier other-account answer must not name a network failure
         val manifest = fetch("manifest.bin")?.let { open(c, key, it) } ?: return false
         val mo = org.json.JSONObject(manifest.toString(Charsets.UTF_8))
         // Another Fariin account's backup (same Google Drive or iCloud) is never filed into this one.

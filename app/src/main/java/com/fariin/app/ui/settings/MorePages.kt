@@ -561,7 +561,13 @@ private fun ChatsSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
         }
         // iOS ChatsSettingsView: the last row, red, with what it does written under it.
         // iOS: greyed and dead while it runs or when there is no chat to clear.
-        val canClear = !clearing && com.fariin.app.data.CryptoHub.listedAll().isNotEmpty()
+        // listedAll() is a plain map, not state: look again each second until the list has loaded,
+        // or the row stays grey when the page was drawn first.
+        var hasChats by remember { mutableStateOf(com.fariin.app.data.CryptoHub.listedAll().isNotEmpty()) }
+        LaunchedEffect(Unit) {
+            while (!hasChats) { kotlinx.coroutines.delay(1000); hasChats = com.fariin.app.data.CryptoHub.listedAll().isNotEmpty() }
+        }
+        val canClear = !clearing && hasChats
         SettingsSection(footer = "Deletes every message, photo, video and call from all your devices. It cannot be undone.") {
             SettingsRow("Clear Chat History", trailing = Trailing.NONE,
                 titleColor = if (canClear) Fariin.colors.red else Fariin.colors.red.copy(alpha = 0.4f), last = true,
