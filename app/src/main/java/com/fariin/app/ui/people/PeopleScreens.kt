@@ -630,7 +630,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                 com.fariin.app.ui.components.GlassAlertAction("Block and Report", com.fariin.app.ui.components.GlassAlertStyle.Red) {
                     block {
                         com.fariin.app.data.ReportFlow.ask(com.fariin.app.data.ReportTarget(com.fariin.app.data.ReportKind.ACCOUNT,
-                            name = name, personUid = uid, cid = cid, onSent = { }))
+                            name = name, personUid = uid, cid = cid, preBlocked = true, onSent = { }))
                     }
                 },
                 com.fariin.app.ui.components.GlassAlertAction("Cancel") { },

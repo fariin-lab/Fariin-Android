@@ -101,6 +101,8 @@ data class ReportTarget(
     val onLeave: (() -> Unit)? = null,
     /** The words of a single group message, sent only when the reporter keeps the share switch on. */
     val messageText: String? = null,
+    /** Opened from a Block alert's "Block and Report": the person is already blocked (iOS preBlocked). */
+    val preBlocked: Boolean = false,
 )
 
 /** The words and rules of the sheet, kept here so they can be tested. */

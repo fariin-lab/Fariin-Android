@@ -113,7 +113,8 @@ private fun ReportSheet(t: ReportTarget, me: String, onDismiss: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     // Already blocked (Block and Report, or earlier): no Block switch or row, and the report still says
     // block (iOS alreadyBlocked / preBlocked).
-    val alreadyBlocked = t.personUid?.let { com.fariin.app.data.BlockList.contains(it) } == true
+    // preBlocked first: the block list listener may not have the new block yet.
+    val alreadyBlocked = t.preBlocked || t.personUid?.let { com.fariin.app.data.BlockList.contains(it) } == true
     val canBlock = ReportRules.canBlock(t, me) && !alreadyBlocked
     val animate = animationsOn()
     val density = LocalDensity.current
