@@ -199,7 +199,9 @@ fun ThreadLiveCallBar(cid: String, isGroup: Boolean, title: String, pin: @Compos
     }
     val g by GroupCall.ui.collectAsState()
     val l = live
-    val shown = l != null && g.cid != cid
+    // Hidden while I am in, joining or waiting at any group call, this one or another (iOS callShown),
+    // and while group calls are switched off.
+    val shown = l != null && g.cid == null && com.fariin.app.data.AppFeatures.groupCalls
     AnimatedContent(shown, transitionSpec = { (slideInVertically { -it } + fadeIn()) togetherWith fadeOut() }, label = "callbar") { s ->
         if (s && l != null) CallBar(l, conv, title) else pin()
     }
