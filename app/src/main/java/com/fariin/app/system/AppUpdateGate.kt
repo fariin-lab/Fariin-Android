@@ -170,7 +170,7 @@ fun AppUpdateLayer() {
                 }
             }
         }
-    } else GlassAlert(onDismissRequest = { AppUpdateGate.notNow(ctx) },
+    } else GlassAlert(onDismissRequest = { },   // only the buttons answer; an outside tap or Back must not snooze
         title = { Text(u.title) }, text = { if (u.message.isNotEmpty()) Text(u.message) },
         confirmButton = { TextButton(onClick = { AppUpdateGate.openStore(ctx, u) }) { Text("Update") } },
         dismissButton = { TextButton(onClick = { AppUpdateGate.notNow(ctx) }) { Text("Not Now") } })
