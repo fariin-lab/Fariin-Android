@@ -1541,7 +1541,8 @@ private fun StoryPage(
                                     item("Save", ImageVector.cachedVector(R.drawable.ic_save_down), null, "save")
                                     // Edit Story (iOS 2026-11-20): photo stories for now; a clip keeps its picture.
                                     // Not a repost (its picture is somebody else's story) and not an expired one (iOS canEditCaption).
-                                    if (!story.isVideo && story.groupId == null && story.repostOf == null
+                                    // A group story too: iOS lets its author edit it (only the author, not the group's admins).
+                                    if (!story.isVideo && story.repostOf == null
                                         && story.expiresAtMs > System.currentTimeMillis()) item("Edit Story", ImageVector.cachedVector(R.drawable.ic_sf_pencil), null, "edit")
                                     if (com.fariin.app.data.PostedStoriesRules.canEditViewers(story)) item("Edit Viewers", ImageVector.cachedVector(com.fariin.app.R.drawable.ic_gs_members), null, "viewers")
                                     if (com.fariin.app.data.PostedStoriesRules.canShare(story)) item("Share", ImageVector.cachedVector(R.drawable.ic_link_share), null, "share")
