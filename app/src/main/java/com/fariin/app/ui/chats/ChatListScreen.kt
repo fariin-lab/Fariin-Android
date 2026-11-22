@@ -514,9 +514,12 @@ fun ChatListScreen(
                             val list = selectedConvs
                             selected = emptySet(); selectMode = false
                             scope.launch {
-                                list.forEach { ChatListActions.setArchived(me, it, on) }
+                                val ok = list.map { ChatListActions.setArchived(me, it, on) }.all { it }
                                 val n = list.size
                                 val what = if (n == 1) "Chat" else "$n chats"
+                                // A failed write is said, never "archived" (iOS: "Couldn't archive this chat. Try again.").
+                                if (!ok) { Snack.show(if (on) "Couldn't archive ${if (n == 1) "this chat" else "these chats"}. Try again."
+                                    else "Couldn't unarchive ${if (n == 1) "this chat" else "these chats"}. Try again."); return@launch }
                                 Snack.show(if (on) "$what archived" else "$what unarchived", action = "Undo") {
                                     scope.launch { list.forEach { ChatListActions.setArchived(me, it, !on) } }
                                 }
@@ -1064,13 +1067,27 @@ fun ChatListScreen(
                                     single.photoUrl(me), singleKind == DeleteKind.LEAVE_CHANNEL,
                                     com.fariin.app.data.LeaveUndo.WINDOW_MS) { com.fariin.app.data.LeaveUndo.undo() }
                             }
+                            // My own channel: deleted for everyone, Undo for a few seconds (as its page).
+                            single != null && singleKind == DeleteKind.DELETE_CHANNEL -> {
+                                com.fariin.app.data.LeaveUndo.start(single.id, single.displayName(me)) { ChatListActions.deleteOwnChannel(single.id) }
+                                Snack.show("Channel deleted.", "Undo", durationMs = com.fariin.app.data.LeaveUndo.WINDOW_MS) {
+                                    com.fariin.app.data.LeaveUndo.undo()
+                                }
+                            }
                             single != null && singleKind == DeleteKind.UNFOLLOW -> scope.launch {
                                 val ok = ChatListActions.deleteByKind(me, single)
                                 Snack.show(if (ok) "You left the channel." else "Couldn't leave the channel. Try again.")
                             }
                             else -> scope.launch {
+                                val kept = targets.count { ChatListActions.deleteKind(me, it) == DeleteKind.DELETE_CHANNEL }
                                 val ok = targets.map { async { ChatListActions.deleteByKind(me, it) } }.awaitAll().all { it }
-                                Snack.show(if (ok) (if (targets.size == 1) "Chat deleted" else "${targets.size} chats deleted") else "Couldn't delete them all. Try again.")
+                                val gone = targets.size - kept
+                                Snack.show(when {
+                                    !ok -> "Couldn't delete them all. Try again."
+                                    kept > 0 -> "A channel you own was kept. Delete it from the channel's page."
+                                    gone == 1 -> "Chat deleted"
+                                    else -> "$gone chats deleted"
+                                })
                             }
                         }
                     },
