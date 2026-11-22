@@ -66,10 +66,12 @@ fun SetNicknamePage(uid: String, photoUrl: String?, sheet: com.fariin.app.ui.com
     var note by remember(uid) { mutableStateOf(saved.note) }
     var confirmDelete by remember { mutableStateOf(false) }
     val changed = ContactCard(first, last, note) != saved
+    // Saved trimmed, the note tidied once more on the way out (iOS save).
+    fun save() = ContactNames.setCard(uid, ContactCard(first.trim(), last.trim(), GroupRules.oneParagraph(note, ContactNames.NOTE_LIMIT).trim()))
 
     if (confirmDelete) com.fariin.app.ui.components.GlassAlert(onDismissRequest = { confirmDelete = false },
-        title = { Text("Delete nickname and note?") },
-        text = { Text("This removes the name and note you saved. Their profile name shows again.") },
+        title = { Text("Delete Nickname?") },
+        text = { Text("This will permanently delete this nickname and note.") },
         confirmButton = { TextButton({ confirmDelete = false; ContactNames.remove(uid); onBack() }) { Text("Delete", color = c.red) } },
         dismissButton = { TextButton({ confirmDelete = false }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
 
@@ -101,14 +103,14 @@ fun SetNicknamePage(uid: String, photoUrl: String?, sheet: com.fariin.app.ui.com
     // From the profile's Edit: a sheet with X and a tick (iOS .sheet), owner 2026-11-08.
     if (sheet != null) {
         com.fariin.app.ui.components.SheetPage(sheet, "Set nickname", doneEnabled = changed,
-            onDone = { ContactNames.setCard(uid, ContactCard(first, last, note)); onBack() }) {
+            onDone = { save(); onBack() }) {
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) { body() }
         }
         return
     }
     val barScroll = rememberScrollState()
     BarPage("Set nickname", onBack = onBack, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary).imePadding(), action = {
-            com.fariin.app.ui.components.FloatingTextAction("Save", enabled = changed) { ContactNames.setCard(uid, ContactCard(first, last, note)); onBack() }
+            com.fariin.app.ui.components.FloatingTextAction("Save", enabled = changed) { save(); onBack() }
         }) { top ->
         Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top), horizontalAlignment = Alignment.CenterHorizontally) { body() }
     }
