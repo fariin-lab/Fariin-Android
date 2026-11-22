@@ -94,6 +94,20 @@ class LocalStoresTest {
         assertEquals(emptyMap<String, String>(), Drafts.decode("{\"x\":\"\"}"))
     }
 
+    @Test fun draftFormatIsTiedToItsWords() {
+        val cid = "fmt_test_chat"
+        val fmt = "[[0,4,\"b\"]]"
+        Drafts.set(cid, " bold words ")
+        Drafts.setFormat(cid, " bold words ", fmt)
+        assertEquals(fmt, Drafts.format(cid, "bold words"))
+        // Other words: the runs were not made for them.
+        assertNull(Drafts.format(cid, "bold words!"))
+        // The draft going takes its format with it, and the chat list never sees the format key.
+        Drafts.set(cid, "")
+        assertNull(Drafts.format(cid, "bold words"))
+        assertFalse(Drafts.map.value.keys.any { it.contains("fmt:") })
+    }
+
     @Test fun presenceFollowsBothAudiences() {
         val now = 10_000_000.0
         assertEquals("online", Presence.line(emptyMap(), emptyMap(), true, true, null, now))

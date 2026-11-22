@@ -112,6 +112,9 @@ data class ThreadActions(
     /** The words left in the box last time (iOS Drafts), and where new ones are kept. */
     val draft: String = "",
     val onDraft: (String) -> Unit = {},
+    /** The draft's bold and links (wire fmt of its trimmed words), and where new ones are kept. */
+    val draftFmt: String? = null,
+    val onDraftFormat: (String, String?) -> Unit = { _, _ -> },
     /** Pin / unpin (iOS togglePin, ChatService.unpin). */
     val onPin: (Message) -> Unit = {},
     val onUnpin: (String) -> Unit = {},

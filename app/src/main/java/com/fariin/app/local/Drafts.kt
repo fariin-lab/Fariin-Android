@@ -29,6 +29,10 @@ object Drafts {
     @Volatile private var file: File? = null
     private val io = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pending: Job? = null
+    /** A draft's bold and links (iOS Drafts.setFormat, 2026-11-19): by chat, {"t": the trimmed
+     *  words they were made for, "f": the wire fmt}. Sealed in the same file, under [FMT] keys. */
+    @Volatile private var fmts: Map<String, String> = emptyMap()
+    private const val FMT = "\u0001fmt:"
     /** drafts.bin read, unsealed (Keystore + AES-GCM) and decoded once, off the main thread when
      *  the start-up thread gets there first; every read and write below waits for it. */
     private val disk = LoadOnce {
@@ -37,7 +41,8 @@ object Drafts {
             if (f != null && f.exists()) AtRest.open(f.readBytes())?.toString(Charsets.UTF_8)?.let(::decode) ?: emptyMap() else emptyMap()
         } catch (_: Exception) { emptyMap() }
         // Anything set while the file was read cannot exist: set() waits for this read.
-        _map.value = m
+        fmts = m.filterKeys { it.startsWith(FMT) }.mapKeys { it.key.removePrefix(FMT) }
+        _map.value = m.filterKeys { !it.startsWith(FMT) }
     }
 
     /** Cheap, at app start: only remembers where the file is. The read is [preload] or the first use. */
@@ -58,8 +63,26 @@ object Drafts {
         val t = text.trim()
         val old = _map.value[cid] ?: ""
         if (old == t) return
+        if (t.isEmpty()) fmts = fmts - cid
         _map.value = if (t.isEmpty()) _map.value - cid else _map.value + (cid to t)
         if (old.isEmpty() != t.isEmpty()) flush() else later()
+    }
+
+    /** The draft's bold and links ([fmt]: wire JSON for text.trim(), null = none), tied to those words. */
+    fun setFormat(cid: String, text: String, fmt: String?) {
+        disk.ensure()
+        val t = text.trim()
+        val v = if (t.isEmpty() || fmt == null) null else JSONObject().put("t", t).put("f", fmt).toString()
+        if (fmts[cid] == v) return
+        fmts = if (v == null) fmts - cid else fmts + (cid to v)
+        later()
+    }
+
+    /** The draft's bold and links when they were made for [text] (trimmed), else null. */
+    fun format(cid: String, text: String): String? {
+        disk.ensure()
+        val o = fmts[cid]?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return null
+        return if (o.optString("t") == text.trim()) o.optString("f").takeIf { it.isNotEmpty() } else null
     }
 
     @Synchronized private fun later() {
@@ -76,7 +99,7 @@ object Drafts {
             synchronized(this@Drafts) {
                 // The map as it is NOW, so an older write landing late can never bring back a
                 // draft that was sent or wiped since.
-                val snapshot = _map.value
+                val snapshot = _map.value + fmts.filterKeys { _map.value.containsKey(it) }.mapKeys { FMT + it.key }
                 try {
                     if (snapshot.isEmpty()) f.delete() else {
                         val sealed = AtRest.seal(encode(snapshot).toByteArray(Charsets.UTF_8)) ?: return@launch
@@ -93,6 +116,7 @@ object Drafts {
         synchronized(this) {
             pending?.cancel(); pending = null
             _map.value = emptyMap()
+            fmts = emptyMap()
             file?.delete()
         }
     }

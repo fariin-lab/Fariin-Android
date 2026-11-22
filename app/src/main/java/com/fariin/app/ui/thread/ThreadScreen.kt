@@ -1890,6 +1890,7 @@ private fun ThreadContent(
                     },
                     refill = composerRefill, onRefilled = steady0 { composerRefill = null },
                     initialDraft = actions.draft, onDraft = steady1 { d: String -> actions.onDraft(d); linkText = d },
+                    initialDraftFmt = actions.draftFmt, onDraftFormat = steady2(actions.onDraftFormat),
                     // A channel's admin writes a "Broadcast", with the post-without-sound bell (iOS).
                     placeholder = if (ch != null) "Broadcast"
                         else if (slowLeft > 0) "Slow mode · %d:%02d".format(slowLeft / 60, slowLeft % 60) else "Message",
@@ -3102,6 +3103,8 @@ private fun Composer(
     boldable: Boolean = false,
     onTyping: (Boolean) -> Unit = {},
     initialDraft: String = "", onDraft: (String) -> Unit = {},
+    /** The draft's bold and links (iOS Drafts.format): put back with its words, kept as they change. */
+    initialDraftFmt: String? = null, onDraftFormat: (String, String?) -> Unit = { _, _ -> },
     /** Words to put back in the field (a key, then the text): what a held-back send did not take. */
     refill: Pair<Long, String>? = null, onRefilled: () -> Unit = {},
     me: String = "", onSticker: (com.fariin.app.data.StickerRef) -> Unit = {},
@@ -3144,9 +3147,12 @@ private fun Composer(
     // iOS mentionMap: the members picked from the @ list, by name; resolved against the text at send.
     var picks by remember { mutableStateOf(emptyMap<String, List<String>>()) }
     // The field's bold runs (TextFormat), kept in step with every change to its words.
-    var boxBold by remember { mutableStateOf(emptyList<com.fariin.app.data.TextFormat.Span>()) }
+    // A draft coming back brings its own (iOS restoreDraft, 2026-11-19).
+    var boxBold by remember { mutableStateOf(if (boldable) com.fariin.app.data.TextFormat.parse(initialDraftFmt, initialDraft.length)
+        else emptyList<com.fariin.app.data.TextFormat.Span>()) }
     // ...and its links (iOS Format > Link), the same way.
-    var boxLinks by remember { mutableStateOf(emptyList<com.fariin.app.data.TextFormat.Link>()) }
+    var boxLinks by remember { mutableStateOf(if (boldable) com.fariin.app.data.TextFormat.parseLinks(initialDraftFmt, initialDraft.length)
+        else emptyList<com.fariin.app.data.TextFormat.Link>()) }
     // Add Link / Edit Link: the selection it is for, while the dialog is up.
     var linkFor by remember { mutableStateOf<IntRange?>(null) }
     // Edit puts the message's words in the field (keyed by message id, so it happens once).
@@ -3165,6 +3171,12 @@ private fun Composer(
     LaunchedEffect(refill?.first) { refill?.let { if (prefill == null) { draft = it.second; picks = emptyMap() }; onRefilled() } }
     // Every change outside an edit is the chat's draft (sent = cleared below).
     LaunchedEffect(draft) { if (prefill == null && !wasEditing) { kept = draft; onDraft(draft) } }
+    // Its bold and links go with it, measured on the trimmed words (iOS Drafts.setFormat).
+    LaunchedEffect(draft, boxBold, boxLinks) {
+        if (prefill == null && !wasEditing && boldable) onDraftFormat(draft, com.fariin.app.data.TextFormat.serialize(
+            com.fariin.app.data.TextFormat.forTrimmed(boxBold, draft), draft.trim().length,
+            com.fariin.app.data.TextFormat.linksForTrimmed(boxLinks, draft)))
+    }
 
     // iOS typing: "on" only from a keystroke (a draft coming back or an edit's words are not
     // typing, and nothing goes while editing a sent message), re-sent at most every 10 s while keys

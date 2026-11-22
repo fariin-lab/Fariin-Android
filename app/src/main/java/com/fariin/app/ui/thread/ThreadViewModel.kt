@@ -391,6 +391,8 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         // Drafts kept per chat (iOS Drafts): the box comes back with what was left in it.
         draft = remember(cid) { Drafts.text(cid) },
         onDraft = { Drafts.set(cid, it) },
+        draftFmt = remember(cid) { Drafts.format(cid, Drafts.text(cid)) },
+        onDraftFormat = { t, f -> Drafts.setFormat(cid, t, f) },
         onPin = { m ->
             vm.viewModelScope.launch {
                 when (vm.repo.pin(m)) {
