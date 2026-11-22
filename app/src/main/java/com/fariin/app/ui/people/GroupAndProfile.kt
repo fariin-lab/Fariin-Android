@@ -252,8 +252,15 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
                         val hadVideo = com.fariin.app.data.AvatarVideoIndex.mine() != null
                         onBack()
                         profileSaveScope.launch {
+                            // The text and the photo are separate steps, as on iOS: a failed name
+                            // write must not drop the new photo, and a failed upload must not drop the bio.
+                            var failure: String? = null
                             try {
                                 if (newName != null) api.writeName(newName)
+                                if (newAbout != null) com.fariin.app.data.ProfileWrites.saveAbout(api.me, newAbout)
+                            } catch (e: kotlinx.coroutines.CancellationException) { throw e
+                            } catch (_: Exception) { failure = "Couldn't save your profile. Try again." }
+                            try {
                                 // The held photo goes now (iOS: nothing changes until Save).
                                 jpeg?.let { j ->
                                     api.uploadPhoto(j)
@@ -262,10 +269,10 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
                                 if (remove) api.removePhoto()
                                 if (video != null) com.fariin.app.data.AvatarVideoService.publishInBackground(appCtx, video)
                                 else if (hadVideo && (jpeg != null || remove)) com.fariin.app.data.AvatarVideoService.removeInBackground()
-                                if (newAbout != null) com.fariin.app.data.ProfileWrites.saveAbout(api.me, newAbout)
                             } catch (e: kotlinx.coroutines.CancellationException) { throw e
-                            } catch (e: com.fariin.app.data.LimitReached) { com.fariin.app.ui.components.Snack.show(e.message ?: "Couldn't save your profile.")
-                            } catch (_: Exception) { com.fariin.app.ui.components.Snack.show("Couldn't save your profile. Try again.") }
+                            } catch (e: com.fariin.app.data.LimitReached) { failure = e.message ?: "Couldn't save your profile."
+                            } catch (_: Exception) { failure = "Couldn't save your profile. Try again." }
+                            failure?.let { com.fariin.app.ui.components.Snack.show(it) }
                         }
                     } catch (e: IllegalArgumentException) { error = e.message ?: "That name can’t be used." }
                     catch (_: Exception) { error = "Couldn't save. Try again." }
