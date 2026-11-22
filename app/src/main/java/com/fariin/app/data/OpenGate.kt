@@ -32,6 +32,8 @@ object OpenGate {
             try {
                 val snap = conv.get().await()
                 if (!snap.exists()) return Result.CHAT_GONE
+                // A deleted channel keeps its document, archived (server grouparchive): gone, not refused.
+                if (snap.get("archivedAt") != null) return Result.CHAT_GONE
                 @Suppress("UNCHECKED_CAST")
                 val users = snap.get("users") as? List<String> ?: return Result.REFUSED
                 // A public channel opens for anyone.
