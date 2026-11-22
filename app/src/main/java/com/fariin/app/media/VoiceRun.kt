@@ -31,7 +31,8 @@ object VoiceRun {
         val i = list.indexOfFirst { it.rowId == rowId }
         if (i < 0) return null
         for (m in list.subList(i + 1, list.size)) {
-            if (m.isSystem) continue
+            // A pinned-message line is the app's own notice too (iOS pinNotice), so it does not end the run.
+            if (m.isSystem || com.fariin.app.data.PinRules.notice(m.text) != null) continue
             if (m.deleted || m.mediaKind != Message.MediaKind.VOICE || m.viewOnce) return null
             return m
         }
