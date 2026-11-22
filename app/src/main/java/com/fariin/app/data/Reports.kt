@@ -148,11 +148,15 @@ object ReportRules {
 
     fun counter(typed: String) = "${typed.length}/$NOTE_MAX"
 
-    /** The words for a refused report, by the callable's error code name. */
-    fun errorText(code: String?): String = when (code) {
+    /**
+     * The words for a refused report, by the callable's error code name. A bad request (note too
+     * long, target gone) shows the server's own words, as iOS does, not the connection line.
+     */
+    fun errorText(code: String?, serverWords: String? = null): String = when (code) {
         "RESOURCE_EXHAUSTED" -> "You've sent a lot of reports today. Try again tomorrow."
         "FAILED_PRECONDITION" -> "You can't report your own content."
         "PERMISSION_DENIED" -> "You can't send reports right now."
+        "INVALID_ARGUMENT" -> serverWords?.trim()?.takeIf { it.isNotEmpty() && it.length <= 120 } ?: ReportSender.FAILED
         else -> ReportSender.FAILED
     }
 
@@ -209,7 +213,8 @@ object ReportSender {
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
-            return ReportRules.errorText((e as? com.google.firebase.functions.FirebaseFunctionsException)?.code?.name)
+            val fe = e as? com.google.firebase.functions.FirebaseFunctionsException
+            return ReportRules.errorText(fe?.code?.name, fe?.message)
         }
         // The report went; a failed block is said on its own and does not undo it.
         if (block && !block(t)) com.fariin.app.ui.components.Snack.show("Reported, but couldn't block. Try again from their profile.")

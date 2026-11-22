@@ -49,6 +49,8 @@ class ReportRulesTest {
     @Test fun refusals() {
         assertEquals("You've sent a lot of reports today. Try again tomorrow.", ReportRules.errorText("RESOURCE_EXHAUSTED"))
         assertEquals(ReportSender.FAILED, ReportRules.errorText(null))
+        assertEquals("Keep the note to 500 characters.", ReportRules.errorText("INVALID_ARGUMENT", "Keep the note to 500 characters."))
+        assertEquals(ReportSender.FAILED, ReportRules.errorText("INVALID_ARGUMENT", null))
     }
 
     @Test fun subReasons() {
