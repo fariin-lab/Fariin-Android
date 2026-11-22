@@ -519,7 +519,9 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     val reachedWithMyKey = uid != me && live["acceptedVia"] == "pin" && live["acceptedBy"] == uid
     var timerOpen by remember { mutableStateOf(false) }
     if (DisappearingEditor(api, cid, isGroup = false, current = timer, open = timerOpen, onClose = { timerOpen = false })) return
-    val shared = rememberSharedMedia(cid, me)
+    // My Clear Chat mark, live: after Clear Messages the card drops the cleared photos at once (iOS).
+    val clearedMs = ((live["clearedAt"] as? Map<*, *>)?.get(me) as? Number)?.toDouble() ?: conv?.clearedAt?.get(me) ?: 0.0
+    val shared = rememberSharedMedia(cid, me, clearedMs)
     var allMedia by remember { mutableStateOf(false) }
     if (allMedia) { com.fariin.app.ui.components.InnerPageDepth(1); SharedMediaScreen(cid, shared, onBack = { allMedia = false }); return }
     // iOS sharedGroups: groups we are both in, from the live chat list (not on my own page).

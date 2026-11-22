@@ -1043,7 +1043,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             com.fariin.app.data.LeaveUndo.commit()
             onLeft()
         })) return
-    val shared = rememberSharedMedia(cid, me)
+    // My Clear Chat mark: messages before it are not in the chat, so not in its media either (iOS).
+    val shared = rememberSharedMedia(cid, me, ((conv["clearedAt"] as? Map<*, *>)?.get(me) as? Number)?.toDouble() ?: 0.0)
     var allMedia by remember { mutableStateOf(false) }
     if (allMedia) { com.fariin.app.ui.components.InnerPageDepth(1); SharedMediaScreen(cid, shared, onBack = { allMedia = false }); return }
     card?.let { u -> MemberCard(cid, me, u, conv, onClose = { card = null }, onProfile = onOpenPerson, open = { pages.add(it) },

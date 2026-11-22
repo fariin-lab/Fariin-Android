@@ -104,9 +104,12 @@ import kotlinx.coroutines.withContext
  */
 internal class SharedMediaState(val lists: SharedMedia.Lists, val loaded: Boolean)
 
-/** Local first (the last answer, or the chat's saved copy), then the server (iOS loadMedia). */
+/**
+ * Local first (the last answer, or the chat's saved copy), then the server (iOS loadMedia).
+ * [clearedMs]: my Clear Chat mark; older messages are left out, as the chat leaves them out (iOS sharedMedia).
+ */
 @Composable
-internal fun rememberSharedMedia(cid: String, me: String): SharedMediaState {
+internal fun rememberSharedMedia(cid: String, me: String, clearedMs: Double = 0.0): SharedMediaState {
     val ctx = LocalContext.current
     // Delete for Me in the chat takes the item off these pages too (iOS isGone).
     val hidden by HiddenMessages.ids.collectAsState()
@@ -119,8 +122,9 @@ internal fun rememberSharedMedia(cid: String, me: String): SharedMediaState {
         if (fresh == null && local.isEmpty()) { delay(3_000); fresh = source.fetch() }
         value = (fresh ?: value.first) to true
     }
-    return remember(raw, hidden) {
-        SharedMediaState(SharedMedia.lists(raw.first, System.currentTimeMillis().toDouble()) { it in hidden }, raw.second)
+    return remember(raw, hidden, clearedMs) {
+        val kept = if (clearedMs > 0) raw.first.filter { it.createdAtMillis > clearedMs } else raw.first
+        SharedMediaState(SharedMedia.lists(kept, System.currentTimeMillis().toDouble()) { it in hidden }, raw.second)
     }
 }
 
