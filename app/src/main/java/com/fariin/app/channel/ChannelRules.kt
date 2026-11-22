@@ -48,6 +48,10 @@ object ChannelRules {
     /** The visitor / follower page's count line: "1.2k Followers" (PublicGroupSheet.countLine). */
     fun pageCountLine(n: Int): String = "${compactCount(n, lower = true)} Follower${if (n == 1) "" else "s"}"
 
+    /** A group's profile header: "1.2k Members" (GroupInfoView.memberCountText). The members
+     *  section under it keeps the whole number. */
+    fun memberCountLine(n: Int): String = "${compactCount(n, lower = true)} Member${if (n == 1) "" else "s"}"
+
     /** A post's eye: my own post shows at least 1 the moment it lands (the server counts the author). */
     fun shownViews(views: Int, authorId: String, me: String): Int = if (authorId == me) maxOf(views, 1) else views
 

@@ -1126,7 +1126,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         clear = true, enabled = false, bar = {
         Box(Modifier.graphicsLayer { alpha = if (photo.chromeHidden) 0f else 1f }
             .then(Modifier.profileMeltBarGround(melt, c.bgSecondary))) {
-        ProfileDockTitle(melt, conv["title"] as? String ?: "Group", "${users.size} Member${if (users.size == 1) "" else "s"}")
+        ProfileDockTitle(melt, conv["title"] as? String ?: "Group", com.fariin.app.channel.ChannelRules.memberCountLine(users.size))
         // iOS: "Edit" top right for whoever may change the group's info (owner 2026-10-19), and the
         // ••• menu (moreMenuItems) as the Android three-dot overflow: Share Group and QR Code while the
         // group has a link I may share, and Change Wallpaper (the group's, for everyone) for whoever
@@ -1175,7 +1175,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                     }
                     Spacer(Modifier.width(8.dp))
                 }
-                Text("${users.size} Member${if (users.size == 1) "" else "s"}", fontSize = 17.sp, color = c.secondary)
+                Text(com.fariin.app.channel.ChannelRules.memberCountLine(users.size), fontSize = 17.sp, color = c.secondary)
             }
             // No description yet: whoever may edit is offered one, in grey; it opens Edit Group (iOS).
             if (desc.isEmpty() && canEdit) Text("Add group description...", fontSize = 17.sp, color = c.secondary,
