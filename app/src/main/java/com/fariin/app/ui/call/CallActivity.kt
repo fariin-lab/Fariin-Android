@@ -30,6 +30,8 @@ import com.fariin.app.call.GroupCall
 import com.fariin.app.call.GroupCallUi
 import com.fariin.app.call.GroupMember
 import com.fariin.app.call.GroupRing
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 import com.fariin.app.ui.theme.FariinTheme
 
@@ -54,8 +56,15 @@ class CallActivity : ComponentActivity() {
         private const val EXTRA_LOBBY = "lobby.key"
         const val EXTRA_DEMO = "callScreen"
 
+        @Volatile private var lastDialUid: String? = null
+        @Volatile private var lastDialAt = 0L
+
         fun startDial(c: Context, uid: String, name: String, photo: String?, video: Boolean) {
             val idx = com.fariin.app.call.CallPrivacyIndex
+            // A second tap on the same button within a second is ignored.
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (lastDialUid == uid && now - lastDialAt < 1000) return
+            lastDialUid = uid; lastDialAt = now
             // iOS startCall, before anything rings: someone I blocked, already in a call (1:1 or group,
             // decision D25), no network.
             if (com.fariin.app.data.BlockList.contains(uid)) {
@@ -65,6 +74,8 @@ class CallActivity : ComponentActivity() {
             if (one.status.live && one.peerUid == uid) {
                 c.startActivity(Intent(c, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)); return
             }
+            // They are ringing me right now: their ring is already up, so this does nothing.
+            if (one.status.phase == CallPhase.INCOMING && one.peerUid == uid) return
             if (one.status.live || com.fariin.app.call.GroupCall.ui.value.cid != null) {
                 idx.notice.value = com.fariin.app.call.CallPrivacyIndex.Notice("Can't Call", "You're already in a call."); return
             }
@@ -74,8 +85,19 @@ class CallActivity : ComponentActivity() {
             // Their call privacy, decided here before anything rings (iOS startCall + CallPrivacyIndex).
             com.fariin.app.call.CallPrivacyIndex.refresh(uid)
             if (com.fariin.app.call.CallPrivacyIndex.refuses(uid)) { com.fariin.app.call.CallPrivacyIndex.refused.value = true; return }
-            c.startActivity(Intent(c, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                .putExtra(EXTRA_UID, uid).putExtra(EXTRA_NAME, name).putExtra(EXTRA_PHOTO, photo).putExtra(EXTRA_VIDEO, video))
+            // Deleted or hidden account: one quick read before dialing. Slow or failed read: dial anyway.
+            kotlinx.coroutines.MainScope().launch {
+                val gone = kotlinx.coroutines.withTimeoutOrNull(3000) {
+                    try {
+                        val snap = com.fariin.app.Fb.db.collection("users").document(uid).get().await()
+                        !snap.exists() || (snap.data?.get("isHidden") as? Boolean) == true ||
+                            com.fariin.app.data.Person.hidden(snap.data ?: emptyMap())
+                    } catch (e: Exception) { false }
+                } ?: false
+                if (gone) { idx.notice.value = com.fariin.app.call.CallPrivacyIndex.Notice("Can't Call", "This account no longer exists."); return@launch }
+                c.startActivity(Intent(c, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    .putExtra(EXTRA_UID, uid).putExtra(EXTRA_NAME, name).putExtra(EXTRA_PHOTO, photo).putExtra(EXTRA_VIDEO, video))
+            }
         }
 
         /** [start] true: the call button (joins a running call or starts one); false: the Join bar. */
