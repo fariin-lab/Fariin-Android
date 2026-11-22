@@ -220,6 +220,8 @@ object ChatFoldersStore {
     fun hideTabs(hidden: Boolean) {
         if (tabsHidden == hidden) return
         tabsHidden = hidden
+        // Hidden tabs: the list is All Chats, and showing them again starts there (iOS setTabsHidden).
+        if (hidden && selectedId != ChatFolder.ALL.id) { selectedId = ChatFolder.ALL.id; writeCache() }
         val me = uid ?: return
         app?.let { prefs(it).edit().putBoolean("tabsHidden.$me", hidden).apply() }
     }
