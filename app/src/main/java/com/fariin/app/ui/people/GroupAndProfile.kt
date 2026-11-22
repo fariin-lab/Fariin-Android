@@ -362,7 +362,11 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
             val linksOn = com.fariin.app.data.AppFeatures.value("profileLinks", false)
             SettingsSection {
                 SettingsRow("Username", value = me?.handle?.takeIf { it.isNotEmpty() }?.let { "@$it" } ?: "None", last = !linksOn) { page = "username" }
-                if (linksOn) SettingsRow("Links", value = if (links.isEmpty()) "Add" else "${links.size}", last = true) { page = "links" }
+                if (linksOn) SettingsRow("Links", value = if (links.isEmpty()) "Add" else "${links.size}", last = true) {
+                    // Only once my profile is read: the page saves the whole list, so opened on the
+                    // empty first frame, one added link would write over the ones I already have.
+                    if (me != null) page = "links"
+                }
             }
         }
     }
