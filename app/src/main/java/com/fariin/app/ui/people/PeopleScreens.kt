@@ -791,7 +791,11 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                 com.fariin.app.ui.components.CopyOnHold(name) { Text(name, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center) }
                 if (vKind != null || person?.verified == true) {
                     Spacer(Modifier.width(6.dp))
-                    com.fariin.app.ui.components.VerifiedSeal(if (vKind != null && com.fariin.app.data.VerifiedPeople.isGold(vKind)) androidx.compose.ui.graphics.Color(0xFFE8B21E) else c.blue, Modifier.size(20.dp), "Verified")
+                    // A tap says what the tick claims (iOS VerifiedMark explains: true, profile only).
+                    var sealInfo by remember { mutableStateOf(false) }
+                    com.fariin.app.ui.components.VerifiedSeal(if (vKind != null && com.fariin.app.data.VerifiedPeople.isGold(vKind)) androidx.compose.ui.graphics.Color(0xFFE8B21E) else c.blue,
+                        Modifier.size(20.dp).clip(CircleShape).clickable(onClickLabel = "About verification") { sealInfo = true }, "Verified")
+                    if (sealInfo) VerifiedInfoSheet(vKind) { sealInfo = false }
                 }
                 // A tap on the star opens the Plus page as a sheet.
                 com.fariin.app.ui.settings.PlusBadge(uid, 20.dp, Modifier.padding(start = 6.dp), opensPage = true)
