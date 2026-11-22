@@ -520,7 +520,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     LaunchedEffect(ui.cid, ui.messages) { vm.repo.media?.let { com.fariin.app.media.VoiceRun.publish(ui.cid, ui.messages, it) } }
     CompositionLocalProvider(LocalChatMedia provides vm.repo.media, LocalUploadCancel provides uploadCancel) {
         ThreadScreen(ui, onBack = onBack, onSend = vm.repo::sendText, onLoadOlder = vm.repo::loadOlderPage, onRetry = vm.repo::retry,
-            onSendPhoto = { uri -> vm.repo.sendPhoto(app, uri) }, onSendVoice = vm.repo::sendVoice, actions = actions,
+            onSendPhoto = { uri -> vm.repo.sendPhoto(app, uri) }, onSendVoice = { r, re -> vm.repo.sendVoice(r, re) }, actions = actions,
             onSendPick = { uris, caption, once -> vm.repo.sendPick(app, uris, caption, once) },
             onSendFile = { uri -> vm.repo.sendDocument(app, uri) { notice = it } },
             onSendFiles = { uris -> vm.repo.sendDocuments(app, uris) { notice = it } })

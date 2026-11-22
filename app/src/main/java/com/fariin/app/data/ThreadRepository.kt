@@ -145,6 +145,8 @@ class ThreadRepository(
     /** What a failed media send needs to go again, by clientId. */
     private val retryPhoto = ConcurrentHashMap<String, PhotoPrep>()
     private val retryVoice = ConcurrentHashMap<String, VoiceRecorder.Result>()
+    /** The reply a voice note was recorded under (iOS sendAudio replyTo), by clientId. */
+    private val voiceReplies = ConcurrentHashMap<String, Message.ReplyRef>()
     /** Video, file, album and captioned / view-once photo sends, by clientId, to go again on a tap. */
     private val retryMedia = ConcurrentHashMap<String, suspend () -> Unit>()
     /** iOS localCards: the link card on my own bubble until the server copy carries it, by clientId. */
@@ -1112,7 +1114,7 @@ class ThreadRepository(
         pending.remove(id)
         retryPhoto.remove(id)?.let { com.fariin.app.local.PhotoOutbox.remove(me, id); sendPreparedPhoto(it); return }
         // A new send under a new id: the old written-down entry goes, or a restart would send it twice.
-        retryVoice.remove(id)?.let { com.fariin.app.local.PhotoOutbox.remove(me, id); sendVoice(it); return }
+        retryVoice.remove(id)?.let { com.fariin.app.local.PhotoOutbox.remove(me, id); sendVoiceRef(it, voiceReplies.remove(id)); return }
         retryMedia.remove(id)?.let { work ->
             pending[id]?.let { pending[id] = it.copy(sendState = Message.SendState.SENDING) }
             rebuild()
@@ -1899,13 +1901,19 @@ class ThreadRepository(
     }
 
     /** A recorded note: the message goes out first (with `uploading`), the file follows (iOS). */
-    fun sendVoice(r: VoiceRecorder.Result) {
+    fun sendVoice(r: VoiceRecorder.Result) = sendVoiceRef(r, null)
+
+    /** A voice note recorded while replying carries the reply, as iOS sendAudio. */
+    fun sendVoice(r: VoiceRecorder.Result, reply: Message?) = sendVoiceRef(r, reply?.let { ReplyQuoteRules.ref(it) })
+
+    private fun sendVoiceRef(r: VoiceRecorder.Result, ref: Message.ReplyRef?) {
         val tap = System.currentTimeMillis().toDouble()
         val clientId = UUID.randomUUID().toString().uppercase()
         localFiles[clientId] = r.file.absolutePath
+        if (ref != null) voiceReplies[clientId] = ref
         pending[clientId] = Message(
             id = clientId, authorId = me, text = "", type = "audio", createdAtMillis = tap, hasServerTime = false,
-            clientTs = tap, clientId = clientId, sendState = Message.SendState.SENDING,
+            clientTs = tap, clientId = clientId, sendState = Message.SendState.SENDING, replyTo = ref,
             duration = r.duration, waveform = if (r.viewOnce) emptyList() else r.waveform, localPath = r.file.absolutePath,
             viewOnce = r.viewOnce,
         )
@@ -1952,6 +1960,7 @@ class ThreadRepository(
         if (!r.viewOnce) media?.store(url, data)
         val fields = MediaMessages.audio(me, meta, r.duration, r.waveform, clientTs, clientId, FieldValue.serverTimestamp(),
             viewOnce = r.viewOnce).toMutableMap().apply { remove("uploading"); put("audioUrl", url) }
+        voiceReplies[clientId]?.let { fields["replyTo"] = replyMap(it, seal(it.text, members)) }
         val batch = db.batch()
         batch.set(msgRef, fields)
         batch.update(convRef, MediaMessages.convUpdate(me, com.fariin.app.media.VoiceRecordRules.preview(r.duration, r.viewOnce), members ?: listOf(other),
@@ -1959,6 +1968,7 @@ class ThreadRepository(
         batch.commit().await()
         com.fariin.app.media.ChatSounds.sent()
         if (r.viewOnce) r.file.delete()
+        voiceReplies.remove(clientId)
     }
 
     private suspend fun sealBytes(data: ByteArray, members: List<String>?): Pair<ByteArray, EncMeta> =
@@ -2568,7 +2578,7 @@ class ThreadRepository(
     fun hideForMe(context: Context, m: Message) {
         // An unsent one also leaves the send queue and drops what it was waiting to resend (iOS
         // deleteForMe on a failed message: queue entry, upload and bubble all go).
-        m.clientId?.let { pending.remove(it); retryPhoto.remove(it); retryVoice.remove(it)
+        m.clientId?.let { pending.remove(it); retryPhoto.remove(it); retryVoice.remove(it); voiceReplies.remove(it)
             if (m.sendState != null && !SendQueue.isInFlight(it)) { SendQueue.remove(me, it); retryMedia.remove(it); com.fariin.app.local.PhotoOutbox.remove(me, it) } }
         // An unsent text still on its way (offline, waiting for the server) is called off too, as
         // iOS cancelTextSend: a send not written yet stops before its write, and one Firestore already

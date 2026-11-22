@@ -248,7 +248,7 @@ fun ThreadScreen(
     onLoadOlder: () -> Unit = {},
     onRetry: (Message) -> Unit = {},
     onSendPhoto: (Uri) -> Unit = {},
-    onSendVoice: (VoiceRecorder.Result) -> Unit = {},
+    onSendVoice: (VoiceRecorder.Result, Message?) -> Unit = { _, _ -> },
     actions: ThreadActions = ThreadActions(),
     /** The attach sheet's sends (media worker): photos/videos + caption + view-once, and a file. */
     onSendPick: (List<Uri>, String, Boolean) -> Unit = { l, _, _ -> l.firstOrNull()?.let(onSendPhoto) },
@@ -349,7 +349,7 @@ private fun ThreadContent(
     onLoadOlder: () -> Unit,
     onRetry: (Message) -> Unit,
     onSendPhoto: (Uri) -> Unit,
-    onSendVoice: (VoiceRecorder.Result) -> Unit,
+    onSendVoice: (VoiceRecorder.Result, Message?) -> Unit,
     actions: ThreadActions,
     onSendPick: (List<Uri>, String, Boolean) -> Unit,
     onSendFile: (Uri) -> Unit,
@@ -1822,7 +1822,9 @@ private fun ThreadContent(
                         val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.VOICE)
                         if (stop != null) actions.onNotice(stop) else {
                             sendMotion.arm(SendMotion.Kind.VOICE, ui.messages, sendAnim)
-                            onSendVoice(r)
+                            // A note recorded while replying carries the reply and closes the bar (iOS).
+                            val re = replyTo; replyTo = null
+                            onSendVoice(r, re)
                         }
                     }, prefill = editing?.let { it.id to it.text }, prefillBold = editing?.bold ?: emptyList(), prefillLinks = editing?.links ?: emptyList(), banner = banner, voiceKey = ui.cid,
                     // Bold in the selection menu (iOS Format > Bold): 1:1s, groups and channel posts
