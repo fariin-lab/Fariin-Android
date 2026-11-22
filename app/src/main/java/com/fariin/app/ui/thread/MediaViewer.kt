@@ -735,8 +735,16 @@ private fun PhotoPage(p: ViewerRules.Page, current: Boolean, onTap: () -> Unit, 
                 bmp, "Photo", contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize().enterFade(bornWaiting)
                     .pointerInput(Unit) {
-                        detectTapGestures(onTap = { tap() }, onDoubleTap = {
-                            if (scale > 1f) { scale = 1f; offset = Offset.Zero } else scale = 2.5f
+                        detectTapGestures(onTap = { tap() }, onDoubleTap = { at ->
+                            // iOS: 2x with the tapped spot brought to the middle; zoomed, back to fit.
+                            if (scale > 1f) { scale = 1f; offset = Offset.Zero } else {
+                                val s = 2f
+                                val maxX = (s - 1) * size.width / 2
+                                val maxY = (s - 1) * size.height / 2
+                                scale = s
+                                offset = Offset(((size.width / 2f - at.x) * s).coerceIn(-maxX, maxX),
+                                    ((size.height / 2f - at.y) * s).coerceIn(-maxY, maxY))
+                            }
                         })
                     }
                     .pointerInput(Unit) {
@@ -748,7 +756,7 @@ private fun PhotoPage(p: ViewerRules.Page, current: Boolean, onTap: () -> Unit, 
                                 val pan = e.calculatePan()
                                 val multi = e.changes.size > 1
                                 if (multi || scale > 1f) {
-                                    scale = (scale * zoom).coerceIn(1f, 5f)
+                                    scale = (scale * zoom).coerceIn(1f, 8f)   // iOS: up to 8x the fit
                                     val maxX = (scale - 1) * size.width / 2
                                     val maxY = (scale - 1) * size.height / 2
                                     offset = if (scale == 1f) Offset.Zero else Offset(
