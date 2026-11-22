@@ -97,11 +97,11 @@ object GroupLinkCards {
      * else View Group; a channel's Open / View Channel. A public @name: the same, but a group I am
      * not in has none (its own page has the Join).
      */
+    // iOS MessageRowLayout bottomButton: every group or channel card, a name link or an invite.
+    @Suppress("UNUSED_PARAMETER")
     fun actionLine(byName: Boolean, channel: Boolean, member: Boolean): String? = when {
         channel -> if (member) "Open Channel" else "View Channel"
-        !byName -> if (member) "Open Group" else "View Group"
-        member -> "Open Group"
-        else -> null
+        else -> if (member) "Open Group" else "View Group"
     }
 
     // ------------------------------------------------------------------ the lookup (memory only)

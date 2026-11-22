@@ -41,8 +41,11 @@ class GroupLinkCardsTest {
             GroupLinkCards.firstLinkIn("https://example.com then https://fariin.com/fariin")?.second)
     }
 
-    @Test fun actionWordsOnlyOnANameCard() {
-        assertNull(GroupLinkCards.actionLine(byName = false, channel = true, member = true))
+    @Test fun actionWordsOnEveryGroupCard() {
+        // iOS: an invite card and a name card both say Open or View (MessageRowLayout bottomButton).
+        assertEquals("Open Channel", GroupLinkCards.actionLine(byName = false, channel = true, member = true))
+        assertEquals("View Group", GroupLinkCards.actionLine(byName = false, channel = false, member = false))
+        assertEquals("View Group", GroupLinkCards.actionLine(byName = true, channel = false, member = false))
         assertEquals("Open Channel", GroupLinkCards.actionLine(byName = true, channel = true, member = true))
         assertEquals("View Channel", GroupLinkCards.actionLine(byName = true, channel = true, member = false))
         assertEquals("Open Group", GroupLinkCards.actionLine(byName = true, channel = false, member = true))
