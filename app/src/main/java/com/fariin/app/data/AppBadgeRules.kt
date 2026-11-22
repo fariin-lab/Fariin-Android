@@ -37,13 +37,26 @@ object AppBadgeRules {
     sealed interface Event {
         /** A chat list snapshot arrived: its total is the truth. */
         data class Snapshot(val total: Int) : Event
-        /** A message push. [live]: the chat list listener is registered, so its snapshot counts it. */
-        data class Push(val countsHere: Boolean, val live: Boolean) : Event
+        /** A message push. [live]: the chat list listener is registered, so its snapshot counts it.
+         *  [counted]: the stored number already holds this message (the last snapshot showed it as
+         *  that chat's unread last message, or a push for it was counted before). */
+        data class Push(val countsHere: Boolean, val live: Boolean, val counted: Boolean = false) : Event
     }
 
     /** The stored number after [e]: a snapshot replaces it, a push with no listener adds one. */
     fun next(lastKnown: Int, e: Event): Int = when (e) {
         is Event.Snapshot -> maxOf(0, e.total)
-        is Event.Push -> afterPush(lastKnown, e.countsHere, e.live)
+        is Event.Push -> if (e.counted) maxOf(0, lastKnown) else afterPush(lastKnown, e.countsHere, e.live)
     }
+
+    /** One message for the "already counted" check: its chat and a hash of its sealed text (the
+     *  push's `ct`, the chat doc's `lastMessage`). Null with nothing to match on. */
+    fun messageKey(cid: String?, text: String?): String? =
+        if (cid.isNullOrEmpty() || text.isNullOrEmpty()) null else "$cid:${text.hashCode()}"
+
+    /** What a snapshot already counted that a late push can name again: the last message of each
+     *  chat with unread. A push held back while the app was stopped and handed over later (with the
+     *  next push, in a process with no listener) added one on top of a snapshot that held it. */
+    fun countedKeys(chats: List<Conversation>, me: String): Set<String> =
+        chats.filter { it.unread(me) > 0 }.mapNotNull { messageKey(it.id, it.lastMessageCipher) }.toSet()
 }

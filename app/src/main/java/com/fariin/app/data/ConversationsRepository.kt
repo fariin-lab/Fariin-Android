@@ -128,7 +128,7 @@ class ConversationsRepository(
             val all = (convs + followed).filter { it.id !in hidden && !FormerGroups.hides(it) }
             val total = AppBadgeRules.total(all, uid, OfficialChannel.listEntry(OfficialChannel.view.value, uid),
                 groupsOn = AppFeatures.groups)
-            com.fariin.app.push.AppBadge.sync(app, uid, total, force)
+            com.fariin.app.push.AppBadge.sync(app, uid, total, force, AppBadgeRules.countedKeys(all, uid))
         }
     }
 

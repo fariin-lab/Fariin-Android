@@ -32,8 +32,10 @@ object AppBadge {
     /** A chat list snapshot arrived (ConversationsRepository.listen, in front or behind Home): its
      *  total, from AppBadgeRules.total. [force]: posted again even when unchanged (first snapshot). */
     @Synchronized
-    fun sync(c: Context, me: String, total: Int, force: Boolean = false) {
+    fun sync(c: Context, me: String, total: Int, force: Boolean = false, counted: Set<String> = emptySet()) {
         if (me.isEmpty()) return
+        // The messages this total holds, so a late push for one of them adds nothing (notePush).
+        if (seen(c, me) != counted) prefs(c).edit().putStringSet(SEEN + me, counted).apply()
         val t = AppBadgeRules.next(lastKnown(c, me), AppBadgeRules.Event.Snapshot(total))
         if (!force && prefs(c).getInt(me, -1) == t) return
         prefs(c).edit().putInt(me, t).apply()
@@ -52,12 +54,21 @@ object AppBadge {
      *  list listener up its snapshot sets the number, so nothing is added here (the notification
      *  post shows the stored total). With no listener in this process: last known + 1. */
     @Synchronized
-    fun notePush(c: Context, me: String, countsHere: Boolean) {
+    fun notePush(c: Context, me: String, countsHere: Boolean, key: String? = null) {
         if (me.isEmpty() || !countsHere) return
         val last = lastKnown(c, me)
-        val t = AppBadgeRules.next(last, AppBadgeRules.Event.Push(countsHere = true, live = listLive(me)))
-        if (t != last) prefs(c).edit().putInt(me, t).apply()
+        val seen = seen(c, me)
+        val t = AppBadgeRules.next(last, AppBadgeRules.Event.Push(countsHere = true, live = listLive(me),
+            counted = key != null && key in seen))
+        if (t == last) return
+        // Counted now: the same message pushed again (or handed over late) adds nothing.
+        val e = prefs(c).edit().putInt(me, t)
+        if (key != null) e.putStringSet(SEEN + me, seen + key)
+        e.apply()
     }
+
+    private const val SEEN = "seen."
+    private fun seen(c: Context, me: String): Set<String> = prefs(c).getStringSet(SEEN + me, null)?.toSet() ?: emptySet()
 
     /** Sign-out: the account's number goes with it, and no list counts as live any more. */
     fun forget(c: Context) {

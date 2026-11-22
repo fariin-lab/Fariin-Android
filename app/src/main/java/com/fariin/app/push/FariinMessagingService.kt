@@ -230,7 +230,8 @@ class FariinMessagingService : FirebaseMessagingService() {
                 }
                 // The app icon number: the push has no count on Android, so last known + this one
                 // (a channel post's count lives in the app, as on iOS; in front the list syncs it).
-                AppBadge.notePush(c, me, s.opensChat && !s.isChannel && !com.fariin.app.AppLifecycle.inFront)
+                AppBadge.notePush(c, me, s.opensChat && !s.isChannel && !com.fariin.app.AppLifecycle.inFront,
+                    com.fariin.app.data.AppBadgeRules.messageKey(p.cid, p.cipher ?: p.plainText))
                 NotificationPoster.post(c, s, photos[0], photos[1], me)
                 // The home screen widget: that chat moves to the top (names only, no words or counts).
                 if (s.opensChat) com.fariin.app.system.FariinWidget.notePush(c, s.key)

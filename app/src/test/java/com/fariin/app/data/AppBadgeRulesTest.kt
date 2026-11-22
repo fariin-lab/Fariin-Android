@@ -101,4 +101,21 @@ class AppBadgeRulesTest {
         assertEquals(3, AppBadgeRules.next(n, Event.Snapshot(3)))
         assertEquals(0, AppBadgeRules.next(n, Event.Snapshot(-1)))
     }
+
+    /** Device 2026-11-22: stopped, coldtap1 sent; opened (list 1); Home + kill; coldtap2 sent. The
+     *  coldtap1 push came late with coldtap2 in a process with no listener: it said 3 for 2. */
+    @Test fun latePushForAMessageTheSnapshotHeldAddsNothing() {
+        val one = chat("a", 1).copy(lastMessageCipher = "coldtap1")
+        var n = AppBadgeRules.next(0, Event.Snapshot(AppBadgeRules.total(listOf(one), me, incoming = none)))
+        val seen = AppBadgeRules.countedKeys(listOf(one), me).toMutableSet()
+        assertEquals(1, n)
+        for (ct in listOf("coldtap1", "coldtap2", "coldtap2")) {
+            val key = AppBadgeRules.messageKey("a", ct)
+            n = AppBadgeRules.next(n, Event.Push(countsHere = true, live = false, counted = key in seen))
+            seen += key!!
+        }
+        assertEquals(2, n)
+        // Without the check the same pushes made 3 (and 4 with the repeat).
+        assertEquals(3, AppBadgeRules.next(AppBadgeRules.next(1, Event.Push(true, false)), Event.Push(true, false)))
+    }
 }
