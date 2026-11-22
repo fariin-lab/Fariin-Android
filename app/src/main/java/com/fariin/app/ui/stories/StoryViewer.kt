@@ -1897,7 +1897,10 @@ private fun ReplyBar(
     }
     Column(Modifier.fillMaxWidth()) {
         // The react bar fades and folds away at the first letter typed, and back (iOS pops 65, 102).
-        com.fariin.app.ui.components.Appear(canReply && focused && text.isEmpty(), resize = true) {
+        // One 200 ms ease-in-out clock for the fade and the height (RevealUp), as the chat's reply bar:
+        // it opens while the keyboard lifts this bar, and a spring inside that move made it jump.
+        val reactShowing = com.fariin.app.ui.components.rememberShowing(canReply && focused && text.isEmpty())
+        com.fariin.app.ui.components.RevealUp(reactShowing) {
             Column(
                 Modifier.padding(start = 16.dp, end = 44.dp, bottom = 4.dp).fillMaxWidth().height(62.dp)
                     .clip(RoundedCornerShape(24.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 14.dp),
