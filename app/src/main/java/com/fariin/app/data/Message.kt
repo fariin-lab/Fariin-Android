@@ -69,6 +69,8 @@ data class Message(
     val consumed: Boolean = false,
     /** A file's size in bytes, written in the clear by the sender (iOS sendFile). */
     val fileSize: Long? = null,
+    /** A channel post's number (`postSeq`, written by the server a moment after): its link (ChannelPostLink). */
+    val postSeq: Int? = null,
     val album: List<AlbumItem> = emptyList(),
     /**
      * The file's first home as a one-way key ([com.fariin.app.media.MediaOrigin]), written by a
@@ -424,6 +426,7 @@ data class Message(
                 viewOnce = data["viewOnce"] as? Boolean ?: false,
                 consumed = data["consumed"] as? Boolean ?: false,
                 fileSize = (data["fileSize"] as? Number)?.toLong(),
+                postSeq = (data["postSeq"] as? Number)?.toInt()?.takeIf { it > 0 },
                 views = maxOf(0, (data["views"] as? Number)?.toInt() ?: 0),
                 quoteCount = maxOf(0, (data["quoteCount"] as? Number)?.toInt() ?: 0),
                 quoteFaces = PostQuoteRules.faces(data["quoteFaces"]),

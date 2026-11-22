@@ -176,6 +176,7 @@ internal fun rememberBubbleLinkTap(ui: ThreadUi, onNotice: (String) -> Unit): (T
                     val adminCode = com.fariin.app.ui.channels.AdminInviteLink.code(sp.target)
                     val groupCode = com.fariin.app.ui.people.GroupInviteLink.code(sp.target)
                     val storyLink = StoryLinks.parse(sp.target)
+                    val postLink = com.fariin.app.channel.ChannelPostLink.parse(sp.target)
                     when {
                         storyLink != null -> scope.launch {
                             val g = StoryLinks.open(storyLink.first, storyLink.second)
@@ -193,6 +194,17 @@ internal fun rememberBubbleLinkTap(ui: ThreadUi, onNotice: (String) -> Unit): (T
                             }
                         }
                         call != null -> nav.joinLink(call.text, com.fariin.app.call.CallLinkKey.linkSaysVideo(sp.target))
+                        // A channel post's own link (iOS ChannelPostLink): the channel opens, scrolled to the
+                        // post and lighting it; a channel or post this account cannot read is said so.
+                        postLink != null -> scope.launch {
+                            val cid = com.fariin.app.channel.ChannelPostLink.cid(postLink)
+                            val mid = cid?.let { com.fariin.app.channel.ChannelPostLink.mid(postLink, it) }
+                            if (cid == null || mid == null) notice("This post is not available.")
+                            else {
+                                com.fariin.app.data.QuoteStore.pendingJump.value = com.fariin.app.data.QuoteStore.Jump(cid, mid)
+                                channelNav.open(cid)
+                            }
+                        }
                         h != null -> handle(h)
                         // An author's fariin: or kulan: link: whatever app takes the address.
                         !sp.target.startsWith("http", ignoreCase = true) ->
@@ -300,6 +312,8 @@ object ExternalLinks {
             }
         }
         if (re.containsMatchIn(u) || com.fariin.app.ui.people.GroupInviteLink.code(u) != null) { pending.value = u; return true }
+        // A channel post (fariin.com/<name>/<post>, /c/<cid>/<post>): opened in the channel.
+        if (com.fariin.app.channel.ChannelPostLink.parse(u) != null) { pending.value = u; return true }
         name.find(u)?.let { m ->
             if (m.groupValues[2].lowercase() !in sitePages) { pending.value = u; return true }
         }

@@ -334,7 +334,7 @@ internal fun ChannelPostMenu(
             // Tick several posts to forward, copy or (owner and admins) delete them together.
             if (onSelect != null) add(PostItem("Select", ImageVector.cachedVector(R.drawable.ic_sf_checkmark_circle)) { onDismiss(); onSelect(m) })
             // A post's own link (iOS postLink, owner 2026-11-08): a delivered post of a public channel.
-            com.fariin.app.channel.ChannelRules.postLink(ch.info.username, m.id)?.takeIf {
+            com.fariin.app.channel.ChannelPostLink.link(ch.info.username, ch.info.cid, m.postSeq, m.id)?.takeIf {
                 m.sendState == null && !com.fariin.app.data.MessageRules.isServiceLine(m)
             }?.let { link -> add(PostItem("Copy Link", ImageVector.cachedVector(R.drawable.ic_sf_link)) { onCopy(link) }) }
             // iOS Save Image: where saving is allowed (not a protected channel).
@@ -593,7 +593,10 @@ private fun PostShareSheet(ch: ChannelThreadUi, m: Message, onDismiss: () -> Uni
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var draft by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.fariin.app.data.StoryMedia.Prepared?>(null) }
     var preparing by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    val link = if (ch.info.username.isEmpty()) "" else "https://fariin.com/${ch.info.username}"
+    // The post's own link (iOS postShareSheet, owner 2026-11-12): Copy Link and the text carry THIS
+    // post, public or private; the channel's link only when the post has none yet.
+    val link = com.fariin.app.channel.ChannelPostLink.link(ch.info.username, ch.info.cid, m.postSeq, m.id)
+        ?: if (ch.info.username.isEmpty()) "" else "https://fariin.com/${ch.info.username}"
     val text = listOf(shareBody(m), link.ifEmpty { null }).filterNotNull().joinToString("\n\n")
     draft?.let { d ->
         com.fariin.app.ui.stories.StoryComposerDialog(me, d, com.fariin.app.data.ChatsNow.list,

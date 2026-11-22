@@ -113,6 +113,9 @@
                 <!-- A public name, fariin.com/<name> (iOS DeepLink .name); a site page that has the
                      same shape is handed on to the browser (ExternalLinks.sitePages). Android 12+. -->
                 <data android:pathAdvancedPattern="/[A-Za-z0-9_]+" />
+                <!-- A channel post (iOS ChannelPostLink): /<name>/<post> and /c/<cid>/<post>. -->
+                <data android:pathAdvancedPattern="/[A-Za-z0-9_]+/[A-Za-z0-9_-]+" />
+                <data android:pathAdvancedPattern="/c/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+" />
             </intent-filter>
             <!-- The web landing page's "Open" button: kulan://video/<id>, kulan://voice/<id>, kulan://call/<key>. -->
             <intent-filter>
