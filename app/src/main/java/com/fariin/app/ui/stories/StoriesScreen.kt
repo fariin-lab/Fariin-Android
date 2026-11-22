@@ -154,6 +154,8 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     // iOS "That video is too long" (past the 10-minute pick) and "That's today's limit".
     var tooLong by remember { mutableStateOf(false) }
     var dayLimit by remember { mutableStateOf(false) }
+    // The admin panel switched new stories off (iOS storiesOff).
+    var storiesOff by remember { mutableStateOf(false) }
     val upload by StoryUploads.state.collectAsState()
     val pendingJpeg by StoryUploads.pending.collectAsState()
     // The My Story card (66 x 94 dp), decoded off the main thread at that size.
@@ -192,7 +194,9 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     WhileShown(active, me, live) { on -> if (live && on) limits.refresh(me) }
     val addStory: () -> Unit = {
         if (live) {
-            if (limits.dailyReached()) {
+            // iOS composeStory: the feature first, the allowance second.
+            if (!com.fariin.app.data.AppLimits.storiesEnabled(limits.verified)) storiesOff = true
+            else if (limits.dailyReached()) {
                 dayLimit = true
                 // A window that rolled while the app sat open opens the camera on the next tap.
                 scope.launch { limits.refresh(me) }
@@ -631,6 +635,11 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
         title = { Text(com.fariin.app.data.StoryLimits.TOO_LONG_TITLE) },
         text = { Text(com.fariin.app.data.StoryLimits.TOO_LONG_TEXT) },
         confirmButton = { androidx.compose.material3.TextButton(onClick = { tooLong = false }) { Text("OK") } },
+    )
+    if (storiesOff) com.fariin.app.ui.components.GlassAlert(
+        onDismissRequest = { storiesOff = false },
+        title = { Text(com.fariin.app.data.AppLimits.STORIES_OFF) },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { storiesOff = false }) { Text("OK") } },
     )
     if (dayLimit) com.fariin.app.ui.components.GlassAlert(
         onDismissRequest = { dayLimit = false },

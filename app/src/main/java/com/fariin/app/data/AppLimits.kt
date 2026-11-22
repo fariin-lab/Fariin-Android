@@ -65,6 +65,24 @@ object AppLimits {
     fun storiesPerHour(verified: Boolean): Int = tiered(read(), "stories_per_hour", Fallback.STORIES_PER_HOUR_DEFAULT, Fallback.STORIES_PER_HOUR_VERIFIED, verified)
 
     /**
+     * iOS AppLimits.storiesEnabled: the admin panel's switch that stops new stories
+     * (`stories_enabled_default` / `stories_enabled_verified`). The same `!= 0` the rules use, so a
+     * missing or odd value reads as on and nobody is locked out by mistake.
+     */
+    fun storiesEnabled(verified: Boolean): Boolean =
+        flagOn(read(), if (verified) "stories_enabled_verified" else "stories_enabled_default")
+
+    /** Pure: on unless the key holds a whole number 0 (iOS flag(key, 1) != 0). */
+    fun flagOn(v: Map<String, Any?>, key: String): Boolean = when (val x = v[key]) {
+        is Long -> x != 0L
+        is Int -> x != 0
+        else -> true
+    }
+
+    /** iOS AppLimits.storiesOffMessage: one sentence, no reason given. */
+    const val STORIES_OFF = "Can't upload story right now."
+
+    /**
      * iOS AppLimits.tiered: a `<base>_default` / `<base>_verified` pair for whoever is signed in. A
      * verified account is never given less than an ordinary one, whatever the document says.
      */

@@ -72,7 +72,8 @@ object StoryLimits {
         "You've posted ${dailyLimit()} stories today. You can post again in about ${hoursLeft(dailyWindowStartMs)} hours."
 
     /** iOS postErrorMessage for a rules refusal: the day if it is spent, else the hour may be. */
-    fun refusedText(): String = if (dailyReached())
+    fun refusedText(): String = if (!AppLimits.storiesEnabled(verified)) AppLimits.STORIES_OFF
+    else if (dailyReached())
         "You've posted ${dailyLimit()} stories today, which is the daily limit. You can post again in about ${hoursLeft(dailyWindowStartMs)} hours."
     else "This story couldn't be posted. If you've posted a lot in the last hour (the limit is ${AppLimits.storiesPerHour(verified)}), wait a little and try again."
 
