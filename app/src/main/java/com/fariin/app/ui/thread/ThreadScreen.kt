@@ -3731,7 +3731,7 @@ private fun Composer(
                     contentAlignment = Alignment.Center,
                 ) {
                     // iOS: the mic drawn in a 24 box, at its own shape (owner 2026-11-10: "stretched").
-                    Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_mic), contentDescription = "Record a voice message. Tap for hands-free, hold to record",
+                    Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_mic), contentDescription = "Record voice message",
                         tint = if (recording) Color.White else c.label, modifier = Modifier.size(24.dp))
                 }
             }
