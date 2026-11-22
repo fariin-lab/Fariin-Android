@@ -372,7 +372,8 @@ internal fun PictureBox(
 internal fun VideoOverlay(m: Message, ready: Boolean, showDuration: Boolean = true) {
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
         // While the clip waits or comes down, the corner says its size instead (the download badge).
-        if (showDuration) m.duration?.let { d ->
+        // Only a real length (iOS mediaBody: d > 0); a clip with no length shows no "0:00".
+        if (showDuration) m.duration?.takeIf { it > 0 }?.let { d ->
             // iOS durationPill: 10 in from the corner, 0.5 dark, 11 semibold, 6 either side.
             DurationPill(d, Modifier.padding(10.dp))   // was 5: clear of the round corner (2026-11-13)
         }
