@@ -66,8 +66,12 @@ object VoicePlayer {
         if (this.cid == cid) player?.playbackParameters = PlaybackParameters(next)
     }
 
-    /** Tap on the disc: play, pause, or resume [id]. [file] holds the plain bytes. */
-    fun toggle(context: Context, id: String, cid: String, file: File, author: String = "") {
+    /**
+     * Tap on the disc: play, pause, or resume [id]. [file] holds the plain bytes. [messageId] and
+     * [createdAtMs] are for the played mark, written once the sound really starts.
+     */
+    fun toggle(context: Context, id: String, cid: String, file: File, author: String = "",
+               messageId: String? = null, createdAtMs: Double = 0.0) {
         val s = _state.value
         val p = player
         if (s.id == id && p != null) {
@@ -81,7 +85,7 @@ object VoicePlayer {
                 _state.value = _state.value.copy(failed = _state.value.failed + id)
                 return@launch
             }
-            start(context, id, cid, playable, author)
+            start(context, id, cid, playable, author, messageId, createdAtMs)
         }
     }
 
@@ -121,14 +125,11 @@ object VoicePlayer {
         val url = n.localPath ?: n.audioUrl ?: run { VoiceEar.stop(); return }
         val f = VoiceRun.media?.file(url, n.enc) ?: run { if (_state.value.id == null) VoiceEar.stop(); return }
         if (_state.value.id != null) return   // something else started meanwhile
-        // Only someone else's note counts as heard (iOS start: !isMine).
-        if (n.authorId != com.fariin.app.Fb.auth.currentUser?.uid) {
-            com.fariin.app.data.PlayedVoice.markPlayed(context, cid, n.createdAtMillis)
-        }
-        toggle(context, n.rowId, cid, f, n.authorId)
+        toggle(context, n.rowId, cid, f, n.authorId, n.id, n.createdAtMillis)
     }
 
-    private fun start(context: Context, id: String, cid: String, file: File, author: String) {
+    private fun start(context: Context, id: String, cid: String, file: File, author: String,
+                      messageId: String?, createdAtMs: Double) {
         save()
         player?.release()
         this.cid = cid
@@ -140,7 +141,19 @@ object VoicePlayer {
         p.setMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
         p.playbackParameters = PlaybackParameters(rate(cid))
         p.addListener(object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) { tick() }
+            var heard = false
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                // Heard once sound really comes out (iOS: only after play() succeeded), and only
+                // someone else's note (iOS: !isMine). A note that never plays tells nobody.
+                if (isPlaying && !heard) {
+                    heard = true
+                    val me = com.fariin.app.Fb.auth.currentUser?.uid
+                    if (createdAtMs > 0 && author.isNotEmpty() && author != me) {
+                        com.fariin.app.data.PlayedVoice.markPlayed(context, cid, createdAtMs, messageId)
+                    }
+                }
+                tick()
+            }
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) {
                     // Finished: the note is closed, as iOS (VoicePlayer.barVisible is "started, not
