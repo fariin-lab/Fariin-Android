@@ -125,4 +125,39 @@ class MusicRulesTest {
         assertEquals(false, MusicRules.foldStep(t, -8f, 12f).second)
         assertEquals(3f to null, MusicRules.foldStep(3f, 0f, 12f))
     }
+
+    @Test fun renamedWordsGoOutOnlyWhenChanged() {
+        assertNull(MusicRules.sentField("  ", "Song"))
+        assertNull(MusicRules.sentField(" Song ", "Song"))
+        assertNull(MusicRules.sentField(null, null))
+        assertEquals("New", MusicRules.sentField(" New ", "Song"))
+        assertEquals(100, MusicRules.sentField("x".repeat(150), null)!!.length)
+    }
+
+    @Test fun aRenamedSongWritesOneAudioItemThatReadsBack() {
+        assertNull(MusicRules.songRenameAlbum(null, null))
+        val album = MusicRules.songRenameAlbum("enc1:Title", null)!!
+        assertEquals(listOf(mapOf("title" to "enc1:Title", "kind" to "audio")), album)
+        val p = MusicRules.parse("file", album, open)
+        assertEquals("Title", p.songTitle)
+        assertNull(p.songArtist)
+        assertNull(p.tracks)
+        val both = MusicRules.songRenameAlbum("enc1:T", "enc1:A")!!.single()
+        assertEquals(setOf("title", "artist", "kind"), both.keys)
+    }
+
+    @Test fun aRenamedPlaylistSongCarriesItsSealedWords() {
+        val songs = listOf(
+            MusicRules.SealedSong(enc, "a.mp3", null, 10, sealedTitle = "enc1:T", sealedArtist = "enc1:A"),
+            MusicRules.SealedSong(enc, "b.mp3", null, 20),
+        )
+        val item = MusicRules.playlistItem(songs, 0, "https://x/a", "")
+        assertEquals("enc1:T", item["title"])
+        assertEquals("enc1:A", item["artist"])
+        assertFalse("title" in MusicRules.playlistItem(songs, 1, "https://x/b", ""))
+        val p = MusicRules.parse("file", listOf(item, MusicRules.playlistItem(songs, 1, "https://x/b", "")), open)
+        assertEquals("T", p.tracks!![0].title)
+        assertEquals("A", p.tracks!![0].artist)
+        assertNull(p.tracks!![1].title)
+    }
 }

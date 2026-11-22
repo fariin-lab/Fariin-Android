@@ -1288,7 +1288,10 @@ class ThreadRepository(
     fun sendDocument(context: Context, uri: Uri, onRefused: (String) -> Unit) = sendDocument(context, uri, null, onRefused)
 
     /** As above; a file sent while replying carries the reply. */
-    fun sendDocument(context: Context, uri: Uri, reply: Message?, onRefused: (String) -> Unit) {
+    fun sendDocument(context: Context, uri: Uri, reply: Message?, onRefused: (String) -> Unit) = sendDocument(context, uri, reply, null, onRefused)
+
+    /** As above; [rename] is a song's title and artist typed in the playlist sheet (null = its own). */
+    fun sendDocument(context: Context, uri: Uri, reply: Message?, rename: Pair<String?, String?>?, onRefused: (String) -> Unit) {
         val m = media ?: return
         scope.launch(Dispatchers.IO) {
             val f = when (val r = FilePrep.fromUri(context, uri, m.localDir())) {
@@ -1306,7 +1309,7 @@ class ThreadRepository(
                 fileName = f.name, fileSize = f.bytes.size.toLong(), localPath = local.absolutePath,
             )
             rebuild()
-            val work: suspend () -> Unit = { sender.file(f, false, clientId, tap, reply = ref) }
+            val work: suspend () -> Unit = { sender.file(f, false, clientId, tap, reply = ref, rename = rename) }
             retryMedia[clientId] = work
             runMediaSend(clientId, work)
         }
@@ -1380,15 +1383,25 @@ class ThreadRepository(
      * [caption]. The cover is the first song's own picture (iOS sheet's default cover). My bubble
      * plays the songs from this phone's copies while they go up.
      */
-    fun sendPlaylist(context: Context, uris: List<Uri>, title: String, caption: String, reply: Message?, onRefused: (String) -> Unit) {
+    fun sendPlaylist(context: Context, uris: List<Uri>, title: String, caption: String, reply: Message?, onRefused: (String) -> Unit) =
+        sendPlaylist(context, uris, title, caption, reply, emptyList(), null, onRefused)
+
+    /**
+     * As above, from the send sheet: [renames] is each song's typed title and artist in [uris]' order
+     * (null = its own), [cover] the chosen cover: null = the first song's own picture, an empty array
+     * = removed, else a chosen photo's JPEG (iOS SongSheetCover).
+     */
+    fun sendPlaylist(context: Context, uris: List<Uri>, title: String, caption: String, reply: Message?,
+                     renames: List<Pair<String?, String?>>, cover: ByteArray?, onRefused: (String) -> Unit) {
         val m = media ?: return
         scope.launch(Dispatchers.IO) {
             val songs = ArrayList<FilePrep>()
             val okUris = ArrayList<Uri>()
+            val okRenames = ArrayList<Pair<String?, String?>>()
             var skipped = 0
             for (uri in uris.take(MusicRules.MAX_TRACKS)) {
                 when (val r = FilePrep.fromUri(context, uri, m.localDir())) {
-                    is FilePrep.Companion.Result.Ok -> { songs += r.prep; okUris += uri }
+                    is FilePrep.Companion.Result.Ok -> { songs += r.prep; okUris += uri; okRenames += renames.getOrNull(uris.indexOf(uri)) ?: (null to null) }
                     else -> skipped++
                 }
             }
@@ -1399,7 +1412,7 @@ class ThreadRepository(
             ).takeIf { it.isNotEmpty() }?.let { onRefused(it.joinToString(" ")) }
             if (songs.size < 2) {
                 // One song left is a song message, as one song picked is.
-                okUris.firstOrNull()?.let { sendDocument(context, it, reply, onRefused) }
+                okUris.firstOrNull()?.let { sendDocument(context, it, reply, okRenames.firstOrNull(), onRefused) }
                 return@launch
             }
             val tap = System.currentTimeMillis().toDouble()
@@ -1410,15 +1423,21 @@ class ThreadRepository(
                 id = clientId, authorId = me, text = caption.trim(), type = "file", createdAtMillis = tap, hasServerTime = false,
                 clientTs = tap, clientId = clientId, sendState = Message.SendState.SENDING, replyTo = ref,
                 fileName = songs[0].name, fileSize = songs[0].bytes.size.toLong(),
-                tracks = songs.mapIndexed { i, s -> MusicRules.Track(locals[i].absolutePath, null, s.name, s.bytes.size.toLong()) },
+                tracks = songs.mapIndexed { i, s -> MusicRules.Track(locals[i].absolutePath, null, s.name, s.bytes.size.toLong(),
+                    okRenames[i].first?.trim()?.ifEmpty { null }, okRenames[i].second?.trim()?.ifEmpty { null }) },
                 listName = title.trim(),
             )
             rebuild()
-            val cover = songs[0].previewJpeg
+            val tile = when {
+                cover == null -> songs[0].previewJpeg
+                cover.isEmpty() -> null
+                else -> cover
+            }
             val names = songs.map { it.name }
             val work: suspend () -> Unit = {
                 // Read back from this phone's copies when the send starts, as a list of documents is.
-                sender.playlist(names.mapIndexed { i, n -> FilePrep(n, locals[i].readBytes(), null) }, title, caption, cover, clientId, tap, reply = ref)
+                sender.playlist(names.mapIndexed { i, n -> FilePrep(n, locals[i].readBytes(), null) }, title, caption, tile, clientId, tap, reply = ref,
+                    renames = okRenames)
             }
             retryMedia[clientId] = work
             runMediaSend(clientId, work)

@@ -178,6 +178,34 @@ object MusicRules {
         if (i == 0) put("listName", listNameSealed)
     }
 
+    /** iOS PlaylistDraft.songFieldLimit: the longest renamed title or artist. */
+    const val SONG_FIELD_LIMIT = 100
+
+    /** iOS PlaylistDraft.coverPixels: a chosen cover's longest side. */
+    const val COVER_PIXELS = 600
+
+    /**
+     * A title or artist typed in the send sheet, as it goes out (iOS sentTitle / sentArtist): trimmed
+     * and cut to [SONG_FIELD_LIMIT]; null when cleared or the same as the song's own [own].
+     */
+    fun sentField(typed: String?, own: String?): String? {
+        val t = typed?.trim().orEmpty()
+        return if (t.isEmpty() || t == own) null else t.take(SONG_FIELD_LIMIT)
+    }
+
+    /**
+     * A single song renamed in the sheet (iOS sendFile `renamed`): `album` holds one item
+     * `{kind: "audio", title?, artist?}` with the sealed words; null (no `album`) when neither was typed.
+     */
+    fun songRenameAlbum(sealedTitle: String?, sealedArtist: String?): List<Map<String, Any>>? {
+        if (sealedTitle == null && sealedArtist == null) return null
+        return listOf(buildMap {
+            sealedTitle?.let { put("title", it) }
+            sealedArtist?.let { put("artist", it) }
+            put("kind", "audio")
+        })
+    }
+
     /** The playlist message as first written (iOS sendPlaylist `msg`), before the songs are up. */
     fun playlistMessage(
         me: String, songs: List<SealedSong>, captionSealed: String, listNameSealed: String, clientTs: Double,

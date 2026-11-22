@@ -231,8 +231,14 @@ class MediaSender(
     // ------------------------------------------------------------------ file
 
     /** sendFile: the message (name, size, sealed preview) first with `uploading`, then `fileUrl`. */
-    suspend fun file(f: FilePrep, forwarded: Boolean, clientId: String?, clientTs: Double, reply: Message.ReplyRef? = null) {
+    suspend fun file(f: FilePrep, forwarded: Boolean, clientId: String?, clientTs: Double, reply: Message.ReplyRef? = null,
+                     rename: Pair<String?, String?>? = null) {
         val members = members()
+        // A song renamed in the send sheet (iOS sendFile `renamed`): one audio item in `album`, sealed as text is.
+        val renamed = rename?.let { (t, a) ->
+            com.fariin.app.data.MusicRules.songRenameAlbum(t?.trim()?.takeIf { it.isNotEmpty() }?.let { seal(it, members) },
+                a?.trim()?.takeIf { it.isNotEmpty() }?.let { seal(it, members) })
+        }
         val (cipher, meta) = sealBytes(f.bytes, members)
         val msgRef = convRef.collection("messages").document()
         var thumbUrl: String? = null
@@ -246,8 +252,9 @@ class MediaSender(
             }
         }
         val batch = db.batch()
-        setMsg(batch, msgRef, members, MediaMessages.file(me, f.name, f.bytes.size, meta, clientTs, clientId, thumbUrl, thumbMeta,
-            forwarded, FieldValue.serverTimestamp()), reply)
+        val msg = MediaMessages.file(me, f.name, f.bytes.size, meta, clientTs, clientId, thumbUrl, thumbMeta,
+            forwarded, FieldValue.serverTimestamp())
+        setMsg(batch, msgRef, members, if (renamed != null) msg + ("album" to renamed) else msg, reply)
         batch.update(convRef, MediaMessages.convUpdate(me, MediaRules.filePreview(f.name), others(members),
             FieldValue.serverTimestamp(), FieldValue.increment(1), forwarded = forwarded))
         MediaSend.noteAnnounced(clientId, msgRef.id)
@@ -269,11 +276,18 @@ class MediaSender(
      * one update attaches them all (MusicRules builds the maps key for key). Returns the message id.
      */
     suspend fun playlist(songs: List<FilePrep>, title: String, caption: String, cover: ByteArray?,
-                         clientId: String?, clientTs: Double, reply: Message.ReplyRef? = null): String {
+                         clientId: String?, clientTs: Double, reply: Message.ReplyRef? = null,
+                         renames: List<Pair<String?, String?>> = emptyList()): String {
         require(songs.size >= 2) { "A playlist needs two songs or more." }
         val members = members()
         val sealed = songs.map { sealBytes(it.bytes, members) }
-        val list = songs.mapIndexed { i, s -> com.fariin.app.data.MusicRules.SealedSong(sealed[i].second.asMap(), s.name, null, s.bytes.size) }
+        // Each song's typed title and artist, sealed as text is (iOS sendPlaylist `renamed`).
+        suspend fun sealedWord(s: String?) = s?.trim()?.takeIf { it.isNotEmpty() }?.let { seal(it, members) }
+        val list = songs.mapIndexed { i, s ->
+            val (t, a) = renames.getOrNull(i) ?: (null to null)
+            com.fariin.app.data.MusicRules.SealedSong(sealed[i].second.asMap(), s.name, null, s.bytes.size,
+                sealedTitle = sealedWord(t), sealedArtist = sealedWord(a))
+        }
         val name = title.trim()
         val listNameSealed = if (name.isEmpty()) "" else seal(name, members)
         val words = caption.trim()

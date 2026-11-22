@@ -570,10 +570,10 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
             })
     }
     playlistPick?.let { (uris, re) ->
-        PlaylistComposeSheet(uris, onDismiss = { playlistPick = null }) { ordered, name, caption ->
+        PlaylistComposeSheet(uris, onDismiss = { playlistPick = null }) { ordered, name, caption, renames, cover ->
             playlistPick = null
-            if (ordered.size == 1) vm.repo.sendDocument(app, ordered[0], re) { notice = it }
-            else vm.repo.sendPlaylist(app, ordered, name, caption, re) { notice = it }
+            if (ordered.size == 1) vm.repo.sendDocument(app, ordered[0], re, renames.firstOrNull()) { notice = it }
+            else vm.repo.sendPlaylist(app, ordered, name, caption, re, renames, cover) { notice = it }
         }
     }
     // The question itself: Not Now and the request simply waits; Use Chat Key opens the key sheet.
