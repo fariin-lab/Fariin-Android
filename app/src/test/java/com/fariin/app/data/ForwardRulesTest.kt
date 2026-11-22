@@ -86,4 +86,18 @@ class ForwardRulesTest {
             ForwardRules.noteRefusal(listOf(conv(d) to d), me, "hi"))
         assertNull(ForwardRules.noteRefusal(listOf(conv(d) to d), me, "  "))
     }
+
+    @Test fun shareIntoGroup() {
+        val off = doc("memberSend" to mapOf("files" to false, "links" to false))
+        val files = listOf(GroupAdmins.SendKind.FILES)
+        assertEquals("Files are off in Team.", ForwardRules.shareRefusal(off, conv(off), me, files, 1, nowMs = now))
+        assertEquals("Links are off in Team.", ForwardRules.shareRefusal(off, conv(off), me, listOf(GroupAdmins.SendKind.LINKS), 1, nowMs = now))
+        assertNull(ForwardRules.shareRefusal(off, conv(off), me, listOf(GroupAdmins.SendKind.PHOTOS), 1, nowMs = now))
+        // The owner may send any kind.
+        assertNull(ForwardRules.shareRefusal(off, conv(off), "owner", files, 1, nowMs = now))
+        val slow = doc("slowMode" to 60)
+        assertEquals("Slow mode is on in Team. Send one message at a time.",
+            ForwardRules.shareRefusal(slow, conv(slow), me, files, 2, nowMs = now))
+        assertNull(ForwardRules.shareRefusal(slow, conv(slow), me, files, 1, nowMs = now))
+    }
 }

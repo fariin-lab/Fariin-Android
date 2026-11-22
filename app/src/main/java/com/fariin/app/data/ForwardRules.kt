@@ -35,6 +35,25 @@ object ForwardRules {
         return null
     }
 
+    /**
+     * Why a group will not take what another app shares into it, or null when it takes it. Not a
+     * forward: these are new photos, videos, files and words, so the group's switches for each kind
+     * apply, as the chat's own composer applies them (heldBack, slow mode). [messages] is how many
+     * messages the share makes in each chat: slow mode lets only one through.
+     */
+    fun shareRefusal(d: Map<String, Any?>?, conv: Conversation, me: String, kinds: Collection<GroupAdmins.SendKind>,
+                     messages: Int, nowMs: Double = System.currentTimeMillis().toDouble()): String? {
+        refusal(d, conv, me, emptyList(), share = true, nowMs = nowMs)?.let { return it }
+        if (!conv.isGroup || conv.isChannel || d == null) return null
+        val name = conv.displayName(me)
+        if (messages > 1 && GroupAdmins.slows(d, me)) return "Slow mode is on in $name. Send one message at a time."
+        for (k in kinds) {
+            if (!GroupAdmins.maySend(d, me, k)) return "${k.label} are off in $name."
+            if (GroupAdmins.heldBack(d, me, k, nowMs) != null) return "An admin has turned off ${k.words} for you in $name."
+        }
+        return null
+    }
+
     /** A note is a second message: a slowed group would remove one of the two (iOS sendAll). */
     fun noteRefusal(docs: List<Pair<Conversation, Map<String, Any?>?>>, me: String, note: String): String? {
         if (note.isBlank()) return null

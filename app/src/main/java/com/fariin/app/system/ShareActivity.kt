@@ -55,9 +55,12 @@ import coil3.compose.setSingletonImageLoaderFactory
 import com.fariin.app.MainActivity
 import com.fariin.app.data.Conversation
 import com.fariin.app.data.CryptoHub
+import com.fariin.app.data.ForwardRules
+import com.fariin.app.data.GroupAdmins
 import com.fariin.app.data.ThreadRepository
 import com.fariin.app.local.LocalCache
 import com.fariin.app.media.ChatMedia
+import com.fariin.app.media.MediaRules
 import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.photo.FariinPhotoFetcher
 import com.fariin.app.ui.theme.Fariin
@@ -86,7 +89,8 @@ import kotlinx.coroutines.withContext
 class ShareActivity : ComponentActivity() {
 
     /** [skipped]: items left out (over 200 MB, unreadable, or past the first 32). */
-    private data class Shared(val text: String?, val media: List<Uri>, val files: List<Uri>, val skipped: Int = 0) {
+    /** [videos]: how many of [media] are videos (the rest are photos), for a group's switches. */
+    private data class Shared(val text: String?, val media: List<Uri>, val files: List<Uri>, val skipped: Int = 0, val videos: Int = 0) {
         val empty get() = text == null && media.isEmpty() && files.isEmpty()
     }
 
@@ -154,6 +158,26 @@ class ShareActivity : ComponentActivity() {
         var caption by remember { mutableStateOf(if (s.media.isNotEmpty()) s.text.orEmpty() else "") }
         val convs = remember(cids) { cids.map { id -> CryptoHub.listedConversation(id) } }
         val names = convs.mapIndexed { i, conv -> conv?.displayName(me) ?: ChatShortcuts.titleOf(this, cids[i]) ?: "Chat" }
+        // A group that would not take this from me says why at Send, in the composer's words
+        // (photos, videos, files or links turned off, slow mode), instead of the server removing it.
+        var refused by remember { mutableStateOf<String?>(null) }
+        refused?.let { why ->
+            com.fariin.app.ui.components.GlassAlert(onDismissRequest = { refused = null }, title = "Can't send here", message = why,
+                actions = listOf(com.fariin.app.ui.components.GlassAlertAction("OK") {}))
+        }
+        fun refusal(caption: String): String? {
+            val kinds = ArrayList<GroupAdmins.SendKind>()
+            if (s.videos > 0) kinds += GroupAdmins.SendKind.VIDEOS
+            if (s.media.size > s.videos) kinds += GroupAdmins.SendKind.PHOTOS
+            if (s.files.isNotEmpty()) kinds += GroupAdmins.SendKind.FILES
+            // The words go as their own message with no media, or beside files when no caption took them.
+            val ownText = s.text != null && (s.media.isEmpty() || (s.files.isNotEmpty() && caption.isBlank()))
+            if (ownText && GroupAdmins.hasLink(s.text!!)) kinds += GroupAdmins.SendKind.LINKS
+            val messages = MediaRules.albumChunks(s.media).size + s.files.size + (if (ownText) 1 else 0)
+            return cids.indices.firstNotNullOfOrNull { i ->
+                convs[i]?.let { ForwardRules.shareRefusal(ForwardRules.docOf(cids[i], me), it, me, kinds, messages) }
+            }
+        }
         ModalBottomSheet(onDismissRequest = onCancel, sheetState = sheet, containerColor = c.bg) {
             Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -192,7 +216,8 @@ class ShareActivity : ComponentActivity() {
                     TextButton(onClick = onCancel) { Text("Cancel") }
                     Spacer(Modifier.width(8.dp))
                     Box(
-                        Modifier.clip(RoundedCornerShape(20.dp)).background(c.blue).clickable { onSend(caption) }
+                        Modifier.clip(RoundedCornerShape(20.dp)).background(c.blue)
+                            .clickable { val why = refusal(caption); if (why != null) refused = why else onSend(caption) }
                             .padding(horizontal = 24.dp, vertical = 10.dp),
                     ) { Text("Send", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
                 }
@@ -228,14 +253,16 @@ class ShareActivity : ComponentActivity() {
         val streams = all.take(MAX_ITEMS)
         var skipped = all.size - streams.size
         val media = ArrayList<Uri>(); val files = ArrayList<Uri>()
+        var videos = 0
         for (u in streams) {
             val type = contentResolver.getType(u) ?: i.type
             val copy = copyIn(this, u, type)
             if (copy == null) { skipped++; continue }
-            if (ShareIntake.kindOf(type) == ShareIntake.Kind.MEDIA) media += copy else files += copy
+            if (ShareIntake.kindOf(type) == ShareIntake.Kind.MEDIA) { media += copy; if (type?.startsWith("video/") == true) videos++ }
+            else files += copy
         }
         // A shared text file with no other text is still a file, not the words in it.
-        return Shared(text, media, files, skipped)
+        return Shared(text, media, files, skipped, videos)
     }
 
     companion object {
