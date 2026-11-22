@@ -138,7 +138,7 @@ object ChatListActions {
             val name = one.displayName(me)
             return when (kinds.single()) {
                 DeleteKind.DELETE_CHANNEL ->
-                    DeletePlan("Delete Channel?", "This deletes $name and all its posts for every follower.", "Delete for Everyone")
+                    DeletePlan("Delete Channel", "This permanently deletes the channel and all its posts for everyone. Its followers lose it too. This cannot be undone.", "Delete for Everyone")
                 DeleteKind.UNFOLLOW, DeleteKind.LEAVE_CHANNEL ->
                     DeletePlan("Leave Channel?", "Are you sure you want to leave $name?", "Leave Channel")
                 DeleteKind.LEAVE_GROUP ->
