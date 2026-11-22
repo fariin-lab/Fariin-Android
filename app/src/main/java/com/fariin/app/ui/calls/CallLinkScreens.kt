@@ -278,7 +278,8 @@ private fun LinkBody(s: LinkState, onUsed: () -> Unit, onDeleted: (() -> Unit)?,
                 }
             }
         }
-        if (saved != null && onDeleted != null) {
+        // iOS CallLinkDetailsView: Delete only for the link's admin (its creator).
+        if (saved != null && onDeleted != null && s.admin) {
             Spacer(Modifier.height(8.dp))
             HorizontalDivider(thickness = 0.5.dp, color = c.separator)
             Row(Modifier.fillMaxWidth().clickable { askDelete = true }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
