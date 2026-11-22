@@ -63,11 +63,14 @@ object GroupRingRules {
      * iOS reevaluateInvites / handlePush for a group chat's call: rings only while the call is on,
      * not mine, not answered or declined by me on any phone, and inside the 60 s ring minute.
      */
-    fun rings(doc: Map<String, Any?>?, me: String, startedAtMs: Long?, nowMs: Long): Boolean {
+    fun rings(doc: Map<String, Any?>?, me: String, startedAtMs: Long?, nowMs: Long,
+              blocked: (String) -> Boolean = { com.fariin.app.data.BlockList.contains(it) }): Boolean {
         doc ?: return false
         if (doc["active"] != true) return false
         val by = doc["startedBy"] as? String ?: return false
         if (by == me) return false
+        // A call started by someone I blocked never rings me (iOS GroupCallService).
+        if (blocked(by)) return false
         if ((doc["joined"] as? List<*>)?.contains(me) == true) return false
         if ((doc["declined"] as? List<*>)?.contains(me) == true) return false
         val at = startedAtMs ?: return true

@@ -55,6 +55,22 @@ class CallActivity : ComponentActivity() {
         const val EXTRA_DEMO = "callScreen"
 
         fun startDial(c: Context, uid: String, name: String, photo: String?, video: Boolean) {
+            val idx = com.fariin.app.call.CallPrivacyIndex
+            // iOS startCall, before anything rings: someone I blocked, already in a call (1:1 or group,
+            // decision D25), no network.
+            if (com.fariin.app.data.BlockList.contains(uid)) {
+                idx.notice.value = com.fariin.app.call.CallPrivacyIndex.Notice("Unblock $name?", "You blocked $name. Unblock them to call.", unblock = uid); return
+            }
+            val one = com.fariin.app.call.CallManager.ui.value
+            if (one.status.live && one.peerUid == uid) {
+                c.startActivity(Intent(c, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)); return
+            }
+            if (one.status.live || com.fariin.app.call.GroupCall.ui.value.cid != null) {
+                idx.notice.value = com.fariin.app.call.CallPrivacyIndex.Notice("Can't Call", "You're already in a call."); return
+            }
+            if (com.fariin.app.data.ConnectionStatus.state.value != com.fariin.app.data.ConnectionStatus.State.ONLINE) {
+                idx.notice.value = com.fariin.app.call.CallPrivacyIndex.Notice("No Internet Connection", "Connect to the internet to make a call."); return
+            }
             // Their call privacy, decided here before anything rings (iOS startCall + CallPrivacyIndex).
             com.fariin.app.call.CallPrivacyIndex.refresh(uid)
             if (com.fariin.app.call.CallPrivacyIndex.refuses(uid)) { com.fariin.app.call.CallPrivacyIndex.refused.value = true; return }

@@ -32,6 +32,10 @@ object CallPrivacyIndex {
     /** Set when a dial was refused here; the shell shows the alert and clears it. */
     val refused = MutableStateFlow(false)
 
+    /** Any other dial refused before it starts (iOS startCall's own alerts); [unblock] = a blocked person's uid. */
+    data class Notice(val title: String, val text: String, val unblock: String? = null)
+    val notice = MutableStateFlow<Notice?>(null)
+
     fun record(uid: String, privacy: Map<String, String>) {
         if (uid.isEmpty()) return
         val a = Audience.of(privacy["calls"]) ?: PrivacyRules.default("calls")

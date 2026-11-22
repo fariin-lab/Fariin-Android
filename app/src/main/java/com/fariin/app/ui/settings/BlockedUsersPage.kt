@@ -120,7 +120,7 @@ internal fun BlockedUsersPage(pop: () -> Unit) {
             "They will be able to message and call you again. Messages sent while blocked stay hidden.",
             listOf(com.fariin.app.ui.people.PersonAction("Unblock") {
                 val ok = FirestorePeople(com.fariin.app.Fb.auth.currentUser!!.uid, CryptoHub.get(ctx)).setBlocked(u, false)
-                if (!ok) toast(ctx, "Check your connection and try again.")
+                if (!ok) toast(ctx, "${name.ifEmpty { "They" }} could not be unblocked. Try again.")
                 ok
             }), onDismiss = { confirm = null })
     }

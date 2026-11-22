@@ -383,14 +383,23 @@ internal fun MessagesPrivacyPage(push: (String) -> Unit, pop: () -> Unit, userna
             PrivacySettings.setAudience("messages", Audience.EVERYONE)
         }
     }
-    val sel = PrivacyRules.audience(map, "messages")
+    val stored = PrivacyRules.audience(map, "messages")
+    // iOS (owner 2026-10-18): while the admin panel hides the Chat Key, the key option is not offered
+    // and Everyone carries the tick (what is in force); the stored choice stays for when it is back.
+    val keyShown = com.fariin.app.data.MsgPolicy.chatKeyVisible
+    val sel = if (keyShown) stored else Audience.EVERYONE
+    val me = com.fariin.app.Fb.auth.currentUser?.uid.orEmpty()
     ScrollPage(if (usernameMode) "Contact me by username" else "Messages", pop) {
         ErrorNote(error)
         if (usernameMode) SettingsSection {
             SettingsRow("Username", value = if (handle.isNullOrEmpty()) "Not set" else "@$handle", last = true) { push(PAGE_USERNAME) }
         }
-        SettingsSection(header = "Who can contact me by username", footer = "Who new people can message. Your chats are never affected.") {
-            for (a in PrivacyRules.options("messages")) CheckRow(a.label("messages"), a == sel, last = a == Audience.CONTACTS) {
+        SettingsSection(header = "Who can contact me by username", footer = "Who new people can message. Your chats are never affected." +
+            // Said when the panel has the requirement off for me, so the choice never promises a closed door.
+            (if (keyShown && stored == Audience.CONTACTS && !com.fariin.app.data.MsgPolicy.chatKeyRequired(me))
+                "\nFariin has paused the Chat Key requirement for now, so anyone can message you." else "")) {
+            val shown = PrivacyRules.options("messages").filter { it != Audience.CONTACTS || keyShown }
+            for (a in shown) CheckRow(a.label("messages"), a == sel, last = a == shown.last()) {
                 if (a == Audience.CONTACTS && keySet != true) { explain = true; return@CheckRow }
                 if (a == Audience.EVERYONE && sel == Audience.CONTACTS && keySet == true && com.fariin.app.data.MsgPolicy.chatKeyVisible) {
                     confirmRemoveKey = true; return@CheckRow
@@ -398,8 +407,10 @@ internal fun MessagesPrivacyPage(push: (String) -> Unit, pop: () -> Unit, userna
                 scope.launch { error = PrivacySettings.setAudience("messages", a) }
             }
         }
-        SettingsSection(footer = if (keySet == true) "Anyone who knows your Chat Key can message and call you directly, whatever you choose above."
-            else "You haven't set a Chat Key, so nobody new can message you yet.") {
+        // The Chat Key card belongs to the key mode; a key already set stays visible (iOS 2026-11-02).
+        if (keyShown && (stored == Audience.CONTACTS || keySet == true))
+            SettingsSection(footer = if (stored == Audience.CONTACTS && keySet != true) "You haven't set a Chat Key, so nobody new can message you yet."
+                else "Anyone who knows your Chat Key can message and call you directly, whatever you choose above.") {
             SettingsRow("Chat Key", value = if (keySet == true) "On" else "Off", last = true) { push(PAGE_CHAT_KEY) }
         }
         if (!usernameMode) SettingsSection(footer = "Turning one off stops you sending it. You will still see read receipts and typing from other people.") {
