@@ -643,7 +643,7 @@ private fun ManageStoragePage(pop: () -> Unit) {
             SettingsRow("Image Cache", value = shown(sizes?.images), trailing = Trailing.NONE)
             SettingsRow("Temporary Files", value = shown(sizes?.temp), trailing = Trailing.NONE, last = true)
         }
-        SettingsSection(header = "Keep Media", footer = "Older media is removed from this phone and downloads again when you open it.") {
+        SettingsSection(header = "Keep Media", footer = "Downloaded photos older than this are removed from this phone and download again when you open them. Videos and voice notes are kept.") {
             SettingsRules.keepDays.forEachIndexed { i, (d, label) ->
                 CheckRow(label, keep == d, last = i == SettingsRules.keepDays.lastIndex) {
                     keep = d

@@ -32,13 +32,28 @@ object StorageSweep {
         return Sizes(media, images, maxOf(0L, all - media - inCache - outgoing))
     }
 
-    /** Keep Media: opened media older than the limit goes (it downloads again when opened). */
+    /**
+     * Keep Media: opened pictures older than the limit go (they download again when opened). Videos,
+     * voice notes and documents are kept, as iOS (its sweep only walks the picture cache): the server
+     * may have deleted a delivered file, so this phone's copy can be the last one.
+     */
     fun sweep(c: Context, nowMs: Long = System.currentTimeMillis()) {
         val days = c.getSharedPreferences(AutoDownload.PREFS, Context.MODE_PRIVATE).getInt(KEEP_KEY, 0)
         if (days <= 0) return
         val cutoff = nowMs - days * 24L * HOUR_MS
-        File(c.cacheDir, MEDIA).listFiles()?.forEach { if (it.isFile && it.lastModified() < cutoff) it.delete() }
+        File(c.cacheDir, MEDIA).listFiles()?.forEach { if (it.isFile && it.lastModified() < cutoff && isPicture(it)) it.delete() }
     }
+
+    /** A picture (JPEG, PNG, GIF, WebP, HEIC, AVIF), by its first bytes: the folder names files by a hash. */
+    private fun isPicture(f: File): Boolean = runCatching {
+        val b = ByteArray(12)
+        val n = f.inputStream().use { it.read(b) }
+        if (n < 12) return false
+        fun at(i: Int, s: String) = s.indices.all { b[i + it] == s[it].code.toByte() }
+        (b[0] == 0xFF.toByte() && b[1] == 0xD8.toByte() && b[2] == 0xFF.toByte()) ||
+            (b[0] == 0x89.toByte() && at(1, "PNG")) || at(0, "GIF8") || (at(0, "RIFF") && at(8, "WEBP")) ||
+            (at(4, "ftyp") && listOf("heic", "heix", "hevc", "mif1", "msf1", "avif").any { at(8, it) })
+    }.getOrDefault(false)
 
     /** Clear Cache: everything that downloads again, except waiting sends and files in use. */
     fun clear(c: Context, nowMs: Long = System.currentTimeMillis()) {
