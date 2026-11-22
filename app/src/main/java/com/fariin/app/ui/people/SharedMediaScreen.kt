@@ -211,9 +211,11 @@ private fun MediaTile(item: SharedMedia.Item, modifier: Modifier, cid: String = 
                 menu = false
                 scope.launch { shareItem(ctx, media, item) }
             })
-            DropdownMenuItem(text = { Text("Delete for Me", color = c.red) }, onClick = {
+            // A group or channel has no Delete for Me (iOS deletesOnlyForEveryone). An album photo is
+            // hidden by its own id, not the whole album (iOS deleteSelected).
+            if (!com.fariin.app.crypto.Wire.isGroupCid(cid)) DropdownMenuItem(text = { Text("Delete for Me", color = c.red) }, onClick = {
                 menu = false
-                HiddenMessages.hide(ctx, item.messageId)
+                HiddenMessages.hide(ctx, item.id)
             })
         }
         if (bmp == null || late) placeholder?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
