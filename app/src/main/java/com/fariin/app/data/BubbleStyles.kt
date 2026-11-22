@@ -96,7 +96,9 @@ object BubbleStyles {
      * A picture style that is Fariin Plus for this account (iOS pictureLocked): plusConfig feature
      * `pictureBubbles` is "locked". Off or on: pictures are free. Colours are never locked.
      */
-    fun pictureLocked(id: String?): Boolean = BubbleArt.find(id) != null && PlusStore.state("pictureBubbles") == PlusStore.State.LOCKED
+    fun pictureLocked(id: String?): Boolean = BubbleArt.find(id) != null &&
+        // Fails open where the Plus store cannot start (unit tests, no Firebase).
+        runCatching { PlusStore.state("pictureBubbles") == PlusStore.State.LOCKED }.getOrDefault(false)
 
     /** May I pick it (and send it): a picture style unless locked; a colour style unless it is Plus (not on sale yet). */
     fun mayUse(id: String?): Boolean = id == null || (BubbleArt.find(id) != null && !pictureLocked(id)) || find(id)?.plus == false
