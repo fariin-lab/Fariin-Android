@@ -170,7 +170,14 @@ internal fun MessageMenu(
     val items = if (m.isSystem) listOf(
         MenuItem("Select", null, iconRes = com.fariin.app.R.drawable.ic_sf_checkmark_circle) { onSelect(m) },
         MenuItem("Delete", null, iconRes = com.fariin.app.R.drawable.ic_sf_trash, destructive = true) { onDelete(m) },
-    ) else buildList<MenuItem> {
+    ) else if (m.sendState == Message.SendState.SENDING && (m.mediaKind != null || m.isGif)) buildList<MenuItem> {
+        // Media still going up (iOS customMenuActions' early return): only Cancel Sending and Select;
+        // its caption, Delete and the rest wait until it has landed.
+        uploadCancelFor(m)?.let { cancel ->
+            add(MenuItem("Cancel Sending", null, iconRes = com.fariin.app.R.drawable.ic_sf_xmark_circle, destructive = true) { cancel() })
+        }
+        if (com.fariin.app.data.SelectRules.selectable(m)) add(MenuItem("Select", null, iconRes = com.fariin.app.R.drawable.ic_sf_checkmark_circle) { onSelect(m) })
+    } else buildList<MenuItem> {
         // Restricted chat (iOS): no Forward, Save or Copy for anyone in it.
         val restricted = com.fariin.app.data.ChatRestrictions.isOn(ui.cid)
         if (!m.deleted) {
@@ -201,7 +208,7 @@ internal fun MessageMenu(
             // My own words: change the style my next messages carry, right from here (owner 2026-11-07).
             // Not in a channel, nor in a group whose owner or admin turned styles off.
             if (com.fariin.app.data.BubbleStyles.SHOWN && m.authorId == ui.me && !card && m.text.isNotEmpty() &&
-                m.mediaKind == null && m.poll == null && !m.isCall && !m.isSystem &&
+                m.mediaKind == null && m.poll == null && !m.isCall && !m.isSystem && !m.viewOnce && ui.cid != com.fariin.app.data.OfficialChannel.CID &&
                 !bubbleStylesOff(ui.channel != null, ui.groupDoc, ui.isGroup))
                 add(MenuItem("Bubble Style", null, iconRes = com.fariin.app.R.drawable.ic_set_appearance, badge = NewBadgeSpots.CHAT_MENU_BUBBLE_STYLE) { com.fariin.app.ui.settings.BubbleStyleSheet.open.value = true })
             // iOS canEdit: not while an admin has me muted in this group.

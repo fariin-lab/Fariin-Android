@@ -1210,7 +1210,8 @@ private fun ThreadContent(
             // each pass, so a row never holds the screen's state and is skipped when its own is unchanged.
             rowEnv.jumpTo = { id -> jumpTo(id, advance = false) }
             rowEnv.toggle = { m -> toggle(m) }
-            rowEnv.openMenu = { m, src, preview -> menuSource = src; menuPreview = preview; menuFor = m }
+            // A story-reaction emoji opens no menu (iOS customMenuActions returns none for it).
+            rowEnv.openMenu = { m, src, preview -> if (!com.fariin.app.data.MessageRules.isStoryReaction(m)) { menuSource = src; menuPreview = preview; menuFor = m } }
             rowEnv.openPostMenu = { m, preview -> postPreview = preview; postMenuFor = m }
             rowEnv.reply = { m -> replyTo = m; editing = null }
             rowEnv.swipeMenu = { m -> swipeMenu(m) }
