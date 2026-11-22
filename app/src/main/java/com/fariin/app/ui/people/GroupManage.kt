@@ -516,7 +516,7 @@ internal fun MemberCard(cid: String, me: String, uid: String, conv: Map<String, 
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
     val team = Team.from(conv)
-    val name = team.names[uid] ?: "Member"
+    val name = team.names[uid] ?: "User"
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var confirmPromote by remember { mutableStateOf(false) }
     var confirmDismiss by remember { mutableStateOf(false) }
@@ -579,13 +579,31 @@ internal fun MemberCard(cid: String, me: String, uid: String, conv: Map<String, 
                 modifier = Modifier.profilePhotoSource(cardPhoto).then(
                     if (cardPhoto.hasPhoto) Modifier.clip(CircleShape).clickable(interactionSource = null, indication = null,   // no grey flash when the photo lands back
                         onClickLabel = "View photo") { cardPhoto.show() } else Modifier))
-            Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(if (uid == me) "You" else name, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.label, maxLines = 1)
+            // iOS member card header: a tap on the name opens their profile (not on my own card),
+            // the tag sits beside Owner / Admin, and the @name line under it (blank until read).
+            val handle by androidx.compose.runtime.produceState<String?>(null, uid) {
+                value = runCatching { com.fariin.app.Fb.db.collection("users").document(uid).get().await().getString("handle") }.getOrNull()
+            }
+            val tag = com.fariin.app.data.GroupRole.all(conv)[uid]
+            Column(Modifier.then(if (uid != me) Modifier.clickable(interactionSource = null, indication = null,
+                    onClickLabel = "Open profile") { onClose(); onProfile(uid) } else Modifier),
+                horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(Modifier.padding(top = 10.dp, start = 16.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (uid == me) "You" else name, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.label, maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 if (team.isStaff(uid)) {
                     Spacer(Modifier.width(8.dp))
-                    Text(if (team.isOwner(uid)) "Owner" else "Admin", fontSize = 14.sp, color = c.label,
+                    Text(if (team.isOwner(uid)) "Owner" else "Admin", fontSize = 14.sp, color = c.label, maxLines = 1,
                         modifier = Modifier.clip(CircleShape).background(c.card).padding(horizontal = 10.dp, vertical = 3.dp))
                 }
+                if (tag != null) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(tag.display, fontSize = 14.sp, color = c.label, maxLines = 1,
+                        modifier = Modifier.clip(CircleShape).background(c.card).padding(horizontal = 10.dp, vertical = 3.dp))
+                }
+            }
+            Text(handle?.ifEmpty { null }?.let { "@$it" } ?: " ", fontSize = 15.sp, color = c.secondary, maxLines = 1,
+                modifier = Modifier.padding(top = 2.dp))
             }
             Spacer(Modifier.height(12.dp))
             // iOS member card tiles: Message, Voice, Video under the name, for anyone but me.
