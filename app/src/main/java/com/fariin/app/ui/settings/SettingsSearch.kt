@@ -129,7 +129,7 @@ internal object SettingsIndex {
         page("Chat Wallpaper", ap, "wallpaper background photo image presets chat background", PAGE_WALLPAPER)
         page("Wallpaper Color", ap + "Chat Wallpaper", "wallpaper color colour solid background", PAGE_WALL_COLOR)
         page("Bubble Color", ap, "bubble color colour chat color", PAGE_CHAT_COLOR)
-        page("Bubble Styles", ap, "bubble style styles cute aesthetic pink lavender peach mint picture anime", PAGE_BUBBLE_STYLE)
+        if (com.fariin.app.data.BubbleStyles.SHOWN) page("Bubble Styles", ap, "bubble style styles cute aesthetic pink lavender peach mint picture anime", PAGE_BUBBLE_STYLE)
         page("App Icon", ap, "app icon home screen icon alternate logo", PAGE_APP_ICON)
         page("Quick Reaction", ap, "quick reaction double tap emoji react heart like", PAGE_QUICK)
         row("Night Mode", ap, "night mode dark mode light mode theme system appearance", PAGE_APPEARANCE)
