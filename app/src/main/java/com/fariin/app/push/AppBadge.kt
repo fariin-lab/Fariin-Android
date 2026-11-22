@@ -9,6 +9,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.fariin.app.MainActivity
 import com.fariin.app.R
+import com.fariin.app.data.AppBadgeRules
 
 /**
  * The app icon number (iOS setBadgeCount). Android has no call for it: the launcher reads the
@@ -28,28 +29,41 @@ object AppBadge {
     /** The last total this phone knew for that account. */
     fun lastKnown(c: Context, me: String): Int = prefs(c).getInt(me, 0)
 
-    /** The chat list changed while the app runs: its total, from AppBadgeRules.total. */
+    /** A chat list snapshot arrived (ConversationsRepository.listen, in front or behind Home): its
+     *  total, from AppBadgeRules.total. [force]: posted again even when unchanged (first snapshot). */
+    @Synchronized
     fun sync(c: Context, me: String, total: Int, force: Boolean = false) {
         if (me.isEmpty()) return
-        val t = maxOf(0, total)
+        val t = AppBadgeRules.next(lastKnown(c, me), AppBadgeRules.Event.Snapshot(total))
         if (!force && prefs(c).getInt(me, -1) == t) return
         prefs(c).edit().putInt(me, t).apply()
         refresh(c, me)
     }
 
-    /** A message push with the app in the background. The push has no count on Android, so the
-     *  last known total plus this message (AppBadgeRules.afterPush). */
-    /** True while the chat list is being listened to (MainShell on screen or kept in the back). Its
-     *  total already holds a new message, so a push adding one more counted it twice. */
-    @Volatile var listLive: Boolean = false
+    /** Chat list listeners registered now, per account. Set where ConversationsRepository adds and
+     *  removes its Firestore listener, not from Compose or the lifecycle: behind Home the listener
+     *  keeps running and its snapshot already counts each new message. */
+    private val live = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    fun listenerUp(me: String) { live.merge(me, 1) { a, b -> a + b } }
+    fun listenerDown(me: String) { live.computeIfPresent(me) { _, n -> if (n <= 1) null else n - 1 } }
+    fun listLive(me: String): Boolean = (live[me] ?: 0) > 0
 
+    /** A message push with the app in the background. The push has no count on Android. With the
+     *  list listener up its snapshot sets the number, so nothing is added here (the notification
+     *  post shows the stored total). With no listener in this process: last known + 1. */
+    @Synchronized
     fun notePush(c: Context, me: String, countsHere: Boolean) {
-        if (me.isEmpty() || !countsHere || listLive) return
-        prefs(c).edit().putInt(me, com.fariin.app.data.AppBadgeRules.afterPush(lastKnown(c, me), true, listLive)).apply()
+        if (me.isEmpty() || !countsHere) return
+        val last = lastKnown(c, me)
+        val t = AppBadgeRules.next(last, AppBadgeRules.Event.Push(countsHere = true, live = listLive(me)))
+        if (t != last) prefs(c).edit().putInt(me, t).apply()
     }
 
-    /** Sign-out: the account's number goes with it. */
-    fun forget(c: Context) = prefs(c).edit().clear().apply()
+    /** Sign-out: the account's number goes with it, and no list counts as live any more. */
+    fun forget(c: Context) {
+        live.clear()
+        prefs(c).edit().clear().apply()
+    }
 
     /** Posts the group summary with the total, or takes it down when no message notification is left. */
     @SuppressLint("MissingPermission")   // checked through areNotificationsEnabled

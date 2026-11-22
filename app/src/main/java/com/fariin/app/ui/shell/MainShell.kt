@@ -154,33 +154,6 @@ fun MainShell(
     var tab by tabState
     val officialView by com.fariin.app.data.OfficialChannel.view.collectAsState()
     val unread = unreadChatsBadge(chats.chats, me, com.fariin.app.data.OfficialChannel.listEntry(officialView, me))
-    // The app icon number (iOS NotificationCleaner.syncBadgeFromList): total unread messages, set
-    // again on every list change. Not before the list has loaded, and not from an error page.
-    val badgeTotal = remember(chats.all, chats.loading, chats.error, officialView, me) {
-        if (chats.loading || chats.error != null || me == DemoChats.ME) null
-        else com.fariin.app.data.AppBadgeRules.total(chats.all, me,
-            com.fariin.app.data.OfficialChannel.listEntry(officialView, me), groupsOn = com.fariin.app.data.AppFeatures.groups)
-    }
-    LaunchedEffect(me, badgeTotal) { badgeTotal?.let { com.fariin.app.push.AppBadge.sync(context.applicationContext, me, it) } }
-    // While this list is alive it already counts every new message; a push must not add it again.
-    // And on every start and resume the number is set from the list once, so a too-high number left
-    // by an older run snaps back when the app opens, not only at the next list change.
-    val badgeNow = androidx.compose.runtime.rememberUpdatedState(badgeTotal)
-    val badgeLife = androidx.lifecycle.compose.LocalLifecycleOwner.current
-    androidx.compose.runtime.DisposableEffect(me, badgeLife) {
-        // Live only while started: behind the home screen Compose stops recomposing, so the list
-        // total cannot move and each push must add its own one.
-        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
-            com.fariin.app.push.AppBadge.listLive = e.targetState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
-            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME)
-                badgeNow.value?.let { com.fariin.app.push.AppBadge.sync(context.applicationContext, me, it, force = true) }
-        }
-        badgeLife.lifecycle.addObserver(obs)
-        onDispose {
-            badgeLife.lifecycle.removeObserver(obs)
-            com.fariin.app.push.AppBadge.listLive = false
-        }
-    }
     // The call history, read here so the Calls tab's missed badge counts from any tab (iOS
     // MainShell callsRepo). Each chat's calls are re-read only when that chat moves.
     val callsRepo = remember { com.fariin.app.data.CallsRepository() }

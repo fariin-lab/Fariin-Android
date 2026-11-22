@@ -48,6 +48,11 @@ class ConversationsRepository(
         val gen = LocalCache.currentGeneration
         // Which chats showed unread in the last snapshot (only touched on the list's one parse thread).
         val wasUnread = HashSet<String>()
+        // The app icon number is set here, from every snapshot, so it follows the list with the app
+        // behind Home too (Compose does not run there). The first snapshot of each listener posts it
+        // even when unchanged, so a stale number left by an older run snaps back on open.
+        val badgeList = java.util.concurrent.atomic.AtomicReference<List<Conversation>?>(null)
+        var badgeForce = true
         val reg = db.collection("conversations")
             .whereArrayContains("users", uid)
             .orderBy("updatedAt", Query.Direction.DESCENDING)
@@ -95,8 +100,36 @@ class ConversationsRepository(
                 if (useDiskCache && readNow.isNotEmpty()) runCatching { com.google.firebase.FirebaseApp.getInstance().applicationContext }.getOrNull()?.let { app ->
                     for (cid in readNow) runCatching { com.fariin.app.push.NotificationPoster.clear(app, cid) }
                 }
+                if (useDiskCache) {
+                    badgeList.set(convs)
+                    syncBadge(uid, convs, force = badgeForce)
+                    badgeForce = false
+                }
             }
-        awaitClose { reg.remove() }
+        // Live from here: a push no longer adds one, this listener's snapshot counts it.
+        if (useDiskCache) com.fariin.app.push.AppBadge.listenerUp(uid)
+        // The official chat is not in the query: its unread moving sets the number again.
+        val official = if (useDiskCache) launch { OfficialChannel.view.collect { badgeList.get()?.let { syncBadge(uid, it, force = false) } } } else null
+        awaitClose {
+            reg.remove()
+            official?.cancel()
+            if (useDiskCache) com.fariin.app.push.AppBadge.listenerDown(uid)
+        }
+    }
+
+    /** The app icon total (iOS syncBadgeFromList): every chat (archived too, the rules leave those out),
+     *  followed channels, minus groups whose leave waits, plus the official chat. Signed in only. */
+    private fun syncBadge(uid: String, convs: List<Conversation>, force: Boolean) {
+        if (com.fariin.app.Fb.auth.currentUser?.uid != uid) return
+        val app = runCatching { com.google.firebase.FirebaseApp.getInstance().applicationContext }.getOrNull() ?: return
+        runCatching {
+            val followed = com.fariin.app.channel.ChannelFollows.conversations().filter { f -> convs.none { it.id == f.id } }
+            val hidden = LeaveUndo.hidden.value
+            val all = (convs + followed).filter { it.id !in hidden && !FormerGroups.hides(it) }
+            val total = AppBadgeRules.total(all, uid, OfficialChannel.listEntry(OfficialChannel.view.value, uid),
+                groupsOn = AppFeatures.groups)
+            com.fariin.app.push.AppBadge.sync(app, uid, total, force)
+        }
     }
 
     // ESTIMATE, as iOS reads `data(with: .estimate)`: a pending server time shows as now
