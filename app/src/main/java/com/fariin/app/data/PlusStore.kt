@@ -151,6 +151,8 @@ object PlusStore {
         if (!visible || uid.isEmpty()) return false
         val b = features["badge"]
         if (b == null || b == State.OFF) return false
+        // The server's batch never holds my own uid, so use my own Plus state.
+        if (uid == com.fariin.app.Fb.auth.currentUser?.uid) return isPlus
         if (uid !in asked) want(uid)
         return uid in badges
     }
