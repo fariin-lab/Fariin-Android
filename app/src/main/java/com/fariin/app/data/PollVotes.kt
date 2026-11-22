@@ -18,7 +18,9 @@ import kotlinx.coroutines.tasks.await
  */
 object PollVotes {
     /** uid to chosen option indices; [mineAt] = when my vote reached the server (ms, 0 = not yet). */
-    data class Votes(val byUid: Map<String, List<Int>> = emptyMap(), val mineAt: Double = 0.0)
+    data class Votes(val byUid: Map<String, List<Int>> = emptyMap(), val mineAt: Double = 0.0,
+                     /** A channel poll: my vote before the latest change, and when it was cast (iOS prevMine). */
+                     val prevMine: List<Int> = emptyList(), val prevAt: Double = 0.0)
 
     private class Entry(val flow: MutableStateFlow<Votes>) {
         var reg: ListenerRegistration? = null
@@ -46,7 +48,13 @@ object PollVotes {
                 if (me.isEmpty()) null else votesRef(cid, mid).document(me).addSnapshotListener { snap, _ ->
                     val mine = PollRules.readOptions(snap?.get("options"))
                     val at = snap?.getTimestamp("at")?.toDate()?.time?.toDouble() ?: 0.0
-                    e.flow.value = Votes(if (mine.isEmpty()) emptyMap() else mapOf(me to mine), at)
+                    // A real change of my vote: remember the one it replaces (iOS listenChannel).
+                    val old = e.flow.value
+                    val was = old.byUid[me].orEmpty()
+                    val (pm, pa) = if (was.isNotEmpty() && was != mine)
+                        was to (if (old.mineAt > 0) old.mineAt else System.currentTimeMillis().toDouble())
+                        else old.prevMine to old.prevAt
+                    e.flow.value = Votes(if (mine.isEmpty()) emptyMap() else mapOf(me to mine), at, pm, pa)
                 }
             } else votesRef(cid, mid).addSnapshotListener(com.fariin.app.perf.ListenThread.exec) { snap, _ ->
                 // A big group's votes are read on the listen thread; set on the main thread, where

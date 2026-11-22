@@ -250,7 +250,7 @@ private fun rememberQuotedPoll(card: QuoteCard, poll: com.fariin.app.data.PollCa
         val wait = (poll.endsAt ?: return@LaunchedEffect) - System.currentTimeMillis()
         if (wait > 0) { kotlinx.coroutines.delay(wait.toLong() + 50); now = System.currentTimeMillis().toDouble() }
     }
-    val votes = com.fariin.app.data.PollRules.channelVotes(tally.counts, tally.voters, tally.tallyAt, mine, v.mineAt, me)
+    val votes = com.fariin.app.data.PollRules.channelVotes(tally.counts, tally.voters, tally.tallyAt, mine, v.mineAt, me, v.prevMine, v.prevAt)
     return QuotedPollState(votes, mine, com.fariin.app.data.PollRules.isOpen(poll, tally.closed, now))
 }
 

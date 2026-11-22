@@ -276,8 +276,7 @@ internal fun MessageMenu(
             )
         }
         val mine = m.reactions[ui.me]
-        MessageMenuOverlay(source, rows, reactable = !m.deleted && m.sendState == null && !m.isSystem && !m.isCall &&
-                !com.fariin.app.data.GroupAdmins.reactionsHeldBack(ui.groupDoc, ui.me), mine = mine,
+        MessageMenuOverlay(source, rows, reactable = canReact(m, ui), mine = mine,
             onReact = { e -> actions.onReact(m, MessageRules.nextReaction(mine, e)) },
             onDismiss = onDismiss, preview = preview, onLifted = onLifted, onLanded = onLanded)
         return
@@ -291,8 +290,7 @@ internal fun MessageMenu(
         shape = com.fariin.app.ui.components.SheetShape,
     ) {
         Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            val reactable = !m.deleted && m.sendState == null && !m.isSystem && !m.isCall &&   // iOS canReact: never a call record
-                !com.fariin.app.data.GroupAdmins.reactionsHeldBack(ui.groupDoc, ui.me)   // nor when an admin turned mine off
+            val reactable = canReact(m, ui)
             if (reactable) {
                 val mine = m.reactions[ui.me]
                 Row(
@@ -727,6 +725,15 @@ internal fun mayReplyHere(ui: ThreadUi): Boolean =
     com.fariin.app.data.GroupAdmins.announcementBlock(ui.groupDoc, ui.me) == null
 
 /** iOS: a photo, a video or an album can be saved; a view-once photo never. */
+/**
+ * iOS canReact: never a deleted, unsent, system or call message, nor a story-reaction message; not
+ * when an admin turned my reactions off, nor while an admin has me muted in the group.
+ */
+internal fun canReact(m: Message, ui: ThreadUi): Boolean =
+    !m.deleted && m.sendState == null && !m.isSystem && !m.isCall && !MessageRules.isStoryReaction(m) &&
+        !com.fariin.app.data.GroupAdmins.reactionsHeldBack(ui.groupDoc, ui.me) &&
+        !(ui.isGroup && ui.groupDoc.isNotEmpty() && com.fariin.app.data.MemberRestrict.isMuted(ui.groupDoc, ui.me, System.currentTimeMillis().toDouble()))
+
 internal fun canSaveToGallery(m: Message): Boolean = !m.deleted && !m.viewOnce && m.sendState == null && when (m.mediaKind) {
     Message.MediaKind.PHOTO -> m.imageUrl != null
     Message.MediaKind.VIDEO -> m.videoUrl != null

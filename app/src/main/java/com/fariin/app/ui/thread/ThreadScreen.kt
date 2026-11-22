@@ -3913,8 +3913,7 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ThreadRow(
                             }
                         }
                     }
-                    .doubleTapToReact(!m.deleted && m.sendState == null && !m.isSystem &&
-                        !com.fariin.app.data.GroupAdmins.reactionsHeldBack(ui.groupDoc, ui.me), key = m.id + ReactNow.mine(m, ui.me)) { env.react(m) }) {
+                    .doubleTapToReact(canReact(m, ui), key = m.id + ReactNow.mine(m, ui.me)) { env.react(m) }) {
                     MessageRow(ui, m, g, is24h, { env.failed(it) }, tick) { env.view(it) }
                     // iOS: a pill opens who reacted (channels keep their own chips).
                     ReactionChips(ReactNow.shown(m, ui.me), ui, m.authorId == ui.me) { env.reactors(m) }

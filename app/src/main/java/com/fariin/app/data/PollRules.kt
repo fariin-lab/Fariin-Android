@@ -265,11 +265,16 @@ object PollRules {
      * ([tallyAt] at or after [mineAt]).
      */
     fun channelVotes(counts: Map<Int, Int>, voters: Int, tallyAt: Double, mine: List<Int>, mineAt: Double,
-                     me: String): Map<String, List<Int>> {
+                     me: String, prevMine: List<Int> = emptyList(), prevAt: Double = 0.0): Map<String, List<Int>> {
         val c = counts.toMutableMap()
         var v = voters
         if (mine.isNotEmpty() && mineAt > 0 && tallyAt >= mineAt) {
             for (i in mine) c[i] = maxOf(0, (c[i] ?: 0) - 1)
+            v = maxOf(0, v - 1)
+        } else if (prevMine.isNotEmpty() && prevAt > 0 && tallyAt >= prevAt) {
+            // iOS (owner 2026-11-14): the count is older than my new vote but holds my OLD one;
+            // that one comes off, or a quick change read "2 votes, 50% / 50%".
+            for (i in prevMine) c[i] = maxOf(0, (c[i] ?: 0) - 1)
             v = maxOf(0, v - 1)
         }
         val out = linkedMapOf<String, MutableList<Int>>()
