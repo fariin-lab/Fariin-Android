@@ -181,6 +181,32 @@ object MessageRules {
         1 -> 3.5f; 2 -> 3.0f; 3 -> 2.75f; 4 -> 2.5f; else -> 2.25f
     }
 
+    /**
+     * What a reaction is on, for the chat list's 'reacted ❤️ to "..."' line (iOS replyQuoteText +
+     * quoteSafeLabel): media as a noun with its emoji, which the list turns into an icon; a view-once
+     * photo never shows its caption; a card or other marker never goes out raw.
+     */
+    fun reactionTarget(m: Message): String {
+        val t = when {
+            m.isCall -> if (m.callVideo) "📹 Video call" else "📞 Voice call"
+            m.type == "album" -> "📷 Photos"
+            m.type == "image" -> if (m.viewOnce) "View-once photo" else "📷 Photo"
+            m.type == "video" -> "🎥 Video"
+            m.type == "audio" -> "🎤 Voice message"
+            m.type == "file" -> "📄 " + (m.fileName ?: "Document")
+            m.type == "gif" -> "GIF"
+            m.type == "sticker" -> StickerGifRules.stickerLabel(m.stickerEmoji)
+            else -> m.bodyText
+        }
+        return when {
+            t.startsWith(CardRules.CONTACT) -> "Contact"
+            t.startsWith(CardRules.LOCATION) -> "Location"
+            t.startsWith(PinRules.MARKER) -> "📌 Pinned a message"
+            isFeatureMarker(t) -> "Message"
+            else -> t
+        }
+    }
+
     /** Toggle: the same emoji again takes my reaction off (null), else it becomes mine. With or
      *  without the U+FE0F mark it is the same emoji (an older ❤ against the bar's ❤️), as iOS sameEmoji. */
     fun nextReaction(current: String?, picked: String): String? =

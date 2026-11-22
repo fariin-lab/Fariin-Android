@@ -2607,7 +2607,7 @@ class ThreadRepository(
             val members = if (Wire.isGroupCid(cid)) freshMembers() else null
             val enc = seal(emoji, members)
             ref.update("reactions.$me", enc).await()
-            val snippet = (CardRules.previewWord(m.text) ?: m.bodyText).trim().take(60).takeIf { it.isNotEmpty() }
+            val snippet = MessageRules.reactionTarget(m).trim().take(60).takeIf { it.isNotEmpty() }
             try {
                 convRef.update(mapOf(
                     "lastReactionEnc" to enc, "lastReactionBy" to me, "lastReactionToAuthor" to m.authorId,
