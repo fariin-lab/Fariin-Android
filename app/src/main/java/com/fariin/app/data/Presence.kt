@@ -72,6 +72,22 @@ object Presence {
         return "last seen " + relative(la, nowMillis)
     }
 
+    /** One Recent row's grey line on the search page; `online` draws it in the action colour. */
+    data class Seen(val text: String, val online: Boolean)
+
+    /**
+     * iOS RecentLastSeen: the header's rules (mine must share, theirs must allow me), but a refused
+     * or missing answer reads "last seen recently" instead of nothing. `present` = their presence
+     * doc was read.
+     */
+    fun recentLine(
+        mine: Map<String, String>, theirs: Map<String, String>, contactOfMine: Boolean,
+        present: Boolean, online: Boolean, lastActiveMillis: Double?, nowMillis: Double, legacySwitch: Boolean = true,
+    ): Seen {
+        val text = if (present) line(mine, theirs, contactOfMine, online, lastActiveMillis, nowMillis, legacySwitch) else null
+        return text?.let { Seen(it, it == "online") } ?: Seen("last seen recently", false)
+    }
+
     /** RelativeDateTimeFormatter, short style, English: "5 min. ago", "2 hr. ago", "3 days ago". */
     fun relative(thenMillis: Double, nowMillis: Double): String {
         val s = floor((nowMillis - thenMillis) / 1000).toLong().coerceAtLeast(0)

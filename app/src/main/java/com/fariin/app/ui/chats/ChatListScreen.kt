@@ -952,7 +952,10 @@ fun ChatListScreen(
                                         if (conv != null) rowHold(conv) { removeMenu = true }
                                         else if (e.kind == "person") {
                                             val p = com.fariin.app.data.Person(e.key, e.title, e.handle, e.photo.ifEmpty { null })
-                                            PersonRow(p, onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); removeMenu = true }) {
+                                            // Their last seen under the name, read once when the row shows (iOS RecentRow).
+                                            var seen by remember(e.key) { mutableStateOf(com.fariin.app.data.RecentLastSeen.cached(me, e.key)) }
+                                            LaunchedEffect(e.key) { seen = com.fariin.app.data.RecentLastSeen.load(appCtx, me, e.key) }
+                                            PersonRow(p, recent = true, seen = seen, onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); removeMenu = true }) {
                                                 scope.launch { people.startChat(p)?.let { cid -> SearchRecents.recordPerson(appCtx, me, p, cid); searching = false; query = ""; people.chat(cid) } ?: run { searching = false; query = ""; people.contact(p.uid) } }   // the chat can't be made (their Messages setting): their page, never a dead tap (owner 2026-11-10)
                                             }
                                         }
@@ -1467,7 +1470,8 @@ private fun Centered(icon: ImageVector?, title: String, body: String?, action: P
 /** Section label, Material style: small, in the brand blue, 16 from the edge. */
 /** A person found by username (iOS newPersonRow): photo, name, the @handle in blue. */
 @Composable
-private fun PersonRow(p: com.fariin.app.data.Person, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
+private fun PersonRow(p: com.fariin.app.data.Person, recent: Boolean = false, seen: com.fariin.app.data.Presence.Seen? = null,
+                      onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().combinedClickable(onLongClick = onLongClick, onClick = onClick).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
         Avatar(p.photoUrl, 54.dp, Modifier.padding(vertical = 9.dp))
@@ -1475,7 +1479,9 @@ private fun PersonRow(p: com.fariin.app.data.Person, onLongClick: (() -> Unit)? 
         Column(Modifier.weight(1f)) {
             Text(p.name.ifEmpty { p.handle }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium,
                 color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (p.handle.isNotEmpty()) Text("@" + p.handle, style = MaterialTheme.typography.bodyMedium, color = c.secondary, maxLines = 1)
+            // Under Recent the line is their last seen, not the @handle (iOS RecentRow); "online" in the action colour.
+            if (recent) seen?.let { Text(it.text, style = MaterialTheme.typography.bodyMedium, color = if (it.online) c.accent else c.secondary, maxLines = 1) }
+            else if (p.handle.isNotEmpty()) Text("@" + p.handle, style = MaterialTheme.typography.bodyMedium, color = c.secondary, maxLines = 1)
         }
     }
 }
