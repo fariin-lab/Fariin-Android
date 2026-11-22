@@ -375,11 +375,25 @@ object LocalDb {
                 val now = arrayOf(System.currentTimeMillis().toString())
                 // The chats losing a message get their list row worked out again (iOS), so the
                 // gone message's words do not stay in the chats row or in memory.
-                val touched = d.rawQuery("SELECT DISTINCT cid FROM messages WHERE expires_at IS NOT NULL AND expires_at <= ?", now)
-                    .use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
+                // Their media files on this phone go too (iOS forgetLocalCopies): a message that ran
+                // out while the app was closed never reached the chat's own burn.
+                val files = HashMap<String, MutableSet<String>>()
+                d.rawQuery("SELECT cid, body FROM messages WHERE expires_at IS NOT NULL AND expires_at <= ?", now).use { c ->
+                    while (c.moveToNext()) {
+                        val urls = files.getOrPut(c.getString(0)) { HashSet() }
+                        val body = c.getString(1) ?: continue
+                        if (body == "{}" || body.isEmpty()) continue
+                        runCatching { LocalJson.decodeMessage(org.json.JSONObject(body)) }.getOrNull()?.let { m ->
+                            urls += com.fariin.app.data.OnceStub.mediaUrls(m)
+                            for (a in m.album) urls += listOfNotNull(a.imageUrl, a.videoUrl).filter { it.isNotEmpty() }
+                        }
+                    }
+                }
+                val touched = files.keys
                 if (touched.isEmpty()) return@runCatching
                 d.delete("messages", "expires_at IS NOT NULL AND expires_at <= ?", now)
                 for (cid in touched) refreshSummary(d, cid)
+                app?.let { ctx -> for ((cid, urls) in files) dropCached(ctx, cid, urls) }
             } }
         }
     }
