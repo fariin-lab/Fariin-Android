@@ -39,6 +39,18 @@ class FileOutboxTest {
         assertEquals(listOf(1), MusicRules.songsToUpload(FileOutbox.decode(FileOutbox.encode(listOf(playlist)))[0].urls))
     }
 
+    @Test fun failedOnlyForSendsThisPhoneStarted() {
+        val kept = setOf("C1")
+        val idle: (String) -> Boolean = { false }
+        assertTrue(FileOutbox.failedHere("file", "C1", kept, idle))
+        // Sent from another phone of mine: not in this phone's record, keeps uploading.
+        assertFalse(FileOutbox.failedHere("file", "C9", kept, idle))
+        assertFalse(FileOutbox.failedHere("file", null, kept, idle))
+        // Still going in this process.
+        assertFalse(FileOutbox.failedHere("file", "C1", kept) { it == "C1" })
+        assertFalse(FileOutbox.failedHere("image", "C1", kept, idle))
+    }
+
     @Test fun readableNeedsEveryCopy() {
         val all: (String) -> Long = { 1L }
         assertTrue(FileOutbox.readable(playlist, all))

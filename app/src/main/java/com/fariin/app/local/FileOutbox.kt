@@ -128,6 +128,15 @@ object FileOutbox {
         return true
     }
 
+    /**
+     * Is my `uploading` message of [type] with [clientId] a send THIS phone started and nothing runs
+     * now (pure; unit tested)? Only then is it drawn failed with Delete. The message carries no device
+     * mark, so this phone's own record ([kept], the clientIds written down here) is what tells; a send
+     * from another phone of mine keeps its uploading look until the stuck sweep, as iOS clearStuckSends.
+     */
+    internal fun failedHere(type: String?, clientId: String?, kept: Set<String>, inFlight: (String) -> Boolean): Boolean =
+        type == "file" && clientId != null && clientId in kept && !inFlight(clientId)
+
     private fun read(uid: String): MutableList<Entry> = decode(prefs?.getString(uid, null)).toMutableList()
 
     private fun write(uid: String, list: List<Entry>) {

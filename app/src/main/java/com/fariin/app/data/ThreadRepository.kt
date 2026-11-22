@@ -678,6 +678,8 @@ class ThreadRepository(
         val clearedAt = clearedAtOf(_state.value.conv)
         // Messages from before this phone's keys: left out, ONE notice at the newest one's place (iOS).
         val keysSince = crypto.keysSince()
+        // The file sends this phone wrote down (FileOutbox), read once per rebuild and only if needed.
+        val keptHere by lazy { com.fariin.app.local.FileOutbox.all(me).mapTo(HashSet()) { it.clientId } }
         var newestUnopened: Message? = null
         // iOS notForMe: an old end-to-end group message sealed without me, sent before I came in
         // (memberSince + 5 s), is not mine to read; it goes instead of drawing as a lock. One sealed by
@@ -688,11 +690,12 @@ class ThreadRepository(
         for (d in chSync?.docsOrNull() ?: (olderDocs.values + liveDocs.values)) {
             var m = parse(d)
             if (m.uploading && m.authorId == me && m.sendState == null) m.clientId?.let { k ->
-                // A file, song or playlist of mine still `uploading` from before this app started, with
-                // no send left running (none resumed from FileOutbox): it failed too (the app was
-                // closed or killed on it), red with Resend and Delete instead of spinning.
-                val orphan = m.type == "file" && m.hasServerTime && m.createdAtMillis < processStartMs &&
-                    !com.fariin.app.media.MediaSend.isInFlight(k)
+                // A file, song or playlist THIS phone started, still `uploading` from before this app
+                // started, with no send left running: it failed too (the app was closed or killed on
+                // it), red with Resend and Delete. One from another phone of mine keeps spinning
+                // until the stuck sweep (iOS clearStuckSends), so Delete never takes down its upload.
+                val orphan = m.hasServerTime && m.createdAtMillis < processStartMs &&
+                    com.fariin.app.local.FileOutbox.failedHere(m.type, k, keptHere, com.fariin.app.media.MediaSend::isInFlight)
                 if (k in failedMedia || orphan) m = m.copy(sendState = Message.SendState.FAILED)
             }
             if (historyStart != null && m.hasServerTime && m.createdAtMillis < historyStart && m.authorId != me) continue
@@ -2002,8 +2005,9 @@ class ThreadRepository(
             listName = if (playlist) e.title else null,
         )
         rebuild()
-        // Its message written and its bytes gone: the server's copy shows failed (Delete), nothing to keep.
-        if (!ok) { if (e.messageId != null) { pending.remove(e.clientId); com.fariin.app.local.FileOutbox.remove(me, e.clientId); rebuild() }; return }
+        // Its message written and its bytes gone: the server's copy shows failed (Delete). The entry
+        // stays as the mark that this phone started it (FileOutbox.failedHere); Delete removes it.
+        if (!ok) { if (e.messageId != null) { pending.remove(e.clientId); rebuild() }; return }
         if (com.fariin.app.media.MediaSend.isInFlight(e.clientId)) return
         val work: suspend () -> Unit = {
             val cur = com.fariin.app.local.FileOutbox.get(me, e.clientId) ?: e
