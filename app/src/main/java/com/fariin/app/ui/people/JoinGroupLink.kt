@@ -85,6 +85,19 @@ object GroupLinkPreviews {
         return task.await()
     }
 
+    /** iOS GroupLinkDoor.noteLeft: I left [cid], so no kept card may open it as mine. */
+    fun forgetCid(cid: String) { kept.entries.removeIf { it.value.data["cid"] == cid } }
+
+    /**
+     * iOS noteRequested / noteJoined: the kept card says so, for 20 s only, so reopening shows
+     * "Request Sent" (no second request) and a quick decline lets me ask again.
+     */
+    fun note(code: String, requested: Boolean = false, member: Boolean = false) {
+        val d = kept[code]?.data ?: return
+        val m = HashMap<Any?, Any?>(d); if (requested) m["requested"] = true; if (member) m["isMember"] = true
+        kept[code] = Kept(System.currentTimeMillis() - 40_000, m)
+    }
+
     /** Where a member's tap goes: (cid, isChannel), or null when I am not in it. */
     fun memberTarget(d: Map<*, *>?): Pair<String, Boolean>? {
         if (d == null || d["isMember"] != true) return null
@@ -134,6 +147,8 @@ fun JoinGroupSheet(code: String, onClose: () -> Unit, onOpenChat: (String) -> Un
     var joining by remember { mutableStateOf(false) }
     var requestSent by remember { mutableStateOf(false) }
     var joinError by remember { mutableStateOf<String?>(null) }
+    /** A join the server refused for good (banned): the button stays grey with its words. */
+    var refusedJoin by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
     // iOS GroupInvites.errorText: the server's own words for these, DEADLINE_EXCEEDED included
     // ("This invite link has expired."). A timeout on this phone carries the bare code as its
@@ -164,12 +179,18 @@ fun JoinGroupSheet(code: String, onClose: () -> Unit, onOpenChat: (String) -> Un
                     val status = d?.get("status") as? String ?: ""
                     val cid = d?.get("cid") as? String ?: ""
                     when {
-                        status == "requested" -> requestSent = true
-                        cid.isNotEmpty() -> { onClose(); if (d?.get("channel") == true || p.isChannel) onOpenChannel(cid) else onOpenChat(cid) }
-                        else -> joinError = "Couldn't join. Try again."
+                        status == "requested" -> { requestSent = true; GroupLinkPreviews.note(code, requested = true) }
+                        cid.isNotEmpty() -> { GroupLinkPreviews.note(code, member = true); onClose(); if (d?.get("channel") == true || p.isChannel) onOpenChannel(cid) else onOpenChat(cid) }
+                        else -> joinError = "Couldn't join. The link may have expired; ask for a new one."
                     }
                 }
-                .onFailure { joinError = told(it, "Couldn't join. Check your connection and try again.") }
+                .onFailure { e ->
+                    // iOS: offline said as such; a ban greys Join with the server's own words.
+                    val offline = com.fariin.app.data.ConnectionStatus.state.value != com.fariin.app.data.ConnectionStatus.State.ONLINE
+                    val words = told(e, "Couldn't join. Check your connection and try again.")
+                    if (!offline && words.contains("banned", ignoreCase = true)) refusedJoin = words
+                    else joinError = if (offline) "No internet connection. Try again." else words
+                }
             joining = false
         }
     }
@@ -201,7 +222,7 @@ fun JoinGroupSheet(code: String, onClose: () -> Unit, onOpenChat: (String) -> Un
                                 fontSize = 14.sp, color = c.secondary, modifier = Modifier.weight(1f, fill = false))
                         }
                     }
-                    val note = joinError ?: if (requestSent || p.requested) "An admin will review your request." else null
+                    val note = refusedJoin ?: joinError ?: if (requestSent || p.requested) "An admin will review your request." else null
                     note?.let { Text(it, fontSize = 14.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 16.dp)) }
                     val sent = requestSent || p.requested
                     val title = when {
@@ -212,7 +233,7 @@ fun JoinGroupSheet(code: String, onClose: () -> Unit, onOpenChat: (String) -> Un
                         else -> if (p.needsApproval) "Request to Join" else "Join Group"
                     }
                     Spacer(Modifier.height(24.dp))
-                    CapsuleButton(title, enabled = !joining && !sent, busy = joining) { join(p) }
+                    CapsuleButton(title, enabled = !joining && !sent && refusedJoin == null, busy = joining) { join(p) }
                 }
                 refused != null -> {
                     Text("Can't join with this link", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label)
