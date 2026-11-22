@@ -896,6 +896,18 @@ fun ChatListScreen(
                             val recentById = state.all.filter { !it.isArchived(me) && !it.isCleared(me) &&
                                 !com.fariin.app.data.ChatList.isIncomingRequest(it, me) }.associateBy { it.id }
                             val recents = SearchRecents.entries.toList().filter { it.kind != "chat" || recentById.containsKey(it.key) }
+                            // Nothing to show yet: say what the search finds (iOS ChatSearchPage emptyState).
+                            if (peers.isEmpty() && recents.isEmpty()) item(key = "search-empty") {
+                                Column(Modifier.fillParentMaxWidth().fillParentMaxHeight(0.6f).padding(horizontal = 40.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                    Icon(ImageVector.cachedVector(R.drawable.ic_search_ios), contentDescription = null, tint = c.secondary,
+                                        modifier = Modifier.padding(bottom = 14.dp).size(40.dp))
+                                    Text("Search", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label)
+                                    Spacer(Modifier.height(10.dp))
+                                    Text("Find your chats and groups, or a person by their username.", fontSize = 15.sp, color = c.secondary,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                }
+                            }
                             if (recents.isNotEmpty()) {
                                 item(key = "h-recent") { RecentHeader { SearchRecents.clear(appCtx, me) } }
                                 items(recents, key = { "r-" + it.id }, contentType = { "chat" }) { e ->
