@@ -479,12 +479,17 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     var giftOpen by remember { mutableStateOf(false) }
     var exportJob by remember { mutableStateOf<ChatExportRun.Job?>(null) }
     val shareCtx = androidx.compose.ui.platform.LocalContext.current
-    var blocked by remember { mutableStateOf(false) }
+    // My block list first, from the first frame (iOS BlockList.snapshot): no Message or Call
+    // circles flash for someone I blocked, and a failed read never shows them as unblocked.
+    var blocked by remember { mutableStateOf(com.fariin.app.data.BlockList.contains(uid)) }
     var safety by remember { mutableStateOf<String?>(null) }
     var showSafety by remember { mutableStateOf(false) }
     var ask by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(uid) { api.profile(uid)?.let { person = it; ProfileMemo.put(uid, it) }; blocked = api.isBlocked(uid) }
+    LaunchedEffect(uid) {
+        api.profile(uid)?.let { person = it; ProfileMemo.put(uid, it) }
+        blocked = com.fariin.app.data.BlockList.contains(uid) || api.isBlocked(uid)
+    }
     // Counts toward their profile views in Insights (iOS ProfileViews.record on ContactInfoView).
     LaunchedEffect(uid) { com.fariin.app.data.ProfileViews.record(uid, me) }
     // A name I saved for them wins (iOS ContactNames); Edit opens Set nickname.
