@@ -723,7 +723,14 @@ object CallManager {
                 move(if (back) CallEvent.MediaBack else CallEvent.MediaUp(System.currentTimeMillis()))
                 // iOS: back from Reconnecting, say again whether they can hear me (a write made while
                 // the link was down may never have landed).
-                if (back) broadcastMute()
+                // iOS audit M-051: and on the first connect while muted or held (a mute tapped while
+                // the doc was still being created was never sent).
+                if (back || (first && (_ui.value.muted || _ui.value.held))) broadcastMute()
+                // iOS audit M-121: the camera (or the share, whose write carries `cams`) too.
+                if (back) {
+                    if (_ui.value.sharing) broadcastScreen()
+                    else if (status.callDocCreated) signaling.update(id, CallWire.camsField(me, _ui.value.cameraOn && !_ui.value.held))
+                }
                 if (first && status.connectedAtMs != null) {
                     CallTelecom.setActive(id)
                     if (!status.isCaller) engine?.sendAccept()
