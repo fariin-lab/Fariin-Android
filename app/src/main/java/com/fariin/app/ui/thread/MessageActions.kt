@@ -172,7 +172,8 @@ internal fun MessageMenu(
     val menuMedia = chatMedia()
     // A notice opens a menu only for a group admin who may clear it (iOS canDeleteNotice): Select
     // and Delete, nothing else.
-    val items = if (m.isSystem) listOf(
+    // A group's "pinned a message" line is such a notice too (iOS, owner 2026-11-14).
+    val items = if (m.isSystem || (ui.isGroup && com.fariin.app.data.PinRules.notice(m.text) != null)) listOf(
         MenuItem("Select", null, iconRes = com.fariin.app.R.drawable.ic_sf_checkmark_circle) { onSelect(m) },
         MenuItem("Delete", null, iconRes = com.fariin.app.R.drawable.ic_sf_trash, destructive = true) { onDelete(m) },
     ) else if (m.sendState == Message.SendState.SENDING && (m.mediaKind != null || m.isGif)) buildList<MenuItem> {

@@ -110,17 +110,23 @@ object SelectRules {
     fun selectable(m: Message): Boolean = !m.isSystem && PinRules.notice(m.text) == null
 
     /**
-     * ThreadView.canDeleteNotice (owner 2026-10-29): a group notice that I, holding "Delete messages",
-     * may remove for everyone; such a notice takes Select and Delete, and a tick in select mode.
+     * ThreadView.canDeleteNotice (owner 2026-10-29): a group notice or pin line that I, holding
+     * "Delete messages" (or its author), may remove for everyone; such a notice takes Select and Delete, and a tick in select mode.
      * Not one the owner wrote unless I am the owner (canDeleteForEveryone).
      */
     fun canDeleteNotice(m: Message, groupDoc: Map<String, Any?>, me: String): Boolean {
-        if (!m.isSystem || m.deleted || (groupDoc["type"] as? String) != "group") return false
+        if (!isNotice(m) || m.deleted || (groupDoc["type"] as? String) != "group") return false
         val t = GroupAdmins.Team.from(groupDoc)
-        if (!t.can(me, GroupAdmins.Right.DELETE_MESSAGES)) return false
-        return MessageRules.canDeleteForEveryone(m, me, adminMayDelete = true,
+        // iOS: an admin holding the right, or my own notice (my "pinned" line) inside the window.
+        val right = t.can(me, GroupAdmins.Right.DELETE_MESSAGES)
+        if (!right && m.authorId != me) return false
+        return MessageRules.canDeleteForEveryone(m, me, adminMayDelete = right,
             authorIsOwner = t.isOwner(m.authorId), iAmOwner = t.isOwner(me))
     }
+
+    /** A line about the room, not a message in it: a system notice or a "pinned a message" line
+     *  (iOS: `m.isSystem || m.pinNotice != nil`, owner 2026-11-14). */
+    fun isNotice(m: Message): Boolean = m.isSystem || PinRules.notice(m.text) != null
 
     data class Split(val everyone: Int, val onlyMe: Int)
 
@@ -137,7 +143,7 @@ object SelectRules {
     fun deletable(picked: List<Message>, me: String, isGroup: Boolean, adminMayDelete: Boolean, owner: String = "",
                   channel: Boolean = false, groupDoc: Map<String, Any?> = emptyMap()): Boolean =
         picked.isNotEmpty() && picked.all { m ->
-            if (m.isSystem) canDeleteNotice(m, groupDoc, me)
+            if (isNotice(m)) canDeleteNotice(m, groupDoc, me)
             else !isGroup || m.sendState != null || MessageRules.canDeleteForEveryone(m, me, adminMayDelete, owner, channel)
         }
 

@@ -4254,9 +4254,25 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ThreadRow(
                 // The notice keeps the words from the moment of the pin; once that message is
                 // deleted its words must not stay readable here, and there is nothing to jump to.
                 val gone = pinGone
-                Box(Modifier.fillMaxWidth().clickable(enabled = !selecting && !gone) { env.jumpTo(pinNote.messageId) }) {
+                val pill: @Composable () -> Unit = {
                     NoticePill("${personName(ui, m.authorId)} pinned ${if (gone) "a message" else pinNote.label}")
                 }
+                // A group admin who may clear it, or its own author (iOS canDeleteNotice): a long
+                // press offers Select and Delete, and it takes a tick in select mode.
+                val clearable = ch == null && com.fariin.app.data.SelectRules.canDeleteNotice(m, ui.groupDoc, ui.me)
+                if (clearable && selecting) Row(Modifier.fillMaxWidth().background(selLit).clickable { env.toggle(m) },
+                    verticalAlignment = Alignment.CenterVertically) {
+                    SelectTick(ticked)
+                    Box(Modifier.weight(1f)) { pill() }
+                } else Box(Modifier.fillMaxWidth()
+                    .then(if (!clearable) Modifier else Modifier
+                        .onPlaced { coords[0] = it }
+                        .graphicsLayer { alpha = if (env.menuLifted() == m.rowId) 0f else 1f }
+                        .combinedClickableLong {
+                            val lc = coords[0]?.takeIf { it.isAttached }
+                            env.openMenu(m, lc?.let { menuSourceOf(it, false) }) { pill() }
+                        })
+                    .clickable(enabled = !selecting && !gone) { env.jumpTo(pinNote.messageId) }) { pill() }
             }
             // A notice a group admin may clear (iOS canDeleteNotice, owner 2026-10-29): a long
             // press offers Select and Delete, and it takes a tick in select mode.

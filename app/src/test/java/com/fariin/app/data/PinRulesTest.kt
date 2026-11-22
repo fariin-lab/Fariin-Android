@@ -116,4 +116,25 @@ class PinRulesTest {
         assertTrue(SelectRules.deletable(listOf(call), me, isGroup = false, adminMayDelete = false))
         assertFalse(SelectRules.deletable(listOf(call), me, isGroup = true, adminMayDelete = true))
     }
+
+    @Test fun aGroupPinLineIsANoticeItsAdminOrAuthorMayClear() {
+        val nowMs = System.currentTimeMillis().toDouble()
+        val pin = msg(author = "a", text = PinRules.markerText("t1", "x"), at = nowMs)
+        val group = mapOf<String, Any?>("type" to "group", "createdBy" to "boss", "users" to listOf("boss", "a", me))
+        assertTrue(SelectRules.isNotice(pin))
+        assertTrue(SelectRules.isNotice(msg(type = "system")))
+        assertFalse(SelectRules.isNotice(msg()))
+        // A plain member may not clear someone else's pin line.
+        assertFalse(SelectRules.canDeleteNotice(pin, group, me))
+        // The group's owner may.
+        assertTrue(SelectRules.canDeleteNotice(pin, group, "boss"))
+        // Its author may clear their own (iOS: adminCan || authorId == me).
+        assertTrue(SelectRules.canDeleteNotice(pin, group, "a"))
+        // Not in a 1:1, never a tombstone.
+        assertFalse(SelectRules.canDeleteNotice(pin, group - "type", "boss"))
+        assertFalse(SelectRules.canDeleteNotice(pin.copy(deleted = true), group, "boss"))
+        // Select mode's bin: the pin line goes by the notice rule.
+        assertTrue(SelectRules.deletable(listOf(pin), "boss", isGroup = true, adminMayDelete = true, groupDoc = group))
+        assertFalse(SelectRules.deletable(listOf(pin), me, isGroup = true, adminMayDelete = false, groupDoc = group))
+    }
 }
