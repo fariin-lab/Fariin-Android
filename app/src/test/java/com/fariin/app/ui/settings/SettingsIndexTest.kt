@@ -56,6 +56,14 @@ class SettingsIndexTest {
         assertTrue(e.isPage)
     }
 
+    @Test fun audiencePagesUseTheIosWords() {
+        // iOS audienceKw: "my chats" finds the audience pages, "contacts" does not.
+        val chats = SettingsIndex.matching("my chats").map { it.title }
+        assertTrue("Last seen & online" in chats)
+        assertTrue("Calls" in chats)
+        assertTrue(SettingsIndex.matching("contacts").none { it.title == "Bio" })
+    }
+
     @Test fun idsAreUnique() {
         val ids = SettingsIndex.entries.map { it.id }
         assertEquals(ids.size, ids.toSet().size)

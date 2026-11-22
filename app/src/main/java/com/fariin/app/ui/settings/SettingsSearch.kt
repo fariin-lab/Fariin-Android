@@ -78,7 +78,7 @@ internal object SettingsIndex {
     private const val PR = "Privacy & Security"
     private const val SD = "Storage and Data"
     private const val HP = "Help & About"
-    private const val AUD = "everyone my contacts nobody who can see audience"
+    private const val AUD = "who can see everyone my chats nobody privacy"   // iOS audienceKw, word for word
 
     val entries: List<Entry> get() = buildList {
         fun card(t: String, icon: String, kw: String, page: String) = add(Entry(t, icon, kw, page, isPage = true))
