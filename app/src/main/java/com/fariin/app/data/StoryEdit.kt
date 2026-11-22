@@ -43,10 +43,28 @@ object StoryEdit {
             update["editedAt"] = FieldValue.serverTimestamp()
         }
         try { ref.update(update).await() } catch (e: Exception) { throw Failed("Couldn't save the story. Try again.") }
-        if (story.isPublic) runCatching {
-            val mirror = HashMap<String, Any>(update)
-            mirror.remove("mediaRev")
+        // The live document, not the snapshot: Edit Viewers may have changed the audience (iOS).
+        val live = runCatching { ref.get().await().data }.getOrNull()
+        val isPublic = (live?.get("public") as? Boolean) ?: story.isPublic
+        if (isPublic && !story.oneTime && story.groupId.isNullOrEmpty()) runCatching {
+            // The mirror rule is a fixed key list without mediaRev, editedAt or captionEditedAt:
+            // any of those refuses the whole write, so only these keys go (iOS).
+            val mirror = HashMap<String, Any>()
+            mirror["caption"] = cap
+            if (newMedia != null) {
+                mirror["mediaUrl"] = update["mediaUrl"] as String
+                mirror["blurThumb"] = newMedia.blurThumb
+                mirror["stickers"] = newMedia.stickers.map { StoryTaps.asMap(it) }
+            }
             db.collection("users").document(me).collection("publicStories").document(story.id).update(mirror).await()
+        }
+        // Tell only the @names the edit added, checked against the live audience (iOS).
+        @Suppress("UNCHECKED_CAST")
+        val tokens = (live?.get("recipientUids") as? List<String>).orEmpty()
+        if (captionChanged && story.groupId.isNullOrEmpty() && tokens.isNotEmpty()) {
+            val thumb = (update["mediaUrl"] as? String) ?: story.previewUrl
+            StoryMentions.send(story.id, cap, thumb, emptySet(), me,
+                recipientTokens = tokens.toSet(), skipping = StoryMentions.handles(story.caption))
         }
     }
 }

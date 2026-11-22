@@ -23,15 +23,21 @@ object StoryMentions {
     fun handles(caption: String): Set<String> =
         if (!caption.contains('@')) emptySet() else handleRe.findAll(caption).map { it.groupValues[1].lowercase() }.toSet()
 
-    fun send(storyId: String, caption: String, thumbUrl: String, recipients: Set<String>, me: String) {
-        val names = handles(caption)
+    /**
+     * [recipientTokens]: the audience as hashed tokens (an edited story's `recipientUids`).
+     * [skipping]: names already told, so an edit only tells the names it added (iOS).
+     */
+    fun send(storyId: String, caption: String, thumbUrl: String, recipients: Set<String>, me: String,
+             recipientTokens: Set<String> = emptySet(), skipping: Set<String> = emptySet()) {
+        val names = handles(caption) - skipping
         if (names.isEmpty() || storyId.isEmpty() || me.isEmpty()) return
         scope.launch {
             val people = FirestorePeople(me, CryptoHub.crypto)
             val sent = HashSet<String>()
             for (h in names) {
                 val u = runCatching { people.byHandle(h) }.getOrNull() ?: continue
-                if (u.uid == me || u.uid in sent || u.uid !in recipients) continue
+                if (u.uid == me || u.uid in sent) continue
+                if (u.uid !in recipients && StoryAudienceToken.token(u.uid) !in recipientTokens) continue
                 if (BlockList.snapshot.entries.containsKey(u.uid)) continue
                 val cid = Wire.directCid(me, u.uid)
                 val known = CryptoHub.listedConversation(cid)?.let { !it.isGroup && (it.startedBy.isEmpty() || it.accepted) } ?: false
