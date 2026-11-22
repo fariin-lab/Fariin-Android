@@ -395,6 +395,13 @@ private fun NotificationsPage(pop: () -> Unit) {
     }
     var reset by remember { mutableStateOf(false) }
     val me = com.fariin.app.Fb.auth.currentUser?.uid
+    // Sign-out clears the local switch, but the server keeps sending with users.notifPreview. With no
+    // choice on this phone, show the account's (iOS adoptServerPrefs); a choice made here always wins.
+    androidx.compose.runtime.LaunchedEffect(me) {
+        if (me == null || p.contains("notif.preview")) return@LaunchedEffect
+        val v = runCatching { com.fariin.app.Fb.db.collection("users").document(me).get().await().getBoolean("notifPreview") }.getOrNull()
+        if (v != null && !p.contains("notif.preview")) { preview = v; p.edit().putBoolean("notif.preview", v).apply() }
+    }
     var resetting by remember { mutableStateOf(false) }
     suspend fun saveAccount(field: String, v: Boolean): Boolean = me != null &&
         runCatching { com.fariin.app.Fb.db.collection("users").document(me).set(mapOf(field to v), SetOptions.merge()).await() }.isSuccess
