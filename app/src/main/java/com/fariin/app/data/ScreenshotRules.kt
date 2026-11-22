@@ -30,8 +30,15 @@ object ScreenshotRules {
     data class Shot(
         val id: String,
         val kind: Kind,
-        /** The words, or the media label ("Photo", "Voice message") for [Kind.MEDIA]. */
+        /** The words the person can hide: the message, or a photo's caption ("" when it has none). */
         val text: String,
+        /** A media row's label ("Photo", "Voice message"), drawn when its picture is not on this phone. */
+        val label: String? = null,
+        /** Where its real picture is, for a photo, video, album or sticker. */
+        val pic: Pic? = null,
+        /** A link card's title and site, under the words. */
+        val linkTitle: String? = null,
+        val linkHost: String? = null,
         val isMe: Boolean,
         val authorId: String,
         /** Someone else's name in a group; drawn only where a run starts ([showName]). */
@@ -44,6 +51,27 @@ object ScreenshotRules {
         val edited: Boolean,
         val forwarded: Boolean,
     )
+
+    /**
+     * A media row's picture: [url] is looked up only in the chat's already opened files (never
+     * fetched); a sticker is also found by its pack and id. [aspect] is width over height.
+     */
+    data class Pic(val url: String?, val stickerPack: String? = null, val stickerId: String? = null,
+                   val video: Boolean = false, val aspect: Float = 1f)
+
+    private fun aspect(w: Double?, h: Double?): Float =
+        if (w == null || h == null || w <= 0 || h <= 0) 1f else (w / h).toFloat().coerceIn(0.5f, 2f)
+
+    /** The picture a media row draws: a photo itself, a video's poster, an album's first tile, a sticker. */
+    fun picOf(m: Message): Pic? = when {
+        m.poll != null -> null
+        m.type == "sticker" -> if (m.stickerId.isNullOrEmpty() && m.imageUrl.isNullOrEmpty()) null
+            else Pic(m.imageUrl, m.stickerPack, m.stickerId)
+        m.type == "album" -> m.album.firstOrNull()?.let { Pic(it.imageUrl, video = it.videoUrl != null, aspect = aspect(it.width, it.height)) }
+        m.type == "video" || m.videoUrl != null -> m.thumbUrl?.let { Pic(it, video = true, aspect = aspect(m.width, m.height)) }
+        m.type == "image" || m.type == "gif" || m.imageUrl != null -> m.imageUrl?.let { Pic(it, aspect = aspect(m.width, m.height)) }
+        else -> null
+    }
 
     /** Text the phone could not open: never put in a picture. */
     private val unreadable = setOf(com.fariin.app.crypto.Wire.LOCKED, com.fariin.app.crypto.Wire.NOT_READY,
@@ -90,7 +118,11 @@ object ScreenshotRules {
         val caption = if (kind == Kind.MEDIA && m.poll == null && m.type != "sticker" && m.text.isNotEmpty()) m.text else null
         Shot(
             id = m.rowId, kind = kind,
-            text = if (kind == Kind.MEDIA) (caption?.let { "${mediaLabel(m)}: $it" } ?: mediaLabel(m)) else m.text,
+            text = if (kind == Kind.MEDIA) caption.orEmpty() else m.text,
+            label = if (kind == Kind.MEDIA) mediaLabel(m) else null,
+            pic = if (kind == Kind.MEDIA) picOf(m) else null,
+            linkTitle = m.linkPreview?.title?.takeIf { kind == Kind.TEXT && it.isNotBlank() },
+            linkHost = m.linkPreview?.takeIf { kind == Kind.TEXT && it.title.isNotBlank() }?.host,
             isMe = isMe, authorId = m.authorId,
             senderName = if (isGroup && !isMe && kind != Kind.SYSTEM) name(m.authorId) else null,
             timeMs = minOf(m.createdAtMillis, System.currentTimeMillis().toDouble()),

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -53,6 +54,8 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -221,7 +224,7 @@ private fun EditorPage(cid: String, shots: List<ScreenshotRules.Shot>, is24h: Bo
                         fontSize = 15.sp, modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 50.dp))
                     rows.forEachIndexed { i, s ->
                         androidx.compose.runtime.key(s.id) {
-                            ShotRow(s, places[i], cover = edits.cover(s.id), dark = dark, mine = mine, is24h = is24h,
+                            ShotRow(s, places[i], cid = cid, cover = edits.cover(s.id), dark = dark, mine = mine, is24h = is24h,
                                 onRemove = {
                                     edits = edits.remove(s.id); undoFor = s.id
                                     if (active == s.id) active = null
@@ -339,10 +342,14 @@ private fun RoundButton(icon: Int, label: String, modifier: Modifier = Modifier,
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ShotRow(
-    s: ScreenshotRules.Shot, place: ScreenshotRules.Place, cover: ScreenshotRules.Cover, dark: Boolean, mine: Color, is24h: Boolean,
+    s: ScreenshotRules.Shot, place: ScreenshotRules.Place, cid: String, cover: ScreenshotRules.Cover, dark: Boolean, mine: Color, is24h: Boolean,
     onRemove: () -> Unit, onLong: () -> Unit, onTextTap: (Int) -> Unit, onBubbleTap: () -> Unit,
 ) {
     val hidden = cover.whole
+    val picture = rememberShotPicture(s.pic, cid)
+    val isSticker = s.pic?.stickerId != null
+    // A sticker with no words stands on the wallpaper, as in the chat; its time sits in a chip.
+    val bare = isSticker && picture != null && s.text.isEmpty() && s.replyName == null && !s.forwarded && s.senderName == null
     val longNow = rememberUpdatedState(onLong)
     val tapNow = rememberUpdatedState(onTextTap)
     var layout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
@@ -381,12 +388,12 @@ private fun ShotRow(
                 Text(body, color = chipInk, fontSize = 13.sp, onTextLayout = { layout = it }, modifier = Modifier.align(Alignment.Center)
                     .offset { IntOffset(dx.value.toInt(), 0) }.clip(RoundedCornerShape(10.dp)).background(chip).padding(horizontal = 10.dp, vertical = 4.dp).then(textTaps))
             } else {
-                val fill = if (s.isMe) mine else if (dark) Color(0xFF26262B) else Color(0xFFF2F2F2)
-                val text = if (s.isMe) Color.White else ink
-                val meta = if (s.isMe) Color.White.copy(alpha = 0.7f) else ink.copy(alpha = 0.45f)
+                val fill = if (bare) Color.Transparent else if (s.isMe) mine else if (dark) Color(0xFF26262B) else Color(0xFFF2F2F2)
+                val text = if (s.isMe && !bare) Color.White else ink
+                val meta = if (bare) chipInk else if (s.isMe) Color.White.copy(alpha = 0.7f) else ink.copy(alpha = 0.45f)
                 Column(Modifier.align(if (s.isMe) Alignment.CenterEnd else Alignment.CenterStart).offset { IntOffset(dx.value.toInt(), 0) }
                     .widthIn(max = 290.dp).clip(RoundedCornerShape(18.dp)).background(fill)
-                    .padding(start = 12.dp, end = 10.dp, top = 6.dp, bottom = 5.dp)) {
+                    .padding(start = if (bare) 0.dp else 12.dp, end = if (bare) 0.dp else 10.dp, top = 6.dp, bottom = 5.dp)) {
                     if (place.showName && s.senderName != null)
                         Text(s.senderName, color = senderColor(s.authorId), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     if (s.forwarded) Text("Forwarded message", color = meta, fontSize = 13.sp)
@@ -400,13 +407,48 @@ private fun ShotRow(
                             }
                         }
                     }
-                    if (s.kind == ScreenshotRules.Kind.MEDIA && !hidden) Row(verticalAlignment = Alignment.CenterVertically) {
-                        Image(painterResource(R.drawable.ic_sf_photo), null, Modifier.size(16.dp), colorFilter = ColorFilter.tint(text))
-                        Spacer(Modifier.width(6.dp))
-                        Text(body, color = text, fontSize = 17.sp, onTextLayout = { layout = it }, modifier = textTaps)
+                    if (s.kind == ScreenshotRules.Kind.MEDIA) {
+                        if (picture != null) {
+                            // The real picture, from the copy this phone already opened. Hidden: dots
+                            // in its place, the picture itself is not drawn.
+                            Box(Modifier.padding(vertical = 3.dp).width(if (isSticker) 140.dp else 236.dp)
+                                .aspectRatio(if (isSticker) 1f else s.pic!!.aspect).clip(RoundedCornerShape(12.dp))
+                                .then(if (hidden) Modifier.background(ink.copy(alpha = 0.10f)) else Modifier),
+                                contentAlignment = Alignment.Center) {
+                                if (hidden) Text(ScreenshotRules.coverText(s.label.orEmpty()), color = text, fontSize = 17.sp, letterSpacing = 1.sp)
+                                else {
+                                    Image(picture, null, Modifier.fillMaxSize(),
+                                        contentScale = if (isSticker) ContentScale.Fit else ContentScale.Crop)
+                                    if (s.pic!!.video) Box(Modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)),
+                                        contentAlignment = Alignment.Center) {
+                                        Image(painterResource(R.drawable.ic_sf_play_fill), null, Modifier.size(20.dp), colorFilter = ColorFilter.tint(Color.White))
+                                    }
+                                }
+                            }
+                        } else Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Not opened on this phone: its label only, never a new download.
+                            Image(painterResource(R.drawable.ic_sf_photo), null, Modifier.size(16.dp), colorFilter = ColorFilter.tint(text))
+                            Spacer(Modifier.width(6.dp))
+                            val label = s.label.orEmpty()
+                            Text(if (hidden) ScreenshotRules.coverText(label) else label, color = text, fontSize = 17.sp)
+                        }
+                        if (s.text.isNotEmpty()) Text(body, color = text, fontSize = 17.sp, onTextLayout = { layout = it }, modifier = textTaps,
+                            letterSpacing = if (hidden) 1.sp else androidx.compose.ui.unit.TextUnit.Unspecified)
                     } else Text(body, color = text, fontSize = 17.sp, onTextLayout = { layout = it }, modifier = textTaps,
                         letterSpacing = if (hidden) 1.sp else androidx.compose.ui.unit.TextUnit.Unspecified)
-                    Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+                    // A link card's title, only while nothing in the message is hidden (a title can
+                    // give the hidden words away).
+                    if (s.linkTitle != null && cover.isEmpty) Row(Modifier.padding(top = 4.dp).clip(RoundedCornerShape(6.dp))
+                        .background(if (s.isMe) Color.White.copy(alpha = 0.18f) else ink.copy(alpha = 0.06f))) {
+                        Box(Modifier.width(3.dp).height(40.dp).background(if (s.isMe) Color.White else Fariin.colors.blue))
+                        Column(Modifier.padding(horizontal = 8.dp, vertical = 3.dp)) {
+                            s.linkHost?.takeIf { it.isNotEmpty() }?.let { Text(it, color = text.copy(alpha = 0.75f), fontSize = 13.sp, maxLines = 1) }
+                            Text(s.linkTitle, color = text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
+                        }
+                    }
+                    Row(Modifier.align(Alignment.End)
+                        .then(if (bare) Modifier.clip(CircleShape).background(chip).padding(horizontal = 7.dp, vertical = 1.dp) else Modifier),
+                        verticalAlignment = Alignment.CenterVertically) {
                         val time = ThreadLogic.timeLabel(s.timeMs, is24h)
                         Text(if (s.edited) "edited $time" else time, color = meta, fontSize = 11.sp)
                         tickMark(s.tick)?.let { Text(" $it", color = meta, fontSize = 11.sp) }
@@ -415,6 +457,48 @@ private fun ShotRow(
             }
         }
     }
+}
+
+/**
+ * A media row's real picture, read only from this phone's own copies: the chat's opened files, a
+ * sticker seen before or one shipped with the app. Nothing is downloaded here; null draws the label.
+ */
+@Composable
+private fun rememberShotPicture(pic: ScreenshotRules.Pic?, cid: String): androidx.compose.ui.graphics.ImageBitmap? {
+    val ctx = LocalContext.current.applicationContext
+    return androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, pic, cid) {
+        if (pic != null) value = withContext(Dispatchers.IO) { runCatching { loadShotPicture(ctx, pic, cid) }.getOrNull() }
+    }.value
+}
+
+private fun loadShotPicture(ctx: android.content.Context, pic: ScreenshotRules.Pic, cid: String): androidx.compose.ui.graphics.ImageBitmap? {
+    val id = pic.stickerId
+    if (id != null) {
+        val pack = pic.stickerPack.orEmpty()
+        val own = if (pack == com.fariin.app.data.StickerFavorites.MINE) com.fariin.app.data.StickerFavorites.png(id)
+            else SeenStickers.file(ctx, pack, id)
+        if (own != null) return decodeSmall(own)
+        if (pack.isNotEmpty() && pack != com.fariin.app.data.StickerFavorites.MINE) {
+            val asset = com.fariin.app.data.StickerCatalog.stillPath(ctx, pack, id)
+                ?: com.fariin.app.data.StickerCatalog.assetPath(ctx, pack, id)?.takeIf { !it.endsWith(".tgs") }
+            if (asset != null) return ctx.assets.open(asset).use { android.graphics.BitmapFactory.decodeStream(it) }?.asImageBitmap()
+        }
+    }
+    val url = pic.url ?: return null
+    // peek: the opened copy only (an encrypted file is kept opened); it never starts a download.
+    val file = com.fariin.app.media.ChatMedia(ctx, cid, null).peek(url) ?: return null
+    return decodeSmall(file)
+}
+
+/** Decoded at about the size the picture shows, as a plain (not hardware) bitmap the picture can hold. */
+private fun decodeSmall(f: java.io.File, maxPx: Int = 900): androidx.compose.ui.graphics.ImageBitmap? {
+    val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    android.graphics.BitmapFactory.decodeFile(f.path, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    var sample = 1
+    while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxPx) sample *= 2
+    val opts = android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }
+    return android.graphics.BitmapFactory.decodeFile(f.path, opts)?.asImageBitmap()
 }
 
 private fun tickMark(t: Tick): String? = when (t) {

@@ -71,6 +71,22 @@ class ScreenshotRulesTest {
         assertEquals("4 messages", ScreenshotRules.countLine(4))
     }
 
+    @Test fun mediaRowsCarryTheirPictureNotTheLabelAsWords() {
+        val photo = msg("p", type = "image", text = "at the beach").copy(imageUrl = "u1", width = 400.0, height = 200.0)
+        val video = msg("v", type = "video", text = "").copy(videoUrl = "v1", thumbUrl = "t1")
+        val sticker = msg("s", type = "sticker", text = "").copy(stickerPack = "cats", stickerId = "c1", stickerEmoji = "😺")
+        assertEquals(ScreenshotRules.Pic("u1", aspect = 2f), ScreenshotRules.picOf(photo))
+        assertEquals(ScreenshotRules.Pic("t1", video = true), ScreenshotRules.picOf(video))
+        assertEquals("c1", ScreenshotRules.picOf(sticker)?.stickerId)
+        assertNull(ScreenshotRules.picOf(msg("a", type = "audio", text = "").copy(audioUrl = "a1")))
+        val shots = ScreenshotRules.snapshot(listOf(photo, sticker), setOf("p", "s"), "me", isGroup = false,
+            receipts = Receipts(), name = { "" }, day = { "Today" })
+        assertEquals("at the beach", shots[0].text)
+        assertEquals("Photo", shots[0].label)
+        assertEquals("", shots[1].text)
+        assertEquals("😺", shots[1].label)
+    }
+
     @Test fun wordAtFindsTheWholeWord() {
         val t = "meet at don't go"
         assertEquals(ScreenshotRules.Span(0, 4), ScreenshotRules.wordAt(t, 2))
