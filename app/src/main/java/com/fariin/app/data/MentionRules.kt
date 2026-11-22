@@ -7,8 +7,9 @@ package com.fariin.app.data
  * server reads that list for the "NAME mentioned you" push, even in a muted group.
  */
 object MentionRules {
-    /** iOS mentionPicker: at most five rows. */
-    const val MAX_ROWS = 5
+    /** iOS mentionPicker: up to 50 members in the list, four in view and the rest a scroll away. */
+    const val MAX_ROWS = 50
+    const val ROWS_IN_VIEW = 4
 
     private val token = Regex("@[^\\s@]*$")
 

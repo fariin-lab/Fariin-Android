@@ -7,6 +7,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,11 +52,14 @@ data class MentionSource(
     val photos: Map<String, String>,
 )
 
+/** One picker row: the 30 picture and 8 above and below it. */
+private val MENTION_ROW = 46.dp
+
 /**
- * iOS ThreadView.mentionPicker: while an "@" is typed just before the cursor, up to five members
- * whose names hold what follows it, each a 30 pt picture and the name; a tap puts "@Name " in
- * place. The rounded floating card of the chat's other controls. System back closes it first
- * (it comes back on the next keystroke).
+ * iOS ThreadView.mentionPicker: while an "@" is typed just before the cursor, the members (up to
+ * 50, four in view) whose names hold what follows it, each a 30 pt picture and the name; a tap
+ * puts "@Name " in place. The rounded floating card of the chat's other controls. System back
+ * closes it first (it comes back on the next keystroke).
  */
 @Composable
 internal fun MentionPicker(src: MentionSource, box: TextFieldValue, onPick: (TextFieldValue, String, String) -> Unit) {
@@ -65,10 +73,12 @@ internal fun MentionPicker(src: MentionSource, box: TextFieldValue, onPick: (Tex
     BackHandler { closedAt = head }
     val c = Fariin.colors
     // Typing on narrows it from 4 rows to 1: the list's height follows on the spring (iOS pops 28).
-    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp).floating(RoundedCornerShape(16.dp)).smoothSize()) {
+    // Four rows in view, the rest scroll (iOS: 50 at most), so a big group's sixth member can be picked too.
+    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp).floating(RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp)).smoothSize()
+        .heightIn(max = MENTION_ROW * MentionRules.ROWS_IN_VIEW).verticalScroll(rememberScrollState())) {
         for (p in people) {
             Row(
-                Modifier.fillMaxWidth().clickable {
+                Modifier.fillMaxWidth().height(MENTION_ROW).clickable {
                     MentionRules.insert(box.text, caret, p.name)?.let { (t, at) ->
                         onPick(TextFieldValue(t, TextRange(at)), p.uid, p.name)
                     }
