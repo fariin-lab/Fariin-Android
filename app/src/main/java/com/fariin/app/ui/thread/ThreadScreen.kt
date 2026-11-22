@@ -1623,13 +1623,24 @@ private fun ThreadContent(
                 // No rule above it: the follower's capsule floats over the chat (iOS).
                 barCh?.let { com.fariin.app.ui.channels.ChannelBottomBar(it, ui.sendBlocked) }
             } else if (kind == 3) {
-                // iOS blockedBar: the action alone, in the text colour.
+                // iOS blockedBar: two actions, Clear Chat in red (asked first) and Unblock in the text colour.
+                var askClear by remember { mutableStateOf(false) }
                 HorizontalDivider(thickness = 0.5.dp, color = c.separator)
-                Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(12.dp), contentAlignment = Alignment.Center) {
+                Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(12.dp),
+                    horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.TextButton(onClick = { askClear = true }) {
+                        Text("Clear Chat", fontSize = 17.sp, color = c.red)
+                    }
+                    Spacer(Modifier.width(12.dp))
                     androidx.compose.material3.TextButton(onClick = actions.onUnblock) {
                         Text("Unblock", fontSize = 17.sp, color = c.label)
                     }
                 }
+                if (askClear) com.fariin.app.ui.components.GlassAlert(onDismissRequest = { askClear = false },
+                    title = { Text("Clear this chat?") },
+                    text = { Text("Every message is removed from this chat on your phone. The other person's copy is not affected.") },
+                    confirmButton = { androidx.compose.material3.TextButton({ askClear = false; actions.onClearChat() }) { Text("Clear Chat", color = c.red) } },
+                    dismissButton = { androidx.compose.material3.TextButton({ askClear = false }) { Text("Cancel", color = c.accent) } })
             } else if (kind == 4) {
                 // Nobody left to receive, so no composer (iOS decision D15).
                 DeletedAccountBar()

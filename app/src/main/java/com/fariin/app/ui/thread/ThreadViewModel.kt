@@ -311,6 +311,13 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
                 if (!ok) notice = "Couldn't unblock. Check your connection and try again."
             }
         },
+        onClearChat = {
+            vm.viewModelScope.launch {
+                val chat = conv ?: CryptoHub.listedConversation(cid)
+                val ok = chat != null && com.fariin.app.ui.chats.ChatListActions.deleteForMe(me, chat)
+                if (!ok) notice = "Couldn't clear. Check your connection and try again."
+            }
+        },
         // A refused write (message deleted meanwhile, server said no) puts back what the server kept
         // at once, not after the pick's hold runs out; the iOS words.
         onReact = { m, e -> vm.viewModelScope.launch { if (!vm.repo.setReaction(m, e)) { ReactNow.drop(m)

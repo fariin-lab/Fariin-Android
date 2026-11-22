@@ -93,6 +93,8 @@ data class ThreadActions(
     /** The header menu's Mute / Unmute. */
     val onToggleMute: () -> Unit = {},
     val onUnblock: () -> Unit = {},
+    /** The blocked bar's Clear Chat: the chat list's own delete for me (iOS deleteForMe). */
+    val onClearChat: () -> Unit = {},
     /** Shown in a small notice ("Copied", "Saved to Photos"). */
     val onNotice: (String) -> Unit = {},
     /** Opens the forward picker for a message (ThreadScreen sets it), then sends to the chats picked. */
