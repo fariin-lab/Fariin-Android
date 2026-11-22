@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.foundation.border
 import com.fariin.app.ui.components.linkShake
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.animation.core.animateFloat
@@ -310,16 +312,32 @@ private fun GroupRow(r: com.fariin.app.channel.DiscoveredGroup, pill: JoinPillSt
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(r.title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                    if (r.verified) {
-                        Spacer(Modifier.width(4.dp))
-                        com.fariin.app.ui.components.VerifiedSeal(c.blue, Modifier.size(15.dp), "Verified")
-                    }
+                    ExploreMark(r.verified, r.label, "Verified group")
                 }
                 Text(if (r.memberCount == 1) "1 member" else "${r.memberCount} members", fontSize = 15.sp, color = c.secondary)
             }
         }
         Spacer(Modifier.width(8.dp))
         JoinPill(pill, shake, onClick = onJoin)
+    }
+}
+
+/** The mark by a name (iOS GroupVerifiedMark): Fariin's Scam / Fake label is a small red outlined
+ *  tag in place of the tick; otherwise the tick when verified, else nothing. */
+@Composable
+private fun ExploreMark(verified: Boolean, label: String, sealWords: String) {
+    val c = Fariin.colors
+    if (label == "scam" || label == "fake") {
+        Spacer(Modifier.width(4.dp))
+        Box(Modifier.height(15.dp).border(1.dp, c.red, RoundedCornerShape(4.dp)).padding(horizontal = 4.dp)
+            .semantics { contentDescription = if (label == "scam") "Scam warning" else "Fake group warning" },
+            contentAlignment = Alignment.Center) {
+            Text(if (label == "scam") "SCAM" else "FAKE", fontSize = 9.5.sp, fontWeight = FontWeight.Bold,
+                color = c.red, maxLines = 1, lineHeight = 10.sp)
+        }
+    } else if (verified) {
+        Spacer(Modifier.width(4.dp))
+        com.fariin.app.ui.components.VerifiedSeal(c.blue, Modifier.size(15.dp), sealWords)
     }
 }
 
@@ -344,10 +362,7 @@ private fun DiscoverRow(r: DiscoveredChannel, pill: JoinPillState, shake: Int, o
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(r.title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                    if (r.verified) {
-                        Spacer(Modifier.width(4.dp))
-                        com.fariin.app.ui.components.VerifiedSeal(c.blue, Modifier.size(15.dp), "Verified")
-                    }
+                    ExploreMark(r.verified, r.label, "Verified")
                     if (r.official) {
                         Spacer(Modifier.width(4.dp))
                         Text("Official", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.secondary, maxLines = 1)
