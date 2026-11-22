@@ -193,6 +193,13 @@ object MediaRules {
         return "%d:%02d".format(d / 60, d % 60)
     }
 
+    /** A length drawn in a bubble (iOS MediaDuration.whole): whole seconds cut, not rounded, as m:ss.
+     *  A 7.6 s note reads "0:07" there; only the chat list's preview rounds. */
+    fun bubbleClock(seconds: Double): String {
+        val d = if (seconds.isFinite() && seconds > 0) minOf(seconds, 359_999.0).toInt() else 0
+        return "%d:%02d".format(d / 60, d % 60)
+    }
+
     const val PHOTO_PREVIEW = "📷 Photo"            // "📷 Photo"
     fun voicePreview(seconds: Double) = "🎤 Voice message · " + durationLabel(seconds)   // "🎤 Voice message · 0:53"
 

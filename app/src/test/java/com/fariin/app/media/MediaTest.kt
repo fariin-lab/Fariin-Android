@@ -149,6 +149,11 @@ class MediaTest {
     @Test fun labelsAndWaveform() {
         assertEquals("0:53", MediaRules.durationLabel(52.6))
         assertEquals("1:05", MediaRules.durationLabel(65.0))
+        // In the bubble iOS cuts to whole seconds.
+        assertEquals("0:07", MediaRules.bubbleClock(7.6))
+        assertEquals("0:52", MediaRules.bubbleClock(52.6))
+        assertEquals("1:05", MediaRules.bubbleClock(65.0))
+        assertEquals("0:00", MediaRules.bubbleClock(Double.NaN))
         assertEquals("🎤 Voice message · 0:07", MediaRules.voicePreview(7.2))
         assertEquals("📷 Photo", MediaRules.PHOTO_PREVIEW)
         assertEquals(listOf(1.5f, 2f, 0.5f, 1f), generateSequence(1f) { MediaRules.nextRate(it) }.drop(1).take(4).toList())

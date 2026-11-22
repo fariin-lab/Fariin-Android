@@ -182,9 +182,9 @@ private fun OneTimeVoicePage(m: Message, cid: String, onClose: () -> Unit) {
                                 }) { f -> if (st.ready) player.seek(f) }
                             Spacer(Modifier.height(6.dp))
                             val label = when {
-                                drag != null -> MediaRules.durationLabel(st.durationMs * (drag ?: 0f) / 1000.0)
-                                st.playing || st.positionMs > 0 -> MediaRules.durationLabel(st.positionMs / 1000.0)
-                                else -> MediaRules.durationLabel(if (st.durationMs > 0) st.durationMs / 1000.0 else m.duration ?: 0.0)
+                                drag != null -> MediaRules.bubbleClock(st.durationMs * (drag ?: 0f) / 1000.0)
+                                st.playing || st.positionMs > 0 -> MediaRules.bubbleClock(st.positionMs / 1000.0)
+                                else -> MediaRules.bubbleClock(if (st.durationMs > 0) st.durationMs / 1000.0 else m.duration ?: 0.0)
                             }
                             Text(label, style = TextStyle(fontSize = 12.sp, color = Color.White.copy(alpha = 0.75f), fontFeatureSettings = "tnum"))
                         }

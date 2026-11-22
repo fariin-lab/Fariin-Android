@@ -385,7 +385,7 @@ internal fun VideoOverlay(m: Message, ready: Boolean, showDuration: Boolean = tr
 @Composable
 internal fun DurationPill(seconds: Double, modifier: Modifier = Modifier) {
     Box(modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.5f)).padding(horizontal = 6.dp, vertical = 2.dp)) {
-        Text(MediaRules.durationLabel(seconds), style = TextStyle(fontSize = 11.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+        Text(MediaRules.bubbleClock(seconds), style = TextStyle(fontSize = 11.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
             color = Color.White, fontFeatureSettings = "tnum"))
     }
 }
@@ -500,8 +500,8 @@ internal fun VoiceBody(m: Message, cid: String, isMe: Boolean, width: Dp, meta: 
                     // (a note that played to the end reads its length again, not 0:00).
                     val label = when {
                         failed -> "Can't play"
-                        playing || (progress > 0f && progress < 0.999f) -> MediaRules.durationLabel(pos / 1000.0)
-                        else -> MediaRules.durationLabel(if (total > 0) total else durMs / 1000.0)
+                        playing || (progress > 0f && progress < 0.999f) -> MediaRules.bubbleClock(pos / 1000.0)
+                        else -> MediaRules.bubbleClock(if (total > 0) total else durMs / 1000.0)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(label, style = TextStyle(fontSize = 11.sp, fontFeatureSettings = "tnum",
