@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.offset
 import androidx.compose.ui.draw.clipToBounds
 import kotlinx.coroutines.flow.first
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imeAnimationTarget
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onPlaced
@@ -3353,7 +3354,7 @@ private fun Composer(
                     followKeys = true
                     kotlinx.coroutines.withTimeoutOrNull(800) {
                         androidx.compose.runtime.snapshotFlow { keysNow.getBottom(insetDensity) to keysGoal.getBottom(insetDensity) }
-                            .first { (now, goal) -> goal > 0 && now >= goal }
+                            .first { p: Pair<Int, Int> -> p.second > 0 && p.first >= p.second }
                     }
                     followKeys = false
                 }
