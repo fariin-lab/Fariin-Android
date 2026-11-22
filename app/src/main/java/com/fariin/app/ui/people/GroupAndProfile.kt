@@ -779,8 +779,10 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 SettingsSection(header = "What members can do", footer = "Admins can always do these. Switch one off and only admins can.") {
                     com.fariin.app.ui.channels.SwitchLine("Send messages", canSend) { canSend = it }
-                    com.fariin.app.ui.channels.SwitchLine("Add members", canAdd) { canAdd = it }
-                    com.fariin.app.ui.channels.SwitchLine("Start group calls", canCall, last = true) { canCall = it }
+                    // Group calls switched off from the server: no calls switch (iOS CallFeatures.groupCalls).
+                    val calls = com.fariin.app.data.AppFeatures.groupCalls
+                    com.fariin.app.ui.channels.SwitchLine("Add members", canAdd, last = !calls) { canAdd = it }
+                    if (calls) com.fariin.app.ui.channels.SwitchLine("Start group calls", canCall, last = true) { canCall = it }
                 }
             }
         } else {
@@ -812,7 +814,9 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
             NewGroupTimerSection(timer) { timer = it }
             // iOS: the Permissions row with how many switches are on, and the "change this later" line.
             SettingsSection(footer = "What members can do. You can change this later in the group's settings.") {
-                SettingsRow("Permissions", value = "${listOf(canSend, canAdd, canCall).count { it }}/3", last = true) { step = 3 }
+                // iOS permissionsCount: the calls switch counts only while group calls are on.
+                val on = listOf(canSend, canAdd) + (if (com.fariin.app.data.AppFeatures.groupCalls) listOf(canCall) else emptyList())
+                SettingsRow("Permissions", value = "${on.count { it }}/${on.size}", last = true) { step = 3 }
             }
             // No "Members · N" heading on this page (iOS, owner 2026-10-20): it counted me but listed
             // only the others, so two over one row read as a mistake.
