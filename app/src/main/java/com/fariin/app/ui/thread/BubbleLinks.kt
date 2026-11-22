@@ -43,8 +43,11 @@ internal val NoLinkTap: (TextLinks.Span) -> Unit = {}
 internal fun linkMarked(
     s: AnnotatedString, bold: List<IntRange>, color: Color, tap: (TextLinks.Span) -> Unit,
     own: List<com.fariin.app.data.TextFormat.Link> = emptyList(),
-    /** A channel post: its #tags and $tags open Tag Search (iOS 2026-11-20). */
+    /** #tags and $tags open Tag Search (iOS: every chat since 2026-11-21). */
     tags: Boolean = false,
+    /** My bubble or a bubble style, where links share the text's colour: linked words and tags get
+     *  a line there too (iOS BubbleText); on theirs only the colour marks them. */
+    lined: Boolean = false,
 ): AnnotatedString {
     val text = s.text
     // The author's own links (Format > Link) first; a found address or @name inside them yields (iOS).
@@ -71,8 +74,14 @@ internal fun linkMarked(
     if (spans.isEmpty()) return s
     return AnnotatedString.Builder(s).apply {
         for (sp in spans) {
-            val style = SpanStyle(color = color,
-                textDecoration = if (sp.kind == TextLinks.Kind.HANDLE || sp.kind == TextLinks.Kind.TAG) null else TextDecoration.Underline)
+            // Found addresses always have a line, @names never; the author's linked words and tags only when [lined].
+            val authored = mine.any { it.start == sp.start && it.end == sp.end }
+            val line = when {
+                sp.kind == TextLinks.Kind.HANDLE -> false
+                sp.kind == TextLinks.Kind.TAG || authored -> lined
+                else -> true
+            }
+            val style = SpanStyle(color = color, textDecoration = if (line) TextDecoration.Underline else null)
             addLink(LinkAnnotation.Clickable(sp.kind.name, TextLinkStyles(style)) { tap(sp) }, sp.start, sp.end)
         }
     }.toAnnotatedString()

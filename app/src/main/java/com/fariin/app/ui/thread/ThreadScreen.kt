@@ -2544,8 +2544,9 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 linkInk = if (m.deleted) null else styled?.ink ?: if (isMe) Color.White else c.blue,
                 // The author's own links (Format > Link), only over the words they were made for.
                 ownLinks = if (m.deleted || m.links.isEmpty() || body != m.text) emptyList() else m.links,
-                // A channel post's #tags and $tags open Tag Search.
-                tags = ui.channel != null && !m.deleted,
+                // #tags and $tags open Tag Search in every chat (iOS 2026-11-21, was channel posts only).
+                tags = !m.deleted,
+                lined = isMe || styled != null,
                 // iOS BubbleText: on an incoming bubble the mentions also wear the accent colour.
                 mentionInk = if (m.deleted || isMe) null else styled?.ink ?: c.blue,
             )
@@ -2980,6 +2981,8 @@ private fun tickDescription(t: Tick) = when (t) {
 @Composable
 private fun TextWithMeta(text: String, style: TextStyle, bold: List<IntRange> = emptyList(), fmtBold: List<IntRange> = emptyList(),
                          linkInk: Color? = null, ownLinks: List<com.fariin.app.data.TextFormat.Link> = emptyList(), tags: Boolean = false,
+                         /** My bubble or a bubble style: linked words and tags get a line (iOS BubbleText). */
+                         lined: Boolean = false,
                          /** The mentions' colour on an incoming bubble (iOS BubbleText accent); null keeps the text colour. */
                          mentionInk: Color? = null,
                          meta: @Composable () -> Unit) {
@@ -2989,10 +2992,10 @@ private fun TextWithMeta(text: String, style: TextStyle, bold: List<IntRange> = 
         val term = LocalSearchTerm.current
         // Outside the list (the long-press menu's copy) the links are drawn but take no taps.
         val tap = LocalBubbleLinkTap.current ?: NoLinkTap
-        Text(remember(text, term, bold, fmtBold, linkInk, tap, ownLinks, tags, mentionInk) {
+        Text(remember(text, term, bold, fmtBold, linkInk, tap, ownLinks, tags, lined, mentionInk) {
             // The post's own bold in the bold weight, same size; the mentions keep their semibold.
             val marked = mentionMarked(searchMarked(text, term), bold).let { if (fmtBold.isEmpty()) it else boldMarked(it, fmtBold) }
-            val linked = if (linkInk == null) marked else linkMarked(marked, bold, linkInk, tap, ownLinks, tags)
+            val linked = if (linkInk == null) marked else linkMarked(marked, bold, linkInk, tap, ownLinks, tags, lined)
             // Last, so the mention's colour wins over a link style on the same words (iOS order).
             if (mentionInk == null || bold.isEmpty()) linked else androidx.compose.ui.text.AnnotatedString.Builder(linked).apply {
                 for (r in bold) if (r.last < linked.length) addStyle(androidx.compose.ui.text.SpanStyle(color = mentionInk), r.first, r.last + 1)
