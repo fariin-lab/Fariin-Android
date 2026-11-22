@@ -113,6 +113,8 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     var lastStance by remember(cid) { mutableStateOf(stanceNow) }
     var keyAsk by remember(cid) { mutableStateOf(false) }
     var keyAskSheet by remember(cid) { mutableStateOf(false) }
+    // The public group page over the chat, from the header of a group I am only visiting.
+    var guestPage by remember(cid) { mutableStateOf(false) }
     LaunchedEffect(cid, stanceNow) {
         val old = lastStance
         lastStance = stanceNow
@@ -316,6 +318,8 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         onTitleClick = click@{
             // iOS: a group Fariin suspended or disabled opens nothing from its header.
             if (conv?.fariinLocked() == true) return@click
+            // iOS: a guest opens the group's public page, not the members' one.
+            if (guest != null) { guestPage = true; return@click }
             InChatSearchLink.openedFrom = cid   // the info page's Search circle shows only when opened from here
             if (channel != null) channelNav.page(cid) else if (conv?.isGroup == true) nav.group(cid) else conv?.otherUid(me)?.takeIf { it.isNotEmpty() }?.let(nav.contact)
         },
@@ -544,6 +548,8 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         onDismiss = { keyAskSheet = false },
         onOpened = { keyAskSheet = false; keyAccepted.value = true },
     )
+    if (guestPage) com.fariin.app.ui.people.PublicGroupSheet(cid, onClose = { guestPage = false },
+        onOpenChat = { id -> guestPage = false; if (id != cid) nav.chat(id) else vm.repo.reload() })
 }
 
 
