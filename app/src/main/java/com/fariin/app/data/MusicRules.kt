@@ -113,6 +113,22 @@ object MusicRules {
         return text
     }
 
+    /**
+     * The player bar's second line for a voice note (iOS PlayerAccessory.subtitle): "Voice message ·
+     * <sender>", or "Voice message" alone when there is no sender or the sender already is the title
+     * (a one-to-one chat with the other person). [sender] is "You" for my own note.
+     */
+    fun noteSubtitle(sender: String, title: String): String =
+        if (sender.isEmpty() || sender == title) "Voice message" else "Voice message · $sender"
+
+    /** Who sent the open voice note (iOS PlayerAccessory.sender): "You", the channel, the group member, else the person. */
+    fun noteSender(mine: Boolean, channel: Boolean, group: Boolean, chatName: String, memberName: String?, personName: String): String = when {
+        mine -> "You"
+        channel -> chatName
+        group -> memberName ?: chatName
+        else -> personName
+    }
+
     /** "1:05", or "1:02:03" past an hour (iOS MusicFiles.clock). */
     fun clock(ms: Long): String {
         val s = (ms / 1000).coerceAtLeast(0)

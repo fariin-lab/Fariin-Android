@@ -61,12 +61,13 @@ private fun VoiceNoteBarBody(s: VoicePlayer.State, me: String, modifier: Modifie
     val cid = s.cid ?: return
     val c = Fariin.colors
     val conv = ChatsNow.find(cid)
-    // iOS noteTitle: the chat's name; my own note reads "You · <chat>".
-    val title = conv?.displayName(me).orEmpty()
-    val name = when {
-        s.author == me -> if (title.isEmpty()) "You" else "You · $title"
-        else -> title.ifEmpty { "Voice message" }
-    }
+    // iOS PlayerAccessory: the chat's name over "Voice message · <sender>" ("You" for mine).
+    val chatName = conv?.displayName(me).orEmpty()
+    val name = chatName.ifEmpty { "Voice message" }
+    val sender = com.fariin.app.data.MusicRules.noteSender(mine = s.author == me, channel = conv?.isChannel == true,
+        group = conv?.isGroup == true, chatName = chatName, memberName = conv?.names?.get(s.author)?.takeIf { it.isNotEmpty() },
+        personName = conv?.name(me).orEmpty())
+    val noteLine = com.fariin.app.data.MusicRules.noteSubtitle(sender, name)
     // A song (iOS PlayerAccessory with isMusic): its picture, title and artist, Next inside a playlist, no speed.
     val music = s.music
     val rate = VoicePlayer.rate(cid)
@@ -102,7 +103,7 @@ private fun VoiceNoteBarBody(s: VoicePlayer.State, me: String, modifier: Modifie
             }
             Column(Modifier.weight(1f)) {
                 Text(music?.title ?: name, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(if (music != null) music.artist.ifEmpty { "Song" } else "Voice message", fontSize = 11.sp, color = c.secondary,
+                Text(if (music != null) music.artist.ifEmpty { "Song" } else noteLine, fontSize = 11.sp, color = c.secondary,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (music == null) Text(com.fariin.app.media.MediaRules.rateLabel(rate), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.secondary,

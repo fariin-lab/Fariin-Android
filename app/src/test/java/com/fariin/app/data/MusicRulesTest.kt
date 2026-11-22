@@ -102,4 +102,14 @@ class MusicRulesTest {
         assertFalse("listName" in up[1])
         assertEquals("🎵 3 songs", MusicRules.playlistPreview(3))
     }
+
+    @Test fun voiceNoteLineNamesTheSender() {
+        assertEquals("Voice message · You", MusicRules.noteSubtitle(MusicRules.noteSender(true, false, false, "Hodan", null, "Hodan"), "Hodan"))
+        // One-to-one with the other person: the sender is the title, so the line is plain.
+        assertEquals("Voice message", MusicRules.noteSubtitle(MusicRules.noteSender(false, false, false, "Hodan", null, "Hodan"), "Hodan"))
+        assertEquals("Voice message · Ali", MusicRules.noteSubtitle(MusicRules.noteSender(false, false, true, "Family", "Ali", ""), "Family"))
+        assertEquals("Voice message", MusicRules.noteSubtitle(MusicRules.noteSender(false, false, true, "Family", null, ""), "Family"))
+        assertEquals("Voice message", MusicRules.noteSubtitle(MusicRules.noteSender(false, true, true, "News", "Ali", ""), "News"))
+        assertEquals("Voice message", MusicRules.noteSubtitle("", "Hodan"))
+    }
 }
