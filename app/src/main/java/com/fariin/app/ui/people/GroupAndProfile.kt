@@ -740,6 +740,11 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
                 3 -> com.fariin.app.ui.components.FloatingTopBar("Permissions", onBack = { step = 2 }, container = c.bgSecondary)
                 else -> bar("New Group", { step = 1 }) {
                     TextAction("Create", title.isNotBlank() && !busy) {
+                        // "Create new groups" switched off from the server while this page was open (iOS
+                        // Flags.groupCreateEnabled): said in words, not a bare "Try again".
+                        if (!com.fariin.app.data.AppFeatures.groupCreate) {
+                            error = "Creating new groups isn't available right now."; return@TextAction
+                        }
                         busy = true
                         scope.launch {
                             // At most N groups owned (iOS NewGroupView): the server counts, and says so here.
