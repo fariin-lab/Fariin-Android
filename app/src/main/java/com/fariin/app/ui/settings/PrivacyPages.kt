@@ -397,8 +397,7 @@ internal fun MessagesPrivacyPage(push: (String) -> Unit, pop: () -> Unit, userna
         SettingsSection(header = "Who can contact me by username", footer = "Who new people can message. Your chats are never affected." +
             // Said when the panel has the requirement off for me, so the choice never promises a closed door.
             (if (keyShown && stored == Audience.CONTACTS && !com.fariin.app.data.MsgPolicy.chatKeyRequired(me))
-                "
-Fariin has paused the Chat Key requirement for now, so anyone can message you." else "")) {
+                "\nFariin has paused the Chat Key requirement for now, so anyone can message you." else "")) {
             val shown = PrivacyRules.options("messages").filter { it != Audience.CONTACTS || keyShown }
             for (a in shown) CheckRow(a.label("messages"), a == sel, last = a == shown.last()) {
                 if (a == Audience.CONTACTS && keySet != true) { explain = true; return@CheckRow }
