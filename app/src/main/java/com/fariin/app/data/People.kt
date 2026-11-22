@@ -552,6 +552,7 @@ class FirestorePeople(
         }.await()
         // A link to it must open the join sheet again, not the old chat (iOS GroupLinkDoor.noteLeft).
         com.fariin.app.ui.people.GroupLinkPreviews.forgetCid(cid)
+        GroupLinkCards.forgetCid(cid)
         // And the guest page's kept previews, in memory and on disk.
         com.fariin.app.ui.people.GroupGuestPreviews.forget(cid)
     }

@@ -187,8 +187,11 @@ private fun GroupLinkCard(lp: Message.LinkPreview, target: GroupLinkCards.Target
             Spacer(Modifier.height(2.dp))
             Text(StickerGifRules.cardHost(lp.url), fontSize = 11.sp, color = ink.copy(alpha = 0.55f), maxLines = 1,
                 overflow = TextOverflow.Ellipsis)
-            // A public channel's / group's @name card: what the tap does (the whole card is the button).
-            found?.action?.takeIf { !gone }?.let {
+            // What the tap does (the whole card is the button). An invite says View Group even
+            // before the server answers, as iOS does with the sender's copy.
+            val action = if (gone) null else found?.action
+                ?: if (target is GroupLinkCards.Target.Invite) GroupLinkCards.actionLine(false, channel, false) else null
+            action?.let {
                 Spacer(Modifier.height(6.dp))
                 Text(it, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = tint, maxLines = 1)
             }

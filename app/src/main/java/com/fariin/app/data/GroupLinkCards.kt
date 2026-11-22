@@ -33,9 +33,9 @@ object GroupLinkCards {
     sealed interface Live {
         /** [byName]: found through a public @name (not an invite); [isMember]: I am in it / follow it. */
         data class Found(val title: String, val photoUrl: String?, val count: Int, val isChannel: Boolean,
-                         val byName: Boolean = false, val isMember: Boolean = false) : Live {
+                         val byName: Boolean = false, val isMember: Boolean = false, val cid: String = "") : Live {
             val countLine: String get() = countLine(count, isChannel, byName)
-            /** The card's action words, a public @name only: an invite card is as it was. */
+            /** The card's action words: Open / View Group, Open / View Channel (iOS bottomButton). */
             val action: String? get() = actionLine(byName, isChannel, isMember)
         }
         /** Revoked, expired, deleted or no longer public. */
@@ -92,10 +92,14 @@ object GroupLinkCards {
         else -> "$n ${if (n == 1) "member" else "members"}"
     }
 
-    /** A public @name card's action: Open Channel / View Channel, Open Group when I am in the group. */
+    /**
+     * The card's action. An invite (iOS MessageRowLayout bottomButton): Open Group when I am in it,
+     * else View Group; a channel's Open / View Channel. A public @name: the same, but a group I am
+     * not in has none (its own page has the Join).
+     */
     fun actionLine(byName: Boolean, channel: Boolean, member: Boolean): String? = when {
-        !byName -> null
         channel -> if (member) "Open Channel" else "View Channel"
+        !byName -> if (member) "Open Group" else "View Group"
         member -> "Open Group"
         else -> null
     }
@@ -107,6 +111,19 @@ object GroupLinkCards {
     private val io = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val kept = ConcurrentHashMap<String, Kept>()
     private val inFlight = ConcurrentHashMap<String, Deferred<Live>>()
+
+    /** iOS GroupLinkDoor.noteLeft: I left [cid], so its cards ask again and say View Group. */
+    fun forgetCid(cid: String) {
+        if (cid.isEmpty()) return
+        kept.entries.removeIf { (it.value.live as? Live.Found)?.cid == cid }
+    }
+
+    /** iOS GroupLinkDoor.noteJoined: after a join through the sheet the card says Open Group. */
+    fun noteJoined(code: String, cid: String) {
+        val key = Target.Invite(code).key
+        val f = kept[key]?.live as? Live.Found ?: return
+        kept[key] = Kept(System.currentTimeMillis(), f.copy(isMember = true, cid = cid))
+    }
 
     /** What is in memory for [t], fresh or not (the bubble's first frame), or null. */
     fun peek(t: Target): Live? = kept[t.key]?.live
@@ -141,7 +158,8 @@ object GroupLinkCards {
             if (d == null) Live.Unknown else {
                 val channel = d["channel"] == true
                 Live.Found((d["title"] as? String)?.trim()?.ifEmpty { null } ?: if (channel) "Channel" else "Group",
-                    (d["photoUrl"] as? String)?.ifEmpty { null }, (d["memberCount"] as? Number)?.toInt() ?: 0, channel)
+                    (d["photoUrl"] as? String)?.ifEmpty { null }, (d["memberCount"] as? Number)?.toInt() ?: 0, channel,
+                    isMember = d["isMember"] == true, cid = (d["cid"] as? String).orEmpty())
             }
         } catch (e: FirebaseFunctionsException) {
             if (e.code == FirebaseFunctionsException.Code.NOT_FOUND || e.code == FirebaseFunctionsException.Code.PERMISSION_DENIED) Live.Gone
