@@ -99,9 +99,9 @@ object MessageRules {
     /** A swipe replies to a story react-bar emoji too (iOS 2fff7ecc8); it still has no long press. */
     fun canSwipeReply(m: Message, mayReply: Boolean): Boolean = mayReply && canReply(m)
 
-    /** Info: my own delivered message in a group, never in a channel (iOS). */
+    /** Info: my own delivered message in a group, never in a channel, never a call record (iOS). */
     fun canInfo(m: Message, me: String, isGroup: Boolean, isChannel: Boolean = false): Boolean =
-        isGroup && !isChannel && m.authorId == me && m.sendState == null
+        isGroup && !isChannel && m.authorId == me && m.sendState == null && !m.isCall
 
     data class Chip(val emoji: String, val count: Int, val mine: Boolean, val faces: List<String>)
 

@@ -164,4 +164,13 @@ class MessageRulesTest {
         assertEquals(null, MessageRules.liveLine(mapOf("a" to "photo-1"), "me", false, false, true) { names[it] })
         assertEquals(null, MessageRules.liveLine(mapOf("me" to "photo-1"), "me", false, true, true) { names[it] })
     }
+
+    @Test fun infoIsMyGroupMessageButNeverACallRecord() {
+        assertTrue(MessageRules.canInfo(msg(), me, isGroup = true))
+        assertFalse(MessageRules.canInfo(msg(), me, isGroup = false))
+        assertFalse(MessageRules.canInfo(msg(), me, isGroup = true, isChannel = true))
+        assertFalse(MessageRules.canInfo(msg(author = "them"), me, isGroup = true))
+        // iOS: a call record's menu is Reply, call back, Select and Delete only.
+        assertFalse(MessageRules.canInfo(msg(text = "", type = "call"), me, isGroup = true))
+    }
 }

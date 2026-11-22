@@ -253,8 +253,9 @@ internal fun MessageMenu(
             }
         }
         // Someone else's message in a group (not a channel, not a 1:1, which is end to end with no
-        // Report): the one report sheet, unless the group turned reports off.
-        if (!m.deleted && !m.isSystem && ui.isGroup && ui.channel == null && m.authorId != ui.me && m.authorId.isNotEmpty() &&
+        // Report): the one report sheet, unless the group turned reports off. A call record has
+        // its own short menu on iOS (Reply, call back, Select, Delete): no Report, no Info.
+        if (!m.deleted && !m.isSystem && !m.isCall && ui.isGroup && ui.channel == null && m.authorId != ui.me && m.authorId.isNotEmpty() &&
             ui.groupDoc["noReport"] != true)   // the server field, as iOS reads it
             add(MenuItem("Report", null, destructive = true, iconRes = com.fariin.app.R.drawable.ic_report, badge = NewBadgeSpots.CHAT_MENU_REPORT) {
                 com.fariin.app.data.ReportFlow.ask(com.fariin.app.data.ReportTarget(com.fariin.app.data.ReportKind.MESSAGE,
