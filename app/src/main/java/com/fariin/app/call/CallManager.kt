@@ -739,16 +739,42 @@ object CallManager {
                 }
             }
             PeerConnection.IceConnectionState.DISCONNECTED -> {
-                move(CallEvent.MediaLost)
-                after(30_000) { if (callId == id && status.phase == CallPhase.RECONNECTING) finish(EndReason.FAILED, true, false) }
+                // iOS 1:1 audit #7: a blip that heals within 1 s never shows "Reconnecting…".
+                after(1000) { if (callId == id && !mediaReady && status.phase == CallPhase.ACTIVE) enterReconnecting(id) }
             }
             PeerConnection.IceConnectionState.FAILED -> {
-                move(CallEvent.MediaLost)
+                enterReconnecting(id)
                 if (status.isCaller) restartIce()
                 else { restartRequestsSent++; signaling.update(id, mapOf("restartRequest" to restartRequestsSent)) }
-                after(30_000) { if (callId == id && status.phase == CallPhase.RECONNECTING) finish(EndReason.FAILED, true, false) }
             }
             else -> {}
+        }
+    }
+
+    /** Which drop the give-up timer belongs to: a timer from an earlier drop never ends a later one. */
+    private var reconnectSeq = 0
+    private var reconnectStartedAt = 0L
+
+    private fun enterReconnecting(id: String) {
+        val wasActive = status.phase == CallPhase.ACTIVE
+        move(CallEvent.MediaLost)
+        if (!wasActive || status.phase != CallPhase.RECONNECTING) return
+        reconnectStartedAt = android.os.SystemClock.elapsedRealtime()
+        armReconnectGiveUp(id, ++reconnectSeq, 30_000)
+    }
+
+    /**
+     * iOS armReconnectGiveUp: "Call failed" after 30 s, but while their heartbeat still comes in it
+     * keeps trying, in steps of up to 15 s, to 60 s at most.
+     */
+    private fun armReconnectGiveUp(id: String, seq: Int, ms: Long) {
+        after(ms) {
+            if (callId != id || seq != reconnectSeq || status.phase != CallPhase.RECONNECTING) return@after
+            val now = android.os.SystemClock.elapsedRealtime()
+            val elapsed = now - reconnectStartedAt
+            val peerAlive = peerBeatChangedAt > 0 && now - peerBeatChangedAt < 12_000
+            if (elapsed < 60_000 && peerAlive) { armReconnectGiveUp(id, seq, minOf(15_000L, 60_000L - elapsed)); return@after }
+            finish(EndReason.FAILED, true, false)
         }
     }
 
