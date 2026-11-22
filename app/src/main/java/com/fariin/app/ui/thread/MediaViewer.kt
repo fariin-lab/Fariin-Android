@@ -405,12 +405,13 @@ private fun ViewerBody(
     var shareSheetFor by remember { mutableStateOf<Message?>(null) }
     val videoShare: () -> Unit = {
         val m = page.messageId?.let { host?.message?.invoke(it) }
-        if (host?.forwardTo != null && m != null && page.albumParent == null && page.once == null && !restricted &&
+        // A photo of an album forwards the whole album (iOS albumMessage); a video tile keeps the system share.
+        if (host?.forwardTo != null && m != null && (page.albumParent == null || !page.isVideo) && page.once == null && !restricted &&
             com.fariin.app.data.MessageRules.canForward(m)) shareSheetFor = m else share()
     }
 
     val photoForwards = page.messageId?.let { host?.message?.invoke(it) }?.let { m ->
-        host?.forwardTo != null && page.albumParent == null && page.once == null && !restricted && com.fariin.app.data.MessageRules.canForward(m)
+        host?.forwardTo != null && (page.albumParent == null || !page.isVideo) && page.once == null && !restricted && com.fariin.app.data.MessageRules.canForward(m)
     } == true
 
     Box(Modifier.fillMaxSize().onSizeChanged { box = Size(it.width.toFloat(), it.height.toFloat()) }
