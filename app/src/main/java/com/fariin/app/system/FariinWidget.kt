@@ -59,6 +59,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -156,6 +157,8 @@ object FariinWidget {
             if (HomeWidgetRules.signature(s) == lastShown) return@launch
             // Faces first, so the redraw has them (saved for the notifications too).
             for (r in s.rows) r.photo?.let { url -> runCatching { FariinMessagingService.loadAvatar(app, url) } }
+            // Signed out (or cancelled) while the faces loaded: clear() already ran, write nothing.
+            if (!isActive || com.fariin.app.Fb.auth.currentUser?.uid != me) return@launch
             save(app, s)
             redraw(app, s)
         }
