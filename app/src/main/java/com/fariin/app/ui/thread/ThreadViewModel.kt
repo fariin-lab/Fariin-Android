@@ -107,6 +107,23 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     }
     val requestBar = requestBarFor(conv, me, otherUid, s.otherPrivacy, s.messages, receipts.iBlocked || s.former,
         keyAccepted.value, otherHasKey, keyResolved, com.fariin.app.data.MsgPolicy.revision)
+    // iOS showKeyAsk: once per chat, when my first message turns it into "request sent" and they
+    // have a Chat Key, ask whether I know it. Not marked as asked when they have no key yet.
+    val stanceNow = conv?.takeIf { !it.isGroup }?.let { com.fariin.app.data.Requests.stance(it, me) }
+    var lastStance by remember(cid) { mutableStateOf(stanceNow) }
+    var keyAsk by remember(cid) { mutableStateOf(false) }
+    var keyAskSheet by remember(cid) { mutableStateOf(false) }
+    LaunchedEffect(cid, stanceNow) {
+        val old = lastStance
+        lastStance = stanceNow
+        if (old != com.fariin.app.data.Requests.Stance.FIRST_MESSAGE ||
+            stanceNow != com.fariin.app.data.Requests.Stance.AWAITING_REPLY) return@LaunchedEffect
+        if (!otherHasKey || !com.fariin.app.data.MsgPolicy.chatKeyVisible) return@LaunchedEffect
+        val prefs = app.getSharedPreferences("fariin_requests", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("chatKeyAsked.$cid", false)) return@LaunchedEffect
+        prefs.edit().putBoolean("chatKeyAsked.$cid", true).apply()
+        keyAsk = true
+    }
     // Online / last seen for a 1:1 (iOS ThreadView subtitle), redrawn each minute so "5 min. ago" moves.
     var minute by remember { mutableStateOf(0) }
     LaunchedEffect(cid) { while (true) { delay(60_000); minute++ } }
@@ -501,6 +518,22 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
             onSendFile = { uri -> vm.repo.sendDocument(app, uri) { notice = it } },
             onSendFiles = { uris -> vm.repo.sendDocuments(app, uris) { notice = it } })
     }
+    // The question itself: Not Now and the request simply waits; Use Chat Key opens the key sheet.
+    if (keyAsk) com.fariin.app.ui.components.GlassAlert(
+        onDismissRequest = { keyAsk = false },
+        title = "Know ${ui.title}'s Chat Key?",
+        message = "Your message request is sent. If you know their Chat Key, you can message them now instead of waiting.",
+        actions = listOf(
+            com.fariin.app.ui.components.GlassAlertAction("Not Now", com.fariin.app.ui.components.GlassAlertStyle.Bold) { keyAsk = false },
+            com.fariin.app.ui.components.GlassAlertAction("Use Chat Key") { keyAsk = false; keyAskSheet = true },
+        ),
+    )
+    if (keyAskSheet) com.fariin.app.ui.people.ChatKeySheet(
+        remember(me) { com.fariin.app.data.FirestorePeople(me, crypto) },
+        com.fariin.app.data.Person(otherUid, name = ui.title, handle = ""),
+        onDismiss = { keyAskSheet = false },
+        onOpened = { keyAskSheet = false; keyAccepted.value = true },
+    )
 }
 
 
