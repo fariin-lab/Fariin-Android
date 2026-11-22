@@ -77,6 +77,95 @@ object LocalDb {
     private fun keepable(m: Message) = m.sendState == null && !m.uploading && m.hasServerTime && m.id.isNotEmpty() &&
         !m.id.startsWith("fariin-")
 
+    /**
+     * What this file keeps of [m]: an opened view-once goes in as its stub ([OnceStub], iOS files
+     * it as {}), so its link, keys and caption never stay on the phone, and the plain copy the
+     * chat-media cache holds for it goes too. Opened = the server burned it, or (not mine) this
+     * phone opened it. Call off the main thread.
+     */
+    private fun filed(db: SQLiteDatabase, uid: String, cid: String, m: Message): Message {
+        if (!m.viewOnce || m.deleted) return m
+        val ctx = app
+        val seen = m.authorId != uid && ctx != null && com.fariin.app.media.ViewedOnce.contains(ctx, m.id)
+        if (!com.fariin.app.data.OnceStub.isSpent(m, seen)) return m
+        val stub = com.fariin.app.data.OnceStub.stub(m)
+        if (ctx != null && !com.fariin.app.data.OnceStub.isStub(m)) {
+            // The links of this message only: the copy in hand, and the one filed before (the
+            // server's burned copy may come without its link).
+            val before = runCatching {
+                db.rawQuery("SELECT body FROM messages WHERE cid = ? AND id = ?", arrayOf(cid, m.id)).use { c ->
+                    if (c.moveToFirst()) LocalJson.decodeMessage(org.json.JSONObject(c.getString(0))) else null
+                }
+            }.getOrNull()
+            dropCached(ctx, cid, com.fariin.app.data.OnceStub.mediaUrls(m) + (before?.let { com.fariin.app.data.OnceStub.mediaUrls(it) } ?: emptyList()))
+        }
+        return stub
+    }
+
+    private fun dropCached(ctx: Context, cid: String, urls: Collection<String>) {
+        if (urls.isEmpty()) return
+        val media = com.fariin.app.media.ChatMedia(ctx, cid, null)
+        for (u in urls.toSet()) runCatching { media.forget(u) }
+    }
+
+    /** A spent view-once's row: the stub's body (see [filed]). */
+    private fun putStub(db: SQLiteDatabase, cid: String, stub: Message, now: Long) {
+        db.update("messages", ContentValues().apply {
+            put("body", LocalJson.encodeMessage(stub).toString()); put("updated_at", now)
+        }, "cid = ? AND id = ?", arrayOf(cid, stub.id))
+    }
+
+    /**
+     * I (the receiver) just opened view-once [id] of [cid]: its filed row becomes the stub now,
+     * not when the server's burn comes back.
+     */
+    fun stubOpened(cid: String, id: String) {
+        val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return
+        io.launch {
+            val db = db(uid) ?: return@launch
+            runCatching {
+                val m = message(uid, cid, id) ?: return@launch
+                if (!m.viewOnce || m.deleted || m.authorId == uid) return@launch
+                val stub = filed(db, uid, cid, m.copy(consumed = true))
+                putStub(db, cid, stub, System.currentTimeMillis())
+            }
+        }
+    }
+
+    /**
+     * One time per account (prefs flag): rows filed before the stub rule, every opened view-once
+     * still holding its content, become stubs. Safe to run again: a stub is left as it is.
+     */
+    fun stubSpentOnceRows(uid: String) {
+        val ctx = app ?: return
+        val prefs = ctx.getSharedPreferences("fariin_local", Context.MODE_PRIVATE)
+        val flag = "onceStubbed.$uid"
+        if (prefs.getBoolean(flag, false)) return
+        io.launch {
+            val db = db(uid) ?: return@launch
+            runCatching {
+                val rows = ArrayList<Pair<String, Message>>()
+                db.rawQuery("SELECT cid, body FROM messages WHERE deleted = 0 AND body LIKE ?", arrayOf("%\"once\":true%")).use { c ->
+                    while (c.moveToNext()) runCatching { LocalJson.decodeMessage(org.json.JSONObject(c.getString(1))) }
+                        .getOrNull()?.let { rows.add(c.getString(0) to it) }
+                }
+                val now = System.currentTimeMillis()
+                for ((cid, list) in rows.groupBy({ it.first }, { it.second })) {
+                    val stubs = com.fariin.app.data.OnceStub.migrate(list, uid) { com.fariin.app.media.ViewedOnce.contains(ctx, it) }
+                    if (stubs.isEmpty()) continue
+                    val old = list.associateBy { it.id }
+                    db.beginTransaction()
+                    try {
+                        for (s in stubs) { putStub(db, cid, s, now); written.remove("$uid/$cid/${s.id}") }
+                        db.setTransactionSuccessful()
+                    } finally { db.endTransaction() }
+                    dropCached(ctx, cid, stubs.flatMap { s -> old[s.id]?.let { com.fariin.app.data.OnceStub.mediaUrls(it) } ?: emptyList() })
+                }
+                prefs.edit().putBoolean(flag, true).apply()
+            }
+        }
+    }
+
     /** Write what changed of [messages] (any order), off the main thread. */
     /**
      * [cursor]: may this chat's delivery cursor move (not a channel). The NO-GAP rule (iOS ced63a4fd,
@@ -100,7 +189,7 @@ object LocalDb {
             runCatching {
                 db.beginTransaction()
                 try {
-                    for (m in changed) {
+                    for (m in changed.map { filed(db, uid, cid, it) }) {
                         val body = if (m.deleted) "{}" else LocalJson.encodeMessage(m).toString()
                         db.insertWithOnConflict("messages", null, ContentValues().apply {
                             put("cid", cid); put("id", m.id); put("created_at", m.createdAtMillis.toLong())
@@ -141,14 +230,15 @@ object LocalDb {
         return runCatching {
             db.beginTransaction()
             try {
-                for (m in rows) {
+                for (given in rows) {
+                    val m = filed(db, uid, cid, given)
                     db.insertWithOnConflict("messages", null, ContentValues().apply {
                         put("cid", cid); put("id", m.id); put("created_at", m.createdAtMillis.toLong())
                         put("sender", m.authorId); put("type", m.type); put("deleted", if (m.deleted) 1 else 0)
                         m.expiresAtMillis?.let { put("expires_at", it.toLong()) } ?: putNull("expires_at")
                         put("body", if (m.deleted) "{}" else LocalJson.encodeMessage(m).toString()); put("updated_at", now)
                     }, SQLiteDatabase.CONFLICT_REPLACE)
-                    written["$uid/$cid/${m.id}"] = Seen(m, m.hashCode())
+                    written["$uid/$cid/${m.id}"] = Seen(given, given.hashCode())
                 }
                 db.setTransactionSuccessful()
             } finally { db.endTransaction() }

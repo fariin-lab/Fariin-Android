@@ -142,7 +142,10 @@ object LocalCache {
         if (before != null && sameObjects(before, kept) && lastWritten.containsKey("t:$uid/$cid")) return
         threadMemo["$uid/$cid"] = kept
         val f = dir(uid)?.let { File(File(it, "threads"), safe(cid) + ".bin") } ?: return
-        schedule("t:$uid/$cid", f, kept.hashCode()) { LocalJson.encodeMessages(kept) }
+        // An opened view-once is written as its stub here too (OnceStub): no link or key on disk.
+        schedule("t:$uid/$cid", f, kept.hashCode()) {
+            LocalJson.encodeMessages(kept.map { com.fariin.app.data.OnceStub.forStore(it, seenHere = false) })
+        }
     }
 
     /** Same size and the very same objects in the same places. */
