@@ -233,14 +233,15 @@ object ChatList {
         if (c.isChannel && me !in c.users) return RowPreview(channelPostLine(c))
         // A blocked person's newest line never leaks into the list.
         if (c.leaksBlocked(me)) return RowPreview("Blocked", icon = PreviewIcon.BLOCKED)
-        // I deleted the newest message for me only: the one before it (owner 2026-11-13).
-        HiddenLast.line(c)?.let { return RowPreview(it) }
         reactionPreview(c, me, decryptor, senderName)?.let { line ->
             val heart = c.lastReactionBy != me && c.lastReactionToAuthor == me
             return reactionParts(c, line, heart)
         }
         // Clear Chat in a group I am still in (iOS clearedByMe): the row stays, its last line does not.
         if (clearedByMe(c, me)) return RowPreview("")
+        // I deleted the newest message for me only: the one before it (owner 2026-11-13). After a
+        // newer reaction and Clear Chat, as iOS reads it in decodedLast.
+        HiddenLast.line(c)?.let { return RowPreview(it) }
         // A blank server line on a chat with messages: the last line this phone saw (iOS 44d1d83c3).
         if (c.lastMessageCipher.isEmpty() && c.lastSender.isNotEmpty() && c.lastImageUrl.isNullOrEmpty()) {
             LastSeenLine.get(c.id)?.let { saved -> return rowPreview(c.copy(lastMessageCipher = saved), me, decryptor, senderName) }
