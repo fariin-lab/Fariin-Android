@@ -89,12 +89,16 @@ internal fun moreRoute(page: String, push: (String) -> Unit, pop: () -> Unit): B
         page == PAGE_LESS_DATA -> ChoicePage("Use Less Data", "fariin_calls", "calls.lessData", "never", SettingsRules.lessData,
             "Lowers call quality to save data. Applies from your next call.", pop)
         page.startsWith(PAGE_AUTODL) -> page.removePrefix(PAGE_AUTODL).let { k ->
-            ChoicePage(SettingsRules.autoKinds.first { it.first == k }.second, MEDIA_PREFS, "autodl.$k", SettingsRules.autoDefault(k), SettingsRules.autoPolicies, null, pop)
+            val label = SettingsRules.autoKinds.first { it.first == k }.second
+            // iOS AutoDownloadPage footer, one line per kind.
+            val footer = if (k == "photos") "When off, photos show a blurred preview until you tap them."
+                else "When allowed, ${label.lowercase()} download in the background as chats open, so they play instantly."
+            ChoicePage(label, MEDIA_PREFS, "autodl.$k", SettingsRules.autoDefault(k), SettingsRules.autoPolicies, footer, pop)
         }
         page == PAGE_MANAGE_STORAGE -> ManageStoragePage(pop)
-        // iOS words, less the HD button line: Android has no per-send HD switch yet.
+        // iOS words: the HD button on each send starts from this choice.
         page == PAGE_SENT_QUALITY -> ChoicePage("Sent Media Quality", MEDIA_PREFS, com.fariin.app.media.SentQuality.KEY, "standard", SettingsRules.sentQuality,
-            "Standard sends photos up to 1280 px so they go fast. High sends photos up to 2560 px, using more data.", pop)
+            "Standard sends photos up to 1280 px so they go fast. High starts the HD button switched on: photos up to 2560 px and 1080p video, using more data. You can still change it on each send.", pop)
         page == PAGE_STORIES -> StoriesSettingsPage(push, pop)
         page == PAGE_STORY_EVERYONE -> StoryEveryonePage(pop)
         page == PAGE_STORY_MYCHATS -> StoryMyChatsPage(pop)
