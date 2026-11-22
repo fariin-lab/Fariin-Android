@@ -769,7 +769,7 @@ class ThreadRepository(
         // While only the saved copy is on screen, a pending send joins it instead of replacing it.
         val shown = if (seeded && liveDocs.isEmpty() && olderDocs.isEmpty())
             _state.value.messages.filter { it.sendState == null && it.rowId !in all && !Disappearing.isExpired(it, now) } + all.values else all.values
-        val sorted = order.sort(shown)
+        val sorted = order.sort(sweepStuck(shown, now))
         _state.update { it.copy(messages = sorted, loaded = loaded ?: it.loaded) }
         // A channel never shows a deleted post: its saved copy leaves them out, so the 60 kept rows
         // reach back to real posts (VE3: the newest 60 were all deleted, every open began empty).
@@ -800,6 +800,38 @@ class ThreadRepository(
 
     private var burnJob: Job? = null
     private val burned = HashSet<String>()
+
+    // ------------------------------------------------------------------ stuck sends
+
+    private var sweepJob: Job? = null
+    /** Texts already shown failed by the sweep: they stay failed until their echo lands (iOS). */
+    private val sweptSends = ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * iOS sweepStuckSends: a text of mine never spins "sending" for ever. With no network it shows
+     * the red mark after 5 s (2 min with one, a slow but real send). Only the look changes: the
+     * write stays queued and goes by itself, and its echo from the server puts the tick back.
+     * Media is left out (its upload may still be running and has its own retry).
+     */
+    private fun sweepStuck(shown: Collection<Message>, now: Double): Collection<Message> {
+        val grace = if (ConnectionStatus.offline) 5_000.0 else 120_000.0
+        var next = Double.MAX_VALUE
+        val out = shown.map { m ->
+            if (m.sendState != Message.SendState.SENDING || m.authorId != me || m.hasServerTime ||
+                m.mediaKind != null || !(m.type == null || m.type == "text")) return@map m
+            val id = m.clientId ?: m.id
+            val at = (m.clientTs ?: m.createdAtMillis) + grace
+            if (id in sweptSends || at <= now) { sweptSends += id; m.copy(sendState = Message.SendState.FAILED) }
+            else { next = minOf(next, at); m }
+        }
+        // Looked at again at least every 15 s (iOS's timer), so a signal lost meanwhile shows too.
+        sweepJob?.cancel(); sweepJob = null
+        if (next < Double.MAX_VALUE && !closed) {
+            val wait = minOf(15_000L, maxOf(500L, (next - now).toLong() + 200L))
+            sweepJob = scope.launch { delay(wait); rebuild() }
+        }
+        return out
+    }
 
     /** One timer for the soonest stamp still ahead, a fifth of a second past it (iOS scheduleNextBurn). */
     private fun scheduleBurn(next: Double?) {
@@ -976,6 +1008,7 @@ class ThreadRepository(
             bold = TextFormat.parse(e.fmt, e.text.length),
             links = TextFormat.parseLinks(e.fmt, e.text.length),
         )
+        sweptSends.remove(e.clientId)   // a new try: sending again until the sweep says otherwise
         rebuild()
         return on.launch {
             try {
