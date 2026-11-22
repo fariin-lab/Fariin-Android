@@ -605,6 +605,24 @@ object OfficialChannel {
             .set(mapOf("hiddenIds" to com.google.firebase.firestore.FieldValue.arrayUnion(*ids.toTypedArray())), SetOptions.merge())
     }
 
+    /**
+     * The "how many people saw this" number (iOS AnnouncementStats.countRead): once per person per
+     * note, kept on the phone, one of 100 counter shards goes up by one. Run as a card comes on screen.
+     */
+    private val countedThisRun = HashSet<String>()
+    fun countRead(a: Announcement) {
+        val me = uid ?: return
+        val c = app ?: return
+        val key = "officialRead-$me-${a.id}"
+        if (!countedThisRun.add(key)) return
+        val prefs = c.getSharedPreferences("fariin_official_reads", android.content.Context.MODE_PRIVATE)
+        if (prefs.getBoolean(key, false)) return
+        prefs.edit().putBoolean(key, true).apply()
+        com.fariin.app.Fb.db.collection("announcements").document(a.id)
+            .collection("readShards").document("${(0 until 100).random()}")
+            .set(mapOf("count" to com.google.firebase.firestore.FieldValue.increment(1)), SetOptions.merge())
+    }
+
     const val REJECT_OFFLINE = "Could not reject ownership. Check your connection and try again."
     const val REJECT_TITLE = "Reject ownership?"
     const val REJECT_MESSAGE = "The group goes back to its previous owner, or to its longest-standing admin if they have left. You keep the role you had before."

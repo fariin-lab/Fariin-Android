@@ -331,6 +331,8 @@ fun OfficialChatScreen(onBack: () -> Unit, onInfo: (() -> Unit)? = null) {
                     modifier = Modifier.fillMaxWidth().padding(top = 24.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
             items(view.visible, key = { it.id }) { a ->
+                // Counted as seen once it is on screen (iOS countsAsRead).
+                LaunchedEffect(a.id) { OfficialChannel.countRead(a) }
                 val now = System.currentTimeMillis().toDouble()
                 AnnouncementCard(a, timeLabel(a.sortAt, is24h), a.buttons.filter { it.isUsable(now) }, ::tap,
                     ticked = if (selecting) a.id in picked else null, onToggle = { toggle(a.id) },
