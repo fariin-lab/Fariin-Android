@@ -23,6 +23,9 @@ object ContactNames {
     const val NOTE_LIMIT = 100
 
     private val cards = mutableStateMapOf<String, ContactCard>()
+    /** Goes up on every save or delete, so the notification names can be saved again (iOS NotifShare.noteConversations). */
+    private val changes = androidx.compose.runtime.mutableIntStateOf(0)
+    val version: Int get() = changes.intValue
     @Volatile private var app: Context? = null
     /** The saved cards, parsed once: by the start-up thread ([preload]) or the first reader. */
     private val disk = com.fariin.app.local.LoadOnce {
@@ -58,12 +61,13 @@ object ContactNames {
         val c = card.copy(first = card.first.take(NAME_LIMIT), last = card.last.take(NAME_LIMIT), note = card.note.take(NOTE_LIMIT))
         if (c.isEmpty) cards.remove(uid) else cards[uid] = c
         persist()
+        changes.intValue++
     }
 
-    fun remove(uid: String) { disk.ensure(); cards.remove(uid); persist() }
+    fun remove(uid: String) { disk.ensure(); cards.remove(uid); persist(); changes.intValue++ }
 
     /** Sign-out: they were this account's names. */
-    fun clear() { disk.ensure(); cards.clear(); persist() }
+    fun clear() { disk.ensure(); cards.clear(); persist(); changes.intValue++ }
 
     private fun persist() {
         val c = app ?: return

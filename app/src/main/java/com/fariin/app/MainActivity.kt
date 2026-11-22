@@ -391,7 +391,8 @@ class MainActivity : ComponentActivity() {
         val nav = rememberNavController()
         // Notifications: the chat list's names and photos for the push service, the open chat
         // (no notification for it), and a tapped notification opening its chat.
-        LaunchedEffect(vm) { androidx.compose.runtime.snapshotFlow { chatsState.value.chats }.collect { list ->
+        // A saved or deleted nickname saves the names again too (iOS SetNicknameView notes the chats).
+        LaunchedEffect(vm) { androidx.compose.runtime.snapshotFlow { chatsState.value.chats to com.fariin.app.data.ContactNames.version }.collect { (list, _) ->
             if (list.isNotEmpty()) withContext(Dispatchers.Default) { NotifStore.saveChats(applicationContext, me, list) }
             // Recent chats as conversation shortcuts: share sheet, launcher, notification settings.
             if (list.isNotEmpty()) com.fariin.app.system.ChatShortcuts.publish(applicationContext, me, list)
