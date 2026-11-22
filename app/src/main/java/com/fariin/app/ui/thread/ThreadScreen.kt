@@ -963,7 +963,8 @@ private fun ThreadContent(
             val list = uiNow.value.messages
             val i = list.indexOfFirst { it.id == id }
             if (!found || i < 0) {
-                val gone = list.none { it.id == id } && uiNow.value.pinned[id] == null
+                // Deleted only when proven (iOS pinnedGone); a pin not read yet opens the list instead.
+                val gone = list.firstOrNull { it.id == id }?.deleted ?: (uiNow.value.pinned[id]?.deleted == true)
                 // iOS: out of reach from the pinned bar, the pinned list opens instead of a notice.
                 if (gone) actions.onNotice("Pinned message was deleted")
                 else if (advance) showPins.value = true

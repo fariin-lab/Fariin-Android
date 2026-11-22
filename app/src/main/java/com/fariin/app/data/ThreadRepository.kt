@@ -2457,7 +2457,8 @@ class ThreadRepository(
     // ------------------------------------------------------------------ pins (iOS ChatService pins)
 
     /** The pinned messages by id, fetched on their own so a pin older than the loaded page still
-     *  draws in the bar (iOS pinnedPreviews). A tombstone or a missing document is left out. */
+     *  draws in the bar (iOS pinnedPreviews). A tombstone, or a document the server says is not
+     *  there, is kept as deleted (iOS pinnedGone), so the bar and See All leave it out. */
     private val _pinned = MutableStateFlow<Map<String, Message>>(emptyMap())
     val pinned: StateFlow<Map<String, Message>> = _pinned.asStateFlow()
     private val pinFetching = ConcurrentHashMap.newKeySet<String>()
@@ -2471,7 +2472,10 @@ class ThreadRepository(
                     val d = msgRef(id).get().await()
                     if (d.exists()) {
                         val m = parse(d)
-                        if (!m.deleted) _pinned.update { it + (id to m) }
+                        _pinned.update { it + (id to m) }
+                    } else if (!d.metadata.isFromCache) {
+                        // Proven gone: a stand-in marked deleted, so the bar stops saying "Tap to view".
+                        _pinned.update { it + (id to Message(id = id, authorId = "", text = "", createdAtMillis = 0.0, deleted = true)) }
                     }
                 } catch (_: Exception) {
                 } finally { pinFetching.remove(id) }
