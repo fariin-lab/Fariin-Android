@@ -1,5 +1,7 @@
 package com.fariin.app.push
 
+import kotlinx.coroutines.flow.first
+
 /**
  * A tapped chat notification's message, held from the tap until its chat opens (iOS passes the
  * push's `mid` with the chat the same way). The open chat lands at the newest and follows that
@@ -34,4 +36,20 @@ object PushTapRoute {
      */
     fun opens(gate: com.fariin.app.data.OpenGate.Result): Boolean =
         gate == com.fariin.app.data.OpenGate.Result.OPEN || gate == com.fariin.app.data.OpenGate.Result.POST_GONE
+
+    /** How long a cold-start tap waits for the saved sign-in to come back before it opens anyway. */
+    const val AUTH_WAIT_MS = 5_000L
+
+    /**
+     * A tap with the app closed can come before the saved sign-in is back. It waits for the signed-in
+     * uid ([uids], live), then asks [gate] (which reads as that uid). No user in time: it opens as
+     * before, never a tap that does nothing.
+     */
+    suspend fun allowed(uids: kotlinx.coroutines.flow.Flow<String?>, waitMs: Long = AUTH_WAIT_MS,
+                        gate: suspend () -> com.fariin.app.data.OpenGate.Result): Boolean {
+        kotlinx.coroutines.withTimeoutOrNull(waitMs) {
+            uids.first { it != null }
+        } ?: return true
+        return opens(gate())
+    }
 }

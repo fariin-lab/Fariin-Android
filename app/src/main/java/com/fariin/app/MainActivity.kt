@@ -787,7 +787,10 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             // Checked first (iOS didReceive OpenGate): a banner left from another account, or about a
             // chat that is gone, opens nothing instead of a chat this account is not in.
-            if (!com.fariin.app.push.PushTapRoute.opens(com.fariin.app.data.OpenGate.check(cid, null))) {
+            // With the app closed the saved sign-in may not be back yet: wait for it (up to 5 s), and
+            // open as before if it never comes.
+            if (!com.fariin.app.push.PushTapRoute.allowed(com.fariin.app.data.AuthRepository().uid) {
+                    com.fariin.app.data.OpenGate.check(cid, null) }) {
                 val sheet = com.fariin.app.ui.channels.PostQuotesSheet.pendingReplies
                 if (sheet.value?.first == cid) sheet.value = null
                 return@launch
