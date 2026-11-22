@@ -166,12 +166,12 @@ fun AppUpdateLayer() {
                 if (u.message.isNotEmpty()) Text(u.message, fontSize = 16.sp, color = c.secondary, textAlign = TextAlign.Center)
                 Box(Modifier.fillMaxWidth().height(52.dp).clip(CircleShape).background(c.accent).clickable { AppUpdateGate.openStore(ctx, u) },
                     contentAlignment = Alignment.Center) {
-                    Text("Update", color = c.onAccent, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Update Now", color = c.onAccent, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
     } else GlassAlert(onDismissRequest = { },   // only the buttons answer; an outside tap or Back must not snooze
         title = { Text(u.title) }, text = { if (u.message.isNotEmpty()) Text(u.message) },
-        confirmButton = { TextButton(onClick = { AppUpdateGate.openStore(ctx, u) }) { Text("Update") } },
+        confirmButton = { TextButton(onClick = { AppUpdateGate.openStore(ctx, u) }) { Text("Update Now") } },
         dismissButton = { TextButton(onClick = { AppUpdateGate.notNow(ctx) }) { Text("Not Now") } })
 }
