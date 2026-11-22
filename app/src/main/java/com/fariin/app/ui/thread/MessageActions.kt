@@ -752,11 +752,13 @@ internal fun mayReplyHere(ui: ThreadUi): Boolean =
 
 /** iOS: a photo, a video or an album can be saved; a view-once photo never. */
 /**
- * iOS canReact: never a deleted, unsent, system or call message, nor a story-reaction message; not
- * when an admin turned my reactions off, nor while an admin has me muted in the group.
+ * iOS canReact: never a deleted, unsent, system or call message, nor a story-reaction message, a
+ * "pinned a message" notice or a feature this build cannot show; not when an admin turned my
+ * reactions off, nor while an admin has me muted in the group.
  */
 internal fun canReact(m: Message, ui: ThreadUi): Boolean =
     !m.deleted && m.sendState == null && !m.isSystem && !m.isCall && !MessageRules.isStoryReaction(m) &&
+        com.fariin.app.data.PinRules.notice(m.text) == null && !MessageRules.isUnsupportedFeature(m.text) &&
         !com.fariin.app.data.GroupAdmins.reactionsHeldBack(ui.groupDoc, ui.me) &&
         !(ui.isGroup && ui.groupDoc.isNotEmpty() && com.fariin.app.data.MemberRestrict.isMuted(ui.groupDoc, ui.me, System.currentTimeMillis().toDouble()))
 

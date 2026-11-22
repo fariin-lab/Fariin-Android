@@ -29,6 +29,12 @@ object MessageRules {
     /** iOS Message.isFeatureMarker: a poll, pin notice or any other "fariin-xxx:" text, never edited or copied raw. */
     fun isFeatureMarker(text: String): Boolean = FEATURE_MARKER.containsMatchIn(text)
 
+    /** iOS Message.isUnsupportedFeature: a "fariin-xxx:" marker this build does not know (a newer app sent it). */
+    fun isUnsupportedFeature(text: String): Boolean {
+        val mark = FEATURE_MARKER.find(text)?.value ?: return false
+        return mark !in listOf(CardRules.CONTACT, CardRules.LOCATION, CardRules.LIVE, PinRules.MARKER, PollRules.MARKER)
+    }
+
     /** ThreadView.canEdit: mine, not forwarded, has words, delivered, inside the window. */
     fun canEdit(m: Message, me: String, nowMs: Double, channel: Boolean = false): Boolean =
         m.authorId == me && !m.forwarded && !m.deleted && m.type != "audio" && !m.isCall && !m.isSystem &&
