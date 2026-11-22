@@ -157,6 +157,8 @@ class FirestorePeople(
             coroutineScope {
                 uids.map { u -> async { withTimeoutOrNull(5_000) { db.collection("users").document(u).get().await() } } }.awaitAll()
             }.mapNotNull { s -> s?.data?.takeUnless(Person::hidden)?.let { Person.from(s.id, it) } }
+                // Their photo only when their Profile Picture privacy lets me see it (iOS newPersonRow).
+                .map { p -> if (Person.allows(p.privacy, "photo", isContact(p.uid))) p else p.copy(photoUrl = null) }
         } catch (_: Exception) { emptyList() }
     }
 
