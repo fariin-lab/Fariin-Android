@@ -156,7 +156,7 @@ class ThreadRepository(
      */
     private val failedMedia: MutableSet<String> = ConcurrentHashMap.newKeySet()
     private val processStartMs = ThreadRepositoryStart.ms
-    /** Playlist sends, by clientId: the kind whose Resend picks up where it stopped (MediaSender.PlaylistUpload). */
+    /** Song and playlist sends, by clientId: the kinds whose Resend picks up where it stopped (MediaSender.PlaylistUpload, FileUpload). */
     private val playlistSends: MutableSet<String> = ConcurrentHashMap.newKeySet()
     /** iOS localCards: the link card on my own bubble until the server copy carries it, by clientId. */
     private val localCards = ConcurrentHashMap<String, Message.LinkPreview>()
@@ -1326,7 +1326,15 @@ class ThreadRepository(
                 fileName = f.name, fileSize = f.bytes.size.toLong(), localPath = local.absolutePath,
             )
             rebuild()
-            val work: suspend () -> Unit = { sender.file(f, false, clientId, tap, reply = ref, rename = rename) }
+            // A song is a music message: a failed upload after its write shows failed and its Resend
+            // sends only the file (as a playlist's does); other documents keep their old way.
+            val song = com.fariin.app.media.MediaRules.isSong(f.name)
+            val upload = if (song) com.fariin.app.media.MediaSender.FileUpload() else null
+            val work: suspend () -> Unit = {
+                sender.file(f, false, clientId, tap, reply = ref, rename = rename, job = upload)
+                playlistSends.remove(clientId)
+            }
+            if (song) playlistSends += clientId
             retryMedia[clientId] = work
             runMediaSend(clientId, work)
         }

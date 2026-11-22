@@ -294,8 +294,8 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         if (link != com.fariin.app.data.ConnectionStatus.State.ONLINE || !s.synced) return@LaunchedEffect
         for (m in vm.repo.state.value.messages) {
             val key = m.clientId ?: continue
-            if (m.sendState != com.fariin.app.data.Message.SendState.FAILED || m.mediaKind == null || key in autoRetried) continue
-            if (!vm.repo.canResendMedia(key)) continue
+            if (!com.fariin.app.media.MediaRules.autoRetries(m.sendState == com.fariin.app.data.Message.SendState.FAILED,
+                    m.mediaKind != null, m.forwarded, vm.repo.canResendMedia(key), key in autoRetried)) continue
             autoRetried += key
             vm.repo.retry(m)
         }

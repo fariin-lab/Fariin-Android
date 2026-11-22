@@ -10,6 +10,15 @@ class UploadMatchTest {
         assertTrue(MediaRules.sameUpload("XUFAKrxLKna5cZ2REBfFkg==", "hello".toByteArray()))
     }
 
+    @Test fun aFailedSongOrPlaylistIsResentByItselfButNotAForward() {
+        assertTrue(MediaRules.autoRetries(failed = true, hasMedia = true, forwarded = false, canResend = true, triedAlready = false))
+        assertFalse(MediaRules.autoRetries(failed = true, hasMedia = true, forwarded = true, canResend = true, triedAlready = false))
+        assertFalse(MediaRules.autoRetries(failed = true, hasMedia = true, forwarded = false, canResend = false, triedAlready = false))
+        assertFalse(MediaRules.autoRetries(failed = true, hasMedia = true, forwarded = false, canResend = true, triedAlready = true))
+        assertFalse(MediaRules.autoRetries(failed = false, hasMedia = true, forwarded = false, canResend = true, triedAlready = false))
+        assertFalse(MediaRules.autoRetries(failed = true, hasMedia = false, forwarded = false, canResend = true, triedAlready = false))
+    }
+
     @Test fun anotherObjectOrNoHashIsNot() {
         assertFalse(MediaRules.sameUpload("XUFAKrxLKna5cZ2REBfFkg==", "hellO".toByteArray()))
         assertFalse(MediaRules.sameUpload(null, "hello".toByteArray()))

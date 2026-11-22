@@ -19,6 +19,14 @@ object MediaRules {
      * `md5Hash`, base64) equals our bytes' MD5. Storage rules are create-only, so a retry after a put
      * that landed but lost its reply is refused as if a stranger owned the path; this tells them apart.
      */
+    /**
+     * iOS autoRetryFailedMedia: a failed message of mine with media is resent by itself once per
+     * reconnect or chat open while its send is still held here, but never a forward (iOS skips
+     * MediaSend.isForward: it goes again only on a tap).
+     */
+    fun autoRetries(failed: Boolean, hasMedia: Boolean, forwarded: Boolean, canResend: Boolean, triedAlready: Boolean): Boolean =
+        failed && hasMedia && !forwarded && canResend && !triedAlready
+
     fun sameUpload(storedMd5: String?, bytes: ByteArray): Boolean {
         if (storedMd5.isNullOrEmpty()) return false
         val ours = java.util.Base64.getEncoder().encodeToString(java.security.MessageDigest.getInstance("MD5").digest(bytes))

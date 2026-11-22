@@ -260,8 +260,24 @@ class MediaSender(
     // ------------------------------------------------------------------ file
 
     /** sendFile: the message (name, size, sealed preview) first with `uploading`, then `fileUrl`. */
+    /** A song send kept across a Resend: its written message and the sealed file, so it is not written twice. */
+    class FileUpload {
+        @Volatile var messageId: String? = null
+        var cipher: ByteArray = ByteArray(0)
+    }
+
     suspend fun file(f: FilePrep, forwarded: Boolean, clientId: String?, clientTs: Double, reply: Message.ReplyRef? = null,
-                     rename: Pair<String?, String?>? = null) {
+                     rename: Pair<String?, String?>? = null, job: FileUpload? = null) {
+        // A Resend of a song whose message is already written: only the file goes up, then the attach.
+        job?.messageId?.let { id ->
+            val ref = convRef.collection("messages").document(id)
+            val url = uploadRetrying(job.cipher, MediaRules.filePath(cid, id), progress(clientId))
+            media?.store(url, f.bytes)
+            ref.update(MediaMessages.attachFile(url, FieldValue.delete())).await()
+            com.fariin.app.media.ChatSounds.sent()
+            clientId?.let { UploadProgress.done(it) }
+            return
+        }
         val members = members()
         // A song renamed in the send sheet (iOS sendFile `renamed`): one audio item in `album`, sealed as text is.
         val renamed = rename?.let { (t, a) ->
@@ -288,6 +304,7 @@ class MediaSender(
             FieldValue.serverTimestamp(), FieldValue.increment(1), forwarded = forwarded))
         MediaSend.noteAnnounced(clientId, msgRef.id)
         batch.commit().await()
+        job?.let { it.cipher = cipher; it.messageId = msgRef.id }
         val url = uploadRetrying(cipher, MediaRules.filePath(cid, msgRef.id), progress(clientId))
         media?.store(url, f.bytes)
         msgRef.update(MediaMessages.attachFile(url, FieldValue.delete())).await()
