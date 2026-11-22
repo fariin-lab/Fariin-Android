@@ -151,6 +151,8 @@ object CallManager {
     private var videoSpeakerDone = false
     /** The person picked a route on the speaker button this call (iOS speakerChosenByUser). */
     private var routeChosen = false
+    /** The system's mute as last seen: only a change there is a press (a car's or headset's button). */
+    private var lastSystemMuted = false
 
     fun init(context: Context) {
         if (::app.isInitialized) return
@@ -1006,7 +1008,12 @@ object CallManager {
         // Telecom moved it (a headset in, Bluetooth on): this app's own request follows, see CallAudio.setRoute.
         if (r.current != _ui.value.route.current && ::app.isInitialized) CallAudio.setRoute(app, r.current)
         edit { it.copy(route = r, speaker = CallRouting.speakerLit(r)) }
-        if (status.phase != CallPhase.INCOMING && systemMuted && !_ui.value.muted) toggleMute()
+        // Only a change of the system's mute follows (both ways, as CallKit on iOS). The app can not
+        // set that flag back, so an Unmute here left it on, and the next route change muted again.
+        if (systemMuted != lastSystemMuted) {
+            lastSystemMuted = systemMuted
+            if (status.phase != CallPhase.INCOMING && systemMuted != _ui.value.muted) toggleMute()
+        }
     }
 
     /** The camera button; the call screen asks for the camera permission first. */
@@ -1246,7 +1253,7 @@ object CallManager {
         negotiationVersion = 0; appliedRestart = 0; restartRequestsSeen = 0; restartRequestsSent = 0
         engineIceAt = 0L; relayRefreshTries = 0; relayRefreshTriedAt = 0L
         lastPeerBeat = 0.0; peerBeatChangedAt = 0L; myBeatAckedAt = 0L
-        everVideo = false; videoSpeakerDone = false; routeChosen = false
+        everVideo = false; videoSpeakerDone = false; routeChosen = false; lastSystemMuted = false
     }
 
     // ================================================================== helpers
