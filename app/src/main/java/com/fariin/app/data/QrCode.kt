@@ -48,7 +48,8 @@ object QrRules {
     /** fariin.com's own pages: a bare fariin.com/<word> that is one of these is the website, not a name. */
     private val SITE_PAGES = setOf("help", "privacy", "terms", "safety", "about", "contact", "download", "app", "blog",
         "press", "careers", "legal", "support", "faq", "security", "cookies", "status", "admin", "login", "signup",
-        "call", "video", "voice", "s", "u", "join", "invite", "g", "c", "well-known", ".well-known", "index.html")
+        "call", "video", "voice", "s", "u", "join", "invite", "g", "c", "well-known", ".well-known", "index.html",
+        "news", "reset", "console", "index", "hc", "link")
 
     /**
      * A bare fariin.com/<name> (one path part, not a site page): a public group's, channel's or person's
@@ -65,6 +66,9 @@ object QrRules {
         if (parts.size != 1) return null
         val name = runCatching { java.net.URLDecoder.decode(parts[0], "UTF-8") }.getOrNull() ?: return null
         if (name.lowercase() in SITE_PAGES || name.contains('.')) return null
+        // Only the shape a name can have (iOS route: 1 to 30 letters, digits, _); fariin.com/some-page
+        // is a web page and opens in the browser, not "this user doesn't seem to exist".
+        if (!Regex("^[A-Za-z0-9_]{1,30}$").matches(name)) return null
         return name.takeIf { safeSegment(it) }
     }
 
