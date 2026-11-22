@@ -133,7 +133,8 @@ object GroupStats {
             for ((e, n) in dict(r["counts"])) {
                 val k = e as? String ?: continue
                 val cnt = int(n); if (cnt <= 0) continue
-                val name = if (k.startsWith("custom:") || k.length > 16) "Custom" else k
+                // "ce_" and "cu_" keys count together as "Custom", as on iOS.
+                val name = if (com.fariin.app.ui.thread.CustomReaction.isCustom(k)) "Custom" else k
                 counts[name] = (counts[name] ?: 0) + cnt
             }
             day to counts
