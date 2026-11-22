@@ -62,6 +62,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -93,8 +94,28 @@ object FariinWidget {
     private val faces = LruCache<String, Bitmap>(12)
     private val listeners = mutableListOf<SharedPreferences.OnSharedPreferenceChangeListener>()
 
-    fun showPreview(c: Context): Boolean =
-        c.applicationContext.getSharedPreferences(PREFS_PUSH, Context.MODE_PRIVATE).getBoolean(PREVIEW_KEY, true)
+    /**
+     * Message Preview, as the notifications follow it. Not set on this phone (a new sign-in clears
+     * it) means not known yet: the words stay hidden until [adoptPreview] reads the account's choice,
+     * since the server may already send this account plain notifications.
+     */
+    fun showPreview(c: Context): Boolean {
+        val p = c.applicationContext.getSharedPreferences(PREFS_PUSH, Context.MODE_PRIVATE)
+        return p.contains(PREVIEW_KEY) && p.getBoolean(PREVIEW_KEY, true)
+    }
+
+    @Volatile private var adoptedFor: String? = null
+
+    /** The account's Message Preview (users.notifPreview, absent = on), kept on this phone once, the
+     *  way the Notifications page adopts it. Writing it redraws the widget (the prefs listener). */
+    private suspend fun adoptPreview(app: Context, me: String) {
+        val p = app.getSharedPreferences(PREFS_PUSH, Context.MODE_PRIVATE)
+        if (p.contains(PREVIEW_KEY) || adoptedFor == me) return
+        val doc = runCatching { com.fariin.app.Fb.db.collection("users").document(me).get().await() }.getOrNull() ?: return
+        adoptedFor = me
+        val v = doc.getBoolean("notifPreview") ?: true
+        if (!p.contains(PREVIEW_KEY) && com.fariin.app.Fb.auth.currentUser?.uid == me) p.edit().putBoolean(PREVIEW_KEY, v).apply()
+    }
 
     /** App start: follow the two switches the widget obeys (Settings writes them, we only listen). */
     fun init(c: Context) {
@@ -147,6 +168,7 @@ object FariinWidget {
         pending = scope.launch {
             delay(pause)
             if (!placed(app)) return@launch   // no widget on the home screen: no work at all
+            adoptPreview(app, me)
             val now = System.currentTimeMillis()
             val s = withContext(Dispatchers.Default) {
                 HomeWidgetRules.snapshot(convs, me, AppLock.enabled(app), showPreview(app), now) { conv ->
@@ -182,6 +204,7 @@ object FariinWidget {
         val app = c.applicationContext
         pending?.cancel()
         lastInput = null
+        adoptedFor = null
         current = HomeWidgetRules.Snapshot()
         faces.evictAll()
         runCatching { File(app.noBackupFilesDir, FILE).delete() }
