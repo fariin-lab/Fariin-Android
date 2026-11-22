@@ -493,11 +493,11 @@ private fun ChatsSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
             SettingsRow("Chat Key", value = keyValue, last = true, badge = NewBadgeSpots.CHATS_CHAT_KEY) { push(PAGE_CHAT_KEY) }
         }
         // Fariin Plus chatFolders: only while Plus is visible and the feature is not off.
-        if (com.fariin.app.data.ChatFoldersStore.settingsShown) SettingsSection(footer = "Sort your chats into folders at the top of your chat list.") {
+        if (com.fariin.app.data.ChatFoldersStore.settingsShown) SettingsSection(footer = "Sort your chats into folders and switch between them at the top of your chat list.") {
             SettingsRow("Chat Folders", value = com.fariin.app.data.ChatFoldersStore.customFolders.size.takeIf { it > 0 }?.toString(),
                 accessory = { PlusBadgeImage(18.dp) }, last = true) { push(PAGE_CHAT_FOLDERS) }
         }
-        if (com.fariin.app.backup.ChatTransfer.ENABLED) SettingsSection(footer = "Move your chats to a new phone, Android or iPhone.") {
+        if (com.fariin.app.backup.ChatTransfer.ENABLED) SettingsSection(footer = "Move your chats to a new phone with a QR code.") {
             SettingsRow("Transfer Chats", last = true) { push(PAGE_TRANSFER) }
         }
         // iOS: saves received photos and videos, from the moment it is turned on (never the history).
