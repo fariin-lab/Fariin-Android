@@ -67,6 +67,8 @@ object GroupStats {
         val growth: DaySeries, val followers: DaySeries, val notifications: DaySeries,
         val hours: List<Bin>, val interactions: DaySeries, val emoji: DaySeries, val stories: DaySeries,
         val recentPosts: List<Post>,
+        /** The days the Overview covers (`from` / `to`), shown on its card as iOS; null when not sent. */
+        val from: LocalDate? = null, val to: LocalDate? = null,
     ) {
         val isEmpty get() = tiles.isEmpty() && growth.isEmpty && followers.isEmpty && notifications.isEmpty &&
             hours.isEmpty() && interactions.isEmpty && emoji.isEmpty && stories.isEmpty && recentPosts.isEmpty()
@@ -92,6 +94,7 @@ object GroupStats {
             emoji = emojiSeries(c["reactionsByEmoji"]),
             stories = daySeries(storyRows, storyKeys),
             recentPosts = posts(d["recentPosts"]),
+            from = parseDay(d["from"]), to = parseDay(d["to"]),
         )
     }
 

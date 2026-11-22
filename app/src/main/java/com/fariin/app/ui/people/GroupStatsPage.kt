@@ -514,7 +514,9 @@ private fun ChannelStatsBody(s: GroupStats.ChannelData) {
     val orange = ChartColors.orange(dark)
     if (s.isEmpty) Text("No activity in the last 30 days yet. Numbers show here once the channel gets follows and views.",
         fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 40.dp))
-    if (s.tiles.isNotEmpty()) StatsCard("Overview") {
+    // "Oct 22 - Nov 21" on the card when the server named the period, as iOS.
+    val period = if (s.from != null && s.to != null) dayText(s.from) + " – " + dayText(s.to) else null
+    if (s.tiles.isNotEmpty()) StatsCard("Overview", period) {
         s.tiles.chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 pair.forEach { t ->
