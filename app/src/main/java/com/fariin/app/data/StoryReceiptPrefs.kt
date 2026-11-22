@@ -42,6 +42,7 @@ object StoryReceiptPrefs {
                     snap.metadata.isFromCache -> return@addSnapshotListener
                     else -> true
                 }
+                offAtMs = if (v) null else snap.getTimestamp("offAt")?.toDate()?.time ?: offAtMs
                 _on.value = v
                 p.edit().putBoolean(KEY, v).apply()
             }
@@ -49,9 +50,16 @@ object StoryReceiptPrefs {
 
     /** The settings switch moved (or rolled back): the viewer follows at once. */
     fun set(ctx: Context, v: Boolean) {
+        offAtMs = if (v) null else System.currentTimeMillis()
         _on.value = v
         ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY, v).apply()
     }
+
+    /**
+     * When I switched receipts off (`offAt`), ms; null while on or not known. With receipts off my
+     * own stories list only the viewers who were there by then (iOS StoryReceiptPrefs.offAt).
+     */
+    @Volatile var offAtMs: Long? = null
 
     /** Sign-out: the next account must not inherit this one's choice. */
     @Synchronized

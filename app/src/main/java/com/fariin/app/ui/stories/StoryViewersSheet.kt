@@ -633,11 +633,6 @@ internal fun ViewersSheet(
                         Text(
                             when {
                                 failed -> buildAnnotatedString { append("Couldn't load viewers. Trying again…") }
-                                !receipts -> buildAnnotatedString {
-                                    pushStyle(SpanStyle(color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 17.sp))
-                                    append("Views not available\n"); pop()
-                                    append("Can't see views because you disabled Read Receipts in Settings > Stories")
-                                }
                                 else -> buildAnnotatedString { append("No views yet") }
                             },
                             color = Color.White.copy(alpha = 0.55f), fontSize = 15.sp, textAlign = TextAlign.Center,

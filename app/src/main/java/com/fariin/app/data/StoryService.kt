@@ -83,7 +83,13 @@ class StoryService(
         val snap = db.collection("stories").document(storyId).collection("views")
             .orderBy("viewedAt", Query.Direction.DESCENDING).limit(StoryRules.VIEWER_LIST_CAP)
             .get(Source.SERVER).await()
-        snap.documents.map { d ->
+        // RECIPROCAL (iOS, owner 2026-10-17): with my receipts off, only the viewers who were there
+        // when I switched off (`firstAt`, else `viewedAt`, at or before `offAt`); no offAt known = none new.
+        val off = StoryReceiptPrefs.on.value == false
+        val cutoff = StoryReceiptPrefs.offAtMs ?: Long.MIN_VALUE
+        snap.documents.filter { d ->
+            !off || ((d.getTimestamp("firstAt") ?: d.getTimestamp("viewedAt"))?.toDate()?.time ?: Long.MAX_VALUE) <= cutoff
+        }.map { d ->
             val (name, photo) = who(d.id)
             StoryViewer(d.id, name, photo, d.getTimestamp("viewedAt")?.toDate()?.time ?: System.currentTimeMillis(),
                 d.getString("reaction"))

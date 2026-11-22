@@ -78,7 +78,13 @@ object ChatListActions {
     suspend fun setUnread(me: String, c: Conversation, on: Boolean): Boolean =
         if (c.isFollower(me)) (me == DemoChats.ME || com.fariin.app.channel.ChannelService.setRead(c.id, if (on) maxOf(0, c.postCount - 1) else c.postCount))
         else if (on) merge(me, c.id, mapOf("markedUnread" to mapOf(me to true)))
-        else merge(me, c.id, mapOf("markedUnread" to mapOf(me to false), "unreadCount" to mapOf(me to 0)))
+        else merge(me, c.id, buildMap {
+            put("markedUnread", mapOf(me to false)); put("unreadCount", mapOf(me to 0))
+            // A real read, as opening the chat (iOS resetUnread + markRead): the sender's ticks too,
+            // unless my read receipts are off or I blocked them (then nothing tells them).
+            if (com.fariin.app.data.PrivacySettings.readReceipts() && !c.isBlockedByMe(me))
+                put("lastRead", mapOf(me to com.google.firebase.firestore.FieldValue.serverTimestamp()))
+        })
 
     /** Delete for me: the chat empties and leaves my list until something new arrives (iOS deleteForMe). */
     suspend fun deleteForMe(me: String, c: Conversation): Boolean =
@@ -114,6 +120,8 @@ object ChatListActions {
      */
     fun deleteKind(me: String, c: Conversation): DeleteKind = when {
         c.isFollower(me) -> DeleteKind.UNFOLLOW
+        // My own channel is deleted for everyone, never left (iOS LeaveGroupAlert ownsChannel).
+        c.isChannel && c.createdBy == me && c.users.contains(me) -> DeleteKind.DELETE_CHANNEL
         c.isGroup && c.users.contains(me) -> if (c.isChannel) DeleteKind.LEAVE_CHANNEL else DeleteKind.LEAVE_GROUP
         else -> DeleteKind.HIDE
     }
@@ -129,6 +137,8 @@ object ChatListActions {
         if (one != null) {
             val name = one.displayName(me)
             return when (kinds.single()) {
+                DeleteKind.DELETE_CHANNEL ->
+                    DeletePlan("Delete Channel", "This permanently deletes the channel and all its posts for everyone. Its followers lose it too. This cannot be undone.", "Delete for Everyone")
                 DeleteKind.UNFOLLOW, DeleteKind.LEAVE_CHANNEL ->
                     DeletePlan("Leave Channel?", "Are you sure you want to leave $name?", "Leave Channel")
                 DeleteKind.LEAVE_GROUP ->
@@ -166,10 +176,18 @@ object ChatListActions {
         DeleteKind.HIDE -> deleteForMe(me, c)
         DeleteKind.UNFOLLOW -> me == DemoChats.ME || runCatching { com.fariin.app.channel.ChannelService.unfollow(c.id) }.isSuccess
         DeleteKind.LEAVE_GROUP, DeleteKind.LEAVE_CHANNEL -> runCatching { leave(me, c.id) }.isSuccess
+        // Several picked: an owned channel is kept (iOS deleteChats); the caller says so.
+        DeleteKind.DELETE_CHANNEL -> true
+    }
+
+    /** iOS ChatService.deleteGroup for my own channel. */
+    suspend fun deleteOwnChannel(cid: String) {
+        com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
+            .getHttpsCallable("deleteGroup").call(mapOf("cid" to cid)).await()
     }
 }
 
-enum class DeleteKind { HIDE, UNFOLLOW, LEAVE_GROUP, LEAVE_CHANNEL }
+enum class DeleteKind { HIDE, UNFOLLOW, LEAVE_GROUP, LEAVE_CHANNEL, DELETE_CHANNEL }
 
 /** The delete sheet's title, sentence and its one action button (Cancel comes with the sheet). */
 data class DeletePlan(val title: String, val body: String, val button: String)
