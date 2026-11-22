@@ -36,9 +36,9 @@ object MessageRules {
             // iOS: a channel post has no window (owner 2026-11-05); the rules drop it for channels too.
             (channel || nowMs - m.createdAtMillis < EDIT_WINDOW_MS)
 
-    /** My photo, video, album or file: Edit adds or clears its caption even when it has none (iOS 667799876). */
-    fun captionable(m: Message): Boolean = m.type in setOf("image", "video", "album", "file") &&
-        m.type != "sticker" && m.type != "gif"
+    /** My photo, video, album, file or GIF: Edit adds or clears its caption even when it has none
+     *  (iOS 667799876; a GIF too since it can carry one, iOS 2026-11-21). Stickers stay out. */
+    fun captionable(m: Message): Boolean = m.type in setOf("image", "video", "album", "file", "gif")
 
     /** ThreadView.canDeleteForEveryone. [adminMayDelete]: I hold the group "Delete messages" right. */
     fun canDeleteForEveryone(m: Message, me: String, adminMayDelete: Boolean = false, authorIsOwner: Boolean = false,
