@@ -44,7 +44,8 @@ fun VoiceNoteBar(here: String?, me: String, modifier: Modifier = Modifier, onOpe
     val live by VoicePlayer.state.collectAsState()
     // It fades and opens with its height (the list's or chat's space following), and closes the same
     // way, still showing the note while it leaves (iOS pops 117).
-    val showing = live.cid != null && live.id != null && live.cid != here
+    // Not for a note the person paused on its bubble before leaving: they were done with it (iOS barVisible).
+    val showing = live.cid != null && live.id != null && live.cid != here && !(live.pausedByUser && !live.playing)
     val held = androidx.compose.runtime.remember { arrayOf(live) }
     if (showing) held[0] = live
     com.fariin.app.ui.components.Appear(showing, modifier) { VoiceNoteBarBody(held[0], me, Modifier, onOpen) }

@@ -38,6 +38,11 @@ object VoicePlayer {
         /** The chat the open note belongs to, and who sent it (the bar away from that chat). */
         val cid: String? = null,
         val author: String = "",
+        /**
+         * Paused by the person on its bubble, not by a call or unplugged headphones (iOS pausedByUser):
+         * they were done with it, so leaving the chat shows no bar for it.
+         */
+        val pausedByUser: Boolean = false,
     )
 
     private val _state = MutableStateFlow(State())
@@ -75,7 +80,9 @@ object VoicePlayer {
         val s = _state.value
         val p = player
         if (s.id == id && p != null) {
-            if (p.isPlaying) p.pause() else if (callActive()) return else { if (p.playbackState == Player.STATE_ENDED) p.seekTo(0); p.play() }
+            if (p.isPlaying) { p.pause(); _state.value = _state.value.copy(pausedByUser = true) }
+            else if (callActive()) return
+            else { if (p.playbackState == Player.STATE_ENDED) p.seekTo(0); p.play(); _state.value = _state.value.copy(pausedByUser = false) }
             return
         }
         if (callActive()) return
@@ -109,12 +116,23 @@ object VoicePlayer {
         VoiceEar.stop()
         player?.release(); player = null
         ticker?.cancel()
-        _state.value = _state.value.copy(id = null, playing = false, positionMs = 0, cid = null)
+        _state.value = _state.value.copy(id = null, playing = false, positionMs = 0, cid = null, pausedByUser = false)
+    }
+
+    /**
+     * Its chat was opened (iOS chatOpened): a paused note there is closed, so the bar does not come
+     * back for it on the way out. A note still playing carries on.
+     */
+    fun chatOpened(cid: String) {
+        val s = _state.value
+        if (s.id != null && s.cid == cid && !s.playing) stop()
     }
 
     /** The bar's control: pause the open note, or carry on from where it stopped. */
     fun playPause() {
         val p = player ?: return
+        // A pause on the bar keeps the bar: it holds the only play button (iOS pause(byUser:) outside the chat).
+        _state.value = _state.value.copy(pausedByUser = false)
         if (p.isPlaying) p.pause() else if (callActive()) return else { if (p.playbackState == Player.STATE_ENDED) p.seekTo(0); p.play() }
     }
 
@@ -177,7 +195,8 @@ object VoicePlayer {
         p.play()
         player = p
         VoiceEar.watch(context) { player }   // raise to ear, as iOS
-        _state.value = _state.value.copy(id = id, playing = true, failed = _state.value.failed - id, cid = cid, author = author)
+        _state.value = _state.value.copy(id = id, playing = true, failed = _state.value.failed - id, cid = cid, author = author,
+            pausedByUser = false)
         ticker?.cancel()
         ticker = main.launch { while (isActive) { tick(); delay(50) } }
     }
