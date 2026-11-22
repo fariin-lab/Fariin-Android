@@ -1615,7 +1615,22 @@ private fun DescriptionCard(desc: String) {
             Text("Description", fontSize = 17.sp, color = c.label)
         }
         Spacer(Modifier.height(8.dp))
-        Text(desc, fontSize = 17.sp, color = c.label, maxLines = if (expanded) Int.MAX_VALUE else 3,
+        // iOS blueLinks: web links in the description are blue and open on a tap.
+        val ctx = LocalContext.current
+        val linked = remember(desc, c.accent) {
+            val spans = com.fariin.app.data.TextLinks.find(desc).filter { it.kind == com.fariin.app.data.TextLinks.Kind.WEB }
+            androidx.compose.ui.text.buildAnnotatedString {
+                append(desc)
+                spans.forEach { sp ->
+                    val url = if (sp.target.contains("://")) sp.target else "https://" + sp.target
+                    addLink(androidx.compose.ui.text.LinkAnnotation.Clickable(url,
+                        androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(color = c.accent))) {
+                        com.fariin.app.ui.thread.openWebLink(ctx, android.net.Uri.parse(url))
+                    }, sp.start, sp.end)
+                }
+            }
+        }
+        Text(linked, fontSize = 17.sp, color = c.label, maxLines = if (expanded) Int.MAX_VALUE else 3,
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             onTextLayout = { if (!expanded) folds = it.hasVisualOverflow })
         if (folds && !expanded) Text("more", fontSize = 17.sp, color = c.accent, modifier = Modifier.align(Alignment.End))
