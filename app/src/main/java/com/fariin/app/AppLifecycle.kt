@@ -52,7 +52,7 @@ object AppLifecycle : DefaultLifecycleObserver {
         // Notifications of disappearing messages that ran out while the app was away.
         runCatching { com.fariin.app.push.NotificationPoster.pruneExpired(app) }
         runCatching { com.fariin.app.push.NotificationPoster.pruneDeleted(app) }   // deleted-for-everyone lines
-        scope.launch { Presence.set(online = true, context = app) }
+        scope.launch { Presence.setNow({ inFront }, context = app) }
         com.fariin.app.data.AppConfig.foreground()   // the server's settings, when the last ask is old
         try { com.fariin.app.Fb.db.enableNetwork() } catch (_: Exception) {}
         reconnect()
@@ -69,12 +69,12 @@ object AppLifecycle : DefaultLifecycleObserver {
         com.fariin.app.media.VoiceEar.away()   // out of the app: loudspeaker, sensor off
         Drafts.flush()
         if (com.fariin.app.Fb.auth.currentUser == null) return
-        scope.launch { Presence.set(online = false, context = app) }
+        scope.launch { Presence.setNow({ inFront }, context = app) }
     }
 
     /** Sign-in just finished (the app was already in front when it did). */
     fun signedIn() {
-        if (inFront) scope.launch { Presence.set(online = true, context = app) }
+        if (inFront) scope.launch { Presence.setNow({ inFront }, context = app) }
         reconnect()
     }
 

@@ -5,6 +5,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
 import kotlin.math.floor
 
@@ -15,8 +16,8 @@ import kotlin.math.floor
  * readable by any signed-in account; this one has its own rule, so the server enforces the
  * Last Seen audience). My audience "nobody" (privacy.lastSeen on my user document, which iOS
  * keeps in step with its setting) publishes offline and never moves lastActive, so the timestamp
- * cannot leak "was just online". Every write also deletes the old `online` / `lastActive` fields
- * from the user document, as iOS does.
+ * cannot leak "was just online". The same state is written once (iOS lastWritten), and the old
+ * `online` / `lastActive` fields on the user document are deleted once per account, as iOS does.
  */
 object Presence {
     /** iOS: share = my audience is not "nobody" and the old local switch is on (default on). */
@@ -38,19 +39,49 @@ object Presence {
     /** The last of my own privacy settings seen this run (a chat seeds its presence rules with it). */
     fun myPrivacyNow(): Map<String, String>? = myPrivacy
 
-    suspend fun set(online: Boolean, context: Context? = null) {
+    /** One write is worked out at a time: a quick out-and-back (two calls) used to race, and the
+     *  older "online" or "offline" could land last and stay. */
+    private val turn = kotlinx.coroutines.sync.Mutex()
+    /** iOS lastWritten: "uid|online|share" of the last write, so the same state is not sent twice. */
+    @Volatile private var lastWritten: String? = null
+
+    suspend fun set(online: Boolean, context: Context? = null) = setNow({ online }, context)
+
+    /** [online] is asked when this write's turn comes (the app's front/back hooks pass "am I in
+     *  front now"), so the last write always says the latest state. */
+    suspend fun setNow(online: () -> Boolean, context: Context? = null) {
         val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         val db = com.fariin.app.Fb.db
         val user = db.collection("users").document(uid)
-        // Read fresh each time (the setting can change on another phone); offline, the last copy.
-        val privacy = try {
-            privacyOf(user.get().await().data).also { myPrivacy = it }
-        } catch (_: Exception) { myPrivacy ?: emptyMap() }
-        val share = shares(privacy, legacySwitch(context))
-        val data = fields(online, share).mapValues { (_, v) -> v ?: FieldValue.serverTimestamp() }
-        try { user.collection("presence").document("state").set(data, SetOptions.merge()).await() } catch (_: Exception) {}
+        val (key, write) = turn.withLock {
+            // Read fresh each time (the setting can change on another phone); offline, the last copy.
+            val privacy = try {
+                privacyOf(user.get().await().data).also { myPrivacy = it }
+            } catch (_: Exception) { myPrivacy ?: emptyMap() }
+            if (com.fariin.app.Fb.auth.currentUser?.uid != uid) return   // signed out meanwhile
+            val share = shares(privacy, legacySwitch(context))
+            val on = online()
+            val k = "$uid|${share && on}|$share"
+            if (lastWritten == k) return
+            lastWritten = k
+            val data = fields(on, share).mapValues { (_, v) -> v ?: FieldValue.serverTimestamp() }
+            // Started inside the turn (Firestore keeps the order writes are started in), waited
+            // for outside it: offline the wait never ends and must not hold up the next one.
+            k to user.collection("presence").document("state").set(data, SetOptions.merge())
+        }
+        try { write.await() } catch (_: Exception) {
+            // Not written: forget it, so the next call with the same state tries again.
+            if (lastWritten == key) lastWritten = null
+            return
+        }
+        // The old fields on the user document go once per account on this phone (iOS), not on
+        // every write.
+        val prefs = context?.getSharedPreferences("fariin_presence", Context.MODE_PRIVATE)
+        val cleared = "legacyCleared.$uid"
+        if (prefs?.getBoolean(cleared, false) == true) return
         try {
             user.set(mapOf("online" to FieldValue.delete(), "lastActive" to FieldValue.delete()), SetOptions.merge()).await()
+            prefs?.edit()?.putBoolean(cleared, true)?.apply()
         } catch (_: Exception) {}
     }
 
