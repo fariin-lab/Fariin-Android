@@ -269,7 +269,28 @@ fun ChatListScreen(
         closeSearch = { searching = false; query = "" },
         closeArchive = { showArchive = false })
 
-    val source = if (showArchive) state.archived else state.chats
+    // Archived chats older than the live window (iOS needWholeList("archive")): the list holds the
+    // newest chats only, so the Archive reads the older ones once each time it opens.
+    var olderArchived by remember { mutableStateOf<List<Conversation>>(emptyList()) }
+    // An older chat archived or unarchived from here: its one-shot copy does not hear the change.
+    val olderFlip = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
+    LaunchedEffect(showArchive, me) {
+        if (!showArchive || me.isEmpty() || me == com.fariin.app.ui.debug.DemoChats.ME) return@LaunchedEffect
+        olderFlip.clear()
+        olderArchived = runCatching { com.fariin.app.data.OlderChats.beyondWindow(me, state.all) }.getOrDefault(emptyList())
+            .filter { it.isArchived(me) && !it.isCleared(me) &&
+                !(com.fariin.app.data.ChatList.isIncomingRequest(it, me) && com.fariin.app.data.BlockList.contains(it.otherUid(me))) }
+            .distinctBy { it.id }
+    }
+    val flips = olderFlip.toMap()
+    val archivedAll = remember(state.archived, state.all, olderArchived, flips) {
+        if (olderArchived.isEmpty()) state.archived else {
+            val inWindow = state.all.mapTo(HashSet()) { it.id }
+            (state.archived + olderArchived.filter { it.id !in inWindow && flips[it.id] != false })
+                .sortedByDescending { it.displayUpdatedAt(me) }
+        }
+    }
+    val source = if (showArchive) archivedAll else state.chats
     // Fariin Plus chat folders: the chosen folder (null for All Chats, or for everyone without them).
     // It takes the place of the menu's filter; the archive keeps its own list.
     val folder = if (showArchive) null else com.fariin.app.data.ChatFoldersStore.current
@@ -360,10 +381,10 @@ fun ChatListScreen(
     // "Activity" is found by the chat search like a chat title.
     val activitySearchHit = query.isNotBlank() && activity?.let { it.at > 0 } == true && com.fariin.app.data.ChatSearch.namePrefixMatch(query, "Activity")
     val activityIndex = if (activityShown && !activityPinned) rest.indexOfFirst { it.displayUpdatedAt(me) < activity!!.at }.let { if (it < 0) rest.size else it } else rest.size
-    val selectedConvs = remember(state.chats, state.archived, selected) {
-        if (selected.isEmpty()) emptyList() else (state.chats + state.archived).filter { it.id in selected }
+    val selectedConvs = remember(state.chats, archivedAll, selected) {
+        if (selected.isEmpty()) emptyList() else (state.chats + archivedAll).filter { it.id in selected }
     }
-    val byId = remember(state.chats, state.archived) { (state.chats + state.archived).associateBy { it.id } }
+    val byId = remember(state.chats, archivedAll) { (state.chats + archivedAll).associateBy { it.id } }
     val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
     // Chats taken out of the search page's top row by a long press (per account, as iOS).
     var topHidden by remember(me) { mutableStateOf(TopPeersHidden.load(appCtx, me)) }
@@ -527,6 +548,7 @@ fun ChatListScreen(
                             val list = selectedConvs
                             selected = emptySet(); selectMode = false
                             scope.launch {
+                                list.forEach { olderFlip[it.id] = on }
                                 val ok = list.map { ChatListActions.setArchived(me, it, on) }.all { it }
                                 val n = list.size
                                 val what = if (n == 1) "Chat" else "$n chats"
@@ -534,6 +556,7 @@ fun ChatListScreen(
                                 if (!ok) { Snack.show(if (on) "Couldn't archive ${if (n == 1) "this chat" else "these chats"}. Try again."
                                     else "Couldn't unarchive ${if (n == 1) "this chat" else "these chats"}. Try again."); return@launch }
                                 Snack.show(if (on) "$what archived" else "$what unarchived", action = "Undo") {
+                                    list.forEach { olderFlip[it.id] = !on }
                                     scope.launch { list.forEach { ChatListActions.setArchived(me, it, !on) } }
                                 }
                             }
@@ -821,9 +844,11 @@ fun ChatListScreen(
                             fill = c.blue,
                             onAction = {
                                 val on = !showArchive
+                                olderFlip[conv.id] = on
                                 // The note at once (offline the write waits for the server, and the note
                                 // with its Undo waited with it); a refused write says so (review 2026-11-06).
                                 Snack.show(if (on) "Chat archived" else "Chat unarchived", action = "Undo") {
+                                    olderFlip[conv.id] = !on
                                     scope.launch { ChatListActions.setArchived(me, conv, !on) }
                                 }
                                 scope.launch {
