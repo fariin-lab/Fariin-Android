@@ -250,7 +250,7 @@ class CallWireTest {
         assertNull(GroupCallWire.parsePass(mapOf("url" to "wss://rtc.fariin.com")))
         assertEquals("group_g1", GroupCallWire.roomName("g1"))
         assertTrue(GroupCallWire.isActive(mapOf("active" to true))); assertFalse(GroupCallWire.isActive(null))
-        assertEquals("This call is full.", GroupCallWire.joinNotice("full"))
+        assertEquals(GroupCallWire.FULL_NOTICE, GroupCallWire.joinNotice("full"))
     }
 
     @Test fun peerGoneAfterThirtySilentSecondsWhileMineLand() {
