@@ -3319,6 +3319,12 @@ private fun Composer(
         }
     }
     DisposableEffect(Unit) { onDispose { if (capturedOnce) onCapturing(false) } }
+    // The screen stays on while the mic captures, not while paused for review (iOS SleepBlocker "voice-record").
+    val recView = androidx.compose.ui.platform.LocalView.current
+    DisposableEffect(capturing) {
+        if (capturing) recView.keepScreenOn = true
+        onDispose { if (capturing) recView.keepScreenOn = false }
+    }
     // The "1": this note goes as a one-time listen. It arms ONE note (iOS resetRecordingState).
     var voiceOnce by remember { mutableStateOf(false) }
     var slide by remember { mutableStateOf(0f) }
