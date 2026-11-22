@@ -33,7 +33,7 @@ object PlusStore {
 
     /** Feature ids in the Plus page's order. */
     val FEATURE_IDS = listOf("badge", "storyExpiry", "appIcons", "morePins", "profileVisitors", "animatedAvatar",
-        "storyRewatch", "bubbleStyles", "sharedWallpaper", "sendEffects", "chatKey", "gifts", "chatFolders")
+        "storyRewatch", "bubbleStyles", "sharedWallpaper", "sendEffects", "chatKey", "gifts", "chatFolders", "tagSearch")
 
     const val REGION = "me-central1"
     private val fns get() = FirebaseFunctions.getInstance(REGION)
@@ -45,6 +45,17 @@ object PlusStore {
     var untilMs by mutableStateOf<Long?>(null); private set
     var features by mutableStateOf<Map<String, State>>(emptyMap()); private set
     var pinnedChats by mutableStateOf<Int?>(null); private set
+    /** The plusConfig pin numbers without and with Plus (iOS pinnedChatsFree / pinnedChatsPlus; null
+     *  from an older server). A locked account's [pinnedChats] is the free number, so the Plus number
+     *  for the limit sheet comes from here. */
+    var pinnedChatsFree by mutableStateOf<Int?>(null); private set
+    var pinnedChatsPlus by mutableStateOf<Int?>(null); private set
+    /** How many chats Plus lets this account pin, never below the free limit; null when not known
+     *  (iOS plusPinLimit: an older server and the feature not on for this account). */
+    val plusPinLimit: Int? get() {
+        val n = pinnedChatsPlus ?: (if (state("morePins") == State.ON) pinnedChats else null)
+        return n?.let { maxOf(it, AppLimits.pinnedChatsMax) }
+    }
     var giftMonths by mutableStateOf<List<Int>>(emptyList()); private set
     var purchasesOn by mutableStateOf(false); private set
     var subscription by mutableStateOf<Subscription?>(null); private set
@@ -116,6 +127,8 @@ object PlusStore {
         if (untilMs != null) untilMs = null
         if (features.isNotEmpty()) features = emptyMap()
         if (pinnedChats != null) pinnedChats = null
+        if (pinnedChatsFree != null) pinnedChatsFree = null
+        if (pinnedChatsPlus != null) pinnedChatsPlus = null
         if (giftMonths.isNotEmpty()) giftMonths = emptyList()
         if (purchasesOn) purchasesOn = false
         if (subscription != null) subscription = null
@@ -207,7 +220,10 @@ object PlusStore {
             val st = when (v) { "off" -> State.OFF; "locked" -> State.LOCKED; "on" -> State.ON; else -> null }
             if (k is String && st != null) feats[k] = st
         }
-        val pins = num((reply["limits"] as? Map<*, *>)?.get("pinnedChats"))?.toInt()
+        val limits = reply["limits"] as? Map<*, *>
+        val pins = num(limits?.get("pinnedChats"))?.toInt()
+        val pinsFree = num(limits?.get("pinnedChatsFree"))?.toInt()
+        val pinsPlus = num(limits?.get("pinnedChatsPlus"))?.toInt()
         val months = ((reply["giftMonths"] as? List<*>) ?: emptyList<Any>()).mapNotNull { num(it)?.toInt() }
             .filter { it in 1..36 }.distinct().sorted()
         val sub = (reply["sub"] as? Map<*, *>)?.let { s ->
@@ -223,6 +239,8 @@ object PlusStore {
         refreshPlus()
         if (features != feats) features = feats
         if (pinnedChats != pins) pinnedChats = pins
+        if (pinnedChatsFree != pinsFree) pinnedChatsFree = pinsFree
+        if (pinnedChatsPlus != pinsPlus) pinnedChatsPlus = pinsPlus
         if (!visible) visible = true
         val b = feats["badge"]
         if (b == null || b == State.OFF) clearBadges()

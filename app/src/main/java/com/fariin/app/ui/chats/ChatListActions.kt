@@ -109,10 +109,47 @@ object ChatListActions {
         val pinned = all.count { it.isPinned(me) && !it.isArchived(me) && !it.isCleared(me) && !com.fariin.app.data.ChatList.isIncomingRequest(it, me) } +
             if (official.state.pinned && official.latest != null) 1 else 0
         if (pinned + adding <= PINNED_MAX) return false
-        // Plus is named only to an account that can see it, and only while it is "locked" for it.
-        val more = if (com.fariin.app.data.PlusStore.state("morePins") == com.fariin.app.data.PlusStore.State.LOCKED) " Fariin Plus lets you pin more." else ""
-        Snack.show("You can pin up to $PINNED_MAX chats. Unpin one to pin this chat.$more")
+        val plus = com.fariin.app.data.PlusStore
+        val freeMax = com.fariin.app.data.AppLimits.pinnedChatsMax
+        val morePins = plus.state("morePins")
+        val plusMax = plus.plusPinLimit
+        // Plus visible with a Plus number above the free one (iOS ChatService pin cap, 2026-11-20):
+        // the limit sheet with the Free N / Plus M bar. Locked: its button opens the Plus page; a Plus
+        // member at the Plus limit gets "Got It". An older server without the two numbers, or the
+        // feature on without Plus: the plain line below.
+        if (plus.visible && plus.pinnedChatsFree != null && plusMax != null && plusMax > freeMax &&
+            (morePins == com.fariin.app.data.PlusStore.State.LOCKED || (morePins == com.fariin.app.data.PlusStore.State.ON && plus.isPlus))) {
+            pinGate = PinGate.Limit(pinned, freeMax, plusMax)
+            return true
+        }
+        // Plus is named only to an account that can see it, and only while it is "locked" for it;
+        // then the way to Plus is on the line itself (iOS Learn More opens the morePins gate).
+        val locked = plus.visible && morePins == com.fariin.app.data.PlusStore.State.LOCKED
+        val more = if (locked) " Fariin Plus lets you pin more." else ""
+        val msg = "You can pin up to $PINNED_MAX chats. Unpin one to pin this chat.$more"
+        if (locked) Snack.show(msg, action = "Learn More", long = true) { pinGate = PinGate.Feature }
+        else Snack.show(msg)
         return true
+    }
+
+    /** What a full pin cap opens over the chat list (drawn by [PinGateHost]). */
+    sealed interface PinGate {
+        /** The limit sheet: [count] pinned now, [free] without Plus, [plus] with it. */
+        data class Limit(val count: Int, val free: Int, val plus: Int) : PinGate
+        /** The locked morePins feature sheet. */
+        data object Feature : PinGate
+    }
+
+    var pinGate by mutableStateOf<PinGate?>(null)
+
+    /** Draws [pinGate] while it is set; the chat list hosts it once. */
+    @Composable
+    fun PinGateHost() {
+        when (val g = pinGate) {
+            null -> {}
+            is PinGate.Limit -> com.fariin.app.ui.settings.PlusLimitSheet(g.count, g.free, g.plus) { pinGate = null }
+            PinGate.Feature -> com.fariin.app.ui.settings.PlusGateSheet("morePins") { pinGate = null }
+        }
     }
 
     /**

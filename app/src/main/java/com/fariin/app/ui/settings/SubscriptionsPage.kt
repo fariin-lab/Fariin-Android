@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -119,9 +122,9 @@ private val plusFeatures = listOf(
 
 /** The grey line under a feature, with the real pinned-chat limit when there is one (iOS subtitle). */
 private fun subtitleOf(f: PlusFeature): String =
-    // The server's number is this account's own limit: a member's Plus limit, but a non-member's free one
-    // ("Pin up to 3" read as what Plus gives, Oppo 2026-11-20), so only a member sees it.
-    if (f.id == "morePins" && plusSubscribed()) PlusStore.pinnedChats?.let { "Pin up to $it chats at the top of your chat list." } ?: f.subtitle else f.subtitle
+    // iOS plusPinLimit: the Plus number (pinnedChatsPlus), never a locked account's free one ("Pin up
+    // to 3" read as what Plus gives, Oppo 2026-11-20); from an older server only a member's own limit.
+    if (f.id == "morePins") PlusStore.plusPinLimit?.let { "Pin up to $it chats at the top of your chat list." } ?: f.subtitle else f.subtitle
 
 /** This account has Plus now, or a store subscription whose end is still ahead (iOS `subscribed`). */
 private fun plusSubscribed(): Boolean =
@@ -351,6 +354,68 @@ fun PlusGateSheet(feature: String, onDismiss: () -> Unit) {
                 Box(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp).fillMaxWidth().height(50.dp).clip(CircleShape)
                     .background(PlusBlue).clickable { toPage = true; motion.close() }, contentAlignment = Alignment.Center) {
                     Text(if (f.id in plusVisualFeatures) "Unlock with Fariin Plus" else "Learn About Fariin Plus",
+                        fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                }
+            }
+            com.fariin.app.ui.components.FloatingIcon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Close",
+                onClick = { motion.close() }, circle = true, modifier = Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 12.dp))
+        }
+    }
+}
+
+/**
+ * "Limit Reached" for pinned chats (iOS PlusLimitSheet): a bar with the free part in grey and the
+ * Plus part in Plus blue, a round badge with the [count] on it, the words, and one button. It opens
+ * the Plus page; a Plus member already at the Plus limit gets "Got It", which only closes.
+ */
+@Composable
+fun PlusLimitSheet(count: Int, free: Int, plus: Int, onDismiss: () -> Unit) {
+    var page by remember { mutableStateOf(false) }
+    if (page) { PlusPageSheet(onDismiss); return }
+    val c = Fariin.colors
+    val hasPlus = PlusStore.isPlus
+    var toPage by remember { mutableStateOf(false) }
+    val motion = rememberSheetMotion { if (toPage) page = true else onDismiss() }
+    val density = LocalDensity.current
+    val windowH = LocalWindowInfo.current.containerSize.height
+    val want = with(density) { (windowH - WindowInsets.statusBars.getTop(density) - 10.dp.toPx() - 380.dp.toPx() - WindowInsets.navigationBars.getBottom(density)).coerceAtLeast(0f) }
+    if (motion.mid <= 0f) motion.mid = want
+    androidx.compose.runtime.SideEffect { motion.fitMid(want) }
+    // Where the free part ends, and where the badge sits, along the bar (0..1).
+    val freeShare = if (plus > 0) (free.toFloat() / plus).coerceIn(0.2f, 1f) else 1f
+    val countShare = if (plus > 0) (count.toFloat() / plus).coerceIn(0f, 1f) else 1f
+    FariinSheetDialog(motion, fill = c.bgSecondary) { _ ->
+        Box(Modifier.fillMaxWidth().height(380.dp)) {
+            Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.fillMaxWidth().height(28.dp).sheetDrag(motion))
+                Text("Limit Reached", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label,
+                    modifier = Modifier.padding(top = 46.dp))
+                androidx.compose.foundation.layout.BoxWithConstraints(Modifier.padding(horizontal = 30.dp).padding(top = 64.dp).fillMaxWidth().height(30.dp)) {
+                    val w = maxWidth
+                    Row(Modifier.fillMaxSize().clip(RoundedCornerShape(15.dp))) {
+                        Box(Modifier.width(w * freeShare).fillMaxHeight().background(c.secondary.copy(alpha = 0.18f)), contentAlignment = Alignment.CenterStart) {
+                            Text("Free $free", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.secondary, modifier = Modifier.padding(start = 12.dp))
+                        }
+                        Box(Modifier.weight(1f).fillMaxHeight().background(PlusBlue), contentAlignment = Alignment.CenterEnd) {
+                            Text("Plus $plus", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White, modifier = Modifier.padding(end = 12.dp))
+                        }
+                    }
+                    // The badge with the count, riding above the bar at where the count is.
+                    val share = if (hasPlus) countShare else freeShare
+                    val x = (w * share).coerceIn(24.dp, (w - 24.dp).coerceAtLeast(24.dp)) - 24.dp
+                    Row(Modifier.offset(x = x, y = (-54).dp).size(48.dp).clip(CircleShape).background(PlusBlue)
+                        .semantics { contentDescription = "$count in use" },
+                        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                        Icon(ImageVector.cachedVector(R.drawable.ic_pin_menu), contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                        Text("$count", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(start = 2.dp))
+                    }
+                }
+                Text("You can pin up to $free chats. Fariin Plus lets you pin up to $plus.", fontSize = 17.sp, color = c.secondary,
+                    textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 24.dp).padding(top = 20.dp))
+                Spacer(Modifier.weight(1f))
+                Box(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp).fillMaxWidth().height(50.dp).clip(CircleShape)
+                    .background(PlusBlue).clickable { if (!hasPlus) toPage = true; motion.close() }, contentAlignment = Alignment.Center) {
+                    Text(if (hasPlus) "Got It" else "Raise the Limit with Fariin Plus",
                         fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                 }
             }

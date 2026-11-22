@@ -1043,6 +1043,9 @@ fun ChatListScreen(
         }
     }
 
+    // A full pin cap with Fariin Plus: the limit sheet or the morePins gate (iOS ChatService pin cap).
+    ChatListActions.PinGateHost()
+
     if (confirmDelete || swipeDelete != null) {
         val targets = swipeDelete?.let { listOf(it) } ?: selectedConvs
         // iOS deleteChats: every kind gets its real action (a group or channel I am in is left, a
