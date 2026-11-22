@@ -742,7 +742,7 @@ fun ChatListScreen(
                 // iOS ChatListSkeleton: rows the shape of chats while the first page loads.
                 state.loading && source.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { com.fariin.app.ui.components.ChatListSkeleton() }
                 state.error != null && source.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) {
-                    com.fariin.app.ui.components.CenteredNotice("Couldn't load chats", state.error, "Retry", onRetry, Modifier.fillMaxSize())
+                    com.fariin.app.ui.components.CenteredNotice("Couldn't load your chats.", "Check your connection and try again.", "Try Again", onRetry, Modifier.fillMaxSize())
                 }
                 // The archive's empty page: the drawing, as the other empty pages.
                 shown.isEmpty() && !officialShown && newPeople.isEmpty() && groupHits.isEmpty() && showArchive && query.isBlank() ->
