@@ -1538,6 +1538,19 @@ class ThreadRepository(
     }
 
     /**
+     * A link shared from a Share sheet (iOS ForwardPicker share): sent as my own text, not forwarded,
+     * and its card added to that same message once built (given up on after 2 s, then it goes bare).
+     */
+    suspend fun sendSharedLink(text: String) {
+        val clientId = UUID.randomUUID().toString().uppercase()
+        sendForwardedText(text, forwarded = false, clientId = clientId)
+        val u = LinkPreviews.firstUrl(text) ?: return
+        if (!LinkPreviews.allowedIn(CryptoHub.listedConversation(cid), me)) return
+        val d = LinkPreviews.draftWithin(u, 2_000) ?: return
+        LinkPreviews.attach(convRef, cid, me, crypto, clientId, d, if (Wire.isGroupCid(cid)) freshMembers() else null)
+    }
+
+    /**
      * My words with a quoted channel post (iOS ThreadView.sendQuote): the bubble shows at once with
      * the card (seeded when the quote was made), then the message goes out carrying only the quote's
      * id. Sent straight away, not through the offline queue: a send that fails takes the bubble back

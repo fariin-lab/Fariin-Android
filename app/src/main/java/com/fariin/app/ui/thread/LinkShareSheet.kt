@@ -81,7 +81,7 @@ internal fun LinkShareSheet(me: String, link: String, text: String = link, onDis
             // Off the sheet's scope, so closing it does not stop the sends.
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
                 for (t in targets) runCatching {
-                    com.fariin.app.data.ThreadRepository.openOrQuiet(t, me, crypto, this).sendForwardedText(text, forwarded = false)
+                    com.fariin.app.data.ThreadRepository.openOrQuiet(t, me, crypto, this).sendSharedLink(text)
                 }
             }
         })
