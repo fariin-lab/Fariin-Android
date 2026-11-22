@@ -533,6 +533,16 @@ internal fun ScanQrPage(onMyCode: () -> Unit, onClose: () -> Unit, onDone: () ->
     fun resolve(code: String) {
         if (handling) return
         noCodeInPhoto = false
+        // A group or channel invite (fariin.com/g/<code> or kulan://g/<code>): close the scanner
+        // and open the same Join sheet a tapped invite link opens.
+        val g = com.fariin.app.ui.people.GroupInviteLink.code(code)
+            ?: Regex("^kulan://g/([A-Za-z0-9_-]{4,64})/?$", RegexOption.IGNORE_CASE).find(code.trim())?.groupValues?.get(1)
+        if (g != null) {
+            handling = true
+            com.fariin.app.ui.thread.ExternalLinks.take("https://fariin.com/g/$g")
+            onDone()
+            return
+        }
         val h = QrRules.handleFrom(code)
         if (h == null) {
             notFound = true; offline = false
