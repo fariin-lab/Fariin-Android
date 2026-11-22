@@ -207,10 +207,6 @@ internal fun MessageMenu(
             // Not when the channel turned Quotes off, for anyone (the server refuses everyone then).
             if (!restricted && MessageRules.canQuote(m) && ui.channel?.info?.quotesOff == false) add(MenuItem("Quote", null, iconRes = com.fariin.app.R.drawable.ic_quote, badge = NewBadgeSpots.CHAT_MENU_QUOTE) {
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onQuote(m) })
-            // iOS words "Save Image" (and the viewer's "Save Video"); an album keeps "Save".
-            if (!restricted && canSaveToGallery(m)) add(MenuItem(when (m.mediaKind) {
-                Message.MediaKind.PHOTO -> "Save Image"; Message.MediaKind.VIDEO -> "Save Video"; else -> "Save" }, null, iconRes = com.fariin.app.R.drawable.ic_save_down, badge = NewBadgeSpots.CHAT_MENU_SAVE_IMAGE) {
-                if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onSave(m) })
             // A contact or location card is no text to copy or edit (iOS keeps markers off text surfaces).
             val card = com.fariin.app.data.CardRules.isCard(m.text)
             if (!restricted && MessageRules.canCopy(m) && !card) add(MenuItem("Copy", null, iconRes = com.fariin.app.R.drawable.ic_sf_doc_on_doc, badge = NewBadgeSpots.CHAT_MENU_COPY) {
@@ -228,6 +224,11 @@ internal fun MessageMenu(
             // groups and 1:1 chats unchanged.
             val historyAllowed = ui.channel?.let { it.role == com.fariin.app.channel.ChannelRules.Role.ADMIN } ?: true
             if (m.edited && historyAllowed) add(MenuItem("Edit History", null, iconRes = com.fariin.app.R.drawable.ic_sf_clock_arrow_circlepath, badge = NewBadgeSpots.CHAT_MENU_EDIT_HISTORY) { onEditHistory(m) })
+            // iOS words "Save Image" (and the viewer's "Save Video"); an album keeps "Save".
+            // Its place is after Edit History, as the iOS menu orders it.
+            if (!restricted && canSaveToGallery(m)) add(MenuItem(when (m.mediaKind) {
+                Message.MediaKind.PHOTO -> "Save Image"; Message.MediaKind.VIDEO -> "Save Video"; else -> "Save" }, null, iconRes = com.fariin.app.R.drawable.ic_save_down, badge = NewBadgeSpots.CHAT_MENU_SAVE_IMAGE) {
+                if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onSave(m) })
             // Keep a sticker or a GIF from the chat, mine or theirs (iOS, owner 2026-10-17 / 10-18);
             // not in a restricted chat, where nothing is saved.
             if (!restricted) FavoriteToggles.stickerTitle(m)?.let { t ->
