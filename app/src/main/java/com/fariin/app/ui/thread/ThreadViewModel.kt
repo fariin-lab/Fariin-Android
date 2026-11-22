@@ -289,7 +289,10 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
                 if (!ok) notice = "Couldn't unblock. Check your connection and try again."
             }
         },
-        onReact = { m, e -> vm.viewModelScope.launch { if (!vm.repo.setReaction(m, e)) notice = "Couldn't react. Try again." } },
+        // A refused write (message deleted meanwhile, server said no) puts back what the server kept
+        // at once, not after the pick's hold runs out; the iOS words.
+        onReact = { m, e -> vm.viewModelScope.launch { if (!vm.repo.setReaction(m, e)) { ReactNow.drop(m)
+            notice = "Couldn't update the reaction. Check your connection and try again." } } },
         onSendReply = { t, r -> vm.repo.sendText(t, r) },
         onSendMentioned = { t, r, ids -> vm.repo.sendText(t, r, ids) },
         onSendBold = { t, r, ids, fmt -> vm.repo.sendText(t, r, ids, fmt) },

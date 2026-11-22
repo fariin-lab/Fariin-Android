@@ -27,6 +27,9 @@ internal object ReactNow {
         main.postDelayed({ if (wanted[m.id] == v) wanted.remove(m.id) }, HOLD_MS)
     }
 
+    /** The write was refused: show what the message itself says again. */
+    fun drop(m: Message) { wanted.remove(m.id) }
+
     /** The message with my pick on its way laid over it; the same message once it agrees. */
     fun shown(m: Message, me: String): Message {
         val w = wanted[m.id] ?: return m
