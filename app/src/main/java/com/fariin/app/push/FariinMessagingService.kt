@@ -149,6 +149,9 @@ class FariinMessagingService : FirebaseMessagingService() {
                     listOf(s.senderPhoto, s.groupPhoto).map { url -> async(kotlinx.coroutines.Dispatchers.IO) { url?.let { loadAvatar(c, it) } } }
                         .map { it.await() }
                 }
+                // The app icon number: the push has no count on Android, so last known + this one
+                // (a channel post's count lives in the app, as on iOS; in front the list syncs it).
+                AppBadge.notePush(c, me, s.opensChat && !s.isChannel && !com.fariin.app.AppLifecycle.inFront)
                 NotificationPoster.post(c, s, photos[0], photos[1], me)
                 // The home screen widget: one more unread for that chat (words only as the notification showed them).
                 if (s.opensChat) com.fariin.app.system.FariinWidget.notePush(c, s.key, if (s.plain) null else s.line)

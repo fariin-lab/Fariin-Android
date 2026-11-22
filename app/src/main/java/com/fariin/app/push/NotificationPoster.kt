@@ -111,6 +111,8 @@ object NotificationPoster {
             .setShowWhen(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(if (spec.channel == NotifChannel.CALLS) NotificationCompat.CATEGORY_CALL else NotificationCompat.CATEGORY_MESSAGE)
+        // One group per account; its summary carries the app icon number (AppBadge).
+        if (spec.channel == NotifChannel.MESSAGES && me.isNotEmpty()) b.setGroup(AppBadge.group(me))
         // A disappearing message: the notification goes when its newest line's timer runs out
         // (iOS NotificationCleaner.pruneExpired); the stamp rides along for the prune below.
         if (!spec.mid.isNullOrEmpty()) b.addExtras(android.os.Bundle().apply { putString(EXTRA_MID, spec.mid) })
@@ -122,7 +124,7 @@ object NotificationPoster {
 
         if (spec.plain) {
             b.setStyle(NotificationCompat.BigTextStyle().bigText(spec.body))
-            nmc.notify(spec.key, ID, b.build())
+            nmc.notify(spec.key, ID, b.build()); AppBadge.refresh(c, me)
             return
         }
 
@@ -139,7 +141,7 @@ object NotificationPoster {
                 .setStyle(NotificationCompat.BigTextStyle().bigText(spec.line))
                 .setLargeIcon(circle(senderPhoto, group = false, squircle = true))
             if (spec.opensChat && me.isNotEmpty()) b.addAction(NotifActions.readAction(c, spec.key, me))
-            nmc.notify(spec.key, ID, b.build())
+            nmc.notify(spec.key, ID, b.build()); AppBadge.refresh(c, me)
             return
         }
 
@@ -183,7 +185,7 @@ object NotificationPoster {
             bubble(c, spec.key, circle(if (spec.isGroup) groupPhoto else senderPhoto, spec.isGroup), locked)?.let { b.setBubbleMetadata(it) }
         }
 
-        nmc.notify(spec.key, ID, b.build())
+        nmc.notify(spec.key, ID, b.build()); AppBadge.refresh(c, me)
     }
 
     /**
@@ -223,6 +225,7 @@ object NotificationPoster {
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setShortcutId(n.shortcutId)
         n.getLargeIcon()?.let { b.setLargeIcon(it) }
+        n.group?.let { b.setGroup(it) }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) n.bubbleMetadata?.let { b.setBubbleMetadata(NotificationCompat.BubbleMetadata.fromPlatform(it)) }
         NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n)?.let { style ->
             if (text != null) style.addMessage(text, System.currentTimeMillis(), null as Person?)
@@ -343,6 +346,7 @@ object NotificationPoster {
             val chatDue = due[tag]?.let { (updated, stamp) -> NotifExpiry.chatGone(sbn.postTime, updated, stamp) } == true
             if (NotifExpiry.lineGone(exp, now) || chatDue) nm.cancel(tag, ID)
         }
+        com.fariin.app.Fb.auth.currentUser?.uid?.let { AppBadge.refresh(c, it) }
     }
 
     @Volatile private var lastDeletedCheck = 0L
@@ -384,14 +388,20 @@ object NotificationPoster {
                 if (!d.exists() || d.getBoolean("deleted") == true) gone += cid
             }
             for (cid in gone) try { nm.cancel(cid, ID) } catch (_: Exception) {}
+            if (gone.isNotEmpty()) com.fariin.app.Fb.auth.currentUser?.uid?.let { AppBadge.refresh(app, it) }
         }
     }
 
     /** iOS Push.clear(cid): the chat was opened, its notification goes. */
-    fun clear(c: Context, cid: String) = NotificationManagerCompat.from(c).cancel(cid, ID)
+    fun clear(c: Context, cid: String) {
+        NotificationManagerCompat.from(c).cancel(cid, ID)
+        // The last chat notification gone: the summary (and its number) goes too.
+        com.fariin.app.Fb.auth.currentUser?.uid?.let { AppBadge.refresh(c, it) }
+    }
 
     fun clearAll(c: Context) {
         NotificationManagerCompat.from(c).cancelAll()
+        AppBadge.forget(c)
         ChatShortcuts.clear(c)
     }
 
