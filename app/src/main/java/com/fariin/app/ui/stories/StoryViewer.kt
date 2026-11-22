@@ -1660,7 +1660,6 @@ private fun StoryPage(
     }
 }
 
-/** The picture, or the clip through Media3 while this page is the one on screen. */
 /**
  * iOS StorySound: ONE sound switch for the whole viewer, not per story, so muting one clip keeps
  * the next one quiet too. It starts with sound on every launch (kept in memory only).
@@ -1676,6 +1675,7 @@ internal object StorySound {
     }
 }
 
+/** The picture, or the clip through Media3 while this page is the one on screen. */
 @Composable
 private fun StoryMedia(
     story: Story,
