@@ -99,7 +99,9 @@ class VoiceRecorder(private val context: Context) {
             r.setAudioChannels(1)
             r.setAudioSamplingRate(48_000)
             r.setAudioEncodingBitRate(32_000)
-            r.setMaxDuration(VoiceRecordRules.remainingSeconds(banked) * 1000)
+            // One second past the limit: the chat screen pauses the take at the limit itself, and a
+            // recorder that already stopped on its own would throw on stop() and lose the stretch.
+            r.setMaxDuration((VoiceRecordRules.remainingSeconds(banked) + 1) * 1000)
             r.setOutputFile(f.absolutePath)
             r.prepare()
             r.start()

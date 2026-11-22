@@ -3019,6 +3019,14 @@ private fun Composer(
             }
         }
     }
+    // The note limit (iOS onReachedLimit): the take is not lost, it locks and lands on the review
+    // bar with everything said so far. The recorder's own cap sits a second later, so this comes first.
+    val atLimit = recording && !reviewing && elapsed >= com.fariin.app.media.MediaRules.VOICE_NOTE_SECONDS
+    LaunchedEffect(atLimit) {
+        if (!atLimit) return@LaunchedEffect
+        locked = true
+        pauseOrResume()
+    }
 
     // As iOS ChatComposerView: a 40 glass "+" (the attach sheet), the glass message pill with the
     // camera and the sticker button inside, and a 40 glass circle that is the mic until there are
@@ -3298,7 +3306,7 @@ private fun Composer(
                                 // Up past the lock, or a quick still tap (hands-free, the owner's ask): the
                                 // recording goes on with the finger off. A hold under a second cannot make a
                                 // note: binned with the iOS hint. Otherwise the release sends.
-                                when (crossed ?: com.fariin.app.media.VoiceRecordRules.onRelease(upAt - downAt, moved, tapSlop, elapsed)) {
+                                when (crossed ?: if (locked) com.fariin.app.media.VoiceRecordRules.Release.LOCK else com.fariin.app.media.VoiceRecordRules.onRelease(upAt - downAt, moved, tapSlop, elapsed)) {
                                     com.fariin.app.media.VoiceRecordRules.Release.LOCK -> {
                                         locked = true
                                         haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
