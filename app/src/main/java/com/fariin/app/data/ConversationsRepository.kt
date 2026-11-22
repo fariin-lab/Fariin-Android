@@ -46,6 +46,8 @@ class ConversationsRepository(
         // The cache generation at attach: a snapshot parsed on the background thread while a sign-out
         // wipes the cache must not write that account's chats (or seeds) back (review 2026-11-06).
         val gen = LocalCache.currentGeneration
+        // Which chats showed unread in the last snapshot (only touched on the list's one parse thread).
+        val wasUnread = HashSet<String>()
         val reg = db.collection("conversations")
             .whereArrayContains("users", uid)
             .orderBy("updatedAt", Query.Direction.DESCENDING)
@@ -84,6 +86,15 @@ class ConversationsRepository(
                     for ((id, d) in datas) if (!com.fariin.app.crypto.Wire.isGroupCid(id)) SharedWallpapers.sync(app, id, d["sharedWallpaper"])
                 }
                 if (useDiskCache && !snap.metadata.isFromCache && LocalCache.currentGeneration == gen) LocalCache.saveChats(uid, datas)
+                // Read on another device (iOS: the badge follows reads elsewhere): a chat whose unread
+                // drops to 0, not marked unread by hand, loses its notification here too. Only on a
+                // drop, so a snapshot that is behind a fresh push never takes that push away.
+                val readNow = convs.filter { it.id in wasUnread && !it.hasUnreadMark(uid) }.map { it.id }
+                wasUnread.clear()
+                for (cv in convs) if (cv.hasUnreadMark(uid)) wasUnread += cv.id
+                if (useDiskCache && readNow.isNotEmpty()) runCatching { com.google.firebase.FirebaseApp.getInstance().applicationContext }.getOrNull()?.let { app ->
+                    for (cid in readNow) runCatching { com.fariin.app.push.NotificationPoster.clear(app, cid) }
+                }
             }
         awaitClose { reg.remove() }
     }
