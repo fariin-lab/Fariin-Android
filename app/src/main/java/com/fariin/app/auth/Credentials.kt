@@ -145,10 +145,17 @@ object Passkeys {
     suspend fun list(): List<Row> = listFresh().also { lastList = it }
 
     private suspend fun listFresh(): List<Row> = (call("listPasskeys")["passkeys"] as? List<*>).orEmpty().mapNotNull { it as? Map<*, *> }.map {
-        val provider = it["provider"] as? String ?: ""
+        val provider = displayName(it["provider"] as? String ?: "")
         Row(it["id"] as? String ?: "", provider.ifEmpty { it["label"] as? String ?: "Passkey" },
             (it["createdAt"] as? Number)?.toDouble(), (it["lastUsedAt"] as? Number)?.toDouble())
     }
+
+    /**
+     * PasskeysView.displayName: passkeys saved before the server rename still say "iCloud Keychain".
+     * Same app, newer name, so the list shows "Apple Passwords" as iOS does.
+     */
+    internal fun displayName(provider: String): String =
+        if (provider.startsWith("iCloud Keychain")) "Apple Passwords" else provider
 
     suspend fun delete(id: String) { call("deletePasskey", mapOf("id" to id)); lastList = lastList?.filter { it.id != id } }
 
