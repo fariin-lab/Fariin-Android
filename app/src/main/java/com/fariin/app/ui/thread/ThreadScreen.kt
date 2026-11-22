@@ -2771,7 +2771,8 @@ private fun MediaRow(
                         com.fariin.app.media.AutoSaveMedia.save(clipSaveCtx, "$threadCid/${m.id}/v/${m.id}", f, isVideo = true, sentAtMs = m.createdAtMillis)
                 }
                 PictureBox(m, local ?: m.thumbUrl, if (local != null) null else m.thumbEnc, maxW, RectangleShape, captionW, busy || !ready, onOpen = {
-                    m.videoUrl?.let { onView(Viewing.Video(it, m.enc, msg = m)) }
+                    // Only a delivered clip opens (iOS onTapMedia: sendState == nil), not one still on its way.
+                    if (m.sendState == null) m.videoUrl?.let { onView(Viewing.Video(it, m.enc, msg = m)) }
                 }, overlay = { VideoOverlay(m, here && !busy, showDuration = here || busy || !ready || clip.state == Fetch.FAILED); capsule() },
                     originKey = MediaOrigins.keyOf(m), clip = clip.takeIf { ready && !busy }, wide = ui.channel != null)
             }
