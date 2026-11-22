@@ -89,4 +89,12 @@ class PlusNightTest {
         assertNull(AvatarVideo.parse("x"))
         assertEquals("profiles/u1-video.mp4", AvatarVideo.storagePath("u1"))
     }
+    @Test fun menuFiltersTakenByRuleNotName() {
+        fun make(id: String) = ChatFolder.SUGGESTIONS.first { it.id == id }.make()
+        val renamed = make("unread").copy(name = "New stuff")
+        val edited = make("groups").copy(include = listOf("d1"))
+        val taken = ChatFolder.menuFiltersTaken(listOf(ChatFolder.ALL, renamed, edited, make("channels"), make("direct")))
+        assertEquals(setOf("unread", "channels"), taken)
+        assertTrue(ChatFolder.menuFiltersTaken(listOf(ChatFolder.ALL)).isEmpty())
+    }
 }

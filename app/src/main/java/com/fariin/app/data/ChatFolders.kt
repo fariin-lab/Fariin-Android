@@ -134,6 +134,10 @@ data class ChatFolder(
             Suggestion("channels", "Channels", listOf("channels"), false, "Only channels"),
         )
 
+        /** The chat-list menu filters these folders already are, matched by rule: "unread", "groups", "channels". */
+        fun menuFiltersTaken(folders: List<ChatFolder>): Set<String> =
+            folders.mapNotNull { it.suggestion?.id }.filter { it != "direct" }.toSet()
+
         fun newId(): String = "f" + java.util.UUID.randomUUID().toString().replace("-", "").take(12).lowercase()
 
         /** Cleaned as the server cleans: control chars and line breaks to spaces, spaces collapsed, trimmed, cut. */
@@ -220,9 +224,10 @@ object ChatFoldersStore {
         app?.let { prefs(it).edit().putBoolean("tabsHidden.$me", hidden).apply() }
     }
 
-    /** A menu filter that already is a folder (by its rule, not its name): "unread", "groups" or "channels". */
-    fun hasFolderFor(suggestionId: String): Boolean =
-        active && ChatFolder.SUGGESTIONS.firstOrNull { it.id == suggestionId }?.let { s -> folders.any { s.matches(it) } } == true
+    /** A menu filter that already is a tab (by its rule, not its name): "unread", "groups" or "channels".
+     *  Only while the tabs show (iOS menuFiltersTaken): hidden tabs give the menu every filter back. */
+    fun hasFolderFor(suggestionId: String): Boolean = suggestionId in menuFiltersTaken
+    val menuFiltersTaken: Set<String> get() = if (tabsShown) ChatFolder.menuFiltersTaken(folders) else emptySet()
     val customFolders: List<ChatFolder> get() = folders.filter { !it.isAll }
     val canAddFolder: Boolean get() = featureOn && maxOf(folders.size, 1) < ChatFolder.MAX_FOLDERS
 
