@@ -143,7 +143,7 @@ private fun OneTimeVoicePage(m: Message, cid: String, onClose: () -> Unit) {
                 Spacer(Modifier.weight(1f))
                 DashedOnceRing(Color.White.copy(alpha = 0.9f), showOne = true, side = 58.dp, stroke = 2.dp, digitSize = 26.sp)
                 Spacer(Modifier.height(22.dp))
-                Text("View once voice message", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Text("One-time voice message", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(22.dp))
                 if (failed) {
                     Text("Could not load this voice message.", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
