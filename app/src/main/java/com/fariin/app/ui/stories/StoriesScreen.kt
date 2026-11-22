@@ -218,8 +218,16 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     // "Xm ago" moves once a minute.
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     WhileShown(active) { on -> if (on) { now = System.currentTimeMillis(); while (true) { delay(60_000); now = System.currentTimeMillis() } } }
-    var viewedCollapsed by rememberSaveable { mutableStateOf(false) }
-    var hiddenCollapsed by rememberSaveable { mutableStateOf(false) }
+    // iOS @AppStorage("stories.viewedCollapsed"): the Viewed fold is remembered across launches.
+    val uiPrefs = remember { context.applicationContext.getSharedPreferences("stories_ui", android.content.Context.MODE_PRIVATE) }
+    var viewedCollapsed by remember { mutableStateOf(uiPrefs.getBoolean("viewedCollapsed", false)) }
+    LaunchedEffect(viewedCollapsed) { uiPrefs.edit().putBoolean("viewedCollapsed", viewedCollapsed).apply() }
+    // iOS: Hidden Stories start folded every time, never remembered.
+    var hiddenCollapsed by remember { mutableStateOf(true) }
+    // iOS viewedHold / heldOrder: from the first open until I leave the tab, the split and the
+    // order stay as they were, so a ring I just watched greys in place and moves nothing.
+    var viewedHold by remember { mutableStateOf<Set<String>?>(null) }
+    var heldOrder by remember { mutableStateOf<List<String>?>(null) }
     var posted by rememberSaveable { mutableStateOf(false) }
     var moreOpen by remember { mutableStateOf(false) }
     val moreAnchor = remember { com.fariin.app.ui.components.GlassMenuAnchor() }
@@ -233,17 +241,33 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     val muted by com.fariin.app.data.StoryMutes.set.collectAsState()
     val myName = profile?.name?.ifEmpty { null } ?: "You"
     val (shown, hidden) = com.fariin.app.data.StoryMutes.split(state.others, muted)
-    val recent = shown.filter { it.hasUnseen }
-    val viewed = shown.filter { !it.hasUnseen }
+    // Held order (iOS heldOrdered): anyone not in the snapshot (posted meanwhile) goes first.
+    val shownHeld = heldOrder?.let { order ->
+        val at = order.withIndex().associate { it.value to it.index }
+        shown.sortedBy { at[it.key] ?: -1 }
+    } ?: shown
+    val recent = shownHeld.filter { g -> viewedHold?.let { g.key !in it } ?: g.hasUnseen }
+    val viewed = shownHeld.filter { g -> viewedHold?.let { g.key in it } ?: !g.hasUnseen }
     val ordered = recent + viewed
+    // iOS listDisplayOrder: a folded Viewed section has no rows on screen, so the viewer does not walk into it.
+    val walk = recent + (if (viewedCollapsed) emptyList() else viewed)
+    LaunchedEffect(viewing != null) {
+        if (viewing != null && viewedHold == null) {
+            viewedHold = shown.filter { !it.hasUnseen }.map { it.key }.toSet()
+            heldOrder = shown.map { it.key }
+        }
+    }
     // My Story leads into everyone else, in the page's order (iOS openStoryFromRow, owner 2026-11-07:
     // from my own story a swipe could not reach the next person). Each ring once.
-    fun withOthers(mine: StoryGroup) = (listOf(mine) + ordered).distinctBy { it.key }
+    fun withOthers(mine: StoryGroup) = (listOf(mine) + walk).distinctBy { it.key }
     // iOS .searchable "Search": typing replaces the page with name matches (StoriesTabView.searchResults).
     var search by rememberSaveable { mutableStateOf("") }
     val query = search.trim()
     val matches = if (query.isEmpty()) emptyList() else shown.filter { it.name.contains(query, ignoreCase = true) }
-    val openRing: (StoryGroup) -> Unit = { g -> viewing = ordered to ordered.indexOfFirst { it.key == g.key }.coerceAtLeast(0) }
+    val openRing: (StoryGroup) -> Unit = { g ->
+        val list = if (walk.any { it.key == g.key }) walk else ordered
+        viewing = list to list.indexOfFirst { it.key == g.key }.coerceAtLeast(0)
+    }
     // A hidden person's story walks the Hidden Stories list, not the page above it (iOS).
     val openHidden: (StoryGroup) -> Unit = { g -> viewing = hidden to hidden.indexOfFirst { it.key == g.key }.coerceAtLeast(0) }
     val sendMessage: (StoryGroup) -> Unit = { g ->
@@ -286,6 +310,8 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             viewing = null; camera = false; library = false; post.clear(); composingText = false; posted = false; tooLong = false; dayLimit = false
             addMore = false; libraryFlight = null
             privacyPages.clear(); glowPage = false; glowNotifs = false; hideTarget = null; moreOpen = false
+            // Leaving the tab ends the hold (iOS releaseOrderHold): back on it, the rows re-sort.
+            viewedHold = null; heldOrder = null; hiddenCollapsed = true
         }
     }
     val glowSeenUpTo by com.fariin.app.data.Glow.seenUpTo.collectAsState()
