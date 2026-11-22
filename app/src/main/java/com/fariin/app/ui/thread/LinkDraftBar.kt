@@ -1,11 +1,5 @@
 package com.fariin.app.ui.thread
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -85,10 +79,17 @@ internal fun LinkDraftBar(cid: String, me: String, text: String, allowed: Boolea
         shown = d   // null: no card for this page, the skeleton just goes
     }
     val card = shown
-    AnimatedVisibility(card != null || loading != null,
-        enter = expandVertically(tween(200)) + fadeIn(tween(200)),
-        exit = shrinkVertically(tween(200)) + fadeOut(tween(200))) {
-        LinkDraftRow(card, onClose = {
+    // One 200 ms ease-in-out clock for the fade and the height, as the reply bar (RevealUp): the
+    // card laid out at its final size from the first frame, the composer under it never moving.
+    // It used to be an expand inside the bottom bar's own resize. The last card is held, so a
+    // closing bar still shows its card and not the skeleton.
+    val open = card != null || loading != null
+    val held = remember { arrayOfNulls<LinkPreviews.Draft>(1) }
+    if (open) held[0] = card
+    val drawn = held[0]
+    val showing = com.fariin.app.ui.components.rememberShowing(open)
+    com.fariin.app.ui.components.RevealUp(showing) {
+        LinkDraftRow(drawn, onClose = {
             LinkPreviews.suppress(cid, card?.url ?: loading)
             shown = null
             loading = null
