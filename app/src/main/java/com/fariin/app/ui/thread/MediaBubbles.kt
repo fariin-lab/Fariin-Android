@@ -423,6 +423,12 @@ internal fun VoiceBody(m: Message, cid: String, isMe: Boolean, width: Dp, meta: 
     val durMs = if (mine && st.durationMs > 0) st.durationMs else (total * 1000).toLong()
     val progress = if (durMs > 0) (pos.toFloat() / durMs).coerceIn(0f, 1f) else 0f
     val rate = VoicePlayer.state.collectAsState().value.rates[cid] ?: 1f
+    // iOS "not heard yet" dot: someone else's note never played on this phone. It fades once played.
+    remember { com.fariin.app.data.PlayedVoice.init(ctx.applicationContext) }
+    val playedUpTo by com.fariin.app.data.PlayedVoice.upTo.collectAsState()
+    val playedIds by com.fariin.app.data.PlayedVoice.ids.collectAsState()
+    val unheard = !isMe && m.localPath == null && !playing &&
+        com.fariin.app.data.PlayedVoice.isUnplayed(cid, m.id, m.createdAtMillis, playedUpTo, playedIds)
     // Storage and Data > Auto-Download > Voice messages (iOS AutoDownloadPrefs, audio "always" by
     // default): a note that may come down on this network is fetched as its bubble appears, so the
     // tap plays at once. Not allowed: it still loads on the tap. ChatMedia shares one download.
@@ -496,8 +502,15 @@ internal fun VoiceBody(m: Message, cid: String, isMe: Boolean, width: Dp, meta: 
                         playing || (progress > 0f && progress < 0.999f) -> MediaRules.durationLabel(pos / 1000.0)
                         else -> MediaRules.durationLabel(if (total > 0) total else durMs / 1000.0)
                     }
-                    Text(label, style = TextStyle(fontSize = 11.sp, fontFeatureSettings = "tnum",
-                        color = (if (isMe) Color.White else c.label).copy(alpha = 0.8f)))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(label, style = TextStyle(fontSize = 11.sp, fontFeatureSettings = "tnum",
+                            color = (if (isMe) Color.White else c.label).copy(alpha = 0.8f)))
+                        androidx.compose.animation.AnimatedVisibility(unheard,
+                            enter = com.fariin.app.ui.components.Smooth.fadeIn(),
+                            exit = com.fariin.app.ui.components.Smooth.fadeOut()) {
+                            Box(Modifier.padding(start = 6.dp).size(7.dp).clip(CircleShape).background(c.blue))
+                        }
+                    }
                     meta()
                 }
             }
