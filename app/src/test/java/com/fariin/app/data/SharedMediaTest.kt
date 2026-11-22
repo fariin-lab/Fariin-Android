@@ -64,6 +64,8 @@ class SharedMediaTest {
         val vids = SharedMedia.filtered(SharedMedia.lists(all, now).media, SharedMedia.Filter.VIDEOS)
         assertEquals(listOf("al-1"), vids.map { it.id })
         assertEquals(3, SharedMedia.filtered(SharedMedia.lists(all, now).media, SharedMedia.Filter.PHOTOS).size)
+        // One album photo deleted for me goes alone; the album's other photo stays.
+        assertEquals(listOf("new", "al-1", "old"), SharedMedia.lists(all, now) { it == "al-0" }.media.map { it.id })
     }
 
     @Test fun links() {
