@@ -1236,6 +1236,21 @@ private fun ThreadContent(
             } else if (ui.messages.isEmpty() && ch != null) {
                 // An empty channel shows its own card (iOS: the channel card from the first frame).
                 com.fariin.app.ui.channels.ChannelIntroCard(ch, Modifier.align(Alignment.Center))
+            } else if (ui.messages.isEmpty() && !ui.isGroup && ch == null && !ui.notAMember) {
+                // iOS encryptionNotice: an empty 1:1 says it is end-to-end encrypted, Learn more opens
+                // the safety page. Groups never get this line (they are not end-to-end encrypted).
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                Column(Modifier.align(Alignment.Center).padding(horizontal = 40.dp).clip(RoundedCornerShape(14.dp))
+                    .clickable { com.fariin.app.ui.settings.openWeb(ctx, "https://fariin.com/safety") }
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_sf_lock), null, tint = c.secondary, modifier = Modifier.size(15.dp))
+                    Spacer(Modifier.height(4.dp))
+                    Text(androidx.compose.ui.text.buildAnnotatedString {
+                        append("Messages and calls are end-to-end encrypted. Only people in this chat can read or listen to them.")
+                        pushStyle(androidx.compose.ui.text.SpanStyle(color = c.blue)); append(" Learn more"); pop()
+                    }, fontSize = 13.sp, color = c.secondary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                }
             } else if (ui.messages.isEmpty()) {
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("No messages here yet", fontSize = 15.sp, color = c.secondary)
