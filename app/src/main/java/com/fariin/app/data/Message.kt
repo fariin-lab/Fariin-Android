@@ -412,7 +412,9 @@ data class Message(
                 videoUrl = data["videoUrl"] as? String,
                 audioUrl = data["audioUrl"] as? String,
                 fileUrl = data["fileUrl"] as? String,
-                fileName = data["fileName"] as? String,
+                // A 1:1 document's real name, sealed like the text (iOS audit M11). The plain one is
+                // only a stand-in ("Document.pdf") then; an unreadable seal keeps the plain one.
+                fileName = openOptional("fileNameEnc") ?: data["fileName"] as? String,
                 enc = EncMeta.fromMap(data["enc"] as? Map<*, *>),
                 width = (data["width"] as? Number)?.toDouble(),
                 height = (data["height"] as? Number)?.toDouble(),
