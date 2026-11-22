@@ -366,11 +366,6 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
             when {
                 // iOS CallListSkeleton while the history is read.
                 !loaded -> item(key = "skeleton") { Box(Modifier.animateItem(fadeInSpec = com.fariin.app.ui.components.Smooth.fadeSpec(), placementSpec = com.fariin.app.ui.components.Smooth.soft(), fadeOutSpec = com.fariin.app.ui.components.Smooth.fadeSpec())) { com.fariin.app.ui.components.CallListSkeleton() }}
-                // A failed read is never drawn as an empty history.
-                noCalls && allLinks.isEmpty() && live.isEmpty() && liveEntry == null && error != null -> item(key = "error") {
-                    com.fariin.app.ui.components.CenteredNotice("Couldn't load calls", error, "Retry", onRetry,
-                        Modifier.fillMaxWidth().padding(top = 96.dp))
-                }
                 else -> {
                     // owner 2026-10-23 (iOS): Create a Call Link always first, then the live group calls.
                     // The admin panel's Call Links switch (iOS CallFeatures.callLinks).
@@ -433,6 +428,12 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
                     }}
                     // The empty states sit under the create row, so it is there before the first call.
                     when {
+                        // A failed read is never drawn as an empty history (iOS: under the links, so
+                        // the create row stays, with iOS's words).
+                        noCalls && liveEntry == null && error != null -> item(key = "error") {
+                            com.fariin.app.ui.components.CenteredNotice("Couldn't Load Calls", "Check your connection and try again.",
+                                "Try Again", onRetry, Modifier.fillMaxWidth().padding(top = 48.dp))
+                        }
                         rows.isNotEmpty() || live.isNotEmpty() -> {}
                         noCalls && allLinks.isEmpty() && liveEntry == null && q.isEmpty() -> item(key = "empty") {
                             // One next step: the same New Call page as the bar's button.
