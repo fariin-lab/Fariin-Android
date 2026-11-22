@@ -983,7 +983,12 @@ fun StoryViewer(
                     onShown = onShown,
                     onMediaLoaded = { pageLoaded[it] = true },
                     // iOS "..." > Hide Stories: hidden at once, and the viewer closes.
-                    onHide = { uid -> com.fariin.app.data.StoryMutes.setHidden(context, uid, true); close() },
+                    onHide = { uid ->
+                        com.fariin.app.data.StoryMutes.setHidden(context, uid, true)
+                        // Hiding someone's stories also stops their story notifications (iOS storyActionHide).
+                        if (uid in com.fariin.app.data.StoryNotify.on.value) com.fariin.app.data.StoryNotify.toggle(me, uid)
+                        close()
+                    },
                     onMenuAction = { st, key ->
                         when (key) {
                             "save" -> storyScope.launch { toast = StoryMenuActions.save(context, st) }
