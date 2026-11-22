@@ -267,7 +267,8 @@ class MediaSender(
     }
 
     suspend fun file(f: FilePrep, forwarded: Boolean, clientId: String?, clientTs: Double, reply: Message.ReplyRef? = null,
-                     rename: Pair<String?, String?>? = null, job: FileUpload? = null) {
+                     rename: Pair<String?, String?>? = null, job: FileUpload? = null,
+                     save: ((String, ByteArray) -> Unit)? = null) {
         // A Resend of a song whose message is already written: only the file goes up, then the attach.
         job?.messageId?.let { id ->
             val ref = convRef.collection("messages").document(id)
@@ -303,6 +304,9 @@ class MediaSender(
         batch.update(convRef, MediaMessages.convUpdate(me, MediaRules.filePreview(f.name), others(members),
             FieldValue.serverTimestamp(), FieldValue.increment(1), forwarded = forwarded))
         MediaSend.noteAnnounced(clientId, msgRef.id)
+        // Written down BEFORE the write (FileOutbox, iOS PendingUploadStore): a kill after it can
+        // still finish this message with these sealed bytes.
+        save?.invoke(msgRef.id, cipher)
         batch.commit().await()
         job?.let { it.cipher = cipher; it.messageId = msgRef.id }
         val url = uploadRetrying(cipher, MediaRules.filePath(cid, msgRef.id), progress(clientId))
@@ -336,7 +340,8 @@ class MediaSender(
 
     suspend fun playlist(songs: List<FilePrep>, title: String, caption: String, cover: ByteArray?,
                          clientId: String?, clientTs: Double, reply: Message.ReplyRef? = null,
-                         renames: List<Pair<String?, String?>> = emptyList(), job: PlaylistUpload = PlaylistUpload()): String {
+                         renames: List<Pair<String?, String?>> = emptyList(), job: PlaylistUpload = PlaylistUpload(),
+                         save: ((PlaylistUpload) -> Unit)? = null): String {
         require(songs.size >= 2) { "A playlist needs two songs or more." }
         if (job.messageId == null) {
             val members = members()
@@ -370,6 +375,11 @@ class MediaSender(
             batch.update(convRef, MediaMessages.convUpdate(me, com.fariin.app.data.MusicRules.playlistPreview(list.size), others(members),
                 FieldValue.serverTimestamp(), FieldValue.increment(1)))
             MediaSend.noteAnnounced(clientId, msgRef.id)
+            // Written down BEFORE the write (FileOutbox): a kill after it finishes this message.
+            save?.invoke(PlaylistUpload().also { w ->
+                w.ciphers = sealed.map { it.first }; w.list = list; w.listNameSealed = listNameSealed
+                w.urls = arrayOfNulls(songs.size); w.messageId = msgRef.id
+            })
             batch.commit().await()
             job.ciphers = sealed.map { it.first }
             job.list = list
@@ -387,6 +397,7 @@ class MediaSender(
             val url = uploadRetrying(job.ciphers[i], com.fariin.app.data.MusicRules.songPath(cid, messageId, i), each)
             songs.getOrNull(i)?.let { media?.store(url, it.bytes) }
             job.urls[i] = url
+            save?.invoke(job)
         }
         msgRef.update(com.fariin.app.data.MusicRules.playlistAttach(job.list, job.urls.map { it!! }, job.listNameSealed,
             FieldValue.delete())).await()

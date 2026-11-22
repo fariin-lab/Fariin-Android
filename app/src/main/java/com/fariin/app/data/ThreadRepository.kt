@@ -688,9 +688,10 @@ class ThreadRepository(
         for (d in chSync?.docsOrNull() ?: (olderDocs.values + liveDocs.values)) {
             var m = parse(d)
             if (m.uploading && m.authorId == me && m.sendState == null) m.clientId?.let { k ->
-                // A playlist of mine still `uploading` from before this app started has no send left
-                // running: it failed too (the app was closed or killed on it).
-                val orphan = (m.tracks?.size ?: 0) >= 2 && m.hasServerTime && m.createdAtMillis < processStartMs &&
+                // A file, song or playlist of mine still `uploading` from before this app started, with
+                // no send left running (none resumed from FileOutbox): it failed too (the app was
+                // closed or killed on it), red with Resend and Delete instead of spinning.
+                val orphan = m.type == "file" && m.hasServerTime && m.createdAtMillis < processStartMs &&
                     !com.fariin.app.media.MediaSend.isInFlight(k)
                 if (k in failedMedia || orphan) m = m.copy(sendState = Message.SendState.FAILED)
             }
@@ -1134,6 +1135,9 @@ class ThreadRepository(
     fun retry(m: Message) {
         val id = m.clientId ?: return
         if (SendQueue.isInFlight(id)) return
+        // A file, song or playlist kept across a restart whose copies are gone: nothing to send again, only Delete.
+        if (!retryMedia.containsKey(id) && com.fariin.app.local.FileOutbox.get(me, id)
+                ?.let { !com.fariin.app.local.FileOutbox.readable(it) { p -> File(p).length() } } == true) return
         SendQueue.remove(me, id)
         pending.remove(id)
         retryPhoto.remove(id)?.let { com.fariin.app.local.PhotoOutbox.remove(me, id); sendPreparedPhoto(it); return }
@@ -1330,9 +1334,13 @@ class ThreadRepository(
             // sends only the file (as a playlist's does); other documents keep their old way.
             val song = com.fariin.app.media.MediaRules.isSong(f.name)
             val upload = if (song) com.fariin.app.media.MediaSender.FileUpload() else null
+            // Written down first, so a kill cannot lose it (FileOutbox, iOS PendingUploadStore).
+            keepFile(if (song) "song" else "file", clientId, tap, listOf(local), listOf(f.name), f.previewJpeg, ref = ref,
+                renames = listOfNotNull(rename))
             val work: suspend () -> Unit = {
-                sender.file(f, false, clientId, tap, reply = ref, rename = rename, job = upload)
+                sender.file(f, false, clientId, tap, reply = ref, rename = rename, job = upload, save = fileSave(clientId))
                 playlistSends.remove(clientId)
+                com.fariin.app.local.FileOutbox.remove(me, clientId)
             }
             if (song) playlistSends += clientId
             retryMedia[clientId] = work
@@ -1382,7 +1390,11 @@ class ThreadRepository(
                 // photos never sit in memory at once.
                 val name = f.name
                 val preview = f.previewJpeg
-                val work: suspend () -> Unit = { sender.file(FilePrep(name, local.readBytes(), preview), false, clientId, tap, reply = re) }
+                keepFile("file", clientId, tap, listOf(local), listOf(name), preview, ref = re)
+                val work: suspend () -> Unit = {
+                    sender.file(FilePrep(name, local.readBytes(), preview), false, clientId, tap, reply = re, save = fileSave(clientId))
+                    com.fariin.app.local.FileOutbox.remove(me, clientId)
+                }
                 retryMedia[clientId] = work
                 queued += clientId to work
                 rebuild()
@@ -1461,11 +1473,15 @@ class ThreadRepository(
             val names = songs.map { it.name }
             // Kept across a Resend: the message and the songs already up are not sent twice.
             val upload = com.fariin.app.media.MediaSender.PlaylistUpload()
+            // Written down first, so a kill cannot lose it (FileOutbox): the next start puts up only
+            // the songs still missing and completes the same message.
+            keepFile("playlist", clientId, tap, locals, names, tile, title, caption, okRenames, ref)
             val work: suspend () -> Unit = {
                 // Read back from this phone's copies when the send starts, as a list of documents is.
                 sender.playlist(names.mapIndexed { i, n -> FilePrep(n, locals[i].readBytes(), null) }, title, caption, tile, clientId, tap, reply = ref,
-                    renames = okRenames, job = upload)
+                    renames = okRenames, job = upload, save = playlistSave(clientId))
                 playlistSends.remove(clientId)
+                com.fariin.app.local.FileOutbox.remove(me, clientId)
             }
             playlistSends += clientId
             retryMedia[clientId] = work
@@ -1554,9 +1570,9 @@ class ThreadRepository(
                 com.fariin.app.media.MediaSend.clearItems(clientId)
                 com.fariin.app.media.MediaSend.finish(clientId)
             } catch (e: Exception) {
-                if (mediaSendEnded(clientId, e)) { com.fariin.app.local.PhotoOutbox.remove(me, clientId); return@launch }
+                if (mediaSendEnded(clientId, e)) { com.fariin.app.local.PhotoOutbox.remove(me, clientId); com.fariin.app.local.FileOutbox.remove(me, clientId); return@launch }
                 // Refused for good: no resend at the next start either.
-                if (SendQueue.isPermanent(e)) com.fariin.app.local.PhotoOutbox.remove(me, clientId)
+                if (SendQueue.isPermanent(e)) { com.fariin.app.local.PhotoOutbox.remove(me, clientId); com.fariin.app.local.FileOutbox.remove(me, clientId) }
                 if (!retryMedia.containsKey(clientId)) retryMedia[clientId] = work
                 if (clientId in playlistSends) failedMedia += clientId
                 com.fariin.app.media.UploadProgress.done(clientId)
@@ -1604,6 +1620,7 @@ class ThreadRepository(
         com.fariin.app.media.UploadProgress.done(clientId)
         retryMedia.remove(clientId); retryPhoto.remove(clientId); failedMedia.remove(clientId)
         com.fariin.app.local.PhotoOutbox.remove(me, clientId)
+        com.fariin.app.local.FileOutbox.remove(me, clientId)
         send.clearItems(clientId)
         pending.remove(clientId)
         rebuild()
@@ -1890,6 +1907,7 @@ class ThreadRepository(
      * Firestore's own queue already has a message with it.
      */
     fun resumeOutbox() {
+        for (e in com.fariin.app.local.FileOutbox.all(me)) if (e.cid == cid && !pending.containsKey(e.clientId)) resumeFile(e)
         for (e in com.fariin.app.local.PhotoOutbox.all(me)) {
             if (e.cid != cid || pending.containsKey(e.clientId)) continue
             val f = File(e.path)
@@ -1934,6 +1952,91 @@ class ThreadRepository(
                 if (e.viewOnce && !voice && !video) f.delete()
             }
         }
+    }
+
+    // ------------------------------------------------------------------ files, songs, playlists across a kill (FileOutbox)
+
+    /** Writes down a file, song or playlist send before it starts ([preview]: its tile or cover, kept beside it). */
+    private fun keepFile(kind: String, clientId: String, tap: Double, locals: List<File>, names: List<String>, preview: ByteArray?,
+                         title: String = "", caption: String = "", renames: List<Pair<String?, String?>> = emptyList(),
+                         ref: Message.ReplyRef? = null) {
+        val dir = media?.localDir() ?: return
+        val tile = preview?.takeIf { it.isNotEmpty() }?.let { b -> File(dir, "fprev-$clientId.jpg").also { it.writeBytes(b) }.absolutePath }
+        com.fariin.app.local.FileOutbox.add(me, com.fariin.app.local.FileOutbox.Entry(cid, clientId, tap, kind, locals.map { it.absolutePath }, names, tile,
+            title, caption, renames, ref?.id, ref?.authorId, ref?.text))
+    }
+
+    /** The message id and its sealed copies, written down once, just before the message write. */
+    private fun keepSealed(clientId: String, messageId: String, ciphers: List<ByteArray>,
+                           songs: List<MusicRules.SealedSong>, listName: String, urls: List<String?>) {
+        val dir = media?.localDir() ?: return
+        val cur = com.fariin.app.local.FileOutbox.get(me, clientId) ?: return
+        val sealed = if (cur.messageId == messageId && cur.sealed.size == ciphers.size) cur.sealed
+            else ciphers.mapIndexed { i, c -> File(dir, "seal-$clientId-$i").also { it.writeBytes(c) }.absolutePath }
+        com.fariin.app.local.FileOutbox.update(me, clientId) { it.copy(messageId = messageId, sealed = sealed, songs = songs, listNameSealed = listName, urls = urls) }
+    }
+
+    private fun fileSave(clientId: String): (String, ByteArray) -> Unit =
+        { id, c -> keepSealed(clientId, id, listOf(c), emptyList(), "", emptyList()) }
+
+    private fun playlistSave(clientId: String): (MediaSender.PlaylistUpload) -> Unit =
+        { j -> j.messageId?.let { keepSealed(clientId, it, j.ciphers, j.list, j.listNameSealed, j.urls.toList()) } }
+
+    /**
+     * A file, song or playlist from [com.fariin.app.local.FileOutbox] (the app was closed on it, iOS resumePendingUploads):
+     * not written yet, it is sent again under the same clientId; written, only what is missing goes
+     * up (a playlist's missing songs, MusicRules.songsToUpload) and the same message is completed.
+     * One that can no longer be read stays a failed bubble with Delete.
+     */
+    private fun resumeFile(e: com.fariin.app.local.FileOutbox.Entry) {
+        val ref = if (e.replyId != null && e.replyAuthor != null) Message.ReplyRef(e.replyId, e.replyAuthor, e.replyText ?: "") else null
+        val playlist = e.kind == "playlist"
+        val ok = com.fariin.app.local.FileOutbox.readable(e) { File(it).length() }
+        pending[e.clientId] = Message(
+            id = e.clientId, authorId = me, text = e.caption, type = "file", createdAtMillis = e.ts, hasServerTime = false,
+            clientTs = e.ts, clientId = e.clientId, sendState = if (ok) Message.SendState.SENDING else Message.SendState.FAILED, replyTo = ref,
+            fileName = e.names.firstOrNull(), fileSize = e.paths.firstOrNull()?.let { File(it).length() },
+            localPath = if (playlist) null else e.paths.firstOrNull(),
+            tracks = if (!playlist) null else e.names.mapIndexed { i, n -> MusicRules.Track(e.paths.getOrNull(i) ?: "", null, n, File(e.paths.getOrNull(i) ?: "").length(),
+                e.renames.getOrNull(i)?.first, e.renames.getOrNull(i)?.second) },
+            listName = if (playlist) e.title else null,
+        )
+        rebuild()
+        // Its message written and its bytes gone: the server's copy shows failed (Delete), nothing to keep.
+        if (!ok) { if (e.messageId != null) { pending.remove(e.clientId); com.fariin.app.local.FileOutbox.remove(me, e.clientId); rebuild() }; return }
+        if (com.fariin.app.media.MediaSend.isInFlight(e.clientId)) return
+        val work: suspend () -> Unit = {
+            val cur = com.fariin.app.local.FileOutbox.get(me, e.clientId) ?: e
+            // Written before the kill? Asked by id: this phone's cache first, then the server.
+            val written = cur.messageId?.let { id ->
+                val doc = convRef.collection("messages").document(id)
+                val cached = try { doc.get(Source.CACHE).await().exists() } catch (_: Exception) { false }
+                cached || doc.get(Source.SERVER).await().exists()
+            } ?: false
+            val preview = cur.preview?.let { p -> File(p).takeIf { it.length() > 0 }?.readBytes() }
+            val songs = cur.names.mapIndexed { i, n -> FilePrep(n, File(cur.paths[i]).readBytes(), if (playlist) null else preview) }
+            if (playlist) {
+                val job = MediaSender.PlaylistUpload()
+                if (written) {
+                    job.messageId = cur.messageId
+                    job.ciphers = cur.sealed.map { File(it).readBytes() }
+                    job.list = cur.songs
+                    job.listNameSealed = cur.listNameSealed
+                    job.urls = cur.urls.toTypedArray()
+                }
+                sender.playlist(songs, cur.title, cur.caption, preview, e.clientId, e.ts, reply = ref,
+                    renames = cur.renames, job = job, save = playlistSave(e.clientId))
+            } else {
+                val job = if (written) MediaSender.FileUpload().also { it.messageId = cur.messageId; it.cipher = File(cur.sealed[0]).readBytes() } else null
+                sender.file(songs[0], false, e.clientId, e.ts, reply = ref, rename = cur.renames.firstOrNull(), job = job, save = fileSave(e.clientId))
+            }
+            playlistSends.remove(e.clientId)
+            com.fariin.app.local.FileOutbox.remove(me, e.clientId)
+        }
+        // A failure leaves it red with a Resend that runs this again (the entry stays).
+        playlistSends += e.clientId
+        retryMedia[e.clientId] = work
+        runMediaSend(e.clientId, work)
     }
 
     /** An album from [com.fariin.app.local.PhotoOutbox]: its tiles drawn again and sent under the same clientId. */
@@ -2713,10 +2816,10 @@ class ThreadRepository(
         // An unsent one also leaves the send queue and drops what it was waiting to resend (iOS
         // deleteForMe on a failed message: queue entry, upload and bubble all go).
         m.clientId?.let { pending.remove(it); retryPhoto.remove(it); retryVoice.remove(it); voiceReplies.remove(it)
-            if (m.sendState != null && !SendQueue.isInFlight(it)) { SendQueue.remove(me, it); retryMedia.remove(it); com.fariin.app.local.PhotoOutbox.remove(me, it) }
+            if (m.sendState != null && !SendQueue.isInFlight(it)) { SendQueue.remove(me, it); retryMedia.remove(it); com.fariin.app.local.PhotoOutbox.remove(me, it); com.fariin.app.local.FileOutbox.remove(me, it) }
             // A failed media send whose message the server holds (still `uploading`): it goes for
             // both people, or the other phone would spin on it until the stuck sweep.
-            if (failedMedia.remove(it) || (m.sendState == Message.SendState.FAILED && m.uploading && m.authorId == me && m.id != it && (m.tracks?.size ?: 0) >= 2))
+            if (failedMedia.remove(it) || (m.sendState == Message.SendState.FAILED && m.uploading && m.authorId == me && m.id != it && m.type == "file"))
                 SendScope.launch(Dispatchers.IO) { cancelAnnounced(m.id) } }
         // An unsent text still on its way (offline, waiting for the server) is called off too, as
         // iOS cancelTextSend: a send not written yet stops before its write, and one Firestore already
