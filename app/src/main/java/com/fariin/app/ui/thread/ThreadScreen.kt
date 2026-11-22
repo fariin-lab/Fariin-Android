@@ -663,8 +663,6 @@ private fun ThreadContent(
                 com.fariin.app.ui.components.GlassAlertAction("Cancel") {},
             ))
     }
-    var seenCount by remember { mutableStateOf(ui.messages.size) }
-    LaunchedEffect(atBottom, ui.messages.size) { if (atBottom) seenCount = ui.messages.size }
     // iOS noteReactionChanges: my messages' reactions as last seen; the first pass only seeds, so
     // reactions already there when the chat opened never fire. Only someone else's NEW or CHANGED
     // reaction counts, never a removal. Reaching the bottom clears it.
@@ -710,6 +708,32 @@ private fun ThreadContent(
     var userDragged by remember { mutableStateOf(false) }
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }.collect { if (!it) stick = listState.firstVisibleItemIndex <= 1 }
+    }
+    // iOS newWhileAway: the arrow's count is the messages from others that ARRIVED while I was
+    // scrolled up (newer than the newest delivered one I had). Older pages paging in and my own
+    // sends never count; the open's first answers only set the mark. Reaching the newest zeroes it.
+    var newWhileAway by remember(ui.cid) { androidx.compose.runtime.mutableIntStateOf(0) }
+    val newestSeen = remember(ui.cid) { doubleArrayOf(-1.0) }
+    val countFrom = remember(ui.cid) { booleanArrayOf(false) }
+    LaunchedEffect(ui.messages) {
+        val before = newestSeen[0]
+        // Delivered only: my bubble still on its way carries the phone's clock, which can run ahead.
+        ui.messages.lastOrNull { it.sendState == null }?.createdAtMillis?.let { if (it > before) newestSeen[0] = it }
+        val counting = countFrom[0]
+        countFrom[0] = ui.loaded && ui.synced && before >= 0
+        if (!counting || before < 0) return@LaunchedEffect
+        val away = !stick && listState.firstVisibleItemIndex > 1
+        if (!away) return@LaunchedEffect
+        val incoming = ui.messages.count { it.authorId != ui.me && it.sendState == null && it.createdAtMillis > before }
+        if (incoming > 0) newWhileAway += incoming
+    }
+    LaunchedEffect(atBottom) { if (atBottom) newWhileAway = 0 }
+    // iOS fix-all #75: a chat that opens above the newest with unread waiting shows that count on
+    // the arrow at once, not a bare arrow; reaching the newest zeroes it the same way.
+    LaunchedEffect(ui.cid, ui.loaded && ui.synced) {
+        if (!(ui.loaded && ui.synced)) return@LaunchedEffect
+        kotlinx.coroutines.delay(350)
+        if (ui.unreadAtOpen > 0 && listState.firstVisibleItemIndex > 1) newWhileAway = maxOf(newWhileAway, ui.unreadAtOpen)
     }
     // A short chat (a new group: its card, "created the group" and a message or two) is topped up
     // to the list's height by an empty row above everything (key FILL_KEY). Without it the rows did
@@ -1358,7 +1382,7 @@ private fun ThreadContent(
                 Modifier.align(Alignment.BottomEnd).zIndex(1f).padding(end = COMPOSER_SIDE, bottom = with(density) { bottomBarPx.toDp() } + 10.dp),
                 enter = com.fariin.app.ui.components.Smooth.fadeIn() + (if (com.fariin.app.ui.components.Smooth.on) androidx.compose.animation.scaleIn(com.fariin.app.ui.components.Smooth.soft(), initialScale = 0.8f) else androidx.compose.animation.EnterTransition.None),
                 exit = com.fariin.app.ui.components.Smooth.fadeOut() + (if (com.fariin.app.ui.components.Smooth.on) androidx.compose.animation.scaleOut(com.fariin.app.ui.components.Smooth.fadeSpec(), targetScale = 0.8f) else androidx.compose.animation.ExitTransition.None)) {
-                JumpArrow((ui.messages.size - seenCount).coerceAtLeast(0), onClick = {
+                JumpArrow(newWhileAway, onClick = {
                     quoteSeq[0]++   // a quote jump still paging is dropped (iOS jumpSeq)
                     // iOS two-stage arrow: the first tap goes to the first unread message, once, and
                     // only when the "Unread Messages" divider is still below everything on screen;
