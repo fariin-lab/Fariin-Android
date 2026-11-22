@@ -2114,8 +2114,18 @@ private val senderPalette = listOf(
 private fun SenderLine(ui: ThreadUi, uid: String) {
     val tint = senderColor(uid)
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(ui.names[uid] ?: "Someone", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = tint, maxLines = 1,
+        // iOS personName: "User" when the group has no name on file for them.
+        Text(ui.names[uid]?.takeIf { it.isNotEmpty() } ?: "User", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = tint, maxLines = 1,
             overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        // iOS SenderChrome.verified: the member's tick at 15 after the name (gold for a company).
+        val ctx = LocalContext.current
+        LaunchedEffect(uid) { com.fariin.app.data.VerifiedPeople.warm(ctx.applicationContext, uid) }
+        val kinds by com.fariin.app.data.VerifiedPeople.kinds.collectAsState()
+        com.fariin.app.data.VerifiedPeople.badge(kinds, uid)?.let { kind ->
+            com.fariin.app.ui.components.VerifiedSeal(
+                if (com.fariin.app.data.VerifiedPeople.isGold(kind)) Color(0xFFE8B21E) else Color(0xFF2392FE),
+                Modifier.padding(start = 4.dp).size(15.dp))
+        }
         ui.roles[uid]?.let { r ->
             val chip = com.fariin.app.data.GroupRole.rgb(r.color)?.let { Color(0xFF000000 or it) } ?: tint
             Spacer(Modifier.width(6.dp))
