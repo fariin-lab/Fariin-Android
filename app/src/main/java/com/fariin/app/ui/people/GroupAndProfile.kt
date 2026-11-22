@@ -760,6 +760,15 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
                                 // Not awaited (iOS: a detached task), so Create does not wait on the network.
                                 if (timer > 0) kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
                                     .launch { runCatching { api.setDisappear(cid, timer) } }
+                                // The invite link is made with the group (iOS NewGroupView), behind the chat: once
+                                // more after 3 s if the group was not on the server yet. Both failing is fine, the
+                                // Invite Links page still makes one when it opens.
+                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
+                                    if (runCatching { com.fariin.app.channel.ChannelService.createPrimaryLink(cid) }.getOrNull() == null) {
+                                        kotlinx.coroutines.delay(3_000)
+                                        runCatching { com.fariin.app.channel.ChannelService.createPrimaryLink(cid) }
+                                    }
+                                }
                                 // "New group" on the new-account card is done.
                                 com.fariin.app.ui.chats.GetStartedStore.markDone(gsCtx, com.fariin.app.ui.chats.GetStartedCard.NEW_GROUP)
                                 onCreated(cid)
