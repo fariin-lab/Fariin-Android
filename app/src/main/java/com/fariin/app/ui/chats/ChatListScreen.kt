@@ -1698,7 +1698,7 @@ internal fun ChatRow(
 @Composable
 private fun Ticks(conv: Conversation, me: String) {
     val c = Fariin.colors
-    if (ChatListRules.lastSendPending(conv, me) { com.fariin.app.local.SendQueue.pending(me, conv.id).isNotEmpty() }) {
+    if (ChatListRules.lastSendPending(conv, me) { com.fariin.app.local.SendQueue.pending(me, conv.id).any { !it.refused } }) {
         // Still on this phone (sent offline): the clock, as the chat's own bubble shows.
         Icon(ImageVector.cachedVector(R.drawable.ic_sf_clock), contentDescription = "Sending", tint = c.secondary, modifier = Modifier.size(15.dp))
         return

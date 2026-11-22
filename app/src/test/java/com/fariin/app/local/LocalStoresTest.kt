@@ -81,6 +81,9 @@ class LocalStoresTest {
         val e = SendQueue.Entry("C1", "alice_bobby", "hi there", 12.0, "m0", "bobby", "quoted")
         val f = SendQueue.Entry("C2", "g1", "plain", 13.0)
         assertEquals(listOf(e, f), SendQueue.decode(SendQueue.encode(listOf(e, f))))
+        // A refused send keeps its mark and time through a restart (iOS Entry.refused).
+        val r = f.copy(refused = true, refusedAt = 99.0)
+        assertEquals(listOf(r), SendQueue.decode(SendQueue.encode(listOf(r))))
         assertTrue(SendQueue.isPermanent(IllegalArgumentException("too long")))
         assertFalse(SendQueue.isPermanent(IllegalStateException("offline")))
     }

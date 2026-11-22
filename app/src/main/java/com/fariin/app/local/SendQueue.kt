@@ -16,7 +16,8 @@ import java.util.concurrent.ConcurrentHashMap
  * Duplicate-safe as on iOS: before a re-drive the message document (id = clientId) is looked for,
  * first in Firestore's own offline store (a write already queued there is sent by Firestore
  * itself) and then on the server; found = nothing to do. A refusal by the rules is final: the
- * entry is dropped and the bubble shows as failed, and the user's Retry is a new send.
+ * entry is kept, marked refused, so the failed bubble is still there after a restart; nothing sends
+ * it again on its own, and the user's Retry is a new send.
  *
  * One file per account (local-v1/<uid>/sendqueue.bin), sealed like the other local stores, and
  * wiped at sign-out with them.
@@ -36,6 +37,11 @@ object SendQueue {
         val fmt: String? = null,
         /** Fariin Plus send effect (hearts, confetti, balloons, sparkles), plain `fx` like `bs`. */
         val fx: String? = null,
+        /** The server refused it (iOS Entry.refused): kept only so the chat still draws it failed,
+         *  with Retry and Delete, after a restart. Nothing sends it again on its own. */
+        val refused: Boolean = false,
+        /** When it was refused, in ms (a refused one left 30 days goes, iOS drainAll). */
+        val refusedAt: Double = 0.0,
     )
 
     @Volatile private var root: File? = null
@@ -78,6 +84,20 @@ object SendQueue {
         if (entries.remove(clientId) != null) save(uid)
     }
 
+    /** Keeps the entry but takes it out of every automatic send (iOS markRefused). */
+    @Synchronized fun markRefused(uid: String, clientId: String) {
+        ensure(uid)
+        val e = entries[clientId] ?: return
+        entries[clientId] = e.copy(refused = true, refusedAt = System.currentTimeMillis().toDouble())
+        save(uid)
+    }
+
+    /** Refused sends older than [beforeMs] go: their chat may be one nobody can resend from. */
+    @Synchronized fun pruneRefused(uid: String, beforeMs: Double) {
+        ensure(uid)
+        if (entries.values.removeAll { it.refused && it.refusedAt < beforeMs }) save(uid)
+    }
+
     @Synchronized fun pending(uid: String, cid: String): List<Entry> { ensure(uid); return entries.values.filter { it.cid == cid } }
 
     @Synchronized fun all(uid: String): List<Entry> { ensure(uid); return entries.values.toList() }
@@ -111,6 +131,7 @@ object SendQueue {
             if (e.mentions.isNotEmpty()) put("mn", JSONArray(e.mentions))
             e.fmt?.let { put("fm", it) }
             e.fx?.let { put("fx", it) }
+            if (e.refused) put("rf", e.refusedAt)
         })
     }.toString()
 
@@ -123,7 +144,8 @@ object SendQueue {
             Entry(id, cid, t, o.optDouble("ts", 0.0),
                 o.optString("rid").ifEmpty { null }, o.optString("ra").ifEmpty { null }, if (o.has("rt")) o.getString("rt") else null,
                 o.optJSONArray("mn")?.let { m -> (0 until m.length()).mapNotNull { j -> m.optString(j).ifEmpty { null } } } ?: emptyList(),
-                o.optString("fm").ifEmpty { null }, o.optString("fx").ifEmpty { null })
+                o.optString("fm").ifEmpty { null }, o.optString("fx").ifEmpty { null },
+                refused = o.has("rf"), refusedAt = o.optDouble("rf", 0.0))
         }
     }
 }

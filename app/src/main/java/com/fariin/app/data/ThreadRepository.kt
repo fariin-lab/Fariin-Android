@@ -239,7 +239,7 @@ class ThreadRepository(
             otherReg?.remove(); otherReg = null; myReg?.remove(); myReg = null
             attachPresence(Wire.otherUid(cid, me))
         }
-        for (e in SendQueue.pending(me, cid)) if (!SendQueue.isInFlight(e.clientId)) resend(e)
+        for (e in SendQueue.pending(me, cid)) if (!e.refused && !SendQueue.isInFlight(e.clientId)) resend(e)
         chSync?.reattach()
     }
 
@@ -1002,7 +1002,8 @@ class ThreadRepository(
         e.fx?.let { fxAtSend[e.clientId] = it }
         pending[e.clientId] = Message(
             id = e.clientId, authorId = me, text = e.text, createdAtMillis = e.ts, hasServerTime = false,
-            clientTs = e.ts, clientId = e.clientId, sendState = Message.SendState.SENDING, replyTo = ref,
+            clientTs = e.ts, clientId = e.clientId, replyTo = ref,
+            sendState = if (e.refused) Message.SendState.FAILED else Message.SendState.SENDING,
             mentions = e.mentions, bubbleStyle = style.first, bubbleDecor = style.second,   // from the first frame
             fx = e.fx,
             bold = TextFormat.parse(e.fmt, e.text.length),
@@ -1010,6 +1011,8 @@ class ThreadRepository(
         )
         sweptSends.remove(e.clientId)   // a new try: sending again until the sweep says otherwise
         rebuild()
+        // Refused in an earlier run (iOS Entry.refused): drawn failed with Retry and Delete, never sent.
+        if (e.refused) { SendQueue.end(e.clientId); return null }
         return on.launch {
             try {
                 if (save) SendQueue.add(me, e)
@@ -1041,9 +1044,10 @@ class ThreadRepository(
             } catch (x: Exception) {
                 cardFor.remove(e.clientId)
                 localCards.remove(e.clientId)
-                // A refusal is final (the bubble offers Retry, which is a new send); anything else
+                // A refusal is final (the bubble offers Retry, which is a new send): kept, marked, so
+                // the failed bubble is still there after a restart (iOS markRefused). Anything else
                 // stays queued for the next reconnect.
-                if (SendQueue.isPermanent(x)) SendQueue.remove(me, e.clientId)
+                if (SendQueue.isPermanent(x)) SendQueue.markRefused(me, e.clientId)
                 pending[e.clientId]?.let { pending[e.clientId] = it.copy(sendState = Message.SendState.FAILED) }
                 rebuild()
             } finally {
@@ -2733,7 +2737,9 @@ class ThreadRepository(
 
         /** Every queued text of [me]: through the open chat's repository, or a quiet one. */
         fun drainQueue(me: String, crypto: FariinCrypto, scope: CoroutineScope) {
-            for ((cid, list) in SendQueue.all(me).groupBy { it.cid }) {
+            // A refused send left 30 days goes (iOS drainAll); the rest is never driven on its own.
+            SendQueue.pruneRefused(me, System.currentTimeMillis() - 30 * 86_400_000.0)
+            for ((cid, list) in SendQueue.all(me).filter { !it.refused }.groupBy { it.cid }) {
                 val repo = open[cid] ?: ThreadRepository(cid, me, crypto, scope)
                 for (e in list) if (!SendQueue.isInFlight(e.clientId)) repo.resend(e)
             }
