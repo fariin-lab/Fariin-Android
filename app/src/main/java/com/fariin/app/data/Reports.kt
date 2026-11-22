@@ -103,6 +103,8 @@ data class ReportTarget(
     val messageText: String? = null,
     /** Opened from a Block alert's "Block and Report": the person is already blocked (iOS preBlocked). */
     val preBlocked: Boolean = false,
+    /** False when [cid] is only the would-be 1:1 id with no chat behind it: no Mute (iOS muteCid nil). */
+    val hasChat: Boolean = true,
 )
 
 /** The words and rules of the sheet, kept here so they can be tested. */
@@ -134,7 +136,7 @@ object ReportRules {
     }
 
     /** Mute is offered on the thanks page for a 1:1 (an account) and a group. */
-    fun canMute(t: ReportTarget): Boolean = t.cid.isNotEmpty() && (t.kind == ReportKind.ACCOUNT || t.kind == ReportKind.GROUP || t.kind == ReportKind.MESSAGE)
+    fun canMute(t: ReportTarget): Boolean = t.cid.isNotEmpty() && t.hasChat && (t.kind == ReportKind.ACCOUNT || t.kind == ReportKind.GROUP || t.kind == ReportKind.MESSAGE)
     fun muteLabel(name: String?) = "Mute ${shown(name) ?: "this chat"}"
 
     /** A person is involved: not a whole channel or group, and never myself. */

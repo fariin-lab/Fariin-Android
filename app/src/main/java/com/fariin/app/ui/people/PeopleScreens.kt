@@ -630,7 +630,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                 com.fariin.app.ui.components.GlassAlertAction("Block and Report", com.fariin.app.ui.components.GlassAlertStyle.Red) {
                     block {
                         com.fariin.app.data.ReportFlow.ask(com.fariin.app.data.ReportTarget(com.fariin.app.data.ReportKind.ACCOUNT,
-                            name = name, personUid = uid, cid = cid, preBlocked = true, onSent = { }))
+                            name = name, personUid = uid, cid = cid, preBlocked = true,
+                            hasChat = conv != null || com.fariin.app.data.CryptoHub.listedConversation(cid) != null, onSent = { }))
                     }
                 },
                 com.fariin.app.ui.components.GlassAlertAction("Cancel") { },
@@ -888,7 +889,9 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                     SettingsRow("Block $name", titleColor = c.red, trailing = Trailing.NONE) { ask = "block" }
                     SettingsRow("Report $name", titleColor = c.red, trailing = Trailing.NONE, last = true) {
                         com.fariin.app.data.ReportFlow.ask(com.fariin.app.data.ReportTarget(com.fariin.app.data.ReportKind.ACCOUNT,
-                            name = name, personUid = uid, cid = cid, onSent = { b -> if (b) blocked = true }))
+                            name = name, personUid = uid, cid = cid,
+                            hasChat = conv != null || com.fariin.app.data.CryptoHub.listedConversation(cid) != null,
+                            onSent = { b -> if (b) blocked = true }))
                     }
                 }
             }
