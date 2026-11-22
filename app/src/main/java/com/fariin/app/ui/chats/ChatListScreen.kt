@@ -294,6 +294,12 @@ fun ChatListScreen(
     // Fariin Plus chat folders: the chosen folder (null for All Chats, or for everyone without them).
     // It takes the place of the menu's filter; the archive keeps its own list.
     val folder = if (showArchive) null else com.fariin.app.data.ChatFoldersStore.current
+    // A menu filter that has just become a tab (a folder with its rule was added) goes back to All (iOS).
+    val takenFilters = com.fariin.app.data.ChatFoldersStore.menuFiltersTaken
+    LaunchedEffect(takenFilters) {
+        val name = when (filter) { FILTER_UNREAD -> "unread"; FILTER_GROUPS -> "groups"; FILTER_CHANNELS -> "channels"; else -> null }
+        if (name != null && name in takenFilters) filter = FILTER_ALL
+    }
     // Kept until the list, the filter or the page changes: these were rebuilt on every recomposition
     // (each scroll-driven or badge change), a cost a 2-core phone felt on every tab.
     val filtered = remember(source, filter, showArchive, me, folder) {
@@ -648,7 +654,10 @@ fun ChatListScreen(
                                     }
                                 }
                                 if (!showArchive) OverflowMenu(moreAnchor, onOpen = { items -> moreItems = items; moreOpen = true },
-                                    filter = filter, onFilter = { filter = it },
+                                    // A menu filter and a folder tab never both narrow the list (iOS menuFilterSection):
+                                    // picking a filter selects All Chats, and nothing is ticked while a folder is chosen.
+                                    filter = if (folder != null) -1 else filter,
+                                    onFilter = { filter = it; com.fariin.app.data.ChatFoldersStore.select(com.fariin.app.data.ChatFolder.ALL.id) },
                                     requests = state.requests.size,
                                     // Off from the admin panel = no entry (iOS: owner 2026-10-18). Live:
                                     // reading `revision` redraws this when the panel switch flips.
@@ -691,7 +700,8 @@ fun ChatListScreen(
                             onEdit = { folderEdit = it }, onManage = {
                                 com.fariin.app.ui.settings.SettingsLink.request(com.fariin.app.ui.settings.PAGE_CHAT_FOLDERS)
                                 onSettings()
-                            }, card = listCard?.takeIf { !searching && !selecting && filter == FILTER_ALL && folder == null }) }
+                            }, card = listCard?.takeIf { !searching && !selecting && filter == FILTER_ALL && folder == null },
+                            onPick = { filter = FILTER_ALL }) }
                         }
                     }
                 }

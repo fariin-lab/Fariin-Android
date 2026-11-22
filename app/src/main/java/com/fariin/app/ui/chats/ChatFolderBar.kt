@@ -65,7 +65,9 @@ private class FolderStats(var unread: Int = 0, var readable: Int = 0, var total:
 @Composable
 internal fun ChatFolderBar(chats: List<Conversation>, me: String, onEdit: (ChatFolder) -> Unit, onManage: () -> Unit,
                            /** The chat list card, drawn under the tabs in the same panel (iOS 2026-11-20). */
-                           card: ChatCard? = null) {
+                           card: ChatCard? = null,
+                           /** Any tab picked, All Chats too: the list puts its menu filter back to All (iOS onSelect). */
+                           onPick: () -> Unit = {}) {
     val c = Fariin.colors
     val folders = ChatFoldersStore.folders
     val selected = ChatFoldersStore.selectedId
@@ -125,7 +127,7 @@ internal fun ChatFolderBar(chats: List<Conversation>, me: String, onEdit: (ChatF
         fun pickAt(x: Float) {
             val px = x + scroll.value
             bounds.entries.firstOrNull { (_, b) -> px >= b.first && px <= b.first + b.second }?.key?.let { id ->
-                if (id != ChatFoldersStore.selectedId) { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); ChatFoldersStore.select(id) }
+                if (id != ChatFoldersStore.selectedId) { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); onPick(); ChatFoldersStore.select(id) }
             }
         }
         // The tabs are their own capsule; the chat list card sits under it on its own surface
@@ -148,7 +150,7 @@ internal fun ChatFolderBar(chats: List<Conversation>, me: String, onEdit: (ChatF
                         var muteMenu by remember { mutableStateOf(false) }
                         Box(Modifier.onGloballyPositioned { lc -> bounds[f.id] = lc.positionInParent().x to lc.size.width.toFloat() }) {
                             Row(Modifier.width(with(density) { widths[i].toDp() }).height(34.dp).clip(CircleShape)
-                                .combinedClickable(onClick = { ChatFoldersStore.select(f.id) },
+                                .combinedClickable(onClick = { onPick(); ChatFoldersStore.select(f.id) },
                                     onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); menu = true }),
                                 horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                                 Text(f.name, fontSize = 15.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
