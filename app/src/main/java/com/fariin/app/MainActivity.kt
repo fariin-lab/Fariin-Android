@@ -774,8 +774,18 @@ class MainActivity : ComponentActivity() {
         // The message the notification was about: the chat lands at the newest and follows it in.
         val mid = intent.getStringExtra(PushRouter.EXTRA_OPEN_MID)?.takeIf { it.isNotEmpty() }
         intent.removeExtra(PushRouter.EXTRA_OPEN_MID)
-        PushRouter.pendingMid.value = mid?.let { com.fariin.app.push.PushOpen(cid, it, android.os.SystemClock.elapsedRealtime()) }
-        PushRouter.pendingOpen.value = cid
+        val tapMs = android.os.SystemClock.elapsedRealtime()
+        lifecycleScope.launch {
+            // Checked first (iOS didReceive OpenGate): a banner left from another account, or about a
+            // chat that is gone, opens nothing instead of a chat this account is not in.
+            if (!com.fariin.app.push.PushTapRoute.opens(com.fariin.app.data.OpenGate.check(cid, null))) {
+                val sheet = com.fariin.app.ui.channels.PostQuotesSheet.pendingReplies
+                if (sheet.value?.first == cid) sheet.value = null
+                return@launch
+            }
+            PushRouter.pendingMid.value = mid?.let { com.fariin.app.push.PushOpen(cid, it, tapMs) }
+            PushRouter.pendingOpen.value = cid
+        }
     }
 
     /** The made-up shell, with its chats opening made-up threads. */
