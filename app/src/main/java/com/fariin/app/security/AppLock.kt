@@ -67,7 +67,9 @@ object AppLock {
         return now - backgroundAt >= delaySeconds * 1000L
     }
 
-    fun onUnlocked() { unlocked = true }
+    /** Unlocked: any time out of sight before this (Home from the lock page, the phone's PIN page
+     *  covering it) is settled, so the screen under the lock does not ask a second time. */
+    fun onUnlocked() { unlocked = true; pending = false }
 
     private val live = mutableSetOf<Activity>()
     private fun reapply() { live.forEach { apply(it) } }
