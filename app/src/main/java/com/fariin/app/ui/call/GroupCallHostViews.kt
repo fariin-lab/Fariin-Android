@@ -178,7 +178,11 @@ fun GroupAddPeopleSheet(g: GroupCallUi, onClose: () -> Unit) {
         else GroupCallAdmin.groupAddNotes(here, joined, g.removedHere, me, g.rangAt, System.currentTimeMillis())
     var query by remember { mutableStateOf("") }
     val picked = remember { mutableStateListOf<String>() }
-    val shown = people.filter { query.isBlank() || it.name.contains(query.trim(), ignoreCase = true) }
+    // iOS shown(_:): the name I saved for them is drawn here, never sent. `people` keeps the profile
+    // name, since a call link writes the people I add into the shared call doc.
+    fun shownName(p: CallPerson) = com.fariin.app.data.ContactNames.name(p.uid) ?: p.name
+    val q = query.trim()
+    val shown = people.filter { q.isEmpty() || shownName(it).contains(q, ignoreCase = true) || it.name.contains(q, ignoreCase = true) }
     val action = if (isLink) "Add to call" else "Ring"
     ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = Color.Black, contentColor = Color.White, scrimColor = Color.Black.copy(alpha = 0.4f)) {
@@ -195,7 +199,8 @@ fun GroupAddPeopleSheet(g: GroupCallUi, onClose: () -> Unit) {
                     modifier = Modifier.align(Alignment.CenterEnd).alpha(if (enabled) 1f else 0.4f).clip(RoundedCornerShape(8.dp))
                         .clickable(enabled = enabled) {
                             val chosen = people.filter { it.uid in picked }
-                            if (isLink) GroupCall.invitePeople(chosen) else GroupCall.ringPeople(chosen)
+                            // Ring again sends only uids, so its lines may say the name I saved.
+                            if (isLink) GroupCall.invitePeople(chosen) else GroupCall.ringPeople(chosen.map { it.copy(name = shownName(it)) })
                             onClose()
                         }.padding(horizontal = 6.dp, vertical = 4.dp))
             }
@@ -223,7 +228,7 @@ fun GroupAddPeopleSheet(g: GroupCallUi, onClose: () -> Unit) {
                                 Avatar(p.photo, 40.dp, Modifier.alpha(if (note == null) 1f else 0.5f))
                                 Spacer(Modifier.width(12.dp))
                                 Column(Modifier.weight(1f)) {
-                                    Text(p.name, color = Color.White.copy(alpha = if (note == null) 1f else 0.5f), fontSize = 17.sp,
+                                    Text(shownName(p), color = Color.White.copy(alpha = if (note == null) 1f else 0.5f), fontSize = 17.sp,
                                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     note?.let { Text(it, color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp) }
                                 }
