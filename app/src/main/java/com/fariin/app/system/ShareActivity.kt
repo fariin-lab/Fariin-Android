@@ -85,7 +85,8 @@ import kotlinx.coroutines.withContext
  */
 class ShareActivity : ComponentActivity() {
 
-    private data class Shared(val text: String?, val media: List<Uri>, val files: List<Uri>) {
+    /** [skipped]: items left out (over 200 MB, unreadable, or past the first 32). */
+    private data class Shared(val text: String?, val media: List<Uri>, val files: List<Uri>, val skipped: Int = 0) {
         val empty get() = text == null && media.isEmpty() && files.isEmpty()
     }
 
@@ -118,8 +119,16 @@ class ShareActivity : ComponentActivity() {
                 }
             }
             val s = withContext(Dispatchers.IO) { read(intent) }
-            if (s.empty) { Toast.makeText(this@ShareActivity, "Nothing to share", Toast.LENGTH_SHORT).show(); finish() }
-            else shared.value = s
+            val skippedLine = when (s.skipped) {
+                0 -> null
+                1 -> "1 item couldn't be added (too large or unreadable)."
+                else -> "${s.skipped} items couldn't be added (too large or unreadable)."
+            }
+            if (s.empty) { Toast.makeText(this@ShareActivity, skippedLine ?: "Nothing to share", Toast.LENGTH_SHORT).show(); finish() }
+            else {
+                skippedLine?.let { Toast.makeText(this@ShareActivity, it, Toast.LENGTH_LONG).show() }
+                shared.value = s
+            }
         }
         setContent {
             setSingletonImageLoaderFactory { ctx -> ImageLoader.Builder(ctx).components { add(FariinPhotoFetcher.Factory()) }.build() }
@@ -210,19 +219,22 @@ class ShareActivity : ComponentActivity() {
     /** The intent's text and streams, each stream copied into cache/shared-in under our provider. */
     private fun read(i: Intent): Shared {
         val text = ShareIntake.textOf(i.getStringExtra(Intent.EXTRA_SUBJECT), i.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString())
-        val streams: List<Uri> = when (i.action) {
+        val all: List<Uri> = when (i.action) {
             Intent.ACTION_SEND -> listOfNotNull(IntentCompat.getParcelableExtra(i, Intent.EXTRA_STREAM, Uri::class.java))
             Intent.ACTION_SEND_MULTIPLE -> IntentCompat.getParcelableArrayListExtra(i, Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
             else -> emptyList()
-        }.take(MAX_ITEMS)
+        }
+        val streams = all.take(MAX_ITEMS)
+        var skipped = all.size - streams.size
         val media = ArrayList<Uri>(); val files = ArrayList<Uri>()
         for (u in streams) {
             val type = contentResolver.getType(u) ?: i.type
-            val copy = copyIn(this, u, type) ?: continue
+            val copy = copyIn(this, u, type)
+            if (copy == null) { skipped++; continue }
             if (ShareIntake.kindOf(type) == ShareIntake.Kind.MEDIA) media += copy else files += copy
         }
         // A shared text file with no other text is still a file, not the words in it.
-        return Shared(text, media, files)
+        return Shared(text, media, files, skipped)
     }
 
     companion object {
