@@ -271,7 +271,9 @@ object NotificationPoster {
     fun postReplyAlert(c: Context, title: String, body: String, cid: String, mid: String, rid: String = "", aid: String = "",
                        /** The push kind: a reaction gets its own notification, not the reply's (audit A14). */ kind: String = "",
                        /** The Activity item (marked read on tap) and, for a quote in a public channel, where it is. */
-                       act: String = "", wcid: String = "", wmid: String = "") {
+                       act: String = "", wcid: String = "", wmid: String = "",
+                       /** In front with In-App Preview or Sounds off: in the list only, no drop-down, no tone (iOS willPresent). */
+                       quiet: Boolean = false) {
         ensureChannels(c)
         val nmc = NotificationManagerCompat.from(c)
         if (!nmc.areNotificationsEnabled()) return
@@ -299,6 +301,7 @@ object NotificationPoster {
             .setContentText(body)
             .setContentIntent(tap)
             .setAutoCancel(true)
+            .setSilent(quiet)
             .build()
         // One notification per comment (the server sends one push, then "N new replies to your
         // comment" in its place), one per post for an admin's summary.

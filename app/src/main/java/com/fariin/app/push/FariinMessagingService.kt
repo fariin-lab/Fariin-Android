@@ -89,10 +89,17 @@ class FariinMessagingService : FirebaseMessagingService() {
         // A reply alert (owner 2026-11-06): its own notification, whose tap opens that post's Replies.
         // Shown even while that channel is open (fix contract 2026-11-09): the tap opens the sheet there.
         com.fariin.app.data.PostReplyRules.alertTarget(message.data["kind"], message.data["cid"], message.data["mid"])?.let { (cid, mid) ->
+            // In front the In-App switches apply to it too (iOS willPresent): Preview off keeps it in
+            // the list without the drop-down, Sounds off plays nothing. A channel cannot drop down
+            // without its tone, so either one off posts it quietly and the tone and buzz are ours.
+            val inApp = if (com.fariin.app.AppLifecycle.inFront) InAppNotify.prefs(applicationContext) else null
+            val quiet = inApp != null && !(inApp.preview && inApp.sound)
             if (Push.pushOn(applicationContext)) NotificationPoster.postReplyAlert(applicationContext,
                 message.notification?.title ?: message.data["t"] ?: "Fariin", message.notification?.body ?: message.data["b"] ?: "New reply", cid, mid,
                 message.data["rid"].orEmpty(), message.data["aid"].orEmpty(), message.data["kind"].orEmpty(),
-                act = message.data["act"].orEmpty(), wcid = message.data["wcid"].orEmpty(), wmid = message.data["wmid"].orEmpty())
+                act = message.data["act"].orEmpty(), wcid = message.data["wcid"].orEmpty(), wmid = message.data["wmid"].orEmpty(),
+                quiet = quiet)
+            if (quiet && Push.pushOn(applicationContext)) InAppNotify.present(applicationContext, InAppRoute.InApp(null, inApp!!.sound, inApp.vibrate))
             return
         }
         val p = PushData.parse(message.data, message.notification?.title, message.notification?.body)
