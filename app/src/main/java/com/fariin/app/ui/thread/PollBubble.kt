@@ -124,7 +124,7 @@ private fun rememberPollNow(p: PollCard): Double {
  * back), multiple toggles, a quiz answer is final. No votes on a bubble still being sent.
  */
 /** The card look (iOS AppFeatures.pollCard, owner 2026-11-14). False = the old thick bars (kept, not deleted). */
-internal const val POLL_CARD = true
+internal val POLL_CARD: Boolean get() = com.fariin.app.data.AppFeatures.offOnly("pollCard", true)
 
 /**
  * The card's colours, iOS PollCardColors "soft ink" (owner picked it 2026-11-14): see-through black
