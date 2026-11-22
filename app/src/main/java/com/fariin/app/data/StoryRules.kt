@@ -93,12 +93,13 @@ object StoryRules {
         if (oneTimeFull) "Once viewer is full" else "$count View${if (count == 1) "" else "s"}"
 
     /**
-     * The people I may post to (iOS resolveAudience `allContacts`): my 1:1 chats, not a request I
-     * have not answered, nobody blocked either way.
+     * The people I may post to (iOS resolveAudience `allContacts`): my 1:1 chats, no request that
+     * is still unanswered in either direction (iOS isUnansweredRequest, whatever my request
+     * setting), nobody blocked either way. A stranger I wrote to first gets no stories until they accept.
      */
     fun contacts(me: String, convs: List<Conversation>): Set<String> =
         convs.asSequence()
-            .filter { !it.isGroup && !ChatList.isIncomingRequest(it, me) }
+            .filter { !it.isGroup && !(it.startedBy.isNotEmpty() && !it.accepted) }
             .filter { c -> val them = c.otherUid(me); them.isNotEmpty() && !c.isBlockedByMe(me) && !c.isBlockedByMe(them) }
             .map { it.otherUid(me) }
             .toSet()

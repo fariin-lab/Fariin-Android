@@ -61,6 +61,9 @@ class StoryRulesTest {
         val convs = listOf(dm("a"), dm("b", blockedByMe = true), dm("c", blockedByThem = true), dm("d", request = true),
             Conversation(id = "g1", users = listOf(me, "e"), convType = "group"))
         assertEquals(setOf("a"), StoryRules.contacts(me, convs))
+        // A request I sent that is still unanswered is left out too (iOS isUnansweredRequest).
+        val mine = dm("f").copy(startedBy = me, accepted = false, lastSender = me)
+        assertEquals(setOf("a"), StoryRules.contacts(me, convs + mine))
         assertEquals(setOf("a") to "all", StoryRules.resolveAudience(me, convs, StoryAudienceChoice.MY_CHATS, emptySet()))
         assertEquals(setOf("a") to "everyone", StoryRules.resolveAudience(me, convs, StoryAudienceChoice.EVERYONE, emptySet()))
         // Picked people outside my chats are dropped.
