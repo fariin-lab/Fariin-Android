@@ -1933,8 +1933,8 @@ class ThreadRepository(
             rebuild()
             // Already going (the start-up drain's quiet copy of this chat): the bubble only; it goes
             // when that send lands and the server's copy comes in.
-            if (com.fariin.app.media.MediaSend.isInFlight(e.clientId)) continue
-            runMediaSend(e.clientId) {
+            if (!claimResume(e.clientId)) continue
+            resumeSend(e.clientId) {
                 val landed = try {
                     val q = convRef.collection("messages").whereEqualTo("clientId", e.clientId).limit(1)
                     !q.get(Source.CACHE).await().isEmpty || !q.get(Source.SERVER).await().isEmpty
@@ -1972,8 +1972,9 @@ class ThreadRepository(
     /** The message id and its sealed copies, written down once, just before the message write. */
     private fun keepSealed(clientId: String, messageId: String, ciphers: List<ByteArray>,
                            songs: List<MusicRules.SealedSong>, listName: String, urls: List<String?>) {
-        val dir = media?.localDir() ?: return
         val cur = com.fariin.app.local.FileOutbox.get(me, clientId) ?: return
+        // A quiet chat (the start-up drain) has no media: the copies go beside the file's own.
+        val dir = media?.localDir() ?: cur.paths.firstOrNull()?.let { File(it).parentFile } ?: return
         val sealed = if (cur.messageId == messageId && cur.sealed.size == ciphers.size) cur.sealed
             else ciphers.mapIndexed { i, c -> File(dir, "seal-$clientId-$i").also { it.writeBytes(c) }.absolutePath }
         com.fariin.app.local.FileOutbox.update(me, clientId) { it.copy(messageId = messageId, sealed = sealed, songs = songs, listNameSealed = listName, urls = urls) }
@@ -2008,7 +2009,7 @@ class ThreadRepository(
         // Its message written and its bytes gone: the server's copy shows failed (Delete). The entry
         // stays as the mark that this phone started it (FileOutbox.failedHere); Delete removes it.
         if (!ok) { if (e.messageId != null) { pending.remove(e.clientId); rebuild() }; return }
-        if (com.fariin.app.media.MediaSend.isInFlight(e.clientId)) return
+        if (!claimResume(e.clientId)) return
         val work: suspend () -> Unit = {
             val cur = com.fariin.app.local.FileOutbox.get(me, e.clientId) ?: e
             // Written before the kill? Asked by id: this phone's cache first, then the server.
@@ -2040,7 +2041,19 @@ class ThreadRepository(
         // A failure leaves it red with a Resend that runs this again (the entry stays).
         playlistSends += e.clientId
         retryMedia[e.clientId] = work
-        runMediaSend(e.clientId, work)
+        resumeSend(e.clientId, work)
+    }
+
+    /**
+     * One resume per outbox entry at a time: the start-up drain and an opened chat can both reach
+     * the same entry, on any thread. The add is the check, so only one of them gets it.
+     */
+    private fun claimResume(clientId: String): Boolean =
+        !com.fariin.app.media.MediaSend.isInFlight(clientId) && resuming.add(clientId)
+
+    /** Runs a claimed resume; the claim goes when that send ends (sent, failed or cancelled). */
+    private fun resumeSend(clientId: String, work: suspend () -> Unit) {
+        runMediaSend(clientId, work).invokeOnCompletion { resuming.remove(clientId) }
     }
 
     /** An album from [com.fariin.app.local.PhotoOutbox]: its tiles drawn again and sent under the same clientId. */
@@ -2057,8 +2070,8 @@ class ThreadRepository(
             },
         )
         rebuild()
-        if (com.fariin.app.media.MediaSend.isInFlight(e.clientId)) return
-        runMediaSend(e.clientId) {
+        if (!claimResume(e.clientId)) return
+        resumeSend(e.clientId) {
             val landed = try {
                 val q = convRef.collection("messages").whereEqualTo("clientId", e.clientId).limit(1)
                 !q.get(Source.CACHE).await().isEmpty || !q.get(Source.SERVER).await().isEmpty
@@ -3054,6 +3067,8 @@ class ThreadRepository(
     }
 
     companion object {
+        /** Outbox entries being resumed now, by clientId (claimResume). */
+        private val resuming: MutableSet<String> = ConcurrentHashMap.newKeySet()
         /** One background thread for the open chats' listeners (message window and chat doc). */
         /** Read marks owed when a chat is left are written here, past the screen's own scope. */
         private val readScope = CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
@@ -3092,8 +3107,8 @@ class ThreadRepository(
                 val repo = open[cid] ?: ThreadRepository(cid, me, crypto, scope)
                 for (e in list) if (!SendQueue.isInFlight(e.clientId)) repo.resend(e)
             }
-            // Photos the app was closed on before they went (PhotoOutbox).
-            for (cid in com.fariin.app.local.PhotoOutbox.all(me).map { it.cid }.distinct())
+            // Photos, files, songs and playlists the app was closed on before they went (PhotoOutbox, FileOutbox).
+            for (cid in (com.fariin.app.local.PhotoOutbox.all(me).map { it.cid } + com.fariin.app.local.FileOutbox.all(me).map { it.cid }).distinct())
                 (open[cid] ?: ThreadRepository(cid, me, crypto, scope)).resumeOutbox()
         }
 
