@@ -75,7 +75,9 @@ object ChatTransfer {
         suspend fun fetch(name: String): ByteArray? = got[name] ?: runCatching { dir.child(name).getBytes(64L * 1024 * 1024).await() }.getOrNull()?.also {
             got[name] = it; progress(got.size, code.files)
         }
-        val head = fetch("header.json")?.let { BackupArchive.readHeader(it) } ?: return "This code has expired. Show a new one on your old phone."
+        val head = try { fetch("header.json")?.let { BackupArchive.readHeader(it) } }
+            catch (e: BackupArchive.NewerVersion) { return e.message }
+            ?: return "This code has expired. Show a new one on your old phone."
         val archiveKey = BackupArchive.unlock(c, head, code.key, null) ?: return "This code doesn't match. Scan it again."
         // Every file first (the archive reader takes them from memory), then file the history.
         val manifest = fetch("manifest.bin") ?: return "This code has expired. Show a new one on your old phone."
