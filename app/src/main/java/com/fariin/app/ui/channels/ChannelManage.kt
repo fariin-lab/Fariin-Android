@@ -384,6 +384,8 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: (
                     try {
                         ChannelService.removeFollower(cid, f.uid, ban)
                         rows = rows.filter { it.uid != f.uid }
+                        // Out of the kept first page too, so the page does not show them again on reopen (iOS).
+                        FollowersSeen.map[cid]?.let { p -> FollowersSeen.map[cid] = p.copy(rows = p.rows.filter { it.uid != f.uid }) }
                         removed += 1
                     } catch (e: Exception) { toast(ctx, ChannelService.errorText(e)) }
                 }
