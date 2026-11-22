@@ -341,7 +341,10 @@ fun ChatListScreen(
     // Archived, it lives in the Archived list; pinned, it heads the Pinned section.
     val officialArchived = official.state.archived
     val officialShown = showArchive == officialArchived && official.latest != null &&
-        folder == null && (filter == FILTER_ALL || (filter == FILTER_UNREAD && official.unread > 0)) &&
+        // In a folder it is a channel like any other (iOS): shown when the folder takes it.
+        (if (folder != null) com.fariin.app.data.OfficialChannel.listEntry(official, me)
+            ?.let { folder.contains(it, me, System.currentTimeMillis().toDouble()) } == true
+        else (filter == FILTER_ALL || (filter == FILTER_UNREAD && official.unread > 0))) &&
         (query.isBlank() || com.fariin.app.data.ChatSearch.namePrefixMatch(query, com.fariin.app.data.OfficialChannel.NAME))
     val officialAt = official.latest?.sortAt ?: 0.0
     val officialPinned = officialShown && !showArchive && official.state.pinned

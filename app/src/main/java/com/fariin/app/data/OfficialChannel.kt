@@ -267,6 +267,31 @@ object OfficialChannel {
     }
 
     /** What arrived after the read watermark, else the one a Mark as Unread asks for. */
+    /**
+     * The official row as a plain chat value (iOS listEntry), so the chat folders count it, show it
+     * and act on it like any chat: a channel, its unread count, mute, pin, archive and clear mark.
+     * Null while there is nothing to show. No `startedBy`, so it is never a request.
+     */
+    fun listEntry(v: View, me: String): Conversation? {
+        val latest = v.latest ?: return null
+        if (me.isEmpty()) return null
+        val s = v.state
+        val now = System.currentTimeMillis().toDouble()
+        val mutedEnd = if (s.isMutedNow(now)) (if (s.mutedUntil > 0) s.mutedUntil else Double.MAX_VALUE) else 0.0
+        return Conversation(
+            id = CID,
+            users = listOf(me, CID),
+            names = mapOf(CID to NAME),
+            lastSender = CID,
+            unreadCount = mapOf(me to v.unread),
+            mutedBy = mapOf(me to mutedEnd),
+            pinnedBy = mapOf(me to s.pinned),
+            archivedBy = mapOf(me to s.archived),
+            clearedAt = mapOf(me to s.clearedAt),
+            updatedAtMillis = latest.sortAt,
+        )
+    }
+
     fun unreadCount(visible: List<Announcement>, state: OfficialChannelState): Int {
         val n = visible.count { it.arrivedAt > state.lastReadAt }
         return if (n == 0 && state.markedUnread && visible.isNotEmpty()) 1 else n

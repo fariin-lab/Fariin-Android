@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -70,9 +71,13 @@ internal fun ChatFolderBar(chats: List<Conversation>, me: String, onEdit: (ChatF
     val selected = ChatFoldersStore.selectedId
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
-    val stats = remember(chats, folders, me) {
+    // The official channel's row is in the list but not in `chats`: counted and acted on here as
+    // the list shows it (iOS ChatFolderCountMemo / folderChats).
+    val officialView by com.fariin.app.data.OfficialChannel.view.collectAsState()
+    val official = remember(officialView, me) { com.fariin.app.data.OfficialChannel.listEntry(officialView, me) }
+    val stats = remember(chats, folders, me, official) {
         val now = System.currentTimeMillis().toDouble()
-        val shown = chats.filter { !it.isCleared(me) && !it.isArchived(me) }
+        val shown = (chats + listOfNotNull(official)).filter { !it.isCleared(me) && !it.isArchived(me) }
         folders.associate { f ->
             val s = FolderStats()
             for (cv in shown) if (f.contains(cv, me, now)) {
@@ -85,7 +90,7 @@ internal fun ChatFolderBar(chats: List<Conversation>, me: String, onEdit: (ChatF
     }
     fun chatsOf(f: ChatFolder): List<Conversation> {
         val now = System.currentTimeMillis().toDouble()
-        return chats.filter { !it.isCleared(me) && !it.isArchived(me) && f.contains(it, me, now) }
+        return (chats + listOfNotNull(official)).filter { !it.isCleared(me) && !it.isArchived(me) && f.contains(it, me, now) }
     }
     // ONE glass capsule with plain-text tabs (iOS 2026-11-20): the chosen tab is a lens that slides,
     // its two edges on different springs so it stretches a little on the way; drag along the bar to
@@ -170,14 +175,14 @@ internal fun ChatFolderBar(chats: List<Conversation>, me: String, onEdit: (ChatF
                                 if (s.readable > 0) DropdownMenuItem(text = { Text("Mark All as Read") }, onClick = {
                                     menu = false
                                     val list = chatsOf(f).filter { !it.isBlockedByMe(me) && it.hasUnreadMark(me) }
-                                    scope.launch { list.forEach { ChatListActions.setUnread(me, it, false) } }
+                                    scope.launch { list.forEach { if (it.id == com.fariin.app.data.OfficialChannel.CID) com.fariin.app.data.OfficialChannel.markRead() else ChatListActions.setUnread(me, it, false) } }
                                 })
                                 if (s.total > 0) {
                                     if (s.muted == s.total) DropdownMenuItem(text = { Text("Unmute All") }, onClick = {
                                         menu = false
                                         val now = System.currentTimeMillis().toDouble()
                                         val list = chatsOf(f).filter { it.isMuted(me, now) }
-                                        scope.launch { list.forEach { ChatListActions.setMute(me, it, 0.0) }; Snack.show("Unmuted") }
+                                        scope.launch { list.forEach { if (it.id == com.fariin.app.data.OfficialChannel.CID) com.fariin.app.data.OfficialChannel.setMuted(false) else ChatListActions.setMute(me, it, 0.0) }; Snack.show("Unmuted") }
                                     }) else DropdownMenuItem(text = { Text("Mute All") }, onClick = { menu = false; muteMenu = true })
                                 }
                                 if (f.isAll) DropdownMenuItem(text = { Text("Folder Settings") }, onClick = { menu = false; onManage() })
@@ -186,7 +191,8 @@ internal fun ChatFolderBar(chats: List<Conversation>, me: String, onEdit: (ChatF
                             MuteForMenu(muteMenu, onDismiss = { muteMenu = false }) { label, until ->
                                 val now = System.currentTimeMillis().toDouble()
                                 val list = chatsOf(f).filter { !it.isMuted(me, now) }
-                                scope.launch { list.forEach { ChatListActions.setMute(me, it, until) }; Snack.show(MuteFor.doneWord(label)) }
+                                // The official channel's mute is a plain on/off on iOS's folder menu.
+                                scope.launch { list.forEach { if (it.id == com.fariin.app.data.OfficialChannel.CID) com.fariin.app.data.OfficialChannel.setMuted(true) else ChatListActions.setMute(me, it, until) }; Snack.show(MuteFor.doneWord(label)) }
                             }
                         }
                     }
