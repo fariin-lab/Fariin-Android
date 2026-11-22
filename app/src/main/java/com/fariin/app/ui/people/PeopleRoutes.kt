@@ -102,6 +102,7 @@ fun peopleNav(nav: NavHostController, api: PeopleApi? = null) = PeopleNav(
     chat = { nav.navigate("thread/$it") { popUpTo("main"); launchSingleTop = true } },
     searchPeople = { q -> api?.let { runCatching { it.search(q) }.getOrDefault(emptyList()) }.orEmpty() },
     startChat = { p -> api?.let { runCatching { it.openChat(p) }.getOrNull() } },
+    byHandle = { h -> api?.let { a -> runCatching { a.byHandle(h) } } ?: Result.success(null) },
 )
 
 /** The live group document (read only), for Group Info. */

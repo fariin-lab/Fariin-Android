@@ -552,8 +552,10 @@ internal fun ScanQrPage(onMyCode: () -> Unit, onClose: () -> Unit, onDone: () ->
         }
         handling = true
         scope.launch {
-            val found = runCatching { people.searchPeople(h) }
-            val p = found.getOrNull()?.firstOrNull { it.handle.equals(h, ignoreCase = true) }
+            // The exact name, as iOS findByHandle reads it: not the prefix search, which can miss it
+            // and never says when it could not ask (then "Check your connection").
+            val found = people.byHandle(h)
+            val p = found.getOrNull()
             val cid = p?.let { runCatching { people.startChat(it) }.getOrNull() }
             if (cid != null) { onDone(); people.chat(cid) }
             else { notFound = true; offline = found.isFailure; delay(1000); handling = false }

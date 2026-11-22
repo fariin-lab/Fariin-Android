@@ -27,6 +27,8 @@ data class PeopleNav(
      *  the chat with a person found that way (opening it is what creates it). */
     val searchPeople: suspend (String) -> List<com.fariin.app.data.Person> = { emptyList() },
     val startChat: suspend (com.fariin.app.data.Person) -> String? = { null },
+    /** Exactly the owner of this @username (iOS findByHandle); a failure means the lookup could not ask. */
+    val byHandle: suspend (String) -> Result<com.fariin.app.data.Person?> = { Result.success(null) },
 )
 
 val LocalPeopleNav = staticCompositionLocalOf { PeopleNav() }
