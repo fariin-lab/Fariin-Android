@@ -23,6 +23,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.alpha
+import com.fariin.app.ui.components.floating
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,18 +45,86 @@ import com.fariin.app.R
  * from over "Voice Message", the chat's speed, and close. The progress runs along the bottom edge.
  * Shown only away from the chat it belongs to; a tap on it goes back there, at the note.
  */
+/**
+ * The bar folded into a round button while the Chats list scrolls down (iOS PlayerBarGate.collapsed):
+ * scrolling up, or reaching the top, opens it again. Only ever folded while the shell's bar is up.
+ */
+object PlayerBar {
+    var folded by androidx.compose.runtime.mutableStateOf(false)
+        private set
+    /** The shell's bar (over the tabs) is showing; written by that bar only. */
+    var visible = false
+        internal set
+    private var travel = 0f
+
+    /** The Chats list moved [dy] px this frame (above 0 toward its end), [threshold] in px. */
+    fun listScrolled(dy: Float, threshold: Float) {
+        val (t, fold) = com.fariin.app.data.MusicRules.foldStep(travel, dy, threshold)
+        travel = t
+        if (fold != null) set(fold)
+    }
+
+    /** Back at the top, another tab, or the bar gone: the full bar again. */
+    fun open() { travel = 0f; set(false) }
+
+    private fun set(fold: Boolean) {
+        val f = fold && visible
+        if (f != folded) folded = f
+    }
+}
+
+/** Whether the bar shows for [live] away from chat [here] (iOS barVisible). */
+private fun barShowing(live: VoicePlayer.State, here: String?): Boolean {
+    // Never over a locked app (the lock page is in front; this keeps the name off it while it comes up).
+    val locked = com.fariin.app.security.AppLock.enabled() && !com.fariin.app.security.AppLock.unlocked
+    return live.cid != null && live.id != null && live.cid != here && !(live.pausedByUser && !live.playing) && !locked
+}
+
+/**
+ * The folded bar (iOS PlayerMiniButton): a round glass button, the song's cover faint behind play or
+ * pause. A tap plays or pauses; scrolling the list up brings the bar back. Only on the Chats tab.
+ */
 @Composable
-fun VoiceNoteBar(here: String?, me: String, modifier: Modifier = Modifier, onOpen: (String) -> Unit) {
+fun PlayerMiniButton(foldable: Boolean, modifier: Modifier = Modifier) {
+    val live by VoicePlayer.state.collectAsState()
+    val on = foldable && PlayerBar.folded && barShowing(live, null)
+    val anim = com.fariin.app.ui.components.animationsOn()
+    androidx.compose.animation.AnimatedVisibility(on, modifier,
+        enter = if (anim) androidx.compose.animation.scaleIn(initialScale = 0.4f,
+            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 1f)) + androidx.compose.animation.fadeIn()
+            else androidx.compose.animation.fadeIn(),
+        exit = if (anim) androidx.compose.animation.scaleOut(targetScale = 0.4f,
+            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 1f)) + androidx.compose.animation.fadeOut()
+            else androidx.compose.animation.fadeOut()) {
+        val c = Fariin.colors
+        val art = rememberArt(live.music?.art)
+        Box(Modifier.size(56.dp).floating().clip(androidx.compose.foundation.shape.CircleShape)
+            .clickable { VoicePlayer.playPause() }
+            .semantics { contentDescription = if (live.playing) "Pause" else "Play" }, contentAlignment = Alignment.Center) {
+            if (art != null) androidx.compose.foundation.Image(art, null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.matchParentSize().alpha(0.3f))
+            Icon(ImageVector.cachedVector(if (live.playing) R.drawable.ic_sf_pause_fill else R.drawable.ic_sf_play_fill), null,
+                tint = c.label, modifier = Modifier.size(22.dp))
+        }
+    }
+}
+
+/** [foldable]: the shell's bar on the Chats tab, which folds into [PlayerMiniButton] as the list scrolls. */
+@Composable
+fun VoiceNoteBar(here: String?, me: String, modifier: Modifier = Modifier, foldable: Boolean = false, onOpen: (String) -> Unit) {
     val live by VoicePlayer.state.collectAsState()
     // It fades and opens with its height (the list's or chat's space following), and closes the same
     // way, still showing the note while it leaves (iOS pops 117).
     // Not for a note the person paused on its bubble before leaving: they were done with it (iOS barVisible).
-    // Never over a locked app (the lock page is in front; this keeps the name off it while it comes up).
-    val locked = com.fariin.app.security.AppLock.enabled() && !com.fariin.app.security.AppLock.unlocked
-    val showing = live.cid != null && live.id != null && live.cid != here && !(live.pausedByUser && !live.playing) && !locked
+    val showing = barShowing(live, here)
+    if (here == null) androidx.compose.runtime.SideEffect {
+        PlayerBar.visible = showing
+        // Gone and back means the full bar again, not the button (iOS PlayerBarGate.refresh).
+        if (!showing && PlayerBar.folded) PlayerBar.open()
+    }
     val held = androidx.compose.runtime.remember { arrayOf(live) }
     if (showing) held[0] = live
-    com.fariin.app.ui.components.Appear(showing, modifier) { VoiceNoteBarBody(held[0], me, Modifier, onOpen) }
+    com.fariin.app.ui.components.Appear(showing && !(foldable && PlayerBar.folded), modifier) { VoiceNoteBarBody(held[0], me, Modifier, onOpen) }
 }
 
 @Composable

@@ -129,6 +129,18 @@ object MusicRules {
         else -> personName
     }
 
+    /**
+     * The Chats list folding the player bar (iOS ChatListTable.trackPlayerFold). [travel] is how far
+     * the list has run in one direction, [dy] this frame's move (above 0 toward the list's end).
+     * Returns the new travel and true (fold into the round button), false (open the bar) or null
+     * (no change) once it passes [threshold] either way. A turn starts the count again.
+     */
+    fun foldStep(travel: Float, dy: Float, threshold: Float): Pair<Float, Boolean?> {
+        if (dy == 0f) return travel to null
+        val t = (if ((dy > 0f) != (travel > 0f)) 0f else travel) + dy
+        return t to when { t > threshold -> true; t < -threshold -> false; else -> null }
+    }
+
     /** "1:05", or "1:02:03" past an hour (iOS MusicFiles.clock). */
     fun clock(ms: Long): String {
         val s = (ms / 1000).coerceAtLeast(0)

@@ -471,7 +471,9 @@ fun ChatListScreen(
     LaunchedEffect(atTop) { if (atTop) barState.heightOffset = 0f }
     // The floating buttons step aside while the list scrolls down and come back on the way up.
     var fabShown by remember { mutableStateOf(true) }
-    val fabScroll = remember(listState) {
+    // iOS trackPlayerFold: 12 points one way folds the player bar (down) or opens it (up).
+    val foldPx = with(androidx.compose.ui.platform.LocalDensity.current) { 12.dp.toPx() }
+    val fabScroll = remember(listState, foldPx) {
         object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
             override fun onPreScroll(available: androidx.compose.ui.geometry.Offset,
                                      source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
@@ -480,6 +482,10 @@ fun ChatListScreen(
                 // lost the way to start a chat. Down hides only while there is more list below.
                 if (available.y < -6f && listState.canScrollForward) fabShown = false
                 else if (available.y > 6f) fabShown = true
+                // The player bar folds into its round button on the way down (not past the list's end,
+                // where a bounce would count) and opens on the way up.
+                val dy = -available.y
+                if (dy < 0f || listState.canScrollForward) com.fariin.app.ui.thread.PlayerBar.listScrolled(dy, foldPx)
                 return androidx.compose.ui.geometry.Offset.Zero
             }
         }
@@ -487,6 +493,8 @@ fun ChatListScreen(
     // A list that cannot scroll, or one back at the top, always shows them.
     val listScrolls by remember(listState) { androidx.compose.runtime.derivedStateOf { listState.canScrollForward || listState.canScrollBackward } }
     LaunchedEffect(atTop, listScrolls) { if (atTop || !listScrolls) fabShown = true }
+    // Back at the top the player bar opens again (iOS).
+    LaunchedEffect(atTop) { if (atTop) com.fariin.app.ui.thread.PlayerBar.open() }
     val anim = com.fariin.app.ui.components.animationsOn()
     // Rows glide to new places only once the list has settled (owner 2026-11-11, frame by frame on
     // the Pixel: right after the splash the official row and late summaries arrived and every row

@@ -112,4 +112,17 @@ class MusicRulesTest {
         assertEquals("Voice message", MusicRules.noteSubtitle(MusicRules.noteSender(false, true, true, "News", "Ali", ""), "News"))
         assertEquals("Voice message", MusicRules.noteSubtitle("", "Hodan"))
     }
+
+    @Test fun chatListFoldsTheBarAfterTwelveOneWay() {
+        var (t, d) = MusicRules.foldStep(0f, 8f, 12f)
+        assertNull(d)
+        MusicRules.foldStep(t, 8f, 12f).let { t = it.first; d = it.second }
+        assertEquals(true, d)
+        // A turn starts the count again: the first move back does not open it yet.
+        MusicRules.foldStep(t, -5f, 12f).let { t = it.first; d = it.second }
+        assertEquals(-5f, t, 0f)
+        assertNull(d)
+        assertEquals(false, MusicRules.foldStep(t, -8f, 12f).second)
+        assertEquals(3f to null, MusicRules.foldStep(3f, 0f, 12f))
+    }
 }

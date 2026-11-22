@@ -358,8 +358,15 @@ fun MainShell(
         // 40a1005cd): at the bottom, just above the tab bar, on every tab; a tap opens its chat.
         if (!TabBarVisibility.hidden) {
             val nav = com.fariin.app.ui.people.LocalPeopleNav.current
-            com.fariin.app.ui.thread.VoiceNoteBar(null, me, Modifier.align(Alignment.BottomCenter).padding(bottom = barInset + 2.dp)) { cid -> nav.chat(cid) }
+            com.fariin.app.ui.thread.VoiceNoteBar(null, me, Modifier.align(Alignment.BottomCenter).padding(bottom = barInset + 2.dp),
+                foldable = tab == TAB_CHATS) { cid -> nav.chat(cid) }
+            // Folded while the Chats list scrolls down (iOS PlayerMiniButton): just above the tab bar's
+            // end, in the floating buttons' column.
+            com.fariin.app.ui.thread.PlayerMiniButton(tab == TAB_CHATS,
+                Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = barInset + 8.dp))
         }
+        // Leaving Chats opens the bar again, so every tab (and the way back) starts full (iOS).
+        LaunchedEffect(tab) { if (tab != TAB_CHATS) com.fariin.app.ui.thread.PlayerBar.open() }
         // Full-screen pages drawn over everything, the tab bar included, in the activity's own window
         // (no Dialog: its system dim and rise played before any code could stop them; owner's Pixel
         // recording 2026-11-09). The story camera uses it.
