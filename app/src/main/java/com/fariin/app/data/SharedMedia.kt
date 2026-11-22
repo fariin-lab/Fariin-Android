@@ -167,7 +167,8 @@ object SharedMedia {
         fun bucket(ms: Double): String {
             val d = Instant.ofEpochMilli(ms.toLong()).atZone(zone).toLocalDate()
             return when {
-                d == today -> "Today"
+                // A stamp a little ahead of this phone's clock is still Today (iOS: >= start of today).
+                !d.isBefore(today) -> "Today"
                 d == today.minusDays(1) -> "Yesterday"
                 d.year == today.year && d.month == today.month -> "This Month"
                 d.year == today.year -> d.month.getDisplayName(TextStyle.FULL_STANDALONE, locale)

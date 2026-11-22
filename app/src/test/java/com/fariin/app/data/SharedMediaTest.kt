@@ -102,5 +102,9 @@ class SharedMediaTest {
         val month = SharedMedia.sections(listOf(item("m", ms(2026, 11, 2, 1)), item("n", ms(2026, 10, 30))),
             ms(2026, 11, 20), ZoneOffset.UTC, Locale.ENGLISH)
         assertEquals(listOf("This Month", "October"), month.map { it.first })
+        // Another phone's clock a little ahead: still Today, not a section of its own.
+        val ahead = SharedMedia.sections(listOf(item("f", ms(2026, 11, 3, 1)), item("t", now - 1000)),
+            ms(2026, 11, 2, 23), ZoneOffset.UTC, Locale.ENGLISH)
+        assertEquals(listOf("Today"), ahead.map { it.first })
     }
 }
