@@ -1935,10 +1935,7 @@ class ThreadRepository(
             )
             localFiles[e.clientId] = if (video) e.poster!! else e.path
             rebuild()
-            // Already going (the start-up drain's quiet copy of this chat): the bubble only; it goes
-            // when that send lands and the server's copy comes in.
-            if (!claimResume(e.clientId)) continue
-            resumeSend(e.clientId) {
+            val work: suspend () -> Unit = {
                 val landed = try {
                     val q = convRef.collection("messages").whereEqualTo("clientId", e.clientId).limit(1)
                     !q.get(Source.CACHE).await().isEmpty || !q.get(Source.SERVER).await().isEmpty
@@ -1958,8 +1955,14 @@ class ThreadRepository(
                 // Sent: a view-once photo's plain copy goes (the voice note's own send deletes its file).
                 if (e.viewOnce && !voice && !video) f.delete()
             }
+            // Already going (the start-up drain's quiet copy of this chat): this chat waits on that
+            // send and redraws the bubble when it ends.
+            if (!claimResume(e.clientId)) { awaitResume(e.clientId, work) { photoQueued(e.clientId) }; continue }
+            resumeSend(e.clientId, work)
         }
     }
+
+    private fun photoQueued(clientId: String) = com.fariin.app.local.PhotoOutbox.all(me).any { it.clientId == clientId }
 
     // ------------------------------------------------------------------ files, songs, playlists across a kill (FileOutbox)
 
@@ -2013,7 +2016,6 @@ class ThreadRepository(
         // Its message written and its bytes gone: the server's copy shows failed (Delete). The entry
         // stays as the mark that this phone started it (FileOutbox.failedHere); Delete removes it.
         if (!ok) { if (e.messageId != null) { pending.remove(e.clientId); rebuild() }; return }
-        if (!claimResume(e.clientId)) return
         val work: suspend () -> Unit = {
             val cur = com.fariin.app.local.FileOutbox.get(me, e.clientId) ?: e
             // Written before the kill? Asked by id: this phone's cache first, then the server.
@@ -2044,6 +2046,7 @@ class ThreadRepository(
         }
         // A failure leaves it red with a Resend that runs this again (the entry stays).
         playlistSends += e.clientId
+        if (!claimResume(e.clientId)) { awaitResume(e.clientId, work) { com.fariin.app.local.FileOutbox.get(me, e.clientId) != null }; return }
         retryMedia[e.clientId] = work
         resumeSend(e.clientId, work)
     }
@@ -2053,11 +2056,37 @@ class ThreadRepository(
      * the same entry, on any thread. The add is the check, so only one of them gets it.
      */
     private fun claimResume(clientId: String): Boolean =
-        !com.fariin.app.media.MediaSend.isInFlight(clientId) && resuming.add(clientId)
+        !com.fariin.app.media.MediaSend.isInFlight(clientId) && resuming.claim(clientId)
 
     /** Runs a claimed resume; the claim goes when that send ends (sent, failed or cancelled). */
     private fun resumeSend(clientId: String, work: suspend () -> Unit) {
-        runMediaSend(clientId, work).invokeOnCompletion { resuming.remove(clientId) }
+        runMediaSend(clientId, work).invokeOnCompletion { resuming.release(clientId) }
+    }
+
+    /**
+     * The claim was taken (the start-up drain's quiet copy of this chat is sending it): wait for that
+     * send to end, then redraw from the outbox, so the bubble never spins with nothing watching.
+     * [queued] true: it failed, red with a Resend that runs [work] here. False: it went (or was
+     * dropped), so the pending copy goes and the server's copy shows.
+     */
+    private fun awaitResume(clientId: String, work: suspend () -> Unit, queued: () -> Boolean) {
+        retryMedia[clientId] = work
+        val settle: () -> Unit = {
+            SendScope.launch(Dispatchers.IO) {
+                if (queued()) {
+                    if (clientId in playlistSends) failedMedia += clientId
+                    pending[clientId]?.let { pending[clientId] = it.copy(sendState = Message.SendState.FAILED) }
+                } else {
+                    retryMedia.remove(clientId); playlistSends.remove(clientId)
+                    pending.remove(clientId)
+                }
+                rebuild()
+            }
+        }
+        if (resuming.onRelease(clientId, settle)) return
+        // No resume claim: a send of it runs in this process anyway (or one that failed is still filed).
+        val job = com.fariin.app.media.MediaSend.job(clientId)
+        if (job != null) job.invokeOnCompletion { settle() } else settle()
     }
 
     /** An album from [com.fariin.app.local.PhotoOutbox]: its tiles drawn again and sent under the same clientId. */
@@ -2074,8 +2103,7 @@ class ThreadRepository(
             },
         )
         rebuild()
-        if (!claimResume(e.clientId)) return
-        resumeSend(e.clientId) {
+        val resume: suspend () -> Unit = {
             val landed = try {
                 val q = convRef.collection("messages").whereEqualTo("clientId", e.clientId).limit(1)
                 !q.get(Source.CACHE).await().isEmpty || !q.get(Source.SERVER).await().isEmpty
@@ -2092,6 +2120,8 @@ class ThreadRepository(
             }
             com.fariin.app.local.PhotoOutbox.remove(me, e.clientId)
         }
+        if (!claimResume(e.clientId)) { awaitResume(e.clientId, resume) { photoQueued(e.clientId) }; return }
+        resumeSend(e.clientId, resume)
     }
 
     fun sendPhoto(context: Context, uri: Uri) {
@@ -3072,7 +3102,7 @@ class ThreadRepository(
 
     companion object {
         /** Outbox entries being resumed now, by clientId (claimResume). */
-        private val resuming: MutableSet<String> = ConcurrentHashMap.newKeySet()
+        private val resuming = ResumeClaims()
         /** One background thread for the open chats' listeners (message window and chat doc). */
         /** Read marks owed when a chat is left are written here, past the screen's own scope. */
         private val readScope = CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)

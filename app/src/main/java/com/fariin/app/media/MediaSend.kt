@@ -19,6 +19,9 @@ object MediaSend {
     /** Is a send for this clientId running in this process right now? */
     fun isInFlight(clientId: String) = jobs.containsKey(clientId)
 
+    /** The running send for this clientId, so another chat can wait for it to end. */
+    fun job(clientId: String): Job? = jobs[clientId]
+
     /** Cancel the whole send. */
     fun cancel(clientId: String) {
         cancelled.add(clientId)
