@@ -91,6 +91,8 @@ class SettingsIndexTest {
 
     @Test fun noRowThePageDoesNotHave() {
         assertTrue(SettingsIndex.entries.none { it.title == "Clear Media" })
+        // Bubble Color opened the Bubble Styles page even while that page is hidden.
+        assertTrue(SettingsIndex.entries.none { it.page == PAGE_CHAT_COLOR })
     }
 
     @Test fun disappearingIsARowNotAListedPage() {
