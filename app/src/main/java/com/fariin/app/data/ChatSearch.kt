@@ -40,6 +40,17 @@ object ChatSearch {
         MARKS.replace(Normalizer.normalize(s, Normalizer.Form.NFKD), "").lowercase(Locale.ROOT)
 
     /** Fold + strip a string down to searchable form (the same for messages and queries). */
+    /**
+     * iOS namePrefixMatch (owner 2026-10-04): every query word starts some word of the name, in any
+     * order, folded like the in-chat search. "abd" and "abdi ad" find "Adnan Abdi"; "bdi" does not.
+     */
+    fun namePrefixMatch(query: String, name: String): Boolean {
+        val q = normalize(query).split(' ').filter { it.isNotEmpty() }
+        if (q.isEmpty()) return true
+        val words = normalize(name).split(' ').filter { it.isNotEmpty() }
+        return q.all { part -> words.any { it.startsWith(part) } }
+    }
+
     fun normalize(text: String): String {
         val folded = foldChar(Normalizer.normalize(text, Normalizer.Form.NFC))
         val out = StringBuilder(folded.length)
