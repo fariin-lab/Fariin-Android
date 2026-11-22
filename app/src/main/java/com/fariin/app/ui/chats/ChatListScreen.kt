@@ -279,7 +279,8 @@ fun ChatListScreen(
         if (folder != null) { val now = System.currentTimeMillis().toDouble(); source.filter { folder.contains(it, me, now) } }
         else if (filter == FILTER_ALL) source else source.filter {
             when (filter) {
-                FILTER_UNREAD -> !showArchive && it.hasUnreadMark(me)
+                // Blocked-aware, like the row's badge (iOS): a blocked chat shows no unread.
+                FILTER_UNREAD -> !showArchive && !it.isBlockedByMe(me) && it.hasUnreadMark(me)
                 FILTER_GROUPS -> !showArchive && it.isGroup && !it.isChannel
                 FILTER_CHANNELS -> !showArchive && it.isChannel
                 else -> true
