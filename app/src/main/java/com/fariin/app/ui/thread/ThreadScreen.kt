@@ -2109,6 +2109,16 @@ private val senderPalette = listOf(
     Color(0xFF34C759), Color(0xFF30B0C7), Color(0xFF5856D6), Color(0xFFFF3B30),
 )
 
+/**
+ * iOS personName: "You" for me; in a group the member's name, else "User" (someone who left with
+ * no name on file), never the group's own name; in a 1:1 the chat's title.
+ */
+internal fun personName(ui: ThreadUi, uid: String): String = when {
+    uid == ui.me -> "You"
+    ui.isGroup && ui.channel == null -> ui.names[uid]?.takeIf { it.isNotEmpty() } ?: "User"
+    else -> ui.names[uid] ?: ui.title
+}
+
 /** The sender's name in a group bubble, with their tag beside it (iOS role chip: its colour, else the name's). */
 @Composable
 private fun SenderLine(ui: ThreadUi, uid: String) {
@@ -2704,7 +2714,7 @@ private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
     // A quote of my own words wears Fariin's blue, never a palette colour (owner 2026-11-13: the green
     // that "You" happened to get read as another app's colour).
     val bar = if (isMe) Color.White else if (r.authorId == ui.me) c.blue else senderColor(r.authorId)
-    val name = if (r.authorId == ui.me) "You" else ui.names[r.authorId] ?: ui.title
+    val name = personName(ui, r.authorId)
     // A tap goes to the original (iOS jumpToQuotedOriginal); a story's quote opens the story while it
     // is live (iOS onTapStoryQuote). Not in select mode, where the tap ticks the row.
     val jump = LocalQuoteJump.current
@@ -3955,7 +3965,7 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ThreadRow(
                 // deleted its words must not stay readable here, and there is nothing to jump to.
                 val gone = pinGone
                 Box(Modifier.fillMaxWidth().clickable(enabled = !selecting && !gone) { env.jumpTo(pinNote.messageId) }) {
-                    NoticePill("${if (m.authorId == ui.me) "You" else ui.names[m.authorId] ?: ui.title} pinned ${if (gone) "a message" else pinNote.label}")
+                    NoticePill("${personName(ui, m.authorId)} pinned ${if (gone) "a message" else pinNote.label}")
                 }
             }
             // A notice a group admin may clear (iOS canDeleteNotice, owner 2026-10-29): a long
@@ -3964,7 +3974,7 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ThreadRow(
                 val pill: @Composable () -> Unit = {
                     val secs = m.disappearSeconds
                     if (secs != null) NoticePill(com.fariin.app.data.Disappearing.noticeLine(
-                        if (m.authorId == ui.me) "You" else ui.names[m.authorId] ?: ui.title, secs), icon = true)
+                        personName(ui, m.authorId), secs), icon = true)
                     else NoticePill(youNotice(m, ui))
                 }
                 if (selecting) Row(Modifier.fillMaxWidth().background(selLit).clickable { env.toggle(m) },
@@ -3981,7 +3991,7 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ThreadRow(
             }
             m.isSystem && m.disappearSeconds != null -> NoticePill(
                 com.fariin.app.data.Disappearing.noticeLine(
-                    if (m.authorId == ui.me) "You" else ui.names[m.authorId] ?: ui.title, m.disappearSeconds),
+                    personName(ui, m.authorId), m.disappearSeconds),
                 icon = true)
             // A call record: the iOS call bubble (CallBubble.kt); tap asks, then calls back.
             m.isCall && ch == null -> {

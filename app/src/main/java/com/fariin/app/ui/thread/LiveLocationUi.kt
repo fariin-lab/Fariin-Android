@@ -187,7 +187,7 @@ internal fun LiveMapPage(ui: ThreadUi, onSend: (String) -> Unit, onDismiss: () -
     var menu by remember { mutableStateOf(false) }
     var share by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    fun name(uid: String) = if (uid == ui.me) "You" else ui.names[uid] ?: ui.title
+    fun name(uid: String) = personName(ui, uid)
     // Markers follow the spots: moved, added, or taken away.
     LaunchedEffect(map, spots) {
         val m = map ?: return@LaunchedEffect

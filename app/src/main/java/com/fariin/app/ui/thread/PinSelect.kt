@@ -160,7 +160,7 @@ private fun PinnedBarBody(
     val msg = msgFor(pid)
     // Groups and channels say "Pinned Message" (iOS batch 2026-11-14 item 4); a 1:1 keeps the author's name.
     val author = if (ui.channel != null || com.fariin.app.crypto.Wire.isGroupCid(ui.cid)) "Pinned Message"
-        else msg?.let { if (it.authorId == ui.me) "You" else ui.names[it.authorId] ?: ui.title } ?: "Pinned Message"
+        else msg?.let { personName(ui, it.authorId) } ?: "Pinned Message"
     var menu by remember { mutableStateOf(false) }
     // A floating rounded card under the header, not a flat strip (iOS pinned banner, owner 2026-11-03).
     // A floating capsule over the chat (iOS pinned banner): a picture of the pinned photo at the start,
