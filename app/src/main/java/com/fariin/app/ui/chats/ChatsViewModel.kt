@@ -110,8 +110,9 @@ class ChatsViewModel(
                 if (!s.fromCache && crypto != null) com.fariin.app.data.DeliveryReceipts.mark(ChatList.visible(s.conversations, me), me)
             }
         }
-        // A chat with only a draft (or a call going on) stays listed (iOS visible).
-        .combine(com.fariin.app.local.Drafts.map.map { it.keys }.distinctUntilChanged()
+        // A chat with only a draft, a kept voice note or a call going on stays listed (iOS visible).
+        .combine(com.fariin.app.local.Drafts.map.map { it.keys }
+            .combine(com.fariin.app.media.VoiceDrafts.index.map { it.keys }) { a, v -> a + v }.distinctUntilChanged()
             .combine(LiveCallRow.live) { d, call -> LiveCallRow.cid(me, call)?.let { d + it } ?: d }) { s, k -> s to k }
         .map { (s, keep) -> sameRows(uiOf(s, keep)) }
         // Off the main thread (2026-11-20, Oppo profile: merging, hiding, delivery marks, the rows and
