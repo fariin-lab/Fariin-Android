@@ -542,7 +542,7 @@ private fun pollPicOf(context: android.content.Context, uri: android.net.Uri): P
  */
 @Composable
 internal fun PollComposer(onDismiss: () -> Unit, upload: (suspend (ByteArray) -> com.fariin.app.data.PollImage)? = null,
-                          onSend: (String) -> Unit) {
+                          isChannel: Boolean = false, onSend: (String) -> Unit) {
     val c = Fariin.colors
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
@@ -602,7 +602,9 @@ internal fun PollComposer(onDismiss: () -> Unit, upload: (suspend (ByteArray) ->
         }
     }
     val footer = buildList {
-        if (hideVoters) add("Results show only the numbers, not names.")
+        // A channel's poll is always anonymous, so it has no Hide who voted switch (iOS).
+        if (isChannel) add("Votes are anonymous in channels. Only the numbers show.")
+        else if (hideVoters) add("Results show only the numbers, not names.")
         if (quiz) add("Voters see if they were right after they answer, and cannot change it.")
         if (ends != PollRules.EndChoice.NEVER) add("Voting stops automatically.")
     }.ifEmpty { listOf("Anyone in the chat can vote and see who voted.") }.joinToString(" ")
@@ -730,8 +732,10 @@ internal fun PollComposer(onDismiss: () -> Unit, upload: (suspend (ByteArray) ->
                         multiple = on
                         if (!on) { var seen = false; for (k in opts.indices) if (opts[k].right) { if (seen) opts[k] = opts[k].copy(right = false) else seen = true } }
                     }
-                    SettingLine()
-                    Setting("Hide who voted", hideVoters, icon = R.drawable.ic_eye_off) { hideVoters = it }
+                    if (!isChannel) {
+                        SettingLine()
+                        Setting("Hide who voted", hideVoters, icon = R.drawable.ic_eye_off) { hideVoters = it }
+                    }
                     SettingLine()
                     Setting("Quiz", quiz, icon = R.drawable.ic_sf_graduationcap) { on -> quiz = on; if (on) multiple = false }
                     SettingLine()

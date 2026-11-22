@@ -1805,7 +1805,7 @@ private fun ThreadContent(
                     })
                 // No Contact tile: iOS took it off the attach sheet ("No phone numbers anywhere", 46d10cb2).
                 // Received cards still draw and open; the picker below waits for a Share-from-profile entry.
-                if (pollOpen) PollComposer(onDismiss = { pollOpen = false }, upload = actions.onPollImage) { marker -> onSend(marker) }
+                if (pollOpen) PollComposer(onDismiss = { pollOpen = false }, upload = actions.onPollImage, isChannel = ui.channel != null) { marker -> onSend(marker) }
                 if (locationOpen) LocationPicker(onDismiss = { locationOpen = false },
                     onShareLive = if (ui.channel == null) ({ locationOpen = false; liveOpen = true }) else null) { lat, lon, label ->
                     onSend(com.fariin.app.data.CardRules.locationText(lat, lon, label))
