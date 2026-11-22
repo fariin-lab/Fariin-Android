@@ -764,10 +764,10 @@ internal fun canReactTo(m: Message): Boolean =
 /**
  * iOS canReact: never a deleted, unsent, system or call message, nor a story-reaction message, a
  * "pinned a message" notice or a feature this build cannot show; not when an admin turned my
- * reactions off, nor while an admin has me muted in the group.
+ * reactions off, nor while an admin has me muted in the group, nor as a public group's guest.
  */
 internal fun canReact(m: Message, ui: ThreadUi): Boolean =
-    canReactTo(m) && !com.fariin.app.data.GroupAdmins.reactionsHeldBack(ui.groupDoc, ui.me) &&
+    canReactTo(m) && ui.groupGuest == null && !com.fariin.app.data.GroupAdmins.reactionsHeldBack(ui.groupDoc, ui.me) &&
         !(ui.isGroup && ui.groupDoc.isNotEmpty() && com.fariin.app.data.MemberRestrict.isMuted(ui.groupDoc, ui.me, System.currentTimeMillis().toDouble()))
 
 internal fun canSaveToGallery(m: Message): Boolean = !m.deleted && !m.viewOnce && m.sendState == null && when (m.mediaKind) {
