@@ -77,7 +77,8 @@ internal fun MusicBody(m: Message, refs: List<MusicRules.Ref>, cid: String, isMe
     val st by VoicePlayer.state.collectAsState()
     val tagsVersion by MusicTags.version.collectAsState()
     val playlist = refs.size >= 2
-    val busy = m.uploading || m.sendState == Message.SendState.SENDING
+    // A failed send is not "Uploading" any more: the row's red mark offers Resend and Delete.
+    val busy = (m.uploading && m.sendState != Message.SendState.FAILED) || m.sendState == Message.SendState.SENDING
     val coverFile = if (m.thumbUrl != null) rememberPlainFile(m.thumbUrl, m.thumbEnc) else null
     val coverBmp = rememberBitmap(coverFile, 160)
     var open by rememberSaveable(m.id) { mutableStateOf(false) }

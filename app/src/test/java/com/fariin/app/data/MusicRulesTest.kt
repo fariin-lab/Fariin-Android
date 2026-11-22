@@ -126,6 +126,12 @@ class MusicRulesTest {
         assertEquals(3f to null, MusicRules.foldStep(3f, 0f, 12f))
     }
 
+    @Test fun aResendPutsUpOnlyTheSongsNotUpYet() {
+        assertEquals(listOf(0, 1, 2), MusicRules.songsToUpload(listOf(null, null, null)))
+        assertEquals(listOf(1, 2), MusicRules.songsToUpload(listOf("https://x/0", null, "")))
+        assertEquals(emptyList<Int>(), MusicRules.songsToUpload(listOf("https://x/0", "https://x/1")))
+    }
+
     @Test fun renamedWordsGoOutOnlyWhenChanged() {
         assertNull(MusicRules.sentField("  ", "Song"))
         assertNull(MusicRules.sentField(" Song ", "Song"))

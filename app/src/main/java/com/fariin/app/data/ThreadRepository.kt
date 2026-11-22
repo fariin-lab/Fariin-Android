@@ -149,6 +149,15 @@ class ThreadRepository(
     private val voiceReplies = ConcurrentHashMap<String, Message.ReplyRef>()
     /** Video, file, album and captioned / view-once photo sends, by clientId, to go again on a tap. */
     private val retryMedia = ConcurrentHashMap<String, suspend () -> Unit>()
+    /**
+     * Media sends of mine that failed after their message was written (a playlist whose songs did not
+     * go up, say), by clientId. The server's copy still says `uploading`, so it is drawn failed instead
+     * of spinning for ever: the red mark with Resend and Delete, as a failed send before its write.
+     */
+    private val failedMedia: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private val processStartMs = ThreadRepositoryStart.ms
+    /** Playlist sends, by clientId: the kind whose Resend picks up where it stopped (MediaSender.PlaylistUpload). */
+    private val playlistSends: MutableSet<String> = ConcurrentHashMap.newKeySet()
     /** iOS localCards: the link card on my own bubble until the server copy carries it, by clientId. */
     private val localCards = ConcurrentHashMap<String, Message.LinkPreview>()
     /** The link a text send attaches its card for once the text has landed, by clientId. */
@@ -678,6 +687,13 @@ class ThreadRepository(
         // A synced channel draws its store (ChannelSync); everything else the window and older pages.
         for (d in chSync?.docsOrNull() ?: (olderDocs.values + liveDocs.values)) {
             var m = parse(d)
+            if (m.uploading && m.authorId == me && m.sendState == null) m.clientId?.let { k ->
+                // A playlist of mine still `uploading` from before this app started has no send left
+                // running: it failed too (the app was closed or killed on it).
+                val orphan = (m.tracks?.size ?: 0) >= 2 && m.hasServerTime && m.createdAtMillis < processStartMs &&
+                    !com.fariin.app.media.MediaSend.isInFlight(k)
+                if (k in failedMedia || orphan) m = m.copy(sendState = Message.SendState.FAILED)
+            }
             if (historyStart != null && m.hasServerTime && m.createdAtMillis < historyStart && m.authorId != me) continue
             if (clearedAt > 0 && m.sendState == null && m.hasServerTime && m.createdAtMillis <= clearedAt) continue
             // Only a message that could not be opened (drawn as the lock) is worth parsing again: the
@@ -1123,6 +1139,7 @@ class ThreadRepository(
         retryPhoto.remove(id)?.let { com.fariin.app.local.PhotoOutbox.remove(me, id); sendPreparedPhoto(it); return }
         // A new send under a new id: the old written-down entry goes, or a restart would send it twice.
         retryVoice.remove(id)?.let { com.fariin.app.local.PhotoOutbox.remove(me, id); sendVoiceRef(it, voiceReplies.remove(id)); return }
+        failedMedia.remove(id)
         retryMedia.remove(id)?.let { work ->
             pending[id]?.let { pending[id] = it.copy(sendState = Message.SendState.SENDING) }
             rebuild()
@@ -1434,11 +1451,15 @@ class ThreadRepository(
                 else -> cover
             }
             val names = songs.map { it.name }
+            // Kept across a Resend: the message and the songs already up are not sent twice.
+            val upload = com.fariin.app.media.MediaSender.PlaylistUpload()
             val work: suspend () -> Unit = {
                 // Read back from this phone's copies when the send starts, as a list of documents is.
                 sender.playlist(names.mapIndexed { i, n -> FilePrep(n, locals[i].readBytes(), null) }, title, caption, tile, clientId, tap, reply = ref,
-                    renames = okRenames)
+                    renames = okRenames, job = upload)
+                playlistSends.remove(clientId)
             }
+            playlistSends += clientId
             retryMedia[clientId] = work
             runMediaSend(clientId, work)
         }
@@ -1521,6 +1542,7 @@ class ThreadRepository(
             try {
                 work()
                 retryMedia.remove(clientId)
+                failedMedia.remove(clientId)
                 com.fariin.app.media.MediaSend.clearItems(clientId)
                 com.fariin.app.media.MediaSend.finish(clientId)
             } catch (e: Exception) {
@@ -1528,6 +1550,7 @@ class ThreadRepository(
                 // Refused for good: no resend at the next start either.
                 if (SendQueue.isPermanent(e)) com.fariin.app.local.PhotoOutbox.remove(me, clientId)
                 if (!retryMedia.containsKey(clientId)) retryMedia[clientId] = work
+                if (clientId in playlistSends) failedMedia += clientId
                 com.fariin.app.media.UploadProgress.done(clientId)
                 pending[clientId]?.let { pending[clientId] = it.copy(sendState = Message.SendState.FAILED) }
                 rebuild()
@@ -1571,7 +1594,7 @@ class ThreadRepository(
             ?: m.id.takeIf { m.uploading && m.authorId == me && it != clientId }
         if (announced != null) scope.launch(Dispatchers.IO) { cancelAnnounced(announced) }
         com.fariin.app.media.UploadProgress.done(clientId)
-        retryMedia.remove(clientId); retryPhoto.remove(clientId)
+        retryMedia.remove(clientId); retryPhoto.remove(clientId); failedMedia.remove(clientId)
         com.fariin.app.local.PhotoOutbox.remove(me, clientId)
         send.clearItems(clientId)
         pending.remove(clientId)
@@ -2682,7 +2705,11 @@ class ThreadRepository(
         // An unsent one also leaves the send queue and drops what it was waiting to resend (iOS
         // deleteForMe on a failed message: queue entry, upload and bubble all go).
         m.clientId?.let { pending.remove(it); retryPhoto.remove(it); retryVoice.remove(it); voiceReplies.remove(it)
-            if (m.sendState != null && !SendQueue.isInFlight(it)) { SendQueue.remove(me, it); retryMedia.remove(it); com.fariin.app.local.PhotoOutbox.remove(me, it) } }
+            if (m.sendState != null && !SendQueue.isInFlight(it)) { SendQueue.remove(me, it); retryMedia.remove(it); com.fariin.app.local.PhotoOutbox.remove(me, it) }
+            // A failed media send whose message the server holds (still `uploading`): it goes for
+            // both people, or the other phone would spin on it until the stuck sweep.
+            if (failedMedia.remove(it) || (m.sendState == Message.SendState.FAILED && m.uploading && m.authorId == me && m.id != it && (m.tracks?.size ?: 0) >= 2))
+                SendScope.launch(Dispatchers.IO) { cancelAnnounced(m.id) } }
         // An unsent text still on its way (offline, waiting for the server) is called off too, as
         // iOS cancelTextSend: a send not written yet stops before its write, and one Firestore already
         // holds is deleted, so the message deleted here never reaches the other phone.
@@ -2997,4 +3024,10 @@ internal object KeysNoticeMemo {
         p()?.edit()?.putString(k(me, cid), "$at|$text")?.apply()
     }
     fun clear(me: String, cid: String) { mem.remove(k(me, cid)); p()?.edit()?.remove(k(me, cid))?.apply() }
+}
+
+/** When this app process started: a send of mine still `uploading` from before it has nothing running. */
+private object ThreadRepositoryStart {
+    val ms: Double = (System.currentTimeMillis() - android.os.SystemClock.elapsedRealtime() +
+        android.os.Process.getStartElapsedRealtime()).toDouble()
 }

@@ -137,10 +137,20 @@ class MediaSender(
         var attempt = 0
         while (true) {
             try { return upload(cipher, path, onProgress) } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException || ++attempt >= 4) throw e
+                // A refusal (403, no permission) is not going to change on a retry: stop at once.
+                if (e is kotlinx.coroutines.CancellationException || refused(e) || ++attempt >= 4) throw e
                 delay(minOf(30_000L, 1_000L shl attempt))
             }
         }
+    }
+
+    /** Storage or Firestore said no for good: a 403 or a permission refusal. */
+    private fun refused(e: Exception): Boolean = when (e) {
+        is com.google.firebase.storage.StorageException ->
+            e.errorCode == com.google.firebase.storage.StorageException.ERROR_NOT_AUTHORIZED || e.httpResultCode == 403
+        is com.google.firebase.firestore.FirebaseFirestoreException ->
+            e.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED
+        else -> false
     }
 
     private fun progress(clientId: String?): ((Float) -> Unit)? = clientId?.let { id -> { f -> UploadProgress.set(id, f) } }
@@ -275,55 +285,78 @@ class MediaSender(
      * the sealed preview tile. The message is written first, the songs go up one after another, and
      * one update attaches them all (MusicRules builds the maps key for key). Returns the message id.
      */
+    /**
+     * A playlist send kept across a Resend: its message, each song sealed (the envelopes the message
+     * already names), and the urls of the songs already up. A failed upload leaves it as it was, so a
+     * Resend puts up only the songs still missing (MusicRules.songsToUpload) and then attaches them.
+     */
+    class PlaylistUpload {
+        @Volatile var messageId: String? = null
+        var ciphers: List<ByteArray> = emptyList()
+        var list: List<com.fariin.app.data.MusicRules.SealedSong> = emptyList()
+        var listNameSealed: String = ""
+        var urls: Array<String?> = emptyArray()
+    }
+
     suspend fun playlist(songs: List<FilePrep>, title: String, caption: String, cover: ByteArray?,
                          clientId: String?, clientTs: Double, reply: Message.ReplyRef? = null,
-                         renames: List<Pair<String?, String?>> = emptyList()): String {
+                         renames: List<Pair<String?, String?>> = emptyList(), job: PlaylistUpload = PlaylistUpload()): String {
         require(songs.size >= 2) { "A playlist needs two songs or more." }
-        val members = members()
-        val sealed = songs.map { sealBytes(it.bytes, members) }
-        // Each song's typed title and artist, sealed as text is (iOS sendPlaylist `renamed`).
-        suspend fun sealedWord(s: String?) = s?.trim()?.takeIf { it.isNotEmpty() }?.let { seal(it, members) }
-        val list = songs.mapIndexed { i, s ->
-            val (t, a) = renames.getOrNull(i) ?: (null to null)
-            com.fariin.app.data.MusicRules.SealedSong(sealed[i].second.asMap(), s.name, null, s.bytes.size,
-                sealedTitle = sealedWord(t), sealedArtist = sealedWord(a))
-        }
-        val name = title.trim()
-        val listNameSealed = if (name.isEmpty()) "" else seal(name, members)
-        val words = caption.trim()
-        val captionSealed = if (words.isEmpty()) "" else seal(words, members)
-        val msgRef = convRef.collection("messages").document()
-        // The cover rides as the sealed preview tile, as a single song's does. Best effort.
-        var thumbUrl: String? = null
-        var thumbMeta: EncMeta? = null
-        cover?.let { jpg ->
-            runCatching {
-                val (tc, tm) = sealBytes(jpg, members)
-                thumbUrl = upload(tc, MediaRules.fileThumbPath(cid, msgRef.id))
-                thumbMeta = tm
-                media?.store(thumbUrl!!, jpg)
+        if (job.messageId == null) {
+            val members = members()
+            val sealed = songs.map { sealBytes(it.bytes, members) }
+            // Each song's typed title and artist, sealed as text is (iOS sendPlaylist `renamed`).
+            suspend fun sealedWord(s: String?) = s?.trim()?.takeIf { it.isNotEmpty() }?.let { seal(it, members) }
+            val list = songs.mapIndexed { i, s ->
+                val (t, a) = renames.getOrNull(i) ?: (null to null)
+                com.fariin.app.data.MusicRules.SealedSong(sealed[i].second.asMap(), s.name, null, s.bytes.size,
+                    sealedTitle = sealedWord(t), sealedArtist = sealedWord(a))
             }
+            val name = title.trim()
+            val listNameSealed = if (name.isEmpty()) "" else seal(name, members)
+            val words = caption.trim()
+            val captionSealed = if (words.isEmpty()) "" else seal(words, members)
+            val msgRef = convRef.collection("messages").document()
+            // The cover rides as the sealed preview tile, as a single song's does. Best effort.
+            var thumbUrl: String? = null
+            var thumbMeta: EncMeta? = null
+            cover?.let { jpg ->
+                runCatching {
+                    val (tc, tm) = sealBytes(jpg, members)
+                    thumbUrl = upload(tc, MediaRules.fileThumbPath(cid, msgRef.id))
+                    thumbMeta = tm
+                    media?.store(thumbUrl!!, jpg)
+                }
+            }
+            val batch = db.batch()
+            setMsg(batch, msgRef, members, com.fariin.app.data.MusicRules.playlistMessage(me, list, captionSealed, listNameSealed,
+                clientTs, clientId, thumbUrl, thumbMeta?.asMap(), FieldValue.serverTimestamp()), reply)
+            batch.update(convRef, MediaMessages.convUpdate(me, com.fariin.app.data.MusicRules.playlistPreview(list.size), others(members),
+                FieldValue.serverTimestamp(), FieldValue.increment(1)))
+            MediaSend.noteAnnounced(clientId, msgRef.id)
+            batch.commit().await()
+            job.ciphers = sealed.map { it.first }
+            job.list = list
+            job.listNameSealed = listNameSealed
+            job.urls = arrayOfNulls(songs.size)
+            job.messageId = msgRef.id
         }
-        val batch = db.batch()
-        setMsg(batch, msgRef, members, com.fariin.app.data.MusicRules.playlistMessage(me, list, captionSealed, listNameSealed,
-            clientTs, clientId, thumbUrl, thumbMeta?.asMap(), FieldValue.serverTimestamp()), reply)
-        batch.update(convRef, MediaMessages.convUpdate(me, com.fariin.app.data.MusicRules.playlistPreview(list.size), others(members),
-            FieldValue.serverTimestamp(), FieldValue.increment(1)))
-        MediaSend.noteAnnounced(clientId, msgRef.id)
-        batch.commit().await()
-        // One after another, so ten songs never hold ten uploads open at once.
-        val urls = ArrayList<String>()
-        val n = songs.size
-        sealed.forEachIndexed { i, (cipher, _) ->
+        val messageId = job.messageId!!
+        val msgRef = convRef.collection("messages").document(messageId)
+        // One after another, so ten songs never hold ten uploads open at once. A Resend skips the
+        // songs already up: their urls are kept with the envelopes the message names.
+        val n = job.urls.size
+        for (i in com.fariin.app.data.MusicRules.songsToUpload(job.urls.toList())) {
             val each: ((Float) -> Unit)? = clientId?.let { id -> { f -> UploadProgress.set(id, (i + f) / n) } }
-            val url = uploadRetrying(cipher, com.fariin.app.data.MusicRules.songPath(cid, msgRef.id, i), each)
-            media?.store(url, songs[i].bytes)
-            urls += url
+            val url = uploadRetrying(job.ciphers[i], com.fariin.app.data.MusicRules.songPath(cid, messageId, i), each)
+            songs.getOrNull(i)?.let { media?.store(url, it.bytes) }
+            job.urls[i] = url
         }
-        msgRef.update(com.fariin.app.data.MusicRules.playlistAttach(list, urls, listNameSealed, FieldValue.delete())).await()
+        msgRef.update(com.fariin.app.data.MusicRules.playlistAttach(job.list, job.urls.map { it!! }, job.listNameSealed,
+            FieldValue.delete())).await()
         com.fariin.app.media.ChatSounds.sent()
         clientId?.let { UploadProgress.done(it) }
-        return msgRef.id
+        return messageId
     }
 
     // ------------------------------------------------------------------ album

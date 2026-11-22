@@ -228,6 +228,12 @@ object MusicRules {
         clientId?.let { put("clientId", it) }
     }
 
+    /**
+     * The songs a playlist send still has to put up: every index whose url is missing. A Resend after
+     * a failed upload sends only these and keeps the ones already up (their urls and envelopes).
+     */
+    fun songsToUpload(urls: List<String?>): List<Int> = urls.indices.filter { urls[it].isNullOrEmpty() }
+
     /** The one update once every song is up (iOS attachMedia): the first song's url and the full items. */
     fun playlistAttach(songs: List<SealedSong>, urls: List<String>, listNameSealed: String, delete: Any): Map<String, Any> = mapOf(
         "fileUrl" to urls[0],
