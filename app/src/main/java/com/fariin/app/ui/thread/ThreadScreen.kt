@@ -3027,6 +3027,20 @@ private fun Composer(
         locked = true
         pauseOrResume()
     }
+    // A call rings or starts mid-take (iOS onInterrupt): the take is kept, locked and paused to the
+    // review bar, so it can still be sent or binned once the call is over.
+    // Read off the flows, not as state, so call updates do not redraw the composer.
+    LaunchedEffect(Unit) {
+        val calls = kotlinx.coroutines.flow.combine(com.fariin.app.call.CallManager.ui, com.fariin.app.call.GroupCall.ui) { a, g ->
+            a.status.live || g.joined
+        }
+        var was = false
+        calls.collect { live ->
+            // Only the moment a call begins, not every update during it.
+            if (live && !was && recording && !reviewing) { locked = true; pauseOrResume() }
+            was = live
+        }
+    }
 
     // As iOS ChatComposerView: a 40 glass "+" (the attach sheet), the glass message pill with the
     // camera and the sticker button inside, and a 40 glass circle that is the mic until there are
