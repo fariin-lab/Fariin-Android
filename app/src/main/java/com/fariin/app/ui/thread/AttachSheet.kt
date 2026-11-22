@@ -236,6 +236,9 @@ internal fun AttachSheet(
     val launchCamera = {
         runCatching {
             val dir = java.io.File(context.cacheDir, "chat-camera").apply { mkdirs() }
+            // Shots are read once by the send; a day later they are only clutter (as cache/edited).
+            val cutoff = System.currentTimeMillis() - 24 * 60 * 60 * 1000L
+            dir.listFiles()?.forEach { if (it.name.startsWith("shot-") && it.lastModified() < cutoff) it.delete() }
             val f = java.io.File(dir, "shot-${System.currentTimeMillis()}.jpg")
             val u = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".files", f)
             shotUri = u
@@ -434,7 +437,11 @@ internal fun AttachSheet(
         if (onePhoto) PhotoDrawEditor(u, editOnly = false, startDrawing = false,
             onClose = { drawOn = null; if (cameraFirst && picked.size == 1) onDismiss() },
             allowViewOnce = allowViewOnce,
-            onSend = { photo, cap, once -> drawOn = null; onSendMedia(listOf(photo), cap, once); finish() })
+            onSend = { photo, cap, once ->
+                // A view-once camera shot that was cropped or drawn on goes out as the edited copy;
+                // the original is not needed and must not stay in the cache (the send removes the rest).
+                if (once && photo != u) deleteEditedCopy(context, u)
+                drawOn = null; onSendMedia(listOf(photo), cap, once); finish() })
         // One video chosen: the video editor (iOS VideoApprovalView), the trimmer and Send.
         else if (picked.size == 1 && u in videos) VideoEditor(u, caption, onCaption = { caption = it }, onClose = { drawOn = null },
             onSend = { cap -> drawOn = null; onSendMedia(listOf(u), cap, false); finish() })
