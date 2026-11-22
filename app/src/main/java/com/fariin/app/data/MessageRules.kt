@@ -181,8 +181,10 @@ object MessageRules {
         1 -> 3.5f; 2 -> 3.0f; 3 -> 2.75f; 4 -> 2.5f; else -> 2.25f
     }
 
-    /** Toggle: the same emoji again takes my reaction off (null), else it becomes mine. */
-    fun nextReaction(current: String?, picked: String): String? = if (current == picked) null else picked
+    /** Toggle: the same emoji again takes my reaction off (null), else it becomes mine. With or
+     *  without the U+FE0F mark it is the same emoji (an older ❤ against the bar's ❤️), as iOS sameEmoji. */
+    fun nextReaction(current: String?, picked: String): String? =
+        if (com.fariin.app.channel.ChannelRules.sameEmoji(current, picked)) null else picked
 
     /** The typing value iOS writes: "text-<seconds>" on, false off (a changing value re-arms 15 s). */
     fun typingValue(on: Boolean, nowMs: Long): Any = if (on) "text-${nowMs / 1000}" else false
