@@ -164,11 +164,14 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
 }
 
 /** Chats a forward can land in: not a channel I only follow (its admins are its members and may post
- *  there, as iOS canPostHere), not a request I sent that waits. */
+ *  there, as iOS canPostHere), not a request I sent that waits, not a person I blocked, and not an
+ *  incoming request I have not answered (sending would accept it silently), as iOS ForwardPicker. */
 internal fun forwardable(conv: Conversation, me: String): Boolean {
     if (conv.isChannel && me !in conv.users) return false
     if (conv.users.isNotEmpty() && me !in conv.users) return false
     if (!conv.isGroup && conv.startedBy == me && !conv.accepted) return false
+    if (conv.isBlockedByMe(me)) return false
+    if (com.fariin.app.data.ChatList.isIncomingRequest(conv, me)) return false
     return true
 }
 
