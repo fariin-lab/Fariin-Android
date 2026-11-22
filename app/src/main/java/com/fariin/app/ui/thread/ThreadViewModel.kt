@@ -203,12 +203,18 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     }
     val modNow = if (modTick >= 0) System.currentTimeMillis().toDouble() else 0.0
     val modBlocks = modGroup && com.fariin.app.data.GroupMod.blocksSending(s.conv, modNow)
+    // A group's mark by its name (iOS headerModel): Fariin's Scam / Fake label wins over the tick.
+    val groupLabel = if (channel != null) "" else conv?.takeIf { it.isGroup }?.modLabel?.ifEmpty { null }
+        ?: guest?.preview?.label?.takeIf { it == "scam" || it == "fake" } ?: ""
+    val groupVerified = channel == null && groupLabel.isEmpty() && (conv?.takeIf { it.isGroup }?.verified == true || guest?.preview?.verified == true)
+    val groupVerifiedGold = groupVerified && com.fariin.app.data.VerifiedPeople.isGold(conv?.verifiedType)
     val ui = ThreadUi(
         otherPlusBubble = s.otherPlusBubble, myPlusBubble = s.myPlusBubble,
         title = channel?.info?.title?.ifEmpty { null } ?: guest?.preview?.title ?: conv?.displayName(me) ?: "",
         subtitle = if (conv?.fariinLocked() == true) "" else channel?.let { com.fariin.app.channel.ChannelRules.followersLine(it.info.shownCount) }
             ?: guest?.let { com.fariin.app.data.GroupRules.memberCount(it.preview.memberCount) }
             ?: typingLine ?: if (conv?.isGroup == true) com.fariin.app.data.GroupRules.memberCount(conv.users.size) else presenceLine ?: "",
+        groupLabel = groupLabel, groupVerified = groupVerified, groupVerifiedGold = groupVerifiedGold,
         photoUrl = channel?.info?.avatarUrl ?: guest?.preview?.photoUrl ?: conv?.displayPhoto(me),
         isGroup = conv?.isGroup == true || guest != null,
         me = me,

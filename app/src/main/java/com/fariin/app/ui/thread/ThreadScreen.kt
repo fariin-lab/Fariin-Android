@@ -148,6 +148,11 @@ data class ThreadUi(
     val otherPlusBubble: com.fariin.app.data.PlusBubble? = null,
     val myPlusBubble: com.fariin.app.data.PlusBubble? = null,
     val subtitle: String = "",
+    /** A group's mark by its name (iOS ChatHeaderView): Fariin's "scam" / "fake" label, else its tick. */
+    val groupLabel: String = "",
+    val groupVerified: Boolean = false,
+    /** The tick is gold for a company (iOS VerifiedMark.color). */
+    val groupVerifiedGold: Boolean = false,
     val photoUrl: String? = null,
     val isGroup: Boolean = false,
     val me: String,
@@ -2038,6 +2043,33 @@ private fun HeaderBody(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Uni
                         if (ui.channel?.info?.verified == true) {
                             Spacer(Modifier.width(5.dp))
                             com.fariin.app.ui.components.VerifiedSeal(c.blue, Modifier.size(16.dp), "Verified")
+                        }
+                        // A group: Fariin's SCAM / FAKE tag in place of the tick, else its own tick (iOS ChatHeaderView).
+                        if (ui.isGroup && ui.channel == null) {
+                            if (ui.groupLabel == "scam" || ui.groupLabel == "fake") {
+                                Box(Modifier.padding(start = 5.dp).height(15.dp).border(1.dp, c.red, RoundedCornerShape(4.dp)).padding(horizontal = 4.dp),
+                                    contentAlignment = Alignment.Center) {
+                                    Text(if (ui.groupLabel == "scam") "SCAM" else "FAKE", fontSize = 9.5.sp, fontWeight = FontWeight.Bold,
+                                        color = c.red, maxLines = 1, lineHeight = 10.sp)
+                                }
+                            } else if (ui.groupVerified) {
+                                Spacer(Modifier.width(5.dp))
+                                com.fariin.app.ui.components.VerifiedSeal(if (ui.groupVerifiedGold) Color(0xFFE8B21E) else c.blue,
+                                    Modifier.size(16.dp), "Verified group")
+                            }
+                        }
+                        // A person's tick before the Plus star (iOS VerificationIndex), looked up at most once an hour.
+                        if (!ui.isGroup && ui.channel == null && !ui.otherDeleted) {
+                            val peer = com.fariin.app.crypto.Wire.otherUid(ui.cid, ui.me)
+                            val vCtx = LocalContext.current
+                            LaunchedEffect(peer) { com.fariin.app.data.VerifiedPeople.warm(vCtx.applicationContext, peer) }
+                            val vKinds by com.fariin.app.data.VerifiedPeople.kinds.collectAsState()
+                            val vKind = com.fariin.app.data.VerifiedPeople.badge(vKinds, peer)
+                            if (peer.isNotEmpty() && vKind != null) {
+                                Spacer(Modifier.width(5.dp))
+                                com.fariin.app.ui.components.VerifiedSeal(if (com.fariin.app.data.VerifiedPeople.isGold(vKind)) Color(0xFFE8B21E) else c.blue,
+                                    Modifier.size(16.dp), "Verified")
+                            }
                         }
                         if (!ui.isGroup && ui.channel == null)
                             com.fariin.app.ui.settings.PlusBadge(com.fariin.app.crypto.Wire.otherUid(ui.cid, ui.me), 16.dp, Modifier.padding(start = 5.dp))
