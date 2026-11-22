@@ -235,8 +235,12 @@ fun ChatListScreen(
     var listMode by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(showArchive, searching) {
         val mode = "$showArchive/$searching"
-        // The Archive has its own state now (tabKey); a switch into it still opens at its top.
-        if (listMode.isNotEmpty() && listMode != mode) listState.scrollToItem(0)
+        // The Archive has its own state (tabKey): going in opens it at its top, coming out leaves the
+        // main list where it was. Search shares the main list's state, so it still starts at the top.
+        if (listMode.isNotEmpty() && listMode != mode) {
+            val wasSearching = listMode.endsWith("/true")
+            if (searching != wasSearching || showArchive) listState.scrollToItem(0)
+        }
         listMode = mode
     }
     var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
