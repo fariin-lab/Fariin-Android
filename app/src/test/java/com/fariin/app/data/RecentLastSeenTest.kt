@@ -25,6 +25,14 @@ class RecentLastSeenTest {
         assertEquals(Presence.Seen("online", true), Presence.recentLine(mapOf(), mapOf("lastSeen" to "contacts"), true, true, true, null, now))
     }
 
+    @Test fun groupAndChannelRecentLineIsTheirCount() {
+        // iOS Conversation.memberCountLabel; a channel counts its admins too (subscriberCount).
+        assertEquals("1 member", GroupLinkCards.countLine(1, false))
+        assertEquals("3 members", GroupLinkCards.countLine(3, false))
+        assertEquals("1 follower", GroupLinkCards.countLine(com.fariin.app.channel.ChannelRules.subscriberCount(0, 1), true))
+        assertEquals("6 followers", GroupLinkCards.countLine(com.fariin.app.channel.ChannelRules.subscriberCount(4, 1, 1), true))
+    }
+
     @Test fun missingPresenceOrTimeReadsRecently() {
         assertEquals(hidden, Presence.recentLine(mapOf(), mapOf(), false, false, false, null, now))
         assertEquals(hidden, Presence.recentLine(mapOf(), mapOf(), false, true, false, null, now))

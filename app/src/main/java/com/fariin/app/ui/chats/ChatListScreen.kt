@@ -949,7 +949,23 @@ fun ChatListScreen(
                                     // A long press offers Remove from Recent (iOS 7571e6bf5); results keep no menu.
                                     var removeMenu by remember { mutableStateOf(false) }
                                     Box {
-                                        if (conv != null) rowHold(conv) { removeMenu = true }
+                                        if (conv != null) {
+                                            // Recent is who, not what was said (iOS RecentRow): face, name, and a
+                                            // person's last seen or a group's member count. No last message, time or ticks.
+                                            val other = if (conv.isGroup || conv.isChannel) "" else conv.otherUid(me)
+                                            var seen by remember(conv.id) { mutableStateOf(other.takeIf { it.isNotEmpty() }?.let { com.fariin.app.data.RecentLastSeen.cached(me, it) }) }
+                                            if (other.isNotEmpty()) LaunchedEffect(conv.id) { seen = com.fariin.app.data.RecentLastSeen.load(appCtx, me, other) }
+                                            val followers by com.fariin.app.channel.ChannelFollows.docs.collectAsState()
+                                            val bias by com.fariin.app.channel.ChannelFollows.biasFlow.collectAsState()
+                                            val count = if (other.isNotEmpty()) null else com.fariin.app.data.GroupLinkCards.countLine(
+                                                if (conv.isChannel) com.fariin.app.channel.ChannelRules.subscriberCount(
+                                                    (followers[conv.id]?.get("followerCount") as? Number)?.toInt() ?: 0, conv.users.size, bias[conv.id] ?: 0)
+                                                else conv.users.size, conv.isChannel)
+                                            RecentChatRow(conv, me, line = count, seen = seen,
+                                                onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); removeMenu = true }) {
+                                                SearchRecents.recordChat(appCtx, me, conv); searching = false; query = ""; onOpen(conv)
+                                            }
+                                        }
                                         else if (e.kind == "person") {
                                             val p = com.fariin.app.data.Person(e.key, e.title, e.handle, e.photo.ifEmpty { null })
                                             // Their last seen under the name, read once when the row shows (iOS RecentRow).
@@ -1482,6 +1498,28 @@ private fun PersonRow(p: com.fariin.app.data.Person, recent: Boolean = false, se
             // Under Recent the line is their last seen, not the @handle (iOS RecentRow); "online" in the action colour.
             if (recent) seen?.let { Text(it.text, style = MaterialTheme.typography.bodyMedium, color = if (it.online) c.accent else c.secondary, maxLines = 1) }
             else if (p.handle.isNotEmpty()) Text("@" + p.handle, style = MaterialTheme.typography.bodyMedium, color = c.secondary, maxLines = 1)
+        }
+    }
+}
+
+/** A chat under Recent (iOS RecentRow): face, name with its mark, and one grey line under it. */
+@Composable
+private fun RecentChatRow(conv: Conversation, me: String, line: String?, seen: com.fariin.app.data.Presence.Seen?,
+                          onLongClick: () -> Unit, onClick: () -> Unit) {
+    val c = Fariin.colors
+    Row(Modifier.fillMaxWidth().combinedClickable(onLongClick = onLongClick, onClick = onClick).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Avatar(conv.displayPhoto(me), 54.dp, Modifier.padding(vertical = 9.dp), squircle = conv.isChannel,
+            kind = com.fariin.app.ui.components.AvatarKind.of(conv.isGroup, conv.isChannel))
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(conv.displayName(me), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium,
+                    color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                ChatRowVerifiedMark(conv, me)
+            }
+            val text = line ?: seen?.text
+            if (text != null) Text(text, style = MaterialTheme.typography.bodyMedium,
+                color = if (line == null && seen?.online == true) c.accent else c.secondary, maxLines = 1)
         }
     }
 }
