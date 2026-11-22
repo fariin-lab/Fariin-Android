@@ -168,6 +168,19 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     }
     // Leaving the chat runs its waiting clear now (iOS commitClear); the cut stays, so nothing old redraws.
     androidx.compose.runtime.DisposableEffect(cid) { onDispose { com.fariin.app.data.LeaveUndo.commitClear(cid) } }
+    // A timed suspension ends by the clock (iOS muteLiftTick): when `until` passes the chat is read
+    // again, so the bar and the hidden messages come back without a new doc from the server.
+    val modGroup = conv?.isGroup == true && channel == null
+    val modUntil = if (modGroup) com.fariin.app.data.GroupMod.untilMillis(s.conv) else 0.0
+    var modTick by remember(cid) { mutableStateOf(0) }
+    LaunchedEffect(modUntil) {
+        val wait = modUntil - System.currentTimeMillis()
+        if (modUntil <= 0 || wait <= 0) return@LaunchedEffect
+        delay(wait.toLong() + 500)
+        modTick++
+    }
+    val modNow = if (modTick >= 0) System.currentTimeMillis().toDouble() else 0.0
+    val modBlocks = modGroup && com.fariin.app.data.GroupMod.blocksSending(s.conv, modNow)
     val ui = ThreadUi(
         otherPlusBubble = s.otherPlusBubble, myPlusBubble = s.myPlusBubble,
         title = channel?.info?.title?.ifEmpty { null } ?: guest?.preview?.title ?: conv?.displayName(me) ?: "",
@@ -189,10 +202,12 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         // taken as still complete, so its welcome card is there from the first frame (HistoryStart).
         canLoadOlder = s.canLoadOlder && !(startKnown && !s.synced && s.messages.size < ThreadRepository.PAGE_SIZE),
         // An ended, suspended or disabled group first (iOS groupModBlocked), then announcement mode.
-        sendBlocked = (if (conv?.isGroup == true && channel == null) com.fariin.app.data.GroupMod.sendBlock(s.conv) else null)
+        sendBlocked = (if (modGroup) com.fariin.app.data.GroupMod.sendBlock(s.conv, modNow) else null)
             ?: (if (conv?.isGroup == true && channel == null) com.fariin.app.data.GroupAdmins.announcementBlock(s.conv, me) else null)
             ?: vm.repo.sendBlockedReason(listed ?: conv),
-        sendBlockedByMod = conv?.isGroup == true && channel == null && com.fariin.app.data.GroupMod.blocksSending(s.conv),
+        sendBlockedByMod = modBlocks,
+        // iOS groupModHidesChat: suspended (not over) or disabled by Fariin hides the chat; ended keeps it.
+        modHidden = modBlocks && com.fariin.app.data.GroupMod.state(s.conv) != "ended",
         cid = cid,
         otherDeleted = conv?.isGroup != true && channel == null &&
             (s.otherDeleted || conv?.isDeletedAccount(conv.otherUid(me)) == true),
@@ -220,6 +235,9 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         disappearSeconds = (s.conv["disappearSeconds"] as? Number)?.toInt() ?: conv?.disappearSeconds ?: 0,
         groupDoc = if (conv?.isGroup == true && channel == null) s.conv else emptyMap(),
         notAMember = s.former && channel == null && guest == null,
+        // iOS RejoinGroupBar: a public group I left, and nobody banned me, can be joined again from here.
+        canRejoin = s.former && channel == null && guest == null && conv?.isPublicGroup == true &&
+            me !in ((s.conv["bannedUids"] as? List<*>) ?: emptyList<Any>()),
         groupGuest = guest,
         muted = conv?.takeIf { !s.former }?.isMuted(me, System.currentTimeMillis().toDouble()),
         loadError = s.error,

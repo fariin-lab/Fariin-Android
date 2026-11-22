@@ -168,6 +168,10 @@ data class ThreadUi(
     val sendBlockedByMod: Boolean = false,
     /** A group I am no longer in (iOS notAMember): a plain line instead of the composer, no calls. */
     val notAMember: Boolean = false,
+    /** [notAMember] in a public group that did not ban me (iOS RejoinGroupBar): Join Group instead of the line. */
+    val canRejoin: Boolean = false,
+    /** Suspended (not over) or disabled by Fariin (iOS groupModHidesChat): no messages, no bar, the reason in the middle. */
+    val modHidden: Boolean = false,
     /** A public group I am not in, opened from Explore or a link (iOS PublicGroupGuest): Join bar. */
     val groupGuest: com.fariin.app.ui.people.GroupGuestUi? = null,
     /** A 1:1 whose other person deleted their account (iOS otherAccountDeleted): a solid bar, no composer. */
@@ -1146,7 +1150,7 @@ private fun ThreadContent(
                 // A group's live call takes the pinned bar's place while it runs (iOS CallBarOrPin).
                 // Frosted glass, as the header's buttons (owner 2026-11-10: the rows under the pinned
                 // bar read through it, over the pinned message's own words).
-                if (!search.active) androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.components.LocalGlassBlur provides true) {
+                if (!search.active && !ui.modHidden) androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.components.LocalGlassBlur provides true) {
                   com.fariin.app.ui.call.ThreadLiveCallBar(ui.cid, ui.isGroup && ui.channel == null && !ui.notAMember, ui.title) {
                     PinnedBar(pins, pinIndex, ui, msgFor = { id -> ui.messages.firstOrNull { it.id == id } ?: ui.pinned[id] },
                         onJump = { jumpTo(it, advance = true) },
@@ -1155,6 +1159,9 @@ private fun ThreadContent(
                   }
                 }
             }
+            // A group Fariin suspended or closed shows nothing but why (iOS groupModHidesChat): an opaque
+            // page over the messages, under the header. A group its owner ended keeps its messages.
+            if (ui.modHidden) GroupUnavailablePage(ui.sendBlocked.orEmpty(), Modifier.fillMaxSize().zIndex(0.9f))
             if (!ui.loaded) {
                 // iOS ThreadSkeleton: bubble shapes while the first page comes. A channel shows its post
                 // cards instead, and a chat whose kind is not known yet shows none (iOS 2026-11-20, D2).
@@ -1440,6 +1447,8 @@ private fun ThreadContent(
                 ui.requestBar != null -> 5
                 ui.groupGuest != null -> 6
                 ui.notAMember -> 7
+                // Nothing to write into: the reason is in the middle of the chat (iOS).
+                ui.modHidden -> 12
                 ui.sendBlocked != null && ui.sendBlockedByMod -> 8
                 ui.sendBlocked != null -> 9
                 ui.isGroup && rememberMutedInGroup(ui.groupDoc, ui.me) -> 10
@@ -1490,6 +1499,11 @@ private fun ThreadContent(
                 }
             } else if (kind == 6) {
                 barGuest?.let { com.fariin.app.ui.people.GroupGuestJoinBar(it) }
+            } else if (kind == 12) {
+                // A group Fariin closed to view has no bar at all (iOS groupModHidesChat).
+            } else if (kind == 7 && ui.canRejoin) {
+                // A public group I left can be joined again from here (iOS RejoinGroupBar).
+                RejoinGroupBar(ui.cid)
             } else if (kind == 7) {
                 // iOS removedBar: one centred line where the composer was.
                 HorizontalDivider(thickness = 0.5.dp, color = c.separator)
@@ -1918,7 +1932,7 @@ private fun HeaderBody(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Uni
                     }
                 }
             }
-            if (ui.channel == null && !ui.notAMember) com.fariin.app.ui.call.ThreadCallButtons(ui.cid, ui.me, ui.isGroup, ui.title, ui.photoUrl)
+            if (ui.channel == null && !ui.notAMember && !ui.modHidden) com.fariin.app.ui.call.ThreadCallButtons(ui.cid, ui.me, ui.isGroup, ui.title, ui.photoUrl)
             // A channel I run or follow: Search in a glass circle on the right, opening the in-chat
             // search (iOS 93160b88, owner 2026-11-07). No bell there: the bottom Mute bar mutes.
             // A visitor gets neither (Search needs following).
