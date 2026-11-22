@@ -28,6 +28,15 @@ class StickerGifRulesTest {
         assertEquals(160f to 160f, StickerGifRules.stickerBox(null, null))
     }
 
+    @Test fun gifHostsOnlyProviderAndOurs() {
+        assertTrue(StickerGifRules.gifUrlAllowed("https://media2.giphy.com/media/abc/200w.gif"))
+        assertTrue(StickerGifRules.gifUrlAllowed("https://firebasestorage.googleapis.com/v0/b/x/o/y"))
+        assertFalse(StickerGifRules.gifUrlAllowed("http://media.giphy.com/media/abc/200w.gif"))
+        assertFalse(StickerGifRules.gifUrlAllowed("https://evilgiphy.com/a.gif"))
+        assertFalse(StickerGifRules.gifUrlAllowed("https://example.com/giphy.com/media/a.gif"))
+        assertFalse(StickerGifRules.gifUrlAllowed(null))
+    }
+
     @Test fun gifBoxCaps() {
         assertEquals(240f to 240f, StickerGifRules.gifBox(200.0, 200.0))
         assertEquals(170f, StickerGifRules.gifBox(100.0, 200.0).first, 0.01f)

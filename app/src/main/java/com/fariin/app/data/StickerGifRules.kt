@@ -55,6 +55,18 @@ object StickerGifRules {
         return dw to dh
     }
 
+    /** AnimatedGifView.allowedHosts: the GIF provider's media hosts and our own storage. */
+    private val GIF_HOSTS = listOf("giphy.com", "firebasestorage.googleapis.com", "storage.googleapis.com", "fariin.com")
+
+    /** Only https from those hosts is fetched (iOS audit 06 F9): a made-up GIF message with any
+     *  other link made every reader's phone fetch it, telling that server their address and when they read. */
+    fun gifUrlAllowed(url: String?): Boolean {
+        val u = try { URI(url ?: return false) } catch (_: Exception) { return false }
+        if (!u.scheme.equals("https", ignoreCase = true)) return false
+        val host = u.host?.lowercase() ?: return false
+        return GIF_HOSTS.any { host == it || host.endsWith(".$it") }
+    }
+
     /** One GIPHY result (GiphyService.Gif): the fixed_width animated link and its size. */
     data class Gif(val id: String, val url: String, val width: Double, val height: Double)
 

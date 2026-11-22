@@ -262,15 +262,18 @@ internal fun GifRow(m: Message, shape: Shape, fill: Color, hasHeader: Boolean, h
         else StickerGifRules.gifBox(m.width, m.height)
     // A tap opens it in the photo viewer (who sent it, when, Share, Save), as a photo opens
     // (owner 2026-11-13); the plain black page only where there is no viewer to hand it to.
+    // Only the GIF provider's hosts and our own storage are fetched (iOS AnimatedGifView); any other
+    // link stays the grey box.
+    val url = m.imageUrl?.takeIf { StickerGifRules.gifUrlAllowed(it) }
     var open by remember { mutableStateOf(false) }
-    if (open) GifFullScreen(m.imageUrl) { open = false }
+    if (open) GifFullScreen(url) { open = false }
     Column(Modifier.width(w.dp).bubbleClip(shape).background(fill)) {
         if (hasHeader) Box(Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 4.dp)) { header() }
         Box(Modifier.size(w.dp, h.dp).background(Fariin.colors.secondary.copy(alpha = 0.18f))
-            .clickable(enabled = m.sendState == null && !m.imageUrl.isNullOrEmpty(), onClickLabel = "Open GIF") { if (onOpen != null) onOpen() else open = true }) {
+            .clickable(enabled = m.sendState == null && !url.isNullOrEmpty(), onClickLabel = "Open GIF") { if (onOpen != null) onOpen() else open = true }) {
             // Played as its small MP4 on the video chip (GifVideo), its still under it; a GIF with no
             // MP4 (not from Giphy) plays as the picture, as before.
-            val hasMp4 = remember(m.imageUrl) { GifVideo.mp4Of(m.imageUrl) != null }
+            val hasMp4 = remember(url) { GifVideo.mp4Of(url) != null }
             // Not while the chat slides in: starting the video decoder took ~32 ms on the Pixel inside the
             // open (owner's friend's mid-range phone opened chats in ~0.6 s, 2026-11-11). The still slides
             // in; the GIF plays once the page has landed. Read through derivedStateOf so the slide's
@@ -280,10 +283,10 @@ internal fun GifRow(m: Message, shape: Shape, fill: Color, hasHeader: Boolean, h
             val scrollHeld by remember { androidx.compose.runtime.derivedStateOf {
                 com.fariin.app.perf.LowPhoneMedia.held(PowerSaving.state.value.deviceClass, false, com.fariin.app.ui.components.WallpaperHold.scrolling)
             } }
-            GifMp4(m.imageUrl, autoplay() && landed, Modifier.fillMaxSize(), paused = scrollHeld) {
-                if (hasMp4) AsyncImage(com.fariin.app.media.GifLoader.still(LocalContext.current, m.imageUrl ?: ""), contentDescription = "GIF",
+            GifMp4(url, autoplay() && landed, Modifier.fillMaxSize(), paused = scrollHeld) {
+                if (hasMp4) AsyncImage(com.fariin.app.media.GifLoader.still(LocalContext.current, url ?: ""), contentDescription = "GIF",
                     imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current), contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                else AsyncImage(animatedRequest(m.imageUrl, autoplay()), contentDescription = "GIF", imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current),
+                else AsyncImage(animatedRequest(url, autoplay()), contentDescription = "GIF", imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current),
                     contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             }
             if (words == null) Box(Modifier.align(Alignment.BottomEnd).padding(6.dp)) { MetaCapsule { meta() } }
