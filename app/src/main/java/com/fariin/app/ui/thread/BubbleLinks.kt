@@ -156,7 +156,7 @@ internal fun rememberBubbleLinkTap(ui: ThreadUi, onNotice: (String) -> Unit): (T
                         owner == u.me -> nav.myProfile()
                         !u.isGroup && u.cid.isNotEmpty() && owner == com.fariin.app.crypto.Wire.otherUid(u.cid, u.me) -> nav.contact(owner)
                         else -> {
-                            val p = runCatching { nav.searchPeople(h) }.getOrNull()?.firstOrNull { it.uid == owner }
+                            val p = nav.byHandle(h).getOrNull()?.takeIf { it.uid == owner }   // the exact name (iOS findByHandle)
                             val cid = p?.let { runCatching { nav.startChat(it) }.getOrNull() }
                             if (cid != null) nav.chat(cid) else notFound = true
                         }
