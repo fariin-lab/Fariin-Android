@@ -106,7 +106,7 @@ class GroupStatsTest {
         assertEquals("Statistics appear once the group is bigger.", GroupStats.failure("FAILED_PRECONDITION"))
         assertEquals("Only the group's owner and admins can see statistics.", GroupStats.failure("PERMISSION_DENIED"))
         assertEquals("Couldn't load statistics. Check your connection and try again.", GroupStats.failure(null))
-        assertEquals("Statistics appear once the channel is bigger.", GroupStats.failure("FAILED_PRECONDITION", channel = true))
+        assertEquals("Statistics appear once this channel has 100 followers.", GroupStats.failure("FAILED_PRECONDITION", channel = true))
         assertEquals(false, GroupStats.canRetry("FAILED_PRECONDITION"))
         assertEquals(true, GroupStats.canRetry("UNAVAILABLE"))
         assertEquals("Other", GroupStats.languageName("other")); assertEquals("Unknown", GroupStats.languageName("und"))

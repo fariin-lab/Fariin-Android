@@ -383,7 +383,9 @@ object GroupStats {
         val what = if (channel) "channel" else "group"
         return when (code) {
             "PERMISSION_DENIED" -> "Only the $what's owner and admins can see statistics."
-            "FAILED_PRECONDITION" -> "Statistics appear once the $what is bigger."
+            // A channel names its follower minimum, as iOS does.
+            "FAILED_PRECONDITION" -> if (channel) "Statistics appear once this channel has $MIN_FOLLOWERS followers."
+                else "Statistics appear once the group is bigger."
             else -> "Couldn't load statistics. Check your connection and try again."
         }
     }
