@@ -270,7 +270,8 @@ object MessageRules {
                 val kinds = senders.map { it.second }.distinct()
                 val verb = if (kinds.size == 1) sendingWords(kinds[0]) else "sending files"
                 if (!isGroup) "$verb…"
-                else if (senders.size == 1) group(senders.map { it.first }, verb)
+                // iOS: a sender goes by the first name only, one sender or several.
+                else if (senders.size == 1) "${(name(senders[0].first) ?: "Someone").substringBefore(' ')} is $verb…"
                 else senders.joinToString(", ") { (uid, _) -> (name(uid) ?: "Someone").substringBefore(' ') } + " are $verb…"
             }
             else -> null

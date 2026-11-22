@@ -145,6 +145,7 @@ class MessageRulesTest {
         val names = mapOf("a" to "Ali", "b" to "Bo")
         assertEquals("sending a photo…", MessageRules.liveLine(mapOf("a" to "photo-1"), "me", false, true, true) { names[it] })
         assertEquals("Ali is sending a video…", MessageRules.liveLine(mapOf("a" to "video-1"), "me", true, true, true) { names[it] })
+        assertEquals("Ali is sending a video…", MessageRules.liveLine(mapOf("a" to "video-1"), "me", true, true, true) { "Ali Hassan" })
         assertEquals("typing…", MessageRules.liveLine(mapOf("a" to "photo-1", "b" to "text-1"), "me", false, true, true) { names[it] })
         assertEquals("recording…", MessageRules.liveLine(mapOf("a" to "photo-1", "b" to "audio-1"), "me", false, true, true) { names[it] })
         assertEquals(null, MessageRules.liveLine(mapOf("a" to "photo-1"), "me", false, false, true) { names[it] })
