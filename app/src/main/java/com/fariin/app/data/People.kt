@@ -283,7 +283,10 @@ class FirestorePeople(
         }
         // Start of the span: the private entry's time; for a block kept only the old way, on the
         // shared chat, that chat's blockedAt (iOS), so what they sent during it stays hidden.
-        val since = ref.get().await().getTimestamp("at")?.toDate()?.time ?: run {
+        // No block known anywhere (a second Unblock tap, or nobody blocked): no span, as iOS, or the
+        // chat would show a made-up "You blocked / You unblocked this person" pair.
+        val doc = ref.get().await()
+        val since = doc.getTimestamp("at")?.toDate()?.time ?: run {
             val cid = Wire.directCid(me, uid)
             CryptoHub.listedConversation(cid)?.blockedAt?.get(me)
                 ?: runCatching {
@@ -293,9 +296,9 @@ class FirestorePeople(
                         else -> null
                     }
                 }.getOrNull()
-        }?.takeIf { it > 0 }?.toLong() ?: System.currentTimeMillis()
+        }?.takeIf { it > 0 }?.toLong() ?: if (doc.exists()) System.currentTimeMillis() else null
         val batch = db.batch()
-        batch.set(db.collection("users").document(me).collection("blockHistory").document("${uid}_$since"), mapOf(
+        if (since != null) batch.set(db.collection("users").document(me).collection("blockHistory").document("${uid}_$since"), mapOf(
             "other" to uid, "from" to com.google.firebase.Timestamp(java.util.Date(since)), "to" to FieldValue.serverTimestamp()))
         batch.delete(ref)
         batch.commit().await()
