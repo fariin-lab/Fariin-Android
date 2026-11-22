@@ -2341,9 +2341,14 @@ class ThreadRepository(
         if (isChannelChat() || isChannel()) return
         try {
             val group = Wire.isGroupCid(cid)
+            // From the server only (iOS summaryOfNewest): an offline answer from a cache holding none
+            // of this chat's messages looked like "nothing left" and wiped the line. A failed read
+            // writes nothing.
             val newest = convRef.collection("messages").orderBy("createdAt", Query.Direction.DESCENDING)
-                .limit(if (group) 25 else 1).get().await().documents
+                .limit(if (group) 25 else 1).get(Source.SERVER).await().documents
             val d = (if (group) newest.firstOrNull { it.getBoolean("deleted") != true } else newest.firstOrNull())?.data
+            // A group whose 25 newest are all deleted is not proof the chat is empty: keep the line (iOS).
+            if (d == null && group && newest.isNotEmpty()) return
             val update = hashMapOf<String, Any>()
             if (d == null) {
                 update["lastMessage"] = ""; update["lastSender"] = ""
