@@ -663,7 +663,7 @@ object GroupCall {
                 ?: try { (conv.get().await().get("users") as? List<*>)?.size } catch (_: Exception) { null }
                 ?: 0
             if (!GroupCallWire.rangAnyone(d?.get("rung") as? List<*>, members)) return@launch
-            if (room === r && !someoneCame && r.remoteParticipants.isEmpty()) leave()
+            if (room === r && !someoneCame && r.remoteParticipants.isEmpty()) fail("No answer")
         }
     }
 
