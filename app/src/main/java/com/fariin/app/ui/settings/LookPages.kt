@@ -249,9 +249,12 @@ object ChatWallpaperLink {
 fun ChatWallpaperPicker(cid: String, shared: Boolean = false, channel: Boolean = false, onClose: () -> Unit) {
     var colors by remember { mutableStateOf(false) }
     androidx.activity.compose.BackHandler { if (colors) colors = false else onClose() }
-    // Drawn over the chat: it takes every touch so none reaches the list under it.
+    // Drawn over the chat: being hit is enough to keep every touch from the list under it (the
+    // topmost hit sibling takes the touch). ⛔ Never consume here (owner 2026-11-21, Oppo: "can't
+    // scroll down"): consuming after the page's own scroll looked at each move made a slow drag read
+    // as taken by someone else, so the presets only moved on a quick flick.
     Box(Modifier.fillMaxSize().background(Fariin.colors.bgSecondary)
-        .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } }) {
+        .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } }) {
         if (colors) WallpaperColorPage({ colors = false }, cid, done = onClose, shared = shared)
         else ChatWallpaperPage({ colors = true }, onClose, cid, shared, channel)
     }
