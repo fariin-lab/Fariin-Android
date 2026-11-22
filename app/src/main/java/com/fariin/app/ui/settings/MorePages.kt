@@ -575,12 +575,17 @@ private fun ChatsSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
             val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return@YesNo
             clearing = true
             clearScope.launch {
-                // Each chat as the per-chat Delete does it (clearedAt, written on the server so every
-                // device of mine follows). My copy only: the other person keeps theirs. Channels I
-                // follow are left as they are (iOS unfollows them here; clearing is not leaving).
-                val ok = com.fariin.app.data.CryptoHub.listedAll().filter { !it.isFollower(me) }
-                    .map { com.fariin.app.ui.chats.ChatListActions.deleteForMe(me, it) }.all { it }
-                com.fariin.app.data.OfficialChannel.clearHistory()
+                // Every chat in the list, as iOS clearEverything (ChatService.deleteForMe each): my own
+                // clearedAt mark, written on the server so every device of mine follows; the other
+                // person keeps theirs. A channel I only follow is unfollowed, as iOS. The Fariin chat
+                // is not in the list, so iOS leaves it as it is ([ClearHistoryRules]).
+                val ok = com.fariin.app.data.CryptoHub.listedAll().map { c ->
+                    when (com.fariin.app.data.ClearHistoryRules.step(me, c)) {
+                        com.fariin.app.data.ClearHistoryRules.Step.CLEAR_MARK -> com.fariin.app.ui.chats.ChatListActions.deleteForMe(me, c)
+                        com.fariin.app.data.ClearHistoryRules.Step.UNFOLLOW -> com.fariin.app.ui.chats.ChatListActions.deleteByKind(me, c)
+                        com.fariin.app.data.ClearHistoryRules.Step.CLEAR_OFFICIAL -> { com.fariin.app.data.OfficialChannel.clearHistory(); true }
+                    }
+                }.all { it }
                 clearing = false
                 com.fariin.app.ui.components.Snack.show(if (ok) "Chat history cleared" else "Couldn't clear every chat. Check your connection and try again.")
             }
