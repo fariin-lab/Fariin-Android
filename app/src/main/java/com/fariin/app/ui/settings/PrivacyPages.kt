@@ -282,7 +282,19 @@ private fun HideFromPage(pop: () -> Unit) {
     val scope = rememberCoroutineScope()
     var hidden by remember { mutableStateOf<Set<String>?>(null) }
     LaunchedEffect(Unit) { hidden = PhotoHideFrom.load().toSet() }
-    val people = remember { myChatPeople() }
+    val chatPeople = remember { myChatPeople() }
+    // Someone hidden who is no longer in my chats still gets a row, so they can be shown the photo
+    // again (iOS lists every hidden person). Their name comes from their profile.
+    var extra by remember { mutableStateOf(listOf<Triple<String, String, String?>>()) }
+    LaunchedEffect(hidden != null) {
+        val h = hidden ?: return@LaunchedEffect
+        val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return@LaunchedEffect
+        val missing = h.filter { u -> chatPeople.none { it.first == u } }
+        if (missing.isEmpty()) return@LaunchedEffect
+        val api = com.fariin.app.data.FirestorePeople(me, CryptoHub.crypto)
+        extra = missing.map { u -> api.profile(u).let { p -> Triple(u, p?.name.orEmpty(), p?.photoUrl) } }
+    }
+    val people = chatPeople + extra
     // A row whose write is on its way: no second tap, a spinner where the tick goes.
     var working by remember { mutableStateOf(setOf<String>()) }
     ScrollPage("Hide From", pop) {
