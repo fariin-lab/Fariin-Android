@@ -44,6 +44,11 @@ fun NavGraphBuilder.peopleRoutes(
                         com.fariin.app.ui.channels.PostQuotesSheet.pendingFocus.value = com.fariin.app.data.ActivityRules.focus(i)
                         com.fariin.app.ui.channels.PostQuotesSheet.pendingReplies.value = i.cid to i.mid
                         nav.navigate("thread/${i.cid}") { launchSingleTop = true }
+                    } else if (gate == com.fariin.app.data.OpenGate.Result.VISITOR) {
+                        // A row about my comment in a channel I do not follow: iOS says so (a toast), as
+                        // its Replies sheet is not built for a visitor's page.
+                        com.fariin.app.ui.channels.PostQuotesSheet.pendingTab = 0
+                        com.fariin.app.ui.components.Snack.show("You can't open this channel")
                     } else com.fariin.app.data.OpenGate.notice(gate).also { com.fariin.app.ui.channels.PostQuotesSheet.pendingTab = 0 }.takeIf { it.isNotEmpty() }?.let {
                         com.fariin.app.ui.components.Snack.show(it)
                     }
