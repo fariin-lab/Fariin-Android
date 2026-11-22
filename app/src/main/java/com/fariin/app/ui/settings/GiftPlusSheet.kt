@@ -74,6 +74,8 @@ fun GiftPlusSheet(toUid: String, toName: String, toPhoto: String?, onDismiss: ()
     var sent by remember { mutableStateOf<Int?>(null) }
     var alert by remember { mutableStateOf<String?>(null) }
     val locked = PlusStore.state("gifts") == PlusStore.State.LOCKED
+    // iOS shownName: a person without a name reads "this person".
+    val shownName = toName.ifBlank { "this person" }
     val density = LocalDensity.current
     val windowH = LocalWindowInfo.current.containerSize.height
     val want = with(density) { (windowH - WindowInsets.statusBars.getTop(density) - 10.dp.toPx() - 470.dp.toPx() - WindowInsets.navigationBars.getBottom(density)).coerceAtLeast(0f) }
@@ -105,7 +107,7 @@ fun GiftPlusSheet(toUid: String, toName: String, toPhoto: String?, onDismiss: ()
                 if (done != null) {
                     Icon(ImageVector.cachedVector(R.drawable.ic_gift), contentDescription = null, tint = PlusBlue, modifier = Modifier.size(56.dp))
                     Text("Gift Sent", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.label, modifier = Modifier.padding(top = 14.dp))
-                    Text("Fariin Plus for ${monthsWord(done)} is on for $toName now.", fontSize = 16.sp, color = c.secondary,
+                    Text("Fariin Plus for ${monthsWord(done)} is on for $shownName now.", fontSize = 16.sp, color = c.secondary,
                         textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
                     Spacer(Modifier.height(28.dp))
                     BlueCapsule("Done", enabled = true) { motion.close() }
@@ -113,7 +115,7 @@ fun GiftPlusSheet(toUid: String, toName: String, toPhoto: String?, onDismiss: ()
                     Text("Gift Fariin Plus", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = c.label)
                     Spacer(Modifier.height(14.dp))
                     Avatar(toPhoto, 64.dp)
-                    Text("To $toName", fontSize = 16.sp, color = c.label, modifier = Modifier.padding(top = 8.dp))
+                    Text("To $shownName", fontSize = 16.sp, color = c.label, modifier = Modifier.padding(top = 8.dp))
                     Spacer(Modifier.height(18.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         months.forEach { m ->
@@ -127,7 +129,7 @@ fun GiftPlusSheet(toUid: String, toName: String, toPhoto: String?, onDismiss: ()
                             }
                         }
                     }
-                    Text("$toName gets a message from Fariin, and Plus turns on right away.", fontSize = 14.sp, color = c.secondary,
+                    Text("$shownName gets a message from Fariin, and Plus turns on right away.", fontSize = 14.sp, color = c.secondary,
                         textAlign = TextAlign.Center, modifier = Modifier.padding(top = 16.dp))
                     Spacer(Modifier.height(22.dp))
                     BlueCapsule("Send Gift", enabled = !locked && !busy, busy = busy) { send() }
