@@ -159,7 +159,7 @@ fun GroupGuestEmpty(g: GroupGuestUi, modifier: Modifier) {
             modifier = Modifier.padding(top = 12.dp))
         if (g.preview.description.isNotEmpty()) Text(g.preview.description, fontSize = 15.sp, color = c.secondary,
             textAlign = TextAlign.Center, maxLines = 5, modifier = Modifier.padding(top = 6.dp))
-        Text("Join the group to see its messages.", fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center,
+        Text("You need to join this group to view its messages.", fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 14.dp))
     }
 }
