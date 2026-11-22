@@ -225,7 +225,9 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
                 contentAlignment = Alignment.Center) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), null, tint = c.label) }
             Text("Edit Profile", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
             Box(Modifier.align(Alignment.CenterEnd)) {
-            TextAction("Save", enabled = changed && name.isNotBlank() && !busy, busy = saving) {
+            TextAction("Save", enabled = changed && !busy, busy = saving) {
+                // iOS save(): an empty name is refused in words, not by a grey Save with no reason.
+                if (name.isBlank()) { error = "Enter your name"; return@TextAction }
                 scope.launch {
                     busy = true; saving = true
                     try {
