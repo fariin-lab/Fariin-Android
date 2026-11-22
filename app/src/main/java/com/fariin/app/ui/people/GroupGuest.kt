@@ -83,6 +83,13 @@ object GroupGuestPreviews {
         }
     }
 
+    /** I left: the kept copies would still say I am in it (iOS GroupDirectory.noteLeft). */
+    fun forget(cid: String) {
+        cache.remove(cid)
+        refused.remove(cid)
+        ChannelService.forgetPreview(cid)
+    }
+
     /** True for a join error that sticks (the server's "banned" words), kept like a refusal. */
     fun keepIfBanned(cid: String, words: String?): Boolean {
         if (words == null || !words.contains("banned", ignoreCase = true)) return false
@@ -111,8 +118,11 @@ fun rememberGroupGuest(cid: String, me: String, doc: Map<String, Any?>, isChanne
     val p = GroupGuestPreviews.cache[cid]
     // Just left: ask the server again once, even with a kept copy, and take its answer whole.
     // A guest who was never in it is asked by the chat page's own first ask (ChannelRoute), the same way.
-    LaunchedEffect(cid, left) {
-        if (!left || isChannel) return@LaunchedEffect
+    // The leave itself drops the kept copy (GroupGuestPreviews.forget): asked again then, so Join stays.
+    val asked = remember(cid, left) { booleanArrayOf(false) }
+    LaunchedEffect(cid, left, p == null) {
+        if (!left || isChannel || (p != null && asked[0])) return@LaunchedEffect
+        asked[0] = true
         GroupGuestPreviews.adopt(cid, ChannelService.preview(cid), left = true)
     }
     var joining by remember(cid) { mutableStateOf(false) }

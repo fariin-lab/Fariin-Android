@@ -83,6 +83,9 @@ object ChannelService {
     /** The preview last fetched for [cid], from disk, so a cold start shows it at once (iOS loading audit). */
     fun savedPreview(cid: String): ChannelPreview? = PreviewDisk.get(cid)?.let { ChannelPreview.from(it) }
 
+    /** Drops the saved preview, so it no longer says I am in it (iOS GroupDirectory.noteLeft). */
+    fun forgetPreview(cid: String) = PreviewDisk.remove(cid)
+
     /** Public group previews kept on disk as the server sent them (public data only), newest 200. */
     private object PreviewDisk {
         private fun prefs() = com.google.firebase.FirebaseApp.getInstance().applicationContext.getSharedPreferences("fariin_group_previews", android.content.Context.MODE_PRIVATE)
@@ -95,6 +98,7 @@ object ChannelService {
                 e.apply()
             }
         }
+        fun remove(cid: String) { runCatching { prefs().edit().remove(cid).apply() } }
         fun get(cid: String): Map<*, *>? = runCatching { prefs().getString(cid, null)?.let { plain(org.json.JSONObject(it)) as? Map<*, *> } }.getOrNull()
         private fun plain(v: Any?): Any? = when (v) {
             is org.json.JSONObject -> v.keys().asSequence().associateWith { plain(v.opt(it)) }
