@@ -1123,11 +1123,6 @@ private fun ThreadContent(
                 onUnpin = { id -> actions.onUnpin(id); pinIndex = 0 },
                 bubble = { m -> MessageRow(ui, m, ThreadLogic.RowGeometry(false, true, true, 0), is24h, {}) {} })
         }
-        // The sticker sheet's pack grid sends into this chat (StickerInfoSheet).
-        androidx.compose.runtime.DisposableEffect(actions) {
-            StickerSendHook.send = { st -> actions.onSendSticker(st, null) }
-            onDispose { StickerSendHook.send = null }
-        }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             // The top edge (ThreadEdgeGlass.kt): the page colour, or the wallpaper, laid over the
             // messages through the header and fading out over its last 48 dp.
@@ -1710,6 +1705,17 @@ private fun ThreadContent(
                 fun slow(): String? = editHold ?: if (!ui.isGroup || doc.isEmpty()) null else com.fariin.app.data.GroupAdmins.slowWait(doc, ui.me,
                     ui.messages.lastOrNull { it.authorId == ui.me && !it.isSystem }?.createdAtMillis, System.currentTimeMillis().toDouble())
                 val mediaOff = if (ui.isGroup && doc.isNotEmpty()) com.fariin.app.data.GroupAdmins.mediaOff(doc, ui.me) else null
+                // The sticker sheet's pack grid sends into this chat (StickerInfoSheet), held back like
+                // the panel's picks: iOS StickerSend.send asks the same gates for every sticker.
+                val hookCtx = androidx.compose.ui.platform.LocalContext.current
+                androidx.compose.runtime.DisposableEffect(actions, ui, editing) {
+                    StickerSendHook.send = { st ->
+                        val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.STICKERS)
+                        if (stop != null) actions.onNotice(stop)
+                        else { com.fariin.app.data.StickerCatalog.noteUsed(hookCtx, ui.me, st); actions.onSendSticker(st, null) }
+                    }
+                    onDispose { StickerSendHook.send = null }
+                }
                 // The slow-mode wait ticks while it lasts (iOS: a countdown in the empty field, and the
                 // mic and camera held before they open, not after).
                 var slowTick by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
