@@ -240,7 +240,12 @@ internal fun AttachSheet(
             val u = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".files", f)
             shotUri = u
             camera.launch(u)
-        }.onFailure { com.fariin.app.ui.components.Snack.show("Couldn't open the camera.") }
+        }.onFailure {
+            com.fariin.app.ui.components.Snack.show("Couldn't open the camera.")
+            // From the field's camera the sheet is never drawn, so it must close here: left open it
+            // was invisible and the "+" and the camera both did nothing until the chat was reopened.
+            if (cameraFirst && picked.isEmpty()) onDismiss()
+        }
         Unit
     }
     val askCamera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
