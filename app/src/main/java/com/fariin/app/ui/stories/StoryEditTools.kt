@@ -546,9 +546,13 @@ fun StoryPenBar(
 fun chipTapTargets(e: StoryEdits, mediaW: Int, mediaH: Int): List<com.fariin.app.data.StoryTapTarget> {
     if (mediaW <= 0 || mediaH <= 0) return emptyList()
     val spaceH = StoryEditRules.SPACE * mediaH / mediaW
-    return e.texts.filter { it.isChip && !it.link.isNullOrEmpty() && it.hasContent }.map { t ->
+    return e.texts.filter { it.isChip && !it.link.isNullOrEmpty() && it.hasContent }.mapNotNull { t ->
+        val x = (t.cx / StoryEditRules.SPACE).toDouble()
+        val y = (t.cy / spaceH).toDouble()
+        // iOS tapTargets: a chip dragged off the picture gets no tap area, not one nobody can reach.
+        if (x <= -0.05 || x >= 1.05 || y <= -0.05 || y >= 1.05) return@mapNotNull null
         com.fariin.app.data.StoryTapTarget(
-            x = (t.cx / StoryEditRules.SPACE).toDouble(), y = (t.cy / spaceH).toDouble(),
+            x = x, y = y,
             w = (itemW(t) * t.scale / StoryEditRules.SPACE).toDouble(), h = (itemH(t) * t.scale / spaceH).toDouble(),
             rotation = Math.toRadians(t.rotation.toDouble()), url = t.link!!, aspect = mediaW.toDouble() / mediaH)
     }
