@@ -738,6 +738,10 @@ fun ChatListScreen(
                                 withStyle(androidx.compose.ui.text.SpanStyle(color = c.accent, fontWeight = FontWeight.SemiBold)) { append(suggestion) }
                                 append("?")
                             }, fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(top = 4.dp).clickable { query = suggestion })
+                            // iOS NoSearchResults: a way on to public channels.
+                            Text("Find Channels", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.accent,
+                                modifier = Modifier.padding(top = 6.dp).clip(CircleShape).clickable(onClick = channels.find)
+                                    .padding(horizontal = 18.dp, vertical = 10.dp))
                         }
                     }
                 // iOS wording, each with its line under it. The main list has no button (iOS: nothing
