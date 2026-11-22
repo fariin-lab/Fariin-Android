@@ -2,6 +2,8 @@ package com.fariin.app.ui.thread
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -53,14 +55,23 @@ private fun VoiceNoteBarBody(s: VoicePlayer.State, me: String, modifier: Modifie
     val cid = s.cid ?: return
     val c = Fariin.colors
     val conv = ChatsNow.find(cid)
+    // iOS noteTitle: the chat's name; my own note reads "You · <chat>".
+    val title = conv?.displayName(me).orEmpty()
     val name = when {
-        s.author == me -> "You"
-        conv == null -> "Voice message"
-        else -> conv.names[s.author]?.takeIf { it.isNotEmpty() } ?: conv.displayName(me)
+        s.author == me -> if (title.isEmpty()) "You" else "You · $title"
+        else -> title.ifEmpty { "Voice message" }
     }
     val rate = VoicePlayer.rate(cid)
     Box(modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).height(44.dp).clip(RoundedCornerShape(22.dp))
-        .background(c.card).clickable { onOpen(cid) }) {
+        .background(c.card).clickable { onOpen(cid) }
+        // iOS: a sideways drag anywhere on the bar moves the note to that point of its width.
+        .pointerInput(s.id) {
+            val id = s.id ?: return@pointerInput
+            detectHorizontalDragGestures { ch, _ ->
+                ch.consume()
+                if (size.width > 0) VoicePlayer.seek(id, ch.position.x / size.width)
+            }
+        }) {
         Row(Modifier.fillMaxWidth().fillMaxHeight().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(36.dp).clip(RoundedCornerShape(18.dp)).clickable { VoicePlayer.playPause() }, contentAlignment = Alignment.Center) {
                 Icon(if (s.playing) ImageVector.cachedVector(R.drawable.ic_sf_pause_fill) else ImageVector.cachedVector(R.drawable.ic_sf_play_fill), if (s.playing) "Pause" else "Play",
@@ -69,7 +80,7 @@ private fun VoiceNoteBarBody(s: VoicePlayer.State, me: String, modifier: Modifie
             Spacer(Modifier.width(6.dp))
             Column(Modifier.weight(1f)) {
                 Text(name, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("Voice Message", fontSize = 11.sp, color = c.secondary, maxLines = 1)
+                Text("Voice message", fontSize = 11.sp, color = c.secondary, maxLines = 1)
             }
             Text(com.fariin.app.media.MediaRules.rateLabel(rate), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.secondary,
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { VoicePlayer.cycleRate(cid) }.padding(horizontal = 8.dp, vertical = 6.dp))
