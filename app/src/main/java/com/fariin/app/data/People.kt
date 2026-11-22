@@ -113,7 +113,8 @@ interface PeopleApi {
     suspend fun renameGroup(cid: String, title: String)
     suspend fun setGroupPhoto(cid: String, photo: ByteArray)
     suspend fun removeGroupPhoto(cid: String)
-    suspend fun setGroupDescription(cid: String, text: String)
+    /** [max]: a channel's description may be longer than a group's (iOS EditGroupView). */
+    suspend fun setGroupDescription(cid: String, text: String, max: Int = GroupRules.DESC_MAX)
     /** The chat's disappearing timer (iOS ChatService.setDisappear); true when it is now [seconds]. */
     suspend fun setDisappear(cid: String, seconds: Int): Boolean = false
 }
@@ -577,8 +578,8 @@ class FirestorePeople(
     }
 
     /** ChatService.setGroupDescription: `desc` (trimmed, at most [GroupRules.DESC_MAX]) + updatedAt. No chat line, as iOS. */
-    override suspend fun setGroupDescription(cid: String, text: String) {
-        conv(cid).update(mapOf("desc" to GroupRules.cleanDesc(text), "updatedAt" to FieldValue.serverTimestamp())).await()
+    override suspend fun setGroupDescription(cid: String, text: String, max: Int) {
+        conv(cid).update(mapOf("desc" to GroupRules.cleanDesc(text, max), "updatedAt" to FieldValue.serverTimestamp())).await()
     }
 
     /** ChatService.removeGroupAvatar: the field goes, the file is tried, then "<me> removed the group photo". */
@@ -795,7 +796,7 @@ object GroupRules {
     }
 
     /** ChatService.setGroupDescription: trimmed, at most [DESC_MAX]. */
-    fun cleanDesc(s: String): String = s.trim().take(DESC_MAX)
+    fun cleanDesc(s: String, max: Int = DESC_MAX): String = s.trim().take(max)
 
     /** The group's description on its conversation doc (`desc`), "" when none. */
     fun description(data: Map<String, Any?>): String = (data["desc"] as? String)?.trim() ?: ""

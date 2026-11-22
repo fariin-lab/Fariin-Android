@@ -1498,10 +1498,12 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
     var error by remember { mutableStateOf<String?>(null) }
     // What a Save already wrote, so a retry after a failed photo step does not rename twice (iOS).
     var savedName by remember { mutableStateOf<String?>(null) }
-    var desc by remember { mutableStateOf(GroupRules.oneParagraph(description)) }
+    // A channel's description stops at its own limit (255), a group's at the panel's (iOS descChars).
+    val descMax = if (channel) com.fariin.app.channel.ChannelRules.ABOUT_MAX else GroupRules.DESC_MAX
+    var desc by remember { mutableStateOf(GroupRules.oneParagraph(description, descMax)) }
     var savedDesc by remember { mutableStateOf<String?>(null) }
     val trimmed = GroupRules.cleanTitle(name)
-    val trimmedDesc = GroupRules.cleanDesc(desc)
+    val trimmedDesc = GroupRules.cleanDesc(desc, descMax)
     val changed = newPhoto != null || removePhoto || trimmed != title || trimmedDesc != description.trim()
     val hasPhoto = newPhoto != null || (!removePhoto && !photoUrl.isNullOrEmpty())
     BackHandler(onBack = onClose)
@@ -1529,7 +1531,7 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
                 scope.launch {
                     try {
                         if (trimmed != (savedName ?: title)) { api.renameGroup(cid, trimmed); savedName = trimmed }
-                        if (trimmedDesc != (savedDesc ?: description.trim())) { api.setGroupDescription(cid, trimmedDesc); savedDesc = trimmedDesc }
+                        if (trimmedDesc != (savedDesc ?: description.trim())) { api.setGroupDescription(cid, trimmedDesc, descMax); savedDesc = trimmedDesc }
                         // The photo uploads after the page closes (iOS loading audit 2026-11-17): the
                         // name and description above are the steps the server can refuse.
                         val p = newPhoto
@@ -1584,7 +1586,7 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
                 else w("Optional. Shown on the group's info page.")) {
                 Field(name, w("Group Name"), enabled = !locked) { name = it.take(com.fariin.app.channel.ChannelRules.NAME_MAX) }
                 Box(Modifier.fillMaxWidth().padding(start = 16.dp).height(0.5.dp).background(c.separator))
-                DescriptionField(desc, descFocus) { desc = GroupRules.oneParagraph(it) }
+                DescriptionField(desc, descFocus, descMax) { desc = GroupRules.oneParagraph(it, descMax) }
             }
             // The red line folds in and out with a fade, the rows above it not jumping (iOS pops 84, 96).
             val heldError = remember { arrayOf(error) }
@@ -1657,7 +1659,7 @@ private fun DescriptionCard(desc: String) {
  * under it at the end, red at the limit.
  */
 @Composable
-private fun DescriptionField(value: String, focus: FocusRequester, onChange: (String) -> Unit) {
+private fun DescriptionField(value: String, focus: FocusRequester, max: Int, onChange: (String) -> Unit) {
     val c = Fariin.colors
     Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 10.dp), horizontalAlignment = Alignment.End) {
         Box(Modifier.fillMaxWidth()) {
@@ -1665,8 +1667,8 @@ private fun DescriptionField(value: String, focus: FocusRequester, onChange: (St
             BasicTextField(value, onChange, maxLines = 5, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
                 cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth().focusRequester(focus))
         }
-        val left = GroupRules.DESC_MAX - value.length
-        Text("${value.length}/${GroupRules.DESC_MAX}", fontSize = 13.sp, color = if (left <= 0) c.red else c.secondary,
+        val left = max - value.length
+        Text("${value.length}/$max", fontSize = 13.sp, color = if (left <= 0) c.red else c.secondary,
             modifier = Modifier.padding(top = 6.dp))
     }
 }
