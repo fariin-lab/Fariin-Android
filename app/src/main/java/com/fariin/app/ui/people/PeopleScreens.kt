@@ -533,6 +533,48 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     var bubbleOpen by remember { mutableStateOf(false) }
     if (bubbleOpen) { com.fariin.app.ui.components.InnerPageDepth(1); com.fariin.app.ui.settings.BubbleStylePage { bubbleOpen = false }; return }
     com.fariin.app.ui.components.InnerPageDepth(0)   // the profile itself: its pages slide over it (owner 2026-11-10)
+    // The Message circle (iOS ContactInfoView tapMessage / goToChat).
+    var keyPrompt by remember { mutableStateOf(false) }
+    var keyEntry by remember { mutableStateOf(false) }
+    var messageBusy by remember { mutableStateOf(false) }
+    fun goToChat() {
+        val existing = com.fariin.app.data.ChatsNow.findAny(cid)
+        val target = person ?: Person(uid, name = name)
+        if (existing != null) {
+            onOpenChat(cid)
+            // A chat born the old way (by a send) has no name for them: the same write fills it in.
+            if (existing.names[uid] == null) scope.launch { runCatching { api.openChat(target) } }
+            return
+        }
+        // No chat doc yet: open the conversation first (iOS ChatService.openConversation), then the chat.
+        scope.launch { runCatching { api.openChat(target) }; onOpenChat(cid) }
+    }
+    fun tapMessage() {
+        val audience = com.fariin.app.data.Audience.of(person?.privacy?.get("messages")) ?: com.fariin.app.data.Audience.EVERYONE
+        val c0 = com.fariin.app.data.ChatsNow.findAny(cid)
+        // iOS MessageRequests.isFriend: an accepted request, or an old chat with a message in it.
+        val friend = c0 != null && !c0.isGroup && (if (c0.startedBy.isNotEmpty()) c0.accepted else c0.lastMessageCipher.isNotEmpty())
+        // Only when they take messages from friends, we are not, and the admin switch wants the key.
+        if (audience == com.fariin.app.data.Audience.CONTACTS && !friend && com.fariin.app.data.MsgPolicy.chatKeyRequired(uid)) {
+            if (messageBusy) return
+            messageBusy = true
+            // The prompt only for someone who HAS a key; with none, the chat opens on its notice.
+            scope.launch {
+                val has = api.chatKeyExists(uid) == true
+                messageBusy = false
+                if (has) keyPrompt = true else goToChat()
+            }
+        } else goToChat()
+    }
+    if (keyPrompt) com.fariin.app.ui.components.GlassAlert(onDismissRequest = { keyPrompt = false },
+        title = { Text("${name.ifEmpty { "Fariin user" }} only accepts messages from people who know their Chat Key") },
+        text = { Text("If you know it, you can message them now.") },
+        dismissButton = { TextButton({ keyPrompt = false }) { Text("Not Now", color = c.accent) } },
+        confirmButton = { TextButton({ keyPrompt = false; keyEntry = true }) { Text("Use Chat Key", color = c.accent) } },
+        containerColor = c.card)
+    if (keyEntry) ChatKeySheet(api, person ?: Person(uid, name = name), onDismiss = { keyEntry = false }) { opened ->
+        keyEntry = false; onOpenChat(opened)
+    }
     // The full Encryption page, as iOS VerifyEncryptionView (the old dialog wrapped the numbers).
     if (showSafety) {
         var myPhotoUrl by remember { mutableStateOf<String?>(null) }
@@ -730,7 +772,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                 val share = Modifier.weight(1f)
                 // Message only when this page was not opened from the chat itself (iOS: source != .chat).
-                if (!fromChat && uid != me && !blocked) ActionTile("Message", ImageVector.cachedVector(R.drawable.ic_chat), share) { onOpenChat(cid) }
+                if (!fromChat && uid != me && !blocked) ActionTile("Message", ImageVector.cachedVector(R.drawable.ic_chat), share) { tapMessage() }
                 if (glowOn) com.fariin.app.ui.glow.GlowActionTile(glowDoor, share)
                 // iOS ContactInfoView: Voice and Video circles, never on my own page or a blocked person's.
                 if (uid != me && !blocked) {
