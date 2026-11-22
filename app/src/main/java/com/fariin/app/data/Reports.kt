@@ -132,7 +132,7 @@ object ReportRules {
     }
 
     /** Mute is offered on the thanks page for a 1:1 (an account) and a group. */
-    fun canMute(t: ReportTarget): Boolean = t.cid.isNotEmpty() && (t.kind == ReportKind.ACCOUNT || t.kind == ReportKind.GROUP)
+    fun canMute(t: ReportTarget): Boolean = t.cid.isNotEmpty() && (t.kind == ReportKind.ACCOUNT || t.kind == ReportKind.GROUP || t.kind == ReportKind.MESSAGE)
     fun muteLabel(name: String?) = "Mute ${shown(name) ?: "this chat"}"
 
     /** A person is involved: not a whole channel or group, and never myself. */
