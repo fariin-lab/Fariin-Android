@@ -1143,7 +1143,7 @@ class ThreadRepository(
      */
     fun sendPick(context: Context, uris: List<Uri>, caption: String, viewOnce: Boolean) = sendPick(context, uris, caption, viewOnce, null)
 
-    /** As above; a lone photo picked while replying carries the reply (iOS sendPhoto: sendImage replyTo). */
+    /** As above; a pick sent while replying carries the reply on its first message (photo, video or album). */
     fun sendPick(context: Context, uris: List<Uri>, caption: String, viewOnce: Boolean, reply: Message?) {
         val m = media ?: return
         if (uris.isEmpty()) return
@@ -1158,8 +1158,7 @@ class ThreadRepository(
                 async { if (kinds[i]) LocalPreview.videoShape(context, u) else LocalPreview.photoShape(context, u) }
             }.awaitAll()
             val chunks = MediaRules.albumChunks(picked.indices.toList())
-            // Only a single photo takes the reply: an album, a video or a file does not on iOS.
-            val ref = if (picked.size == 1 && !kinds[0]) reply?.let { ReplyQuoteRules.ref(it) } else null
+            val ref = reply?.let { ReplyQuoteRules.ref(it) }
             // The pictures themselves, decoded small in the background; the bubbles wait a moment
             // for them so the first frame already shows the photo, never longer than that.
             val lone = chunks.size == 1 && chunks[0].size == 1
@@ -1176,6 +1175,8 @@ class ThreadRepository(
                 val clientId = UUID.randomUUID().toString().uppercase()
                 val words = if (n == 0) caption.trim() else ""
                 val ts = tap + n
+                // The reply rides on the first message only, as the caption does.
+                val re = if (n == 0) ref else null
                 val once = viewOnce && chunk.size == 1
                 val first = shapes[idx[0]]
                 // A lone video is a video bubble from the first frame (owner 2026-11-04: it showed as a
@@ -1183,13 +1184,13 @@ class ThreadRepository(
                 pending[clientId] = if (chunk.size == 1) Message(
                     id = clientId, authorId = me, text = words, type = if (kinds[idx[0]]) "video" else "image",
                     createdAtMillis = ts, hasServerTime = false, clientTs = ts, clientId = clientId,
-                    sendState = Message.SendState.SENDING, viewOnce = once, replyTo = ref,
+                    sendState = Message.SendState.SENDING, viewOnce = once, replyTo = re,
                     width = first?.width?.toDouble(), height = first?.height?.toDouble(), duration = first?.duration,
                     localUri = if (once) null else chunk[0].toString(),
                 ) else Message(
                     id = clientId, authorId = me, text = words, type = "album",
                     createdAtMillis = ts, hasServerTime = false, clientTs = ts, clientId = clientId,
-                    sendState = Message.SendState.SENDING,
+                    sendState = Message.SendState.SENDING, replyTo = re,
                     album = idx.map { i ->
                         Message.AlbumItem("", null, shapes[i]?.width?.toDouble(), shapes[i]?.height?.toDouble(),
                             duration = shapes[i]?.duration, localUri = picked[i].toString(), localVideo = kinds[i])
@@ -1215,8 +1216,9 @@ class ThreadRepository(
                         // Written down before the upload, as a photo is (PhotoOutbox): the clip and poster are on the phone.
                         com.fariin.app.local.PhotoOutbox.add(me, com.fariin.app.local.PhotoOutbox.Entry(cid, clientId, ts,
                             v.file.absolutePath, v.width, v.height, null, v.poster.thumbB64, words, false,
-                            kind = "video", poster = poster.absolutePath, duration = v.duration))
-                        val work: suspend () -> Unit = { sender.video(v, words, false, clientId, ts); com.fariin.app.local.PhotoOutbox.remove(me, clientId) }
+                            kind = "video", poster = poster.absolutePath, duration = v.duration,
+                            replyId = re?.id, replyAuthor = re?.authorId, replyText = re?.text))
+                        val work: suspend () -> Unit = { sender.video(v, words, false, clientId, ts, reply = re); com.fariin.app.local.PhotoOutbox.remove(me, clientId) }
                         retryMedia[clientId] = work
                         work()
                     } else if (chunk.size == 1) {
@@ -1230,8 +1232,8 @@ class ThreadRepository(
                         // Written down before the upload, so a kill (offline, say) cannot lose it (PhotoOutbox).
                         com.fariin.app.local.PhotoOutbox.add(me, com.fariin.app.local.PhotoOutbox.Entry(cid, clientId, ts,
                             local.absolutePath, prep.width, prep.height, prep.blurhash, prep.thumbB64, words, once,
-                            replyId = ref?.id, replyAuthor = ref?.authorId, replyText = ref?.text))
-                        val work: suspend () -> Unit = { sender.image(prep, words, once, false, clientId, ts, reply = ref); com.fariin.app.local.PhotoOutbox.remove(me, clientId) }
+                            replyId = re?.id, replyAuthor = re?.authorId, replyText = re?.text))
+                        val work: suspend () -> Unit = { sender.image(prep, words, once, false, clientId, ts, reply = re); com.fariin.app.local.PhotoOutbox.remove(me, clientId) }
                         retryMedia[clientId] = work
                         work()
                     } else {
@@ -1261,8 +1263,9 @@ class ThreadRepository(
                                 pp.blurhash, pp.thumbB64, vid?.file?.absolutePath, vid?.duration ?: 0.0)
                         }
                         com.fariin.app.local.PhotoOutbox.add(me, com.fariin.app.local.PhotoOutbox.Entry(cid, clientId, ts,
-                            items[0].path, items[0].width, items[0].height, null, null, words, false, kind = "album", items = items))
-                        val work: suspend () -> Unit = { sender.album(parts, words, false, clientId, ts); com.fariin.app.local.PhotoOutbox.remove(me, clientId) }
+                            items[0].path, items[0].width, items[0].height, null, null, words, false, kind = "album", items = items,
+                            replyId = re?.id, replyAuthor = re?.authorId, replyText = re?.text))
+                        val work: suspend () -> Unit = { sender.album(parts, words, false, clientId, ts, reply = re); com.fariin.app.local.PhotoOutbox.remove(me, clientId) }
                         retryMedia[clientId] = work
                         work()
                     }
@@ -1272,7 +1275,10 @@ class ThreadRepository(
     }
 
     /** A document from the system file picker (iOS sendFile); a refusal is handed to [onRefused]. */
-    fun sendDocument(context: Context, uri: Uri, onRefused: (String) -> Unit) {
+    fun sendDocument(context: Context, uri: Uri, onRefused: (String) -> Unit) = sendDocument(context, uri, null, onRefused)
+
+    /** As above; a file sent while replying carries the reply. */
+    fun sendDocument(context: Context, uri: Uri, reply: Message?, onRefused: (String) -> Unit) {
         val m = media ?: return
         scope.launch(Dispatchers.IO) {
             val f = when (val r = FilePrep.fromUri(context, uri, m.localDir())) {
@@ -1282,14 +1288,15 @@ class ThreadRepository(
             }
             val tap = System.currentTimeMillis().toDouble()
             val clientId = UUID.randomUUID().toString().uppercase()
+            val ref = reply?.let { ReplyQuoteRules.ref(it) }
             val local = File(m.localDir(), "file-$clientId").also { it.writeBytes(f.bytes) }
             pending[clientId] = Message(
                 id = clientId, authorId = me, text = "", type = "file", createdAtMillis = tap, hasServerTime = false,
-                clientTs = tap, clientId = clientId, sendState = Message.SendState.SENDING,
+                clientTs = tap, clientId = clientId, sendState = Message.SendState.SENDING, replyTo = ref,
                 fileName = f.name, fileSize = f.bytes.size.toLong(), localPath = local.absolutePath,
             )
             rebuild()
-            val work: suspend () -> Unit = { sender.file(f, false, clientId, tap) }
+            val work: suspend () -> Unit = { sender.file(f, false, clientId, tap, reply = ref) }
             retryMedia[clientId] = work
             runMediaSend(clientId, work)
         }
@@ -1301,7 +1308,10 @@ class ThreadRepository(
      * original name). The bubbles land in tick order, and the sends go one after another so the
      * server keeps that order. A photo that cannot be read is skipped; one line gives the count.
      */
-    fun sendDocuments(context: Context, uris: List<Uri>, onRefused: (String) -> Unit) {
+    fun sendDocuments(context: Context, uris: List<Uri>, onRefused: (String) -> Unit) = sendDocuments(context, uris, null, onRefused)
+
+    /** As above; sent while replying, the first file carries the reply. */
+    fun sendDocuments(context: Context, uris: List<Uri>, reply: Message?, onRefused: (String) -> Unit) {
         val m = media ?: return
         if (uris.isEmpty()) return
         scope.launch(Dispatchers.IO) {
@@ -1318,17 +1328,18 @@ class ThreadRepository(
                 // One millisecond apart, so the bubbles sort in tick order.
                 val tap = base + i
                 val clientId = UUID.randomUUID().toString().uppercase()
+                val re = if (queued.isEmpty()) reply?.let { ReplyQuoteRules.ref(it) } else null
                 val local = File(m.localDir(), "file-$clientId").also { it.writeBytes(f.bytes) }
                 pending[clientId] = Message(
                     id = clientId, authorId = me, text = "", type = "file", createdAtMillis = tap, hasServerTime = false,
-                    clientTs = tap, clientId = clientId, sendState = Message.SendState.SENDING,
+                    clientTs = tap, clientId = clientId, sendState = Message.SendState.SENDING, replyTo = re,
                     fileName = f.name, fileSize = f.bytes.size.toLong(), localPath = local.absolutePath,
                 )
                 // The bytes are read back from this phone's copy when the send starts, so twenty
                 // photos never sit in memory at once.
                 val name = f.name
                 val preview = f.previewJpeg
-                val work: suspend () -> Unit = { sender.file(FilePrep(name, local.readBytes(), preview), false, clientId, tap) }
+                val work: suspend () -> Unit = { sender.file(FilePrep(name, local.readBytes(), preview), false, clientId, tap, reply = re) }
                 retryMedia[clientId] = work
                 queued += clientId to work
                 rebuild()
@@ -1804,7 +1815,7 @@ class ThreadRepository(
                     voiceNow(com.fariin.app.media.VoiceRecorder.Result(f, e.duration, e.wave, e.viewOnce), e.clientId, e.ts)
                 } else if (!landed && video) {
                     val v = com.fariin.app.media.VideoPrep.describe(f, File(e.poster!!).readBytes()) ?: error("clip not readable")
-                    sender.video(v, e.caption, false, e.clientId, e.ts)
+                    sender.video(v, e.caption, false, e.clientId, e.ts, reply = ref)
                 } else if (!landed) {
                     val prep = PhotoPrep(f.readBytes(), e.width, e.height, e.blurhash, e.thumb)
                     sender.image(prep, e.caption, e.viewOnce, false, e.clientId, e.ts, reply = ref)
@@ -1818,9 +1829,10 @@ class ThreadRepository(
     private fun resumeAlbum(e: com.fariin.app.local.PhotoOutbox.Entry) {
         val ok = e.items.size >= 2 && e.items.all { t -> File(t.path).length() > 0 && (t.clip == null || File(t.clip).length() > 0) }
         if (!ok) { com.fariin.app.local.PhotoOutbox.remove(me, e.clientId); return }
+        val ref = if (e.replyId != null && e.replyAuthor != null) Message.ReplyRef(e.replyId, e.replyAuthor, e.replyText ?: "") else null
         pending[e.clientId] = Message(
             id = e.clientId, authorId = me, text = e.caption, type = "album", createdAtMillis = e.ts, hasServerTime = false,
-            clientTs = e.ts, clientId = e.clientId, sendState = Message.SendState.SENDING,
+            clientTs = e.ts, clientId = e.clientId, sendState = Message.SendState.SENDING, replyTo = ref,
             album = e.items.map { t ->
                 Message.AlbumItem(t.path, null, t.width.toDouble(), t.height.toDouble(), videoUrl = t.clip,
                     duration = if (t.clip != null) t.duration else null, localVideo = t.clip != null)
@@ -1839,7 +1851,7 @@ class ThreadRepository(
                     if (t.clip != null) MediaSender.AlbumPart.Video(com.fariin.app.media.VideoPrep.describe(File(t.clip), pic.jpeg) ?: error("clip not readable"))
                     else MediaSender.AlbumPart.Photo(pic)
                 }
-                val work: suspend () -> Unit = { sender.album(parts, e.caption, false, e.clientId, e.ts); com.fariin.app.local.PhotoOutbox.remove(me, e.clientId) }
+                val work: suspend () -> Unit = { sender.album(parts, e.caption, false, e.clientId, e.ts, reply = ref); com.fariin.app.local.PhotoOutbox.remove(me, e.clientId) }
                 retryMedia[e.clientId] = work
                 work()
             }

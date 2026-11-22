@@ -76,7 +76,7 @@ class MediaSender(
                                members: List<String>?, msg: Map<String, Any>, reply: Message.ReplyRef? = null) {
         val fc = sealOrNull(fwdChannelJson, members)
         var out = if (fc != null) msg + ("fwdChannel" to fc) else msg
-        // A photo sent while replying: replyTo sealed as a text reply seals it (iOS sendImage).
+        // Media sent while replying: replyTo sealed as a text reply seals it, on the message itself (an album too).
         if (reply != null) out = out + ("replyTo" to com.fariin.app.data.ReplyQuoteRules.wire(reply, seal(reply.text, members)))
         quoteId?.takeIf { com.fariin.app.data.QuoteRules.isQid(it) }?.let { out = out + ("quote" to com.fariin.app.data.QuoteStore.wire(it)) }
         // The group or channel it came from (iOS sealedForwardSource), only beside `forwarded`. A
@@ -200,7 +200,7 @@ class MediaSender(
      */
     suspend fun video(
         v: VideoPrep, caption: String, forwarded: Boolean, clientId: String?, clientTs: Double,
-        onAnnounced: (String) -> Unit = {},
+        onAnnounced: (String) -> Unit = {}, reply: Message.ReplyRef? = null,
     ) {
         val members = members()
         val msgRef = convRef.collection("messages").document()
@@ -211,7 +211,7 @@ class MediaSender(
         val batch = db.batch()
         setMsg(batch, msgRef, members, MediaMessages.videoAnnounce(me, thumbUrl, thMeta, v.duration, v.width.toDouble(), v.height.toDouble(),
             captionCipher, clientTs, clientId, sealOrNull(v.poster.blurhash, members), sealOrNull(v.poster.thumbB64, members),
-            forwarded, FieldValue.serverTimestamp()))
+            forwarded, FieldValue.serverTimestamp()), reply)
         batch.update(convRef, MediaMessages.convUpdate(me, MediaRules.videoPreview(v.duration), others(members),
             FieldValue.serverTimestamp(), FieldValue.increment(1), lastImageUrl = thumbUrl, lastImageEnc = thMeta, forwarded = forwarded))
         MediaSend.noteAnnounced(clientId, msgRef.id)   // before the write: a Cancel during it still takes it down
@@ -231,7 +231,7 @@ class MediaSender(
     // ------------------------------------------------------------------ file
 
     /** sendFile: the message (name, size, sealed preview) first with `uploading`, then `fileUrl`. */
-    suspend fun file(f: FilePrep, forwarded: Boolean, clientId: String?, clientTs: Double) {
+    suspend fun file(f: FilePrep, forwarded: Boolean, clientId: String?, clientTs: Double, reply: Message.ReplyRef? = null) {
         val members = members()
         val (cipher, meta) = sealBytes(f.bytes, members)
         val msgRef = convRef.collection("messages").document()
@@ -247,7 +247,7 @@ class MediaSender(
         }
         val batch = db.batch()
         setMsg(batch, msgRef, members, MediaMessages.file(me, f.name, f.bytes.size, meta, clientTs, clientId, thumbUrl, thumbMeta,
-            forwarded, FieldValue.serverTimestamp()))
+            forwarded, FieldValue.serverTimestamp()), reply)
         batch.update(convRef, MediaMessages.convUpdate(me, MediaRules.FILE_PREVIEW, others(members),
             FieldValue.serverTimestamp(), FieldValue.increment(1), forwarded = forwarded))
         MediaSend.noteAnnounced(clientId, msgRef.id)
@@ -262,7 +262,8 @@ class MediaSender(
     // ------------------------------------------------------------------ album
 
     /** sendMixedAlbum (sendAlbum when all photos): every tile sealed and up, then ONE message. */
-    suspend fun album(parts: List<AlbumPart>, caption: String, forwarded: Boolean, clientId: String?, clientTs: Double) {
+    suspend fun album(parts: List<AlbumPart>, caption: String, forwarded: Boolean, clientId: String?, clientTs: Double,
+                      reply: Message.ReplyRef? = null) {
         require(parts.size in 1..MediaRules.ALBUM_MAX_ITEMS)
         val members = members()
         val msgRef = convRef.collection("messages").document()
@@ -319,7 +320,7 @@ class MediaSender(
         val captionCipher = sealOrNull(caption.trim(), members) ?: ""
         val batch = db.batch()
         setMsg(batch, msgRef, members, MediaMessages.album(me, tiles, captionCipher, clientTs, clientId,
-            sealOrNull(first.blurhash, members), sealOrNull(first.thumbB64, members), forwarded, FieldValue.serverTimestamp()))
+            sealOrNull(first.blurhash, members), sealOrNull(first.thumbB64, members), forwarded, FieldValue.serverTimestamp()), reply)
         val cover = tiles.firstOrNull { !it.isVideo } ?: tiles.first()
         val ordered = listOf(cover) + tiles.filter { it !== cover }
         batch.update(convRef, MediaMessages.convUpdate(me, MediaMessages.albumPreview(tiles), others(members),

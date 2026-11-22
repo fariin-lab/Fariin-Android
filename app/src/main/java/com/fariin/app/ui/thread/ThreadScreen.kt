@@ -252,9 +252,9 @@ fun ThreadScreen(
     actions: ThreadActions = ThreadActions(),
     /** The attach sheet's sends (media worker): photos/videos + caption + view-once, and a file. */
     onSendPick: (List<Uri>, String, Boolean, Message?) -> Unit = { l, _, _, _ -> l.firstOrNull()?.let(onSendPhoto) },
-    onSendFile: (Uri) -> Unit = {},
+    onSendFile: (Uri, Message?) -> Unit = { _, _ -> },
     /** Several files at once, in order (Add files > Photos). */
-    onSendFiles: (List<Uri>) -> Unit = { it.forEach(onSendFile) },
+    onSendFiles: (List<Uri>, Message?) -> Unit = { l, re -> l.forEachIndexed { i, u -> onSendFile(u, if (i == 0) re else null) } },
 ) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     // Not ready on the first frame (no saved rows read yet): the slide waits for the messages, at most
@@ -352,8 +352,8 @@ private fun ThreadContent(
     onSendVoice: (VoiceRecorder.Result, Message?) -> Unit,
     actions: ThreadActions,
     onSendPick: (List<Uri>, String, Boolean, Message?) -> Unit,
-    onSendFile: (Uri) -> Unit,
-    onSendFiles: (List<Uri>) -> Unit,
+    onSendFile: (Uri, Message?) -> Unit,
+    onSendFiles: (List<Uri>, Message?) -> Unit,
 ) {
     androidx.compose.runtime.CompositionLocalProvider(LocalSendText provides onSend) {
     val c = Fariin.colors
@@ -1782,13 +1782,12 @@ private fun ThreadContent(
                             "Send one message at a time: one video, or up to ${com.fariin.app.media.MediaRules.ALBUM_MAX_ITEMS} photos as one album." else null
                         val stop = slow() ?: many ?: kinds.firstNotNullOfOrNull { held(it) }
                         if (stop != null) actions.onNotice(stop) else { sendMotion.arm(SendMotion.Kind.MEDIA, ui.messages, sendAnim)
-                            // A lone photo carries the reply and closes the bar (iOS sendPhoto); an album, a video stay as iOS.
-                            val re = if (uris.size == 1 && kinds == listOf(com.fariin.app.data.GroupAdmins.SendKind.PHOTOS)) replyTo else null
-                            if (re != null) replyTo = null
+                            // Any pick sent while replying carries the reply and closes the bar.
+                            val re = replyTo; replyTo = null
                             onSendPick(uris, cap, once, re) }
                     },
-                    onSendFile = { u -> val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.FILES); if (stop != null) actions.onNotice(stop) else onSendFile(u) },
-                    onSendFiles = { l -> val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.FILES); if (stop != null) actions.onNotice(stop) else onSendFiles(l) },
+                    onSendFile = { u -> val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.FILES); if (stop != null) actions.onNotice(stop) else { val re = replyTo; replyTo = null; onSendFile(u, re) } },
+                    onSendFiles = { l -> val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.FILES); if (stop != null) actions.onNotice(stop) else { val re = replyTo; replyTo = null; onSendFiles(l, re) } },
                     mediaOff = mediaOff,
                     // iOS: the Poll tile is in groups only, held back like the other kinds.
                     onPoll = if (ui.isGroup) ({

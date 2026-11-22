@@ -522,8 +522,8 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         ThreadScreen(ui, onBack = onBack, onSend = vm.repo::sendText, onLoadOlder = vm.repo::loadOlderPage, onRetry = vm.repo::retry,
             onSendPhoto = { uri -> vm.repo.sendPhoto(app, uri) }, onSendVoice = { r, re -> vm.repo.sendVoice(r, re) }, actions = actions,
             onSendPick = { uris, caption, once, re -> vm.repo.sendPick(app, uris, caption, once, re) },
-            onSendFile = { uri -> vm.repo.sendDocument(app, uri) { notice = it } },
-            onSendFiles = { uris -> vm.repo.sendDocuments(app, uris) { notice = it } })
+            onSendFile = { uri, re -> vm.repo.sendDocument(app, uri, re) { notice = it } },
+            onSendFiles = { uris, re -> vm.repo.sendDocuments(app, uris, re) { notice = it } })
     }
     // The question itself: Not Now and the request simply waits; Use Chat Key opens the key sheet.
     if (keyAsk) com.fariin.app.ui.components.GlassAlert(
