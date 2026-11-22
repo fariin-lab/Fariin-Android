@@ -1960,13 +1960,13 @@ private fun youNotice(m: Message, ui: ThreadUi): String {
     val t = noticeText(m)
     // The shared wallpaper notice (iOS 4df24f5a5): "You ..." for the setter, else the contact's name here.
     if (m.isSystem) for (suffix in listOf(com.fariin.app.data.SharedWallpapers.SET_SUFFIX, com.fariin.app.data.SharedWallpapers.REMOVED_SUFFIX)) {
-        if (t.endsWith(suffix)) return (if (m.authorId == ui.me) "You" else ui.names[m.authorId]?.takeIf { it.isNotEmpty() } ?: ui.title) + suffix
+        if (t.endsWith(suffix)) return personName(ui, m.authorId) + suffix
     }
     // Restricted Chat notices are worded per reader (iOS restrictedAction): "You" for mine, the
     // person's current name for theirs, and "Restricted Chat" / "Restricted Group" capitalised.
     if (m.isSystem) for (action in RESTRICTED_ACTIONS) {
         if (t.endsWith(" $action", ignoreCase = true)) {
-            val who = if (m.authorId == ui.me) "You" else ui.names[m.authorId]?.takeIf { it.isNotEmpty() } ?: ui.title
+            val who = personName(ui, m.authorId)
             val said = action.replace("Restricted chat", "Restricted Chat").replace("Restricted group", "Restricted Group")
             return "$who $said"
         }
@@ -2231,6 +2231,8 @@ private val senderPalette = listOf(
  */
 internal fun personName(ui: ThreadUi, uid: String): String = when {
     uid == ui.me -> "You"
+    // A 1:1 says the chat's own name (iOS personName: title), so a deleted account reads "Deleted Account".
+    !ui.isGroup && ui.channel == null -> ui.title.ifEmpty { ui.names[uid].orEmpty() }
     ui.isGroup && ui.channel == null -> ui.names[uid]?.takeIf { it.isNotEmpty() } ?: "User"
     else -> ui.names[uid] ?: ui.title
 }
