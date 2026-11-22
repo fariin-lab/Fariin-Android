@@ -500,7 +500,9 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     LaunchedEffect(cid) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             combine(androidx.compose.runtime.snapshotFlow { followerPostsNow.value }, atBottom, vm.repo.state) { n, bottom, st ->
-                if (n != null && bottom && st.loaded) n else null
+                // The server answer too (synced): a cached list reports the bottom before a saved place or a
+                // jump has scrolled, and the posts would be marked read unseen.
+                if (n != null && bottom && st.loaded && st.synced) n else null
             }.distinctUntilChanged().collectLatest { n ->
                 n ?: return@collectLatest
                 // The list reports where it landed a moment after the open: wait for it.

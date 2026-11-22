@@ -365,6 +365,9 @@ class MainActivity : ComponentActivity() {
         val decryptor = remember(crypto) { CryptoDecryptor(crypto) }
         remember { StartClock.mark("vm.before"); 0 }
         val vm: ChatsViewModel = viewModel(key = "chats-$me") { ChatsViewModel(me, crypto = crypto) }
+        // Kept voice notes are read once here, not per row: a chat whose only content is one must
+        // be listed before any row has been drawn.
+        LaunchedEffect(Unit) { com.fariin.app.media.VoiceDrafts.init(applicationContext) }
         remember { StartClock.mark("vm.made"); 0 }
         // Held as a State and read only where it is used (owner's Pixel 2026-11-09, trace of a group
         // open: every list update, a dozen while a chat opens, recomposed this whole screen, the nav
