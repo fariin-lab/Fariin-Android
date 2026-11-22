@@ -45,7 +45,27 @@ object VoicePlayer {
          * they were done with it, so leaving the chat shows no bar for it.
          */
         val pausedByUser: Boolean = false,
+        /** A song or a playlist's song is open (iOS isMusic), not a voice note; null = a voice note. */
+        val music: MusicNow? = null,
+        /** The song whose file is coming down for a tap, shown as a spinner on its button. */
+        val loading: String? = null,
     )
+
+    /** What the bar and the lock screen say about the open song (iOS noteMusicLabels). */
+    data class MusicNow(
+        val trackId: String,
+        val messageId: String,
+        val title: String,
+        val artist: String,
+        /** The song's picture, else the message's cover, as JPEG bytes; null = none. */
+        val art: ByteArray? = null,
+        val hasNext: Boolean = false,
+        val hasPrevious: Boolean = false,
+    ) {
+        override fun equals(other: Any?) = other is MusicNow && trackId == other.trackId && title == other.title &&
+            artist == other.artist && art === other.art && hasNext == other.hasNext && hasPrevious == other.hasPrevious
+        override fun hashCode() = trackId.hashCode()
+    }
 
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
@@ -94,6 +114,7 @@ object VoicePlayer {
     }
 
     fun cycleRate(cid: String) {
+        if (_state.value.music != null) return   // a song plays at its own speed (iOS: speed is for voice notes)
         val next = MediaRules.nextRate(rate(cid))
         _state.value = _state.value.copy(rates = _state.value.rates + (cid to next))
         if (this.cid == cid) player?.playbackParameters = PlaybackParameters(next)
@@ -125,6 +146,81 @@ object VoicePlayer {
         }
     }
 
+    // ------------------------------------------------------------------ songs
+
+    /** The playlist (or one song) the open song belongs to, and where in it. */
+    private var musicQueue: List<com.fariin.app.data.MusicRules.Ref> = emptyList()
+    private var musicIndex = 0
+    private var musicCid = ""
+    private var musicCover: ByteArray? = null
+    private var musicFetch: (suspend (com.fariin.app.data.MusicRules.Ref) -> File?)? = null
+    private var appContext: Context? = null
+
+    /**
+     * Tap on a song's button or a playlist's track (iOS toggleMusic): play, pause or resume
+     * [queue]'s song at [index]. The songs after it play on by themselves, and next and previous
+     * work from the bar and the lock screen. [cover] is the message's cover (its preview tile);
+     * [fetch] brings a song's plain file (ChatMedia, the document path).
+     */
+    fun toggleMusic(context: Context, cid: String, queue: List<com.fariin.app.data.MusicRules.Ref>, index: Int,
+                    cover: ByteArray?, fetch: suspend (com.fariin.app.data.MusicRules.Ref) -> File?) {
+        val t = queue.getOrNull(index) ?: return
+        val p = player
+        resumeAfterCall = false
+        if (_state.value.id == t.id && p != null) {
+            if (p.isPlaying) { p.pause(); _state.value = _state.value.copy(pausedByUser = true) }
+            else if (callActive()) return
+            else { if (p.playbackState == Player.STATE_ENDED) p.seekTo(0); p.play(); _state.value = _state.value.copy(pausedByUser = false) }
+            return
+        }
+        if (callActive()) return
+        appContext = context.applicationContext
+        musicQueue = queue; musicIndex = index; musicCid = cid; musicCover = cover; musicFetch = fetch
+        main.launch { loadMusic(index) }
+    }
+
+    /** The playlist's next song, from the bar, the lock screen or a headset. */
+    fun nextTrack() {
+        if (_state.value.music?.hasNext != true) return
+        resumeAfterCall = false
+        main.launch { loadMusic(musicIndex + 1) }
+    }
+
+    /** Back to the start of the song, or the song before it when it has only just started. */
+    fun previousTrack() {
+        val p = player
+        resumeAfterCall = false
+        if (p != null && (p.currentPosition > 3000 || _state.value.music?.hasPrevious != true)) { p.seekTo(0); tick(); return }
+        if (_state.value.music?.hasPrevious != true) return
+        main.launch { loadMusic(musicIndex - 1) }
+    }
+
+    /** Brings song [index] of the queue and plays it; false when it cannot be had. */
+    private suspend fun loadMusic(index: Int): Boolean {
+        val ctx = appContext ?: return false
+        val queue = musicQueue
+        val t = queue.getOrNull(index) ?: return false
+        if (callActive()) return false
+        musicIndex = index
+        _state.value = _state.value.copy(loading = t.id, failed = _state.value.failed - t.id)
+        val raw = runCatching { musicFetch?.invoke(t) }.getOrNull()
+        val f = raw?.let { withContext(Dispatchers.IO) { playableFile(ctx, it) } }
+        val tags = f?.let { withContext(Dispatchers.IO) { MusicTags.ensure(t.id, it) } }
+        if (_state.value.loading == t.id) _state.value = _state.value.copy(loading = null)
+        if (musicQueue !== queue || musicIndex != index) return false   // another song was picked meanwhile
+        if (f == null) { _state.value = _state.value.copy(failed = _state.value.failed + t.id); return false }
+        val now = MusicNow(
+            trackId = t.id, messageId = t.messageId,
+            // The sender's own words first, then the tags, then the file name (iOS noteMusicLabels).
+            title = t.title ?: tags?.title ?: t.plainTitle,
+            artist = t.artist ?: tags?.artist ?: "",
+            art = tags?.art ?: musicCover,
+            hasNext = index < queue.size - 1, hasPrevious = index > 0,
+        )
+        start(ctx, t.id, musicCid, f, "", null, 0.0, now)
+        return true
+    }
+
     fun seek(id: String, fraction: Float) {
         val p = player ?: return
         if (_state.value.id != id || p.duration <= 0) return
@@ -147,7 +243,8 @@ object VoicePlayer {
         VoiceSession.close()   // the lock screen lets go before its player does
         player?.release(); player = null
         ticker?.cancel()
-        _state.value = _state.value.copy(id = null, playing = false, positionMs = 0, cid = null, pausedByUser = false)
+        musicQueue = emptyList(); musicFetch = null; musicCover = null
+        _state.value = _state.value.copy(id = null, playing = false, positionMs = 0, cid = null, pausedByUser = false, music = null)
     }
 
     /**
@@ -204,20 +301,22 @@ object VoicePlayer {
     }
 
     private fun start(context: Context, id: String, cid: String, file: File, author: String,
-                      messageId: String?, createdAtMs: Double) {
+                      messageId: String?, createdAtMs: Double, music: MusicNow? = null) {
         save()
+        if (music == null) { musicQueue = emptyList(); musicFetch = null; musicCover = null }   // a voice note ends the playlist
         // The old note's player goes once the lock screen session has moved to the new one.
         val old = player
         player = null
         this.cid = cid
         val p = ExoPlayer.Builder(context.applicationContext).build()
         p.setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
-            .setContentType(C.AUDIO_CONTENT_TYPE_SPEECH).build(), true)
+            .setContentType(if (music != null) C.AUDIO_CONTENT_TYPE_MUSIC else C.AUDIO_CONTENT_TYPE_SPEECH).build(), true)
         // iOS: headphones out must not put a private note on the speaker; it pauses instead.
         p.setHandleAudioBecomingNoisy(true)
         p.setMediaItem(MediaItem.Builder().setUri(Uri.fromFile(file))
-            .setMediaMetadata(VoiceSession.metadata(context, cid, author)).build())
-        p.playbackParameters = PlaybackParameters(rate(cid))
+            .setMediaMetadata(if (music != null) VoiceSession.musicMetadata(context, music)
+                else VoiceSession.metadata(context, cid, author)).build())
+        p.playbackParameters = PlaybackParameters(if (music != null) 1f else rate(cid))
         p.addListener(object : Player.Listener {
             var heard = false
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -237,14 +336,17 @@ object VoicePlayer {
                     // Finished: the note is closed, as iOS (VoicePlayer.barVisible is "started, not
                     // yet finished or closed"), so the bar away from the chat goes; the bubble reads
                     // its length again. Before, the finished note stayed open and its bar never left.
-                    _state.value = _state.value.copy(id = null, cid = null, playing = false, positionMs = 0,
+                    _state.value = _state.value.copy(id = null, cid = null, playing = false, positionMs = 0, music = null,
                         paused = _state.value.paused - id)
                     ticker?.cancel()
                     // Released just after this callback returns, not from inside it.
                     // The lock screen session keeps it a moment, for the run's next note (VoiceSession.retire).
                     if (player === p) { player = null; main.launch { VoiceSession.retire(p) } }
-                    // iOS followOn: the next note sent straight after this one plays by itself.
-                    main.launch { playNext(context.applicationContext, cid, id) }
+                    // A playlist plays on to its next song (iOS musicNext); else iOS followOn: the
+                    // next note sent straight after this one plays by itself.
+                    if (music != null) main.launch {
+                        if (!(music.hasNext && _state.value.id == null && loadMusic(musicIndex + 1))) runOver()
+                    } else main.launch { playNext(context.applicationContext, cid, id) }
                 } else tick()
             }
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
@@ -255,12 +357,14 @@ object VoicePlayer {
         _state.value.paused[id]?.let { p.seekTo(it) }
         p.play()
         player = p
+        // The song is known before the lock screen reads what next and previous may do.
+        _state.value = _state.value.copy(music = music)
         VoiceSession.attach(context, p)
         old?.release()
-        VoiceEar.watch(context) { player }   // raise to ear, as iOS
+        if (music == null) VoiceEar.watch(context) { player }   // raise to ear, as iOS (voice notes only)
         watchCalls()
         _state.value = _state.value.copy(id = id, playing = true, failed = _state.value.failed - id, cid = cid, author = author,
-            pausedByUser = false)
+            pausedByUser = false, music = music)
         ticker?.cancel()
         ticker = main.launch { while (isActive) { tick(); delay(50) } }
     }

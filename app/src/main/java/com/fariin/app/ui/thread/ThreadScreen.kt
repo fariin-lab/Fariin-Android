@@ -2550,6 +2550,12 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 return@Column
             }
             if (kind == Message.MediaKind.FILE) {
+                // A song or a playlist plays in the chat (MusicBubble.kt, iOS MusicBubbleView); other files open.
+                val songs = remember(m) { m.musicRefs() }
+                if (songs != null) {
+                    MusicBody(m, songs, ui.cid, isMe, minOf(maxW - 28.dp, 280.dp)) { Meta(m, tick, isMe, is24h) }
+                    return@Column
+                }
                 FileBody(m, isMe, minOf(maxW - 28.dp, 260.dp)) { Meta(m, tick, isMe, is24h) }
                 return@Column
             }

@@ -57,7 +57,26 @@ object VoiceSession {
         Player.COMMAND_GET_TIMELINE,
         Player.COMMAND_GET_METADATA,
         Player.COMMAND_GET_AUDIO_ATTRIBUTES,
+        // A playlist's song only: the player below offers these while there is a song to go to.
+        Player.COMMAND_SEEK_TO_NEXT,
+        Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
+        Player.COMMAND_SEEK_TO_PREVIOUS,
+        Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
     ).build()
+
+    /**
+     * The words for a song (iOS updateNowPlaying with isMusic): its title over its artist, and its
+     * picture. With App Lock on only "Song", as a voice note shows only "Voice message".
+     */
+    fun musicMetadata(context: Context, music: VoicePlayer.MusicNow): MediaMetadata {
+        val locked = AppLock.enabled(context.applicationContext)
+        val b = MediaMetadata.Builder()
+            .setTitle(if (locked) "Song" else music.title)
+            .setArtist(if (locked) null else music.artist.ifEmpty { null })
+            .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
+        if (!locked) music.art?.let { b.setArtworkData(it, MediaMetadata.PICTURE_TYPE_FRONT_COVER) }
+        return b.build()
+    }
 
     /** The words for [cid]'s note: the same title as the floating bar, nothing with App Lock on. */
     fun metadata(context: Context, cid: String, author: String): MediaMetadata {
@@ -137,6 +156,25 @@ object VoiceSession {
             if (playWhenReady) VoicePlayer.remotePlay() else VoicePlayer.remotePause()
         // Posted: stopping releases this very player, not from inside the session's own call.
         override fun stop() { main.launch { VoicePlayer.stop() } }
+
+        // Next and previous for a playlist's song (owner brief 2026-11-22): on only while there is one to go to.
+        private fun extra(): Player.Commands {
+            val m = VoicePlayer.state.value.music ?: return Player.Commands.EMPTY
+            val b = Player.Commands.Builder()
+            if (m.hasNext) b.addAll(Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+            if (m.hasPrevious) b.addAll(Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+            return b.build()
+        }
+        override fun getAvailableCommands(): Player.Commands =
+            super.getAvailableCommands().buildUpon().addAll(extra()).build()
+        override fun isCommandAvailable(command: Int): Boolean =
+            super.isCommandAvailable(command) || extra().contains(command)
+        override fun seekToNext() = VoicePlayer.nextTrack()
+        override fun seekToNextMediaItem() = VoicePlayer.nextTrack()
+        override fun seekToPrevious() = VoicePlayer.previousTrack()
+        override fun seekToPreviousMediaItem() = VoicePlayer.previousTrack()
+        override fun hasNextMediaItem(): Boolean = VoicePlayer.state.value.music?.hasNext == true
+        override fun hasPreviousMediaItem(): Boolean = VoicePlayer.state.value.music?.hasPrevious == true
     }
 }
 

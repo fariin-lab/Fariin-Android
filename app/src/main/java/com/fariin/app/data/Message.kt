@@ -72,6 +72,13 @@ data class Message(
     /** A channel post's number (`postSeq`, written by the server a moment after): its link (ChannelPostLink). */
     val postSeq: Int? = null,
     val album: List<AlbumItem> = emptyList(),
+    /** A playlist's songs (iOS Message.tracks, MusicRules): the `kind: "audio"` items of `album`; null = none. */
+    val tracks: List<MusicRules.Track>? = null,
+    /** A playlist's name (sealed `listName` on its first song); present, even "", means `text` is the caption. */
+    val listName: String? = null,
+    /** A single song renamed by its sender (a one-item audio `album`); null = its own tags. */
+    val songTitle: String? = null,
+    val songArtist: String? = null,
     /**
      * The file's first home as a one-way key ([com.fariin.app.media.MediaOrigin]), written by a
      * forward, and the byte count the forwarder held; null = this message is the original.
@@ -253,6 +260,10 @@ data class Message(
     /** An optimistic copy and its server echo share the clientId, so the row updates in place. */
     val rowId: String get() = clientId ?: id
 
+    /** The songs this file message plays (MusicRules.refs): a playlist's, or its one song; null = a document. */
+    fun musicRefs(): List<MusicRules.Ref>? =
+        if (deleted) null else MusicRules.refs(id, type, tracks, fileName, fileUrl, enc, fileSize, songTitle, songArtist, localPath)
+
     val isSystem: Boolean get() = type == "system"
     val isCall: Boolean get() = type == "call"
 
@@ -333,6 +344,8 @@ data class Message(
                         ?.let { o -> a.copy(origin = o.key, originSize = o.size) } ?: a
                 }
             } ?: emptyList()
+            // A playlist or a renamed song (iOS 2026-11-21): the audio items the photo reader passed over.
+            val music = if (data["deleted"] == true) MusicRules.Parsed() else MusicRules.parse(type, data["album"]) { open(it, author) }
             // iOS: the link card's words are sealed like the caption; a sentinel drops the whole card.
             val linkPreview = (data["linkPreview"] as? Map<*, *>)?.let { lp ->
                 fun openLp(key: String): String {
@@ -440,6 +453,10 @@ data class Message(
                     if (k is String && n > 0) k to n else null
                 }?.toMap() ?: emptyMap(),
                 album = album,
+                tracks = music.tracks,
+                listName = music.listName,
+                songTitle = music.songTitle,
+                songArtist = music.songArtist,
                 expiresAtMillis = Conversation.millis(data["expiresAt"]).takeIf { it > 0 },
                 disappearSeconds = (data["disappearSeconds"] as? Number)?.toInt(),
                 // Polls: Stop Poll, and a channel poll's server tally (iOS Polls.swift listenChannel).
