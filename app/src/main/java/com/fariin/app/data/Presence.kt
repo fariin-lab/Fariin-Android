@@ -15,8 +15,8 @@ import kotlin.math.floor
  * Written to users/{uid}/presence/state {online, lastActive}, NOT the user document (that one is
  * readable by any signed-in account; this one has its own rule, so the server enforces the
  * Last Seen audience). My audience "nobody" (privacy.lastSeen on my user document, which iOS
- * keeps in step with its setting) publishes offline and never moves lastActive, so the timestamp
- * cannot leak "was just online". The same state is written once (iOS lastWritten), and the old
+ * keeps in step with its setting) publishes offline and never stamps lastActive, so the timestamp
+ * cannot leak "was just online"; the switch to it deletes the stored time once. The same state is written once (iOS lastWritten), and the old
  * `online` / `lastActive` fields on the user document are deleted once per account, as iOS does.
  */
 object Presence {
@@ -24,9 +24,23 @@ object Presence {
     fun shares(myPrivacy: Map<String, String>, legacySwitch: Boolean = true): Boolean =
         myPrivacy["lastSeen"] != "nobody" && legacySwitch
 
-    /** The fields of one write (lastActive is a server time; `null` here stands for it). */
-    fun fields(online: Boolean, share: Boolean): Map<String, Any?> =
-        if (share) mapOf("online" to online, "lastActive" to null) else mapOf("online" to false)
+    /** What one write does to lastActive. */
+    enum class Stamp { NOW, DELETE }
+
+    /**
+     * The fields of one write (shared spec with iOS). Sharing: online + lastActive = server time.
+     * Not sharing: online false only, lastActive left alone, except on the switch to not sharing
+     * ([wasSharing] true, or unknown after a restart), which deletes the stored time once.
+     */
+    fun fields(online: Boolean, share: Boolean, wasSharing: Boolean? = null): Map<String, Any> = when {
+        share -> mapOf("online" to online, "lastActive" to Stamp.NOW)
+        wasSharing != false -> mapOf("online" to false, "lastActive" to Stamp.DELETE)
+        else -> mapOf("online" to false)
+    }
+
+    /** Whether the last write key ("uid|online|share") was for [uid] and shared; null = no write yet. */
+    fun sharedBefore(lastKey: String?, uid: String): Boolean? =
+        lastKey?.split("|")?.takeIf { it.size == 3 && it[0] == uid }?.let { it[2] == "true" }
 
     /** The old on-device switch iOS kept ("shareLastSeen"); no Android page sets it yet. */
     private fun legacySwitch(c: Context?): Boolean =
@@ -63,10 +77,12 @@ object Presence {
             val on = online()
             val k = "$uid|${share && on}|$share"
             if (lastWritten == k) return
-            lastWritten = k
-            val data = fields(on, share).mapValues { (_, v) -> v ?: FieldValue.serverTimestamp() }
+            val data = fields(on, share, sharedBefore(lastWritten, uid)).mapValues { (_, v) ->
+                when (v) { Stamp.NOW -> FieldValue.serverTimestamp(); Stamp.DELETE -> FieldValue.delete(); else -> v }
+            }
             // Started inside the turn (Firestore keeps the order writes are started in), waited
             // for outside it: offline the wait never ends and must not hold up the next one.
+            lastWritten = k
             k to user.collection("presence").document("state").set(data, SetOptions.merge())
         }
         try { write.await() } catch (_: Exception) {
