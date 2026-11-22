@@ -1113,17 +1113,40 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
                             // Edit Story: the picture only when something on it changed (the render hands
                             // the same picture back when nothing did); the caption on its own otherwise.
                             val item = all.first()
-                            // Untouched = nothing placed or drawn and never zoomed or moved: then only the caption.
-                            val touched = !item.edits.isEmpty || item.zoomSet != 0f || item.pan != Offset.Zero
-                            val changed = if (touched) out.firstOrNull()?.first else null
+                            val rendered = out.firstOrNull()
+                            val src = item.media.video
+                            var exported: java.io.File? = null
                             try {
                                 savingPct = 0f
+                                val changed = if (src != null) {
+                                    // A clip (iOS saveEdit): exported again only when the cut, the sound, the
+                                    // framing or the art changed (the render hands no export spec otherwise).
+                                    val spec = rendered?.second
+                                    if (rendered == null || spec == null) null else {
+                                        val app = ctx.applicationContext
+                                        val f = java.io.File(app.cacheDir, "story-edit-${System.nanoTime()}.mp4")
+                                        exported = f
+                                        val part = if (com.fariin.app.media.StoryVideoCut.edit(app, src.file, f, spec))
+                                            kotlinx.coroutines.withContext(Dispatchers.IO) { runCatching { StoryMedia.prepareVideo(app, Uri.fromFile(f)) }.getOrNull() }
+                                        else null
+                                        val clip = part?.video
+                                        if (part == null || clip == null) throw com.fariin.app.data.StoryEdit.Failed("Couldn't prepare this video for your story.")
+                                        StoryMedia.Prepared(part.jpeg, part.blurThumb, StoryMedia.Video(clip.file, clip.info.copy(bytes = f.length())),
+                                            part.width, part.height, rendered.first.stickers, rendered.first.repostOf)
+                                    }
+                                } else {
+                                    // Untouched = nothing placed or drawn and never zoomed or moved: then only the caption.
+                                    val touched = !item.edits.isEmpty || item.zoomSet != 0f || item.pan != Offset.Zero
+                                    if (touched) rendered?.first else null
+                                }
                                 com.fariin.app.data.StoryEdit.save(editing, changed, item.caption) { savingPct = it }
                                 savingPct = null; baking = false
                                 onPosted()
                             } catch (e: Exception) {
                                 savingPct = null; baking = false
                                 android.widget.Toast.makeText(ctx, e.message ?: "Couldn't save the story. Try again.", android.widget.Toast.LENGTH_LONG).show()
+                            } finally {
+                                exported?.delete()
                             }
                             return@launch
                         }
