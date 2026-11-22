@@ -309,7 +309,9 @@ fun ChatListScreen(
         }
     }
     // The name search is not kept: a name saved on this phone (ContactNames) can change under it.
+    // The Archive's search finds a name by any part of it (iOS ArchivedChatsView archiveQuery).
     val shown = if (query.isBlank()) filtered
+        else if (showArchive) filtered.filter { it.displayName(me).lowercase().contains(query.trim().lowercase()) }
         else filtered.filter { com.fariin.app.data.ChatSearch.namePrefixMatch(query, it.displayName(me)) }
     // The search reaches past the list (iOS lookUpPeople, owner 2026-11-03 "not global"): who owns
     // the username typed, asked 0.4 s after the last key, answers kept per query for the session.
@@ -322,9 +324,11 @@ fun ChatListScreen(
     // the page shows skeleton rows; "No Results" only once every answer is in and empty (iOS).
     var peoplePending by remember { mutableStateOf(false) }
     var groupsPending by remember { mutableStateOf(false) }
-    LaunchedEffect(q, searching) {
+    // The Archive's search looks only through the archived chats (iOS archiveQuery): no people
+    // or public groups from the server there.
+    LaunchedEffect(q, searching, showArchive) {
         peopleAll = false
-        if (!searching || q.trim('@').isEmpty()) { peopleHits = emptyList(); peoplePending = false; return@LaunchedEffect }
+        if (!searching || showArchive || q.trim('@').isEmpty()) { peopleHits = emptyList(); peoplePending = false; return@LaunchedEffect }
         val key = q.lowercase()
         peopleCache[key]?.let { peopleHits = it; peoplePending = false; return@LaunchedEffect }
         peoplePending = true
@@ -340,8 +344,8 @@ fun ChatListScreen(
     var publicGroupOpen by remember { mutableStateOf<String?>(null) }
     publicGroupOpen?.let { gid -> com.fariin.app.ui.people.PublicGroupSheet(gid, onClose = { publicGroupOpen = null },
         onOpenChat = { cid -> searching = false; query = ""; people.chat(cid) }, onOpenChannel = { channels.open(it) }) }
-    LaunchedEffect(q, searching) {
-        if (!searching || q.trim('@').length < 3) { groupHits = emptyList(); groupsPending = false; return@LaunchedEffect }
+    LaunchedEffect(q, searching, showArchive) {
+        if (!searching || showArchive || q.trim('@').length < 3) { groupHits = emptyList(); groupsPending = false; return@LaunchedEffect }
         groupsPending = true
         var done = false
         try {
