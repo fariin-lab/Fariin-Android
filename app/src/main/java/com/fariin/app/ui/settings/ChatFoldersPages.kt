@@ -85,8 +85,10 @@ internal fun ChatFoldersPage(pop: () -> Unit) {
             SettingsRow("Fariin Plus", icon = androidx.compose.ui.res.painterResource(R.drawable.ic_plus_badge), iconTint = PlusBlue, last = true) { plusPage = true }
         }
         SettingsSection(header = "Folders", footer = if (on && rows.size > 1) "Tap Edit to put the folders in the order you want on your chat list." else null) {
-            if (on) SettingsRow("Create a Folder", titleColor = if (ChatFoldersStore.canAddFolder) c.accent else c.secondary,
-                trailing = Trailing.NONE) { if (ChatFoldersStore.canAddFolder) creating = true }
+            // Locked: the row stays and its tap opens Fariin Plus (iOS ChatFoldersView, starred row).
+            val locked = !on && com.fariin.app.data.PlusStore.state("chatFolders") == com.fariin.app.data.PlusStore.State.LOCKED
+            if (on || locked) SettingsRow("Create a Folder", titleColor = if (locked || ChatFoldersStore.canAddFolder) c.accent else c.secondary,
+                trailing = Trailing.NONE) { if (locked) plusPage = true else if (ChatFoldersStore.canAddFolder) creating = true }
             val custom = rows.filter { !it.isAll }
             rows.forEachIndexed { i, f ->
                 val last = i == rows.lastIndex

@@ -455,14 +455,22 @@ class FirestorePeople(
         batch.commit()
         // The photo goes up behind the open chat.
         if (photo != null) kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
-            try {
-                val jpeg = squareJpeg(photo, 640, 80)
-                if (jpeg != null) {
+            // One retry after 3 s, then said (iOS NewGroupView: never a silent missing photo).
+            val jpeg = squareJpeg(photo, 640, 80) ?: return@launch
+            var saved = false
+            for (round in 0..1) {
+                if (round == 1) kotlinx.coroutines.delay(3_000)
+                saved = try {
                     val sref = FirebaseStorage.getInstance().reference.child("profiles/group_${ref.id}.jpg")
                     sref.putBytes(jpeg, StorageMetadata.Builder().setContentType("image/jpeg").build()).await()
                     ref.update(mapOf("avatarUrl" to sref.downloadUrl.await().toString(), "updatedAt" to FieldValue.serverTimestamp())).await()
-                }
-            } catch (_: Exception) {}
+                    true
+                } catch (_: Exception) { false }
+                if (saved) break
+            }
+            if (!saved) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                com.fariin.app.ui.components.Snack.show("The group photo was not saved. Set it in Edit.")
+            }
         }
         return ref.id
     }
