@@ -143,7 +143,7 @@ fun CreateCallLinkScreen(onClose: () -> Unit) {
             state != null -> LinkBody(state, onUsed = { persist() }, onDeleted = null)
             failed -> Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center) {
-                Text("Couldn't create a call link", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label, textAlign = TextAlign.Center)
+                Text("Couldn't create call link", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(6.dp))
                 Text(NET_ERROR, fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(16.dp))
@@ -293,17 +293,23 @@ private fun LinkBody(s: LinkState, onUsed: () -> Unit, onDeleted: (() -> Unit)?,
         scope.launch {
             try { s.name = CallLinks.rename(s.roomId, key, name); editing = false }
             catch (e: com.fariin.app.data.Offline) { editing = false; error = e.message }
-            catch (_: Exception) { editing = false; error = "Couldn't save the name" }
+            catch (_: Exception) { editing = false; error = "Couldn't save name" }
         }
     }
     if (askDelete && saved != null) GlassAlert(
         onDismissRequest = { askDelete = false },
         title = { Text("Delete this call link?") },
-        text = { Text(if (saved.admin) "No one will be able to join with it any more." else "It will be removed from your calls.") },
+        text = { Text(when {
+            !saved.admin -> "It will be removed from your calls."
+            // iOS M-023: deleting the link of the call I am in also ends that call on the server.
+            com.fariin.app.call.GroupCall.ui.value.linkRoom == saved.roomId ->
+                "People who have it will no longer be able to join, and the call on it ends for everyone in it."
+            else -> "People who have it will no longer be able to join."
+        }) },
         confirmButton = { TextButton({
             askDelete = false
             scope.launch {
-                try { CallLinks.delete(saved); onDeleted?.invoke() } catch (_: Exception) { error = "Couldn't delete the call link" }
+                try { CallLinks.delete(saved); onDeleted?.invoke() } catch (_: Exception) { error = "Couldn't delete call link" }
             }
         }) { Text("Delete", color = c.red) } },
         dismissButton = { TextButton({ askDelete = false }) { Text("Cancel", color = c.accent) } },
