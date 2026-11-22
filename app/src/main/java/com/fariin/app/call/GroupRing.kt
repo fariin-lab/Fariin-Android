@@ -265,6 +265,8 @@ object GroupRing {
         } else db.collection("groupCalls").document(i.cid).addSnapshotListener { s, _ ->
             if (_invite.value?.cid != i.cid || s == null) return@addSnapshotListener
             if (!GroupRingRules.rings(s.data, me, null, 0)) stop()
+            // An ad-hoc call: taken off its members, the ring stops (iOS GroupCallRinging).
+            else if (i.adhoc && (s.get("members") as? List<*>)?.contains(me) == false) stop()
         }
         timer?.cancel()
         timer = scope.launch {
