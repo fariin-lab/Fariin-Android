@@ -14,6 +14,17 @@ import kotlin.math.sqrt
  * VoiceMessageView.swift (bar drawing), MessageRowLayout.swift (photoBox), storage.rules.
  */
 object MediaRules {
+    /**
+     * iOS ChatService.alreadyUploaded: the stored object is byte for byte ours when its MD5 (Storage's
+     * `md5Hash`, base64) equals our bytes' MD5. Storage rules are create-only, so a retry after a put
+     * that landed but lost its reply is refused as if a stranger owned the path; this tells them apart.
+     */
+    fun sameUpload(storedMd5: String?, bytes: ByteArray): Boolean {
+        if (storedMd5.isNullOrEmpty()) return false
+        val ours = java.util.Base64.getEncoder().encodeToString(java.security.MessageDigest.getInstance("MD5").digest(bytes))
+        return storedMd5 == ours
+    }
+
     // ---- Limits.swift and storage.rules `chat/{cid}/{file}`: size < 102 MB, create only
     // (owner 2026-11-13: chat videos up to 100 MB, plus 2 MB for the encryption bytes).
     const val STORAGE_CHAT_LIMIT = 102L * 1024 * 1024

@@ -137,21 +137,40 @@ class MediaSender(
         var attempt = 0
         while (true) {
             try { return upload(cipher, path, onProgress) } catch (e: Exception) {
-                // A refusal (403, no permission) is not going to change on a retry: stop at once.
-                if (e is kotlinx.coroutines.CancellationException || refused(e) || ++attempt >= 4) throw e
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                // A refusal (403, no permission) is not going to change on a retry: stop at once. But
+                // first, as iOS: our own earlier try may have landed and lost its reply, and the
+                // create-only rule then refuses the retry. Same bytes there = that was our upload.
+                if (refused(e)) { alreadyUploaded(path, cipher)?.let { onProgress?.invoke(1f); return it }; throw e }
+                if (++attempt >= 4) throw e
                 delay(minOf(30_000L, 1_000L shl attempt))
             }
         }
     }
 
-    /** Storage or Firestore said no for good: a 403 or a permission refusal. */
+    /**
+     * Storage or Firestore said no for good (iOS isRetryableUpload false): not authorized or signed
+     * in, over quota, no such object, cancelled, or a 401 / 403.
+     */
     private fun refused(e: Exception): Boolean = when (e) {
-        is com.google.firebase.storage.StorageException ->
-            e.errorCode == com.google.firebase.storage.StorageException.ERROR_NOT_AUTHORIZED || e.httpResultCode == 403
+        is com.google.firebase.storage.StorageException -> e.errorCode in setOf(
+            com.google.firebase.storage.StorageException.ERROR_NOT_AUTHORIZED,
+            com.google.firebase.storage.StorageException.ERROR_NOT_AUTHENTICATED,
+            com.google.firebase.storage.StorageException.ERROR_QUOTA_EXCEEDED,
+            com.google.firebase.storage.StorageException.ERROR_OBJECT_NOT_FOUND,
+            com.google.firebase.storage.StorageException.ERROR_CANCELED,
+        ) || e.httpResultCode == 401 || e.httpResultCode == 403
         is com.google.firebase.firestore.FirebaseFirestoreException ->
             e.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED
         else -> false
     }
+
+    /** iOS alreadyUploaded: the object at [path] is byte for byte [bytes] (same MD5): its link, else null. */
+    private suspend fun alreadyUploaded(path: String, bytes: ByteArray): String? = runCatching {
+        val ref = FirebaseStorage.getInstance().reference.child(path)
+        val meta = ref.metadata.await()
+        if (!MediaRules.sameUpload(meta.md5Hash, bytes)) null else ref.downloadUrl.await().toString()
+    }.getOrNull()
 
     private fun progress(clientId: String?): ((Float) -> Unit)? = clientId?.let { id -> { f -> UploadProgress.set(id, f) } }
 
