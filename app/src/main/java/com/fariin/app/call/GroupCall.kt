@@ -450,12 +450,12 @@ object GroupCall {
         appContext = app
         scope.launch {
             val doc = try { db.collection("groupCalls").document(roomId).get().await() } catch (_: Exception) {
-                if (_ui.value.cid == roomId) fail("Couldn't join")
+                failAdhocJoin(roomId, com.fariin.app.data.AdhocJoinStep.READ_FAILED)
                 return@launch
             }
             if (_ui.value.cid != roomId) return@launch
             val d = doc.data
-            if (d == null || d["active"] != true) { fail("Call ended"); return@launch }
+            if (d == null || d["active"] != true) { failAdhocJoin(roomId, com.fariin.app.data.AdhocJoinStep.ENDED); return@launch }
             val names = (d["names"] as? Map<*, *>).orEmpty()
             val photos = (d["photos"] as? Map<*, *>).orEmpty()
             adhocMembers = (d["members"] as? List<*>).orEmpty().filterIsInstance<String>().distinct().map {
@@ -465,13 +465,26 @@ object GroupCall {
             val pass = try {
                 GroupCallWire.parsePass(functions.getHttpsCallable("groupCallToken").call(GroupCallWire.adhocTokenRequest(roomId)).await().data)
             } catch (e: Exception) {
-                if (_ui.value.cid == roomId) fail(GroupCallWire.joinNotice(e.message))
+                failAdhocJoin(roomId, com.fariin.app.data.AdhocJoinStep.PASS_REFUSED, e.message)
                 return@launch
             }
             if (_ui.value.cid != roomId) return@launch
-            if (pass == null) { fail("Call failed"); return@launch }
+            if (pass == null) { failAdhocJoin(roomId, com.fariin.app.data.AdhocJoinStep.NO_PASS); return@launch }
             connectRoom(app, roomId, title, video, requireLive = true, pass = pass)
         }
+    }
+
+    /**
+     * A join of someone else's call that stopped (AdhocInviteRules.joinFailure): only while this
+     * room is still the one being joined. fail() runs leave(): the call state is reset, a partly
+     * opened room is disconnected and released, adhocJoining is cleared, and `joined` was never
+     * written (that comes only after a good connect). A still-open invitation for it is closed too.
+     */
+    private fun failAdhocJoin(roomId: String, step: com.fariin.app.data.AdhocJoinStep, serverMessage: String? = null) {
+        if (_ui.value.cid != roomId) return
+        val end = com.fariin.app.data.AdhocInviteRules.joinFailure(step, serverMessage)
+        if (GroupRing.invite.value?.cid == roomId) GroupRing.stop()
+        if (end.reset) fail(end.notice)
     }
 
     /** The starter switches the multi-person call's doc off (the rules let only the starter). */
@@ -692,10 +705,13 @@ object GroupCall {
                 // A multi-person call I started: the calling sound goes on until someone comes.
                 if (GroupCallWire.isAdhoc(cid)) {
                     if (adhocJoining) {
-                        // Joined someone else's call: me on `joined` (iOS markJoined) and the joined tone.
-                        com.fariin.app.Fb.auth.currentUser?.uid?.let { db.collection("groupCalls").document(cid).update("joined", FieldValue.arrayUnion(it)) }
+                        // Joined someone else's call: the joined tone, then me on `joined` (iOS
+                        // markJoined) as the very last step, so a failure above never leaves it.
                         refresh()
                         CallTonePlayer.play(CallTone.GROUP_JOINED)
+                        if (room === r && _ui.value.cid == cid) com.fariin.app.Fb.auth.currentUser?.uid?.let {
+                            db.collection("groupCalls").document(cid).update("joined", FieldValue.arrayUnion(it))
+                        }
                     } else { adhocInRoom(cid, r); refresh() }
                     return@run
                 }
@@ -708,7 +724,8 @@ object GroupCall {
                 if (starting) start(cid, title, video, r) else noteJoined(cid)
             } catch (e: Exception) {
                 Log.w(TAG, "join failed", e)
-                fail("Call failed")
+                if (adhocJoining && GroupCallWire.isAdhoc(cid) && _ui.value.cid == cid) failAdhocJoin(cid, com.fariin.app.data.AdhocJoinStep.CONNECT_FAILED)
+                else fail("Call failed")
             }
         }
     }

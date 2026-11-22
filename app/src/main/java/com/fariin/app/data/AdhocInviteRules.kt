@@ -17,6 +17,27 @@ data class AdhocMember(val uid: String, val name: String, val photo: String?)
 /** The invitation read from the call's doc (iOS makeInvite): the others, the starter first. */
 data class AdhocInviteInfo(val roomId: String, val title: String, val video: Boolean, val startedBy: String, val others: List<AdhocMember>)
 
+/** Where a join of someone else's multi-person call stopped (GroupCall.joinAdhoc). */
+enum class AdhocJoinStep {
+    /** The call's doc could not be read (offline): not the same as "the call ended". */
+    READ_FAILED,
+    /** The doc says the call is off, or it is gone. */
+    ENDED,
+    /** groupCallToken refused (full, removed, not on the list...). */
+    PASS_REFUSED,
+    /** groupCallToken answered without a pass. */
+    NO_PASS,
+    /** The room itself would not connect. */
+    CONNECT_FAILED,
+}
+
+/**
+ * How a failed join ends: [notice] is the alert's words; [reset] means the call state is cleared,
+ * a partly opened room is disconnected and the invitation is closed (always, so no half-joined
+ * screen is left). Me on `joined` is written only after a good connect, so a failure never has it.
+ */
+data class AdhocJoinEnd(val notice: String, val reset: Boolean)
+
 /** How an invite push that reached the app is shown. */
 enum class AdhocShow {
     /** Not at all: signed out, pushes off, or I am already in that call. */
@@ -99,6 +120,20 @@ object AdhocInviteRules {
             else -> { val rest = n.size - 2; "${n[0]}, ${n[1]} & $rest ${if (rest == 1) "other" else "others"}" }
         }
     }
+
+    /**
+     * iOS joinAdhoc / connect: "Couldn't join" for a failed read, "Call ended" for a call that is
+     * off, the server's refusal words for a refused pass (joinNotice), else "Call failed".
+     */
+    fun joinFailure(step: AdhocJoinStep, serverMessage: String? = null): AdhocJoinEnd = AdhocJoinEnd(
+        notice = when (step) {
+            AdhocJoinStep.READ_FAILED -> "Couldn't join"
+            AdhocJoinStep.ENDED -> "Call ended"
+            AdhocJoinStep.PASS_REFUSED -> com.fariin.app.call.GroupCallWire.joinNotice(serverMessage)
+            AdhocJoinStep.NO_PASS, AdhocJoinStep.CONNECT_FAILED -> "Call failed"
+        },
+        reset = true,
+    )
 
     /** The push says voice or video only in its words ("... to a video call"). */
     fun video(body: String?): Boolean = body?.contains("video call") == true

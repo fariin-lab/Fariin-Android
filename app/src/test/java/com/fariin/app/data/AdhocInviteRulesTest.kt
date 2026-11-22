@@ -78,6 +78,25 @@ class AdhocInviteRulesTest {
         assertNotNull(AdhocInviteRules.invite("adhoc_abc", doc + ("joined" to listOf("me")), "me") { false })
     }
 
+    @Test fun everyFailedJoinHasItsNoticeAndResets() {
+        val cases = listOf(
+            AdhocInviteRules.joinFailure(AdhocJoinStep.READ_FAILED) to "Couldn't join",
+            AdhocInviteRules.joinFailure(AdhocJoinStep.ENDED) to "Call ended",
+            AdhocInviteRules.joinFailure(AdhocJoinStep.NO_PASS) to "Call failed",
+            AdhocInviteRules.joinFailure(AdhocJoinStep.CONNECT_FAILED) to "Call failed",
+            AdhocInviteRules.joinFailure(AdhocJoinStep.PASS_REFUSED, "removed") to "You can't rejoin this call",
+            AdhocInviteRules.joinFailure(AdhocJoinStep.PASS_REFUSED, "Not a member") to "You can't join this call.",
+            AdhocInviteRules.joinFailure(AdhocJoinStep.PASS_REFUSED, "full") to "Call is full\nThis call has reached its limit. Try again later.",
+            AdhocInviteRules.joinFailure(AdhocJoinStep.PASS_REFUSED, null) to "Call failed",
+            AdhocInviteRules.joinFailure(AdhocJoinStep.PASS_REFUSED, "network") to "Call failed",
+        )
+        for ((end, words) in cases) {
+            assertEquals(words, end.notice)
+            assertTrue(end.reset)
+        }
+        assertEquals(5, AdhocJoinStep.values().size)
+    }
+
     @Test fun titlesAndWords() {
         assertEquals("Group call", AdhocInviteRules.title(emptyList()))
         assertEquals("A", AdhocInviteRules.title(listOf("A", " ")))
