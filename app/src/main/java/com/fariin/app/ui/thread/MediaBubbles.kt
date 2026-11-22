@@ -448,7 +448,8 @@ internal fun VoiceBody(m: Message, cid: String, isMe: Boolean, width: Dp, meta: 
                             val f = media.file(url!!, m.enc)
                             loading = false
                             // Heard, not just seen: the chat list stops drawing its mic in the accent (iOS PlayedVoice).
-                            if (f != null) com.fariin.app.data.PlayedVoice.markPlayed(ctx, cid, m.createdAtMillis)
+                            // Only someone else's note (iOS: !isMine); my own must not move my played mark.
+                            if (f != null && !isMe) com.fariin.app.data.PlayedVoice.markPlayed(ctx, cid, m.createdAtMillis)
                             if (f != null) VoicePlayer.toggle(ctx, m.rowId, cid, f, m.authorId)
                         }
                     },

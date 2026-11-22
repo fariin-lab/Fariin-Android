@@ -110,7 +110,10 @@ object VoicePlayer {
         val url = n.localPath ?: n.audioUrl ?: run { VoiceEar.stop(); return }
         val f = VoiceRun.media?.file(url, n.enc) ?: run { if (_state.value.id == null) VoiceEar.stop(); return }
         if (_state.value.id != null) return   // something else started meanwhile
-        com.fariin.app.data.PlayedVoice.markPlayed(context, cid, n.createdAtMillis)
+        // Only someone else's note counts as heard (iOS start: !isMine).
+        if (n.authorId != com.fariin.app.Fb.auth.currentUser?.uid) {
+            com.fariin.app.data.PlayedVoice.markPlayed(context, cid, n.createdAtMillis)
+        }
         toggle(context, n.rowId, cid, f, n.authorId)
     }
 
