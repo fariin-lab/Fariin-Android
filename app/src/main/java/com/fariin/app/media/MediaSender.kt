@@ -248,7 +248,7 @@ class MediaSender(
         val batch = db.batch()
         setMsg(batch, msgRef, members, MediaMessages.file(me, f.name, f.bytes.size, meta, clientTs, clientId, thumbUrl, thumbMeta,
             forwarded, FieldValue.serverTimestamp()), reply)
-        batch.update(convRef, MediaMessages.convUpdate(me, MediaRules.FILE_PREVIEW, others(members),
+        batch.update(convRef, MediaMessages.convUpdate(me, MediaRules.filePreview(f.name), others(members),
             FieldValue.serverTimestamp(), FieldValue.increment(1), forwarded = forwarded))
         MediaSend.noteAnnounced(clientId, msgRef.id)
         batch.commit().await()

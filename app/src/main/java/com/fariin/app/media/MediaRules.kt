@@ -144,6 +144,16 @@ object MediaRules {
     }
 
     const val FILE_PREVIEW = "📄 File"
+    const val SONG_PREVIEW = "🎵 Song"
+
+    /** iOS MusicFiles.extensions: a file with one of these names is a song. */
+    private val SONG_EXTENSIONS = setOf("mp3", "m4a", "aac", "wav", "flac", "ogg", "oga", "opus", "aif", "aiff", "caf", "m4b")
+
+    fun isSong(name: String?): Boolean =
+        name?.substringAfterLast('.', "")?.lowercase()?.let { it.isNotEmpty() && it in SONG_EXTENSIONS } == true
+
+    /** What a document send writes to the chat list (iOS sendFile): "🎵 Song" for a song, else "📄 File". */
+    fun filePreview(name: String?): String = if (isSong(name)) SONG_PREVIEW else FILE_PREVIEW
     const val VIEW_ONCE_PREVIEW = "View-once photo"
     fun videoPreview(seconds: Double) = "🎥 Video · " + durationLabel(seconds)
 
