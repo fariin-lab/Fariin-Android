@@ -221,12 +221,14 @@ object MediaRules {
 
     /**
      * One meter reading as a 0...1 level. iOS meters average power in dB; Android's recorder
-     * gives the peak amplitude since the last call (0...32767). Both map a -50 dB floor to 0.
+     * gives the peak amplitude since the last call (0...32767). A -50 dB floor maps to 0.
+     * Then the 0.85 power iOS stores (SampledWaveform.storedBars, perceptualLevel): the bubble's
+     * [display] undoes it, so a bar stored without it drew shorter on both phones.
      */
     fun level(amplitude: Int): Float {
         if (amplitude <= 0) return 0f
         val db = 20 * kotlin.math.log10(amplitude / 32767.0)
-        return ((db + 50) / 50).toFloat().coerceIn(0f, 1f)
+        return ((db + 50) / 50).coerceIn(0.0, 1.0).pow(0.85).toFloat()
     }
 
     /** VoiceMessageView: bars merged (loudest wins) so a slot is at least 4 px wide. */

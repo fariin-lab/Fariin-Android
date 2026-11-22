@@ -164,6 +164,8 @@ class MediaTest {
         assertEquals(emptyList<Int>(), MediaRules.bars(emptyList()))
         assertEquals(0f, MediaRules.level(0))
         assertEquals(1f, MediaRules.level(32767))
+        // -25 dB is half way up the -50 dB window, stored with the iOS 0.85 power: 0.5^0.85.
+        assertEquals(0.5548f, MediaRules.level(1842), 0.002f)
         assertEquals(0f, MediaRules.display(0))
         assertTrue(MediaRules.display(100) <= 1f && MediaRules.display(100) > 0.82f)
         // 40 bars in an 80 px wave with 4 px slots: pairs merged, the louder one kept.
