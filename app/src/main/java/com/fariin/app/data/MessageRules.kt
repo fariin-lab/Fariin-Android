@@ -234,7 +234,9 @@ object MessageRules {
             senders.isNotEmpty() -> {
                 val kinds = senders.map { it.second }.distinct()
                 val verb = if (kinds.size == 1) sendingWords(kinds[0]) else "sending files"
-                if (isGroup) group(senders.map { it.first }, verb) else "$verb…"
+                if (!isGroup) "$verb…"
+                else if (senders.size == 1) group(senders.map { it.first }, verb)
+                else senders.joinToString(", ") { (uid, _) -> (name(uid) ?: "Someone").substringBefore(' ') } + " are $verb…"
             }
             else -> null
         }

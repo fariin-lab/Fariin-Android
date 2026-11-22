@@ -19,6 +19,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -87,6 +90,8 @@ internal fun MessageInfoSheet(m: Message, ui: ThreadUi, is24h: Boolean, onDismis
 @Composable
 private fun MemberSection(title: String, icon: ImageVector, uids: List<String>, ui: ThreadUi, name: (String) -> String) {
     val c = Fariin.colors
+    val vCtx = androidx.compose.ui.platform.LocalContext.current
+    val vKinds by com.fariin.app.data.VerifiedPeople.kinds.collectAsState()
     Row(Modifier.padding(start = 32.dp, end = 32.dp, top = 18.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, contentDescription = null, tint = c.secondary, modifier = Modifier.size(15.dp))
         Spacer(Modifier.width(6.dp))
@@ -99,7 +104,13 @@ private fun MemberSection(title: String, icon: ImageVector, uids: List<String>, 
                 Avatar(ui.photos[uid], 40.dp)
                 Spacer(Modifier.width(12.dp))
                 Text(name(uid), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = c.label,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                LaunchedEffect(uid) { com.fariin.app.data.VerifiedPeople.warm(vCtx.applicationContext, uid) }
+                val kind = com.fariin.app.data.VerifiedPeople.badge(vKinds, uid)
+                if (kind != null) com.fariin.app.ui.components.VerifiedSeal(
+                    if (com.fariin.app.data.VerifiedPeople.isGold(kind)) androidx.compose.ui.graphics.Color(0xFFE8B21E) else c.blue,
+                    Modifier.padding(start = 4.dp).size(13.dp), "Verified")
+                Spacer(Modifier.weight(1f))
             }
             if (i < uids.lastIndex) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 68.dp))
         }

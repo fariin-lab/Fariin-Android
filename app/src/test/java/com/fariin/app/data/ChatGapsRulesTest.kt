@@ -69,6 +69,7 @@ class ChatGapsRulesTest {
         assertEquals("2 people recording…", MessageRules.liveLine(rec, "me", true, true, true, n))
         assertEquals("2 people typing…", MessageRules.liveLine(mapOf("a" to true, "b" to "text-2"), "me", true, true, true, n))
         assertEquals("Ali is typing…", MessageRules.liveLine(mapOf("a" to "text-1", "b" to "audio-1"), "me", true, true, true, n))
+        assertEquals("Ali, Ali are sending a photo…", MessageRules.liveLine(mapOf("a" to "photo-1", "b" to "photo-2"), "me", true, true, true, n))
         assertNull(MessageRules.liveLine(typing, "me", false, false, true, n))
         assertNull(MessageRules.liveLine(typing, "me", false, true, false, n))
         assertNull(MessageRules.liveLine(mapOf("me" to "audio-1", "a" to false), "me", false, true, true, n))

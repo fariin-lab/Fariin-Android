@@ -184,7 +184,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     val ui = ThreadUi(
         otherPlusBubble = s.otherPlusBubble, myPlusBubble = s.myPlusBubble,
         title = channel?.info?.title?.ifEmpty { null } ?: guest?.preview?.title ?: conv?.displayName(me) ?: "",
-        subtitle = channel?.let { com.fariin.app.channel.ChannelRules.followersLine(it.info.shownCount) }
+        subtitle = if (conv?.fariinLocked() == true) "" else channel?.let { com.fariin.app.channel.ChannelRules.followersLine(it.info.shownCount) }
             ?: guest?.let { com.fariin.app.data.GroupRules.memberCount(it.preview.memberCount) }
             ?: typingLine ?: if (conv?.isGroup == true) com.fariin.app.data.GroupRules.memberCount(conv.users.size) else presenceLine ?: "",
         photoUrl = channel?.info?.avatarUrl ?: guest?.preview?.photoUrl ?: conv?.displayPhoto(me),
