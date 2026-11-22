@@ -640,7 +640,7 @@ private fun ThreadContent(
     reactorsFor?.let { rid ->
         val m = ui.messages.firstOrNull { it.rowId == rid }
         if (m == null || m.reactions.isEmpty()) LaunchedEffect(rid) { reactorsFor = null }   // the last one came off
-        else ReactorsSheet(m, ui, onRemoveMine = { if (m.reactions[ui.me] != null) actions.onReact(m, null) }) { reactorsFor = null }
+        else ReactorsSheet(m, ui, onRemoveMine = { if (m.reactions[ui.me] != null) { ReactNow.set(m, null); actions.onReact(m, null) } }) { reactorsFor = null }
     }
     // The divider is placed once, from the unread count at open (iOS anchors it the same way).
     // Counted only on the server's first answer: the phone's saved copy can lack the very messages
