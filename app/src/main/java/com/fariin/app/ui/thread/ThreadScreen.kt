@@ -1647,22 +1647,32 @@ private fun ThreadContent(
                 if (slowLeft > 0) LaunchedEffect(slowLeft > 0) {
                     while (true) { kotlinx.coroutines.delay(1000); slowTick = System.currentTimeMillis() }
                 }
-                val gatedSend: (String, List<String>, String?) -> Unit = { t, ids, fmt ->
+                // Words put back in the field (iOS keeps `input` when a send is held back): a key and the text.
+                var composerRefill by remember { mutableStateOf<Pair<Long, String>?>(null) }
+                val gatedSend: (String, List<String>, String?) -> Unit = { whole, ids, wholeFmt ->
+                    // Slow mode lets one bubble through per wait (iOS send(), 2026-10-29): a text longer
+                    // than one bubble sends its first 2,500 characters and the rest goes back in the field.
+                    val parts = if (editing == null && quoting == null && ui.isGroup && doc.isNotEmpty() &&
+                        com.fariin.app.data.GroupAdmins.slows(doc, ui.me)) com.fariin.app.data.MessageLength.splitForBubbles(whole) else emptyList()
+                    val rest = if (parts.size > 1) parts.drop(1).joinToString("\n\n") else null
+                    val t = if (rest != null) parts[0] else whole
+                    // A group's text carries no format runs (they are a channel post's), so the first part goes plain.
+                    val fmt = if (rest != null) null else wholeFmt
                     // Links typed or added through Format > Link both count (iOS).
                     val anyLink = com.fariin.app.data.GroupAdmins.hasLink(t) ||
                         (fmt != null && com.fariin.app.data.TextFormat.parseLinks(fmt, t.length).isNotEmpty())
                     val links = if (anyLink) held(com.fariin.app.data.GroupAdmins.SendKind.LINKS) else null
-                    // Slow mode lets one message through per wait, so a text that splits into several
-                    // bubbles (ThreadRepository.sendText) could not all go: said before, not refused after.
-                    val long = if (editing == null && quoting == null && ui.isGroup && doc.isNotEmpty() &&
-                        com.fariin.app.data.GroupAdmins.slows(doc, ui.me) && com.fariin.app.data.MessageLength.splitForBubbles(t).size > 1)
-                        "Slow mode is on. Messages here can be up to ${com.fariin.app.data.MessageLength.BUBBLE_CHARS} characters." else null
-                    // Text: only the slow-mode wait, never the media holds in slow() (the first message to
-                    // someone new is text, so the text-only hold must not refuse text itself).
-                    val wait = if (!ui.isGroup || doc.isEmpty()) null else com.fariin.app.data.GroupAdmins.slowWait(doc, ui.me,
+                    // Text is what a first message to someone new may be, so the knock hold is not for it.
+                    val slowText = if (!ui.isGroup || doc.isEmpty()) null else com.fariin.app.data.GroupAdmins.slowWait(doc, ui.me,
                         ui.messages.lastOrNull { it.authorId == ui.me && !it.isSystem }?.createdAtMillis, System.currentTimeMillis().toDouble())
-                    val stop = wait ?: links ?: long
-                    if (stop != null && editing == null) actions.onNotice(stop) else send(t, ids, fmt)
+                    val stop = slowText ?: links
+                    if (stop != null && editing == null) {
+                        actions.onNotice(stop)
+                        composerRefill = System.nanoTime() to whole
+                    } else {
+                        send(t, ids, fmt)
+                        if (rest != null) composerRefill = System.nanoTime() to rest
+                    }
                 }
                 if (attachOpen) AttachSheet(allowViewOnce = ui.channel == null, onDismiss = { attachOpen = false; attachCamera = false; AttachKeyboard.release() },
                     cameraFirst = attachCamera,
@@ -1735,6 +1745,7 @@ private fun ThreadContent(
                         val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.PHOTOS)
                         if (stop != null) actions.onNotice(stop) else { attachCamera = true; attachOpen = true }
                     },
+                    refill = composerRefill, onRefilled = steady0 { composerRefill = null },
                     initialDraft = actions.draft, onDraft = steady1 { d: String -> actions.onDraft(d); linkText = d },
                     // A channel's admin writes a "Broadcast", with the post-without-sound bell (iOS).
                     placeholder = if (ch != null) "Broadcast"
@@ -2837,6 +2848,8 @@ private fun Composer(
     boldable: Boolean = false,
     onTyping: (Boolean) -> Unit = {},
     initialDraft: String = "", onDraft: (String) -> Unit = {},
+    /** Words to put back in the field (a key, then the text): what a held-back send did not take. */
+    refill: Pair<Long, String>? = null, onRefilled: () -> Unit = {},
     me: String = "", onSticker: (com.fariin.app.data.StickerRef) -> Unit = {},
     onGif: (com.fariin.app.data.StickerGifRules.Gif) -> Unit = {},
     mentions: MentionSource? = null,
@@ -2893,6 +2906,8 @@ private fun Composer(
     // front of the old words.
     var boxValue by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(draft, androidx.compose.ui.text.TextRange(draft.length))) }
     if (boxValue.text != draft) boxValue = androidx.compose.ui.text.input.TextFieldValue(draft, androidx.compose.ui.text.TextRange(draft.length))
+    // Taken once: a composer drawn again later (after Select or Search) must not get old words back.
+    LaunchedEffect(refill?.first) { refill?.let { if (prefill == null) draft = it.second; onRefilled() } }
     // Every change outside an edit is the chat's draft (sent = cleared below).
     LaunchedEffect(draft) { if (prefill == null && !wasEditing) { kept = draft; onDraft(draft) } }
 
