@@ -74,7 +74,8 @@ object CallHistory {
 
     /**
      * iOS CallsView.shownRuns: same person, same direction, same missed state, same voice or
-     * video, same group, same calendar day, adjacent in the list.
+     * video, same group, same calendar day, adjacent in the list. Two multi-person calls never
+     * merge, even with the same people: each room is its own row (iOS roomId check).
      */
     fun runs(calls: List<CallEntry>, me: String, nowMs: Long = System.currentTimeMillis()): List<CallRun> {
         val out = mutableListOf<MutableList<CallEntry>>()
@@ -82,7 +83,7 @@ object CallHistory {
             val last = out.lastOrNull()?.first()
             if (last != null && last.otherUid == e.otherUid && last.mine(me) == e.mine(me) &&
                 last.missed(nowMs) == e.missed(nowMs) && last.video == e.video &&
-                last.groupCid == e.groupCid && last.adhoc?.members?.toSet() == e.adhoc?.members?.toSet() &&
+                last.groupCid == e.groupCid && last.adhoc?.roomId == e.adhoc?.roomId &&
                 sameDay(last.dateMs, e.dateMs)
             ) {
                 out.last().add(e)
