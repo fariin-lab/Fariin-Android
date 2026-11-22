@@ -71,6 +71,12 @@ object GetStartedStore {
         p(c).edit().putBoolean("$uid.finished", true).apply(); version.intValue++
     }
     fun reopen(c: Context, uid: String) { p(c).edit().putBoolean("$uid.finished", false).apply(); version.intValue++ }
+    // iOS tipDismissed: the "Start your first chat" tip goes for good once New Chat has opened.
+    fun isTipDismissed(c: Context, uid: String) = uid.isEmpty() || p(c).getBoolean("$uid.tipDismissed", false)
+    fun dismissTip(c: Context, uid: String) {
+        if (isTipDismissed(c, uid)) return
+        p(c).edit().putBoolean("$uid.tipDismissed", true).apply(); version.intValue++
+    }
     fun remove(c: Context, uid: String, card: GetStartedCard) {
         val set = p(c).getStringSet("$uid.removed", emptySet()).orEmpty() + card.name
         p(c).edit().putStringSet("$uid.removed", set).apply(); version.intValue++
@@ -121,6 +127,28 @@ object GetStartedStore {
     }
 
     const val CHAT_LIMIT = 5
+}
+
+/**
+ * iOS FirstChatCue: a blue pill beside New Chat with a small tail pointing at it. A tap opens New Chat.
+ */
+@Composable
+fun FirstChatTip(onTap: () -> Unit) {
+    val c = Fariin.colors
+    val tail = 8.dp
+    val t = with(androidx.compose.ui.platform.LocalDensity.current) { tail.toPx() }
+    val shape = remember(t) { androidx.compose.foundation.shape.GenericShape { size, _ ->
+        val h = size.height
+        addRoundRect(androidx.compose.ui.geometry.RoundRect(0f, 0f, size.width - t, h,
+            androidx.compose.ui.geometry.CornerRadius(h / 2, h / 2)))
+        moveTo(size.width - t - 1f, h / 2 - t)
+        lineTo(size.width, h / 2)
+        lineTo(size.width - t - 1f, h / 2 + t)
+        close()
+    } }
+    Text("Start your first chat", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.onAccent, maxLines = 1,
+        modifier = Modifier.floating(shape, fill = c.accent).clickable(onClickLabel = "New Chat", onClick = onTap)
+            .padding(start = 16.dp, end = 16.dp + tail, top = 9.dp, bottom = 9.dp))
 }
 
 /**

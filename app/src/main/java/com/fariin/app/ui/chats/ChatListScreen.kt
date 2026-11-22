@@ -471,6 +471,14 @@ fun ChatListScreen(
     val moreAnchor = remember { com.fariin.app.ui.components.GlassMenuAnchor() }
     var moreOpen by remember { mutableStateOf(false) }
     var moreItems by remember { mutableStateOf<List<com.fariin.app.ui.components.GlassMenuItem>>(emptyList()) }
+    // iOS firstChatCueLayer: a new account's empty list, Get Started not closed, the tip not used yet.
+    // The store version is read so a dismiss redraws this.
+    val tipShown = GetStartedStore.version.intValue >= 0 && !state.loading && state.error == null && !searching && !selecting &&
+        !showArchive && filter == FILTER_ALL && folder == null && GetStartedStore.accountIsNew() &&
+        !GetStartedStore.isFinished(appCtx, me) && !GetStartedStore.isTipDismissed(appCtx, me) &&
+        shown.isEmpty() && !officialShown && newPeople.isEmpty()
+    // Opening New Chat (the pen or the tip) ends the tip, as on iOS.
+    val openNewChat = { GetStartedStore.dismissTip(appCtx, me); people.newChat() }
     Box(Modifier.fillMaxSize()) {
     Scaffold(
         modifier = Modifier.nestedScroll((if (selecting || searching) pinBar else scroll).nestedScrollConnection).nestedScroll(fabScroll),
@@ -663,13 +671,19 @@ fun ChatListScreen(
         floatingActionButton = { androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.components.LocalLiquidBackdrop provides glassLayer) {
             AnimatedVisibility(fabShown && !selecting && !searching && !showArchive,
                 enter = com.fariin.app.ui.components.Motion.fabIn(), exit = com.fariin.app.ui.components.Motion.fabOut()) {
-                Column(Modifier.padding(bottom = fabLift), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(Modifier.padding(bottom = fabLift), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     // Two floating circles (iOS glass buttons): the camera on the card fill, New Chat in blue.
-                    IconButton(onClick = onNewStory, modifier = Modifier.size(48.dp).floating()) {
+                    // The camera keeps its place centred over New Chat (4 dp in from the end).
+                    IconButton(onClick = onNewStory, modifier = Modifier.padding(end = 4.dp).size(48.dp).floating()) {
                         Icon(fi(R.drawable.ic_story_camera), contentDescription = "New Story", tint = c.label)
                     }
-                    IconButton(onClick = people.newChat, modifier = Modifier.size(56.dp).floating(fill = c.accent)) {
-                        Icon(ImageVector.cachedVector(R.drawable.ic_sf_pencil), contentDescription = "New Chat", tint = c.onAccent)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AnimatedVisibility(tipShown, enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut()) {
+                            Box(Modifier.padding(end = 6.dp)) { FirstChatTip(onTap = openNewChat) }
+                        }
+                        IconButton(onClick = openNewChat, modifier = Modifier.size(56.dp).floating(fill = c.accent)) {
+                            Icon(ImageVector.cachedVector(R.drawable.ic_sf_pencil), contentDescription = "New Chat", tint = c.onAccent)
+                        }
                     }
                 }
             }
