@@ -1447,20 +1447,47 @@ private fun ThreadContent(
             }
             // Fariin Plus send effect over the chat; it has no touch handling, so taps go through.
             fxPlaying?.let { (id, k) -> Box(Modifier.matchParentSize().zIndex(2f)) { SendEffectOverlay(id, k) { fxPlaying = null } } }
-            // Receiving: others' new messages with an effect, newest 20 on open, or a live arrival
-            // while at the bottom with the app in front; only what plusEffects names plays.
+            // Receiving (iOS considerEffects): on open only the unread block (newest 20 of it); after
+            // that only messages newer than what was there, played when they land at the bottom with
+            // the app in front, else kept until I reach the bottom. Never older pages, never read
+            // history. Only what plusEffects names plays.
             if (ui.channel == null) {
                 val fxCtx = LocalContext.current
+                val fxScope = androidx.compose.runtime.rememberCoroutineScope()
+                val fxSeen = remember(ui.cid) { doubleArrayOf(-1.0) }   // newest createdAt handled
+                val fxWaiting = remember(ui.cid) { mutableListOf<String>() }
+                val consider: (List<com.fariin.app.data.Message>) -> Unit = { msgs ->
+                    val cand = com.fariin.app.data.SendEffects.candidates(fxCtx, ui.cid, ui.me, msgs).takeLast(20)
+                    if (cand.isNotEmpty()) {
+                        val cid = ui.cid
+                        // Its own scope: a newer arrival must not cancel an ask already marked played.
+                        fxScope.launch {
+                            val (_, fx) = com.fariin.app.data.SendEffects.ask(fxCtx, cid, cand.map { it.id }) ?: return@launch
+                            // The effect the server read, not the one on my copy; and only if I am still here.
+                            if (!com.fariin.app.data.PlusStore.inFront) return@launch
+                            if (!com.fariin.app.data.SendEffects.animationsOff(fxCtx)) fxPlaying = fx to System.nanoTime()
+                        }
+                    }
+                }
                 val newest = ui.messages.lastOrNull()?.id
                 LaunchedEffect(ui.cid, newest) {
-                    if (newest == null || !com.fariin.app.data.PlusStore.inFront) return@LaunchedEffect
-                    if (listState.firstVisibleItemIndex > 1) return@LaunchedEffect
-                    val cand = com.fariin.app.data.SendEffects.candidates(fxCtx, ui.cid, ui.me, ui.messages.takeLast(20))
-                    if (cand.isEmpty()) return@LaunchedEffect
-                    val (_, fx) = com.fariin.app.data.SendEffects.ask(fxCtx, ui.cid, cand.map { it.id }) ?: return@LaunchedEffect
-                    // The effect the server read, not the one on my copy; and only if I am still here.
-                    if (!com.fariin.app.data.PlusStore.inFront) return@LaunchedEffect
-                    if (!com.fariin.app.data.SendEffects.animationsOff(fxCtx)) fxPlaying = fx to System.nanoTime()
+                    if (newest == null) return@LaunchedEffect
+                    val top = ui.messages.maxOf { it.createdAtMillis }
+                    if (fxSeen[0] < 0) {
+                        fxSeen[0] = top
+                        val n = minOf(ui.unreadAtOpen, 20)
+                        if (n > 0 && com.fariin.app.data.PlusStore.inFront) consider(ui.messages.filter { !it.isSystem }.takeLast(n))
+                        return@LaunchedEffect
+                    }
+                    val fresh = ui.messages.filter { it.createdAtMillis > fxSeen[0] && it.fx != null && it.authorId != ui.me }
+                    fxSeen[0] = maxOf(fxSeen[0], top)
+                    if (fresh.isEmpty()) return@LaunchedEffect
+                    if (atBottom && com.fariin.app.data.PlusStore.inFront) consider(fresh) else fxWaiting += fresh.map { it.id }
+                }
+                LaunchedEffect(ui.cid, atBottom) {
+                    if (!atBottom || fxWaiting.isEmpty() || !com.fariin.app.data.PlusStore.inFront) return@LaunchedEffect
+                    val ids = fxWaiting.toSet(); fxWaiting.clear()
+                    consider(ui.messages.filter { it.id in ids })
                 }
             }
         }
