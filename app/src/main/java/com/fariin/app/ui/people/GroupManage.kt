@@ -397,9 +397,16 @@ private fun AddAdminPage(cid: String, me: String, uid: String, onDone: () -> Uni
     var rights by remember { mutableStateOf<Set<String>?>(null) }
     var busy by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
+    // Their tag, typed here (iOS AddAdminPage): saved after the promote.
+    var tag by remember { mutableStateOf("") }
+    var tagColor by remember { mutableStateOf<String?>(null) }
+    // Once promoted, a retry only saves the tag (iOS: a second tap must not promote again).
+    var promoted by remember { mutableStateOf(false) }
     if (doc.isEmpty()) { Loading(); return }
     val team = Team.from(doc)
     val grantable = team.grantable(me)
+    // No tags in a channel; Change info admins only (iOS mayTag).
+    val mayTag = doc["channel"] != true && team.may(me, Right.CHANGE_INFO)
     val on = rights ?: GroupAdmins.startRights(grantable)
     val name = team.names[uid] ?: "Member"
     Problem(problem) { problem = null }
@@ -408,11 +415,15 @@ private fun AddAdminPage(cid: String, me: String, uid: String, onDone: () -> Uni
             if (busy) BusyMark() else Text("Add", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.accent,
                 modifier = Modifier.padding(end = 4.dp).height(44.dp).floating(CircleShape).clickable {
                     busy = true
+                    val words = if (mayTag) com.fariin.app.data.GroupRole.clean(tag) else ""
                     scope.launch {
                         try {
-                            GroupManage.promote(cid, uid, GroupAdmins.toWrite(on, grantable), team)
+                            if (!promoted) { GroupManage.promote(cid, uid, GroupAdmins.toWrite(on, grantable), team); promoted = true }
+                            if (words.isNotEmpty()) com.fariin.app.data.GroupRole.set(cid, me, uid, words, null, tagColor)
                             Snack.show("$name is now an admin"); onDone()
-                        } catch (e: Exception) { problem = failText(e) }
+                        } catch (e: Exception) {
+                            problem = if (promoted) "$name is an admin now, but the tag was not saved. ${failText(e)}" else failText(e)
+                        }
                         busy = false
                     }
                 }.padding(horizontal = 18.dp, vertical = 11.dp))
@@ -424,6 +435,27 @@ private fun AddAdminPage(cid: String, me: String, uid: String, onDone: () -> Uni
                 grantable.forEachIndexed { i, r ->
                     SwitchLine(r.label, r.slug in on, enabled = !busy, last = i == grantable.lastIndex) { v ->
                         rights = if (v) on + r.slug else on - r.slug
+                    }
+                }
+            }
+            if (mayTag) SettingsSection(header = "Tag",
+                footer = "A short word next to the name in this group, like Host or Teacher. Everyone in the group sees it.") {
+                Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    BasicTextField(tag, { v -> tag = com.fariin.app.data.GroupRole.fit(v, com.fariin.app.data.GroupRole.MAX_TEXT) },
+                        singleLine = true, enabled = !busy, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
+                        cursorBrush = SolidColor(c.accent), modifier = Modifier.weight(1f),
+                        decorationBox = { inner -> Box { if (tag.isEmpty()) Text("Host, Teacher…", fontSize = 17.sp, color = c.secondary); inner() } })
+                    Text("${tag.length}/${com.fariin.app.data.GroupRole.MAX_TEXT}", fontSize = 13.sp, color = c.secondary)
+                }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp)) {
+                    com.fariin.app.data.GroupRole.colors.forEach { (n, rgb) ->
+                        val picked = (tagColor ?: "grey") == n
+                        val tint = Color(0xFF000000 or rgb)
+                        Box(Modifier.weight(1f).height(44.dp).clickable(enabled = !busy) { tagColor = if (n == "grey") null else n },
+                            contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(32.dp).then(if (picked) Modifier.border(2.dp, tint, CircleShape) else Modifier).padding(3.dp)
+                                .clip(CircleShape).background(tint))
+                        }
                     }
                 }
             }
