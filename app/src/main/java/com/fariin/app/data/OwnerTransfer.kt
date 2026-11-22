@@ -296,6 +296,8 @@ object ChannelAddFollowers {
             val d = FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION).getHttpsCallable("addChannelFollowers")
                 .withTimeout(20, TimeUnit.SECONDS).call(mapOf("cid" to cid, "uids" to part)).await().getData() as? Map<*, *>
             out = merge(out, parse(d))
+            // The server's count replaces the guess at once, as iOS adoptServerCount.
+            com.fariin.app.channel.ChannelFollows.adoptCount(cid, d)
         }
         return out
     }
