@@ -469,7 +469,11 @@ private fun NotificationsPage(pop: () -> Unit) {
         if (me != null) {
             resetting = true
             scope.launch {
-                val savedAccount = saveAccount("notifPush", true) and saveAccount("notifPreview", true)
+                // The account's message tone back to Note too, as iOS Reset writes it (the server picks
+                // the push sound from users.notifSound).
+                val toneSaved = runCatching { com.fariin.app.Fb.db.collection("users").document(me)
+                    .set(mapOf("notifSound" to com.fariin.app.push.MessageTones.NOTE), SetOptions.merge()).await() }.isSuccess
+                val savedAccount = saveAccount("notifPush", true) and saveAccount("notifPreview", true) and toneSaved
                 var unmuteFailed = 0
                 // isMuted + setMute, as iOS: a channel I only follow keeps its mute on my follow
                 // entry, not in mutedBy, so the old mutedBy-only loop left those muted.
