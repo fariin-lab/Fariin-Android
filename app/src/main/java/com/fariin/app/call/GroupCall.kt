@@ -78,6 +78,19 @@ object GroupCallWire {
         rung?.isNotEmpty() ?: (memberCount <= GROUP_RING_MAX_MEMBERS)
 
     /**
+     * iOS roomDidDisconnect: every way a call ends says why. Null when I ended it for everyone
+     * or hung up myself. One string, so the second line goes after a newline.
+     */
+    fun endNotice(reason: io.livekit.android.events.DisconnectReason?, endingForAll: Boolean): String? = when (reason) {
+        io.livekit.android.events.DisconnectReason.CLIENT_INITIATED -> null
+        io.livekit.android.events.DisconnectReason.PARTICIPANT_REMOVED -> "You were removed from the call"
+        io.livekit.android.events.DisconnectReason.ROOM_DELETED,
+        io.livekit.android.events.DisconnectReason.ROOM_CLOSED -> if (endingForAll) null else "The call was ended"
+        io.livekit.android.events.DisconnectReason.DUPLICATE_IDENTITY -> "You joined this call on another device"
+        else -> if (endingForAll) null else "Call unexpectedly ended\nCheck your connection."
+    }
+
+    /**
      * Who may start a call in this chat, as the rules (groupCalls create: isGroupMember and
      * mayStartCall) and groupCallToken say: a member of a GROUP chat, and only an admin when the
      * group is set to "Start group call: Admins only" (`onlyAdminsCall`). The server checks too.
@@ -317,6 +330,8 @@ object GroupCall {
     private var recordId: String? = null
     private var startedHere = false
     private var someoneCame = false
+    /** I asked the server to end the call for everyone: its room closing says nothing (iOS endingForAll). */
+    private var endingForAll = false
     private var startedAtMs: Long? = null
     /**
      * iOS `dialing`: the Call button (not Join) was tapped and nobody has come yet. The calling
@@ -585,7 +600,7 @@ object GroupCall {
                 events = scope.launch {
                     r.events.collect { e ->
                         when (e) {
-                            is RoomEvent.Disconnected -> leave()
+                            is RoomEvent.Disconnected -> GroupCallWire.endNotice(e.reason, endingForAll)?.let { fail(it) } ?: leave()
                             is RoomEvent.Reconnecting -> { _ui.value = _ui.value.copy(reconnecting = true); refresh() }
                             is RoomEvent.Reconnected -> { _ui.value = _ui.value.copy(reconnecting = false); refresh() }
                             is RoomEvent.DataReceived -> if (e.topic == SOCIAL_TOPIC) social(e.data, e.participant?.identity?.value ?: "")
@@ -1162,6 +1177,7 @@ object GroupCall {
         room?.let { try { it.disconnect(); it.release() } catch (_: Exception) {} }
         room = null
         appContext?.let { CallService.stop(it) }
+        endingForAll = false
         _ui.value = GroupCallUi()
     }
 
@@ -1336,6 +1352,7 @@ object GroupCall {
         val r = room
         val where = GroupCallAdmin.room(g.cid, g.linkRoom)
         if (r == null || where == null) return GroupCallAdmin.errorText("NOT_FOUND")
+        if (action == CallAdminAction.END) endingForAll = true
         return try {
             functions.getHttpsCallable("callAdmin").call(GroupCallAdmin.request(where, action, target)).await()
             if (room === r) {
@@ -1348,6 +1365,7 @@ object GroupCall {
             null
         } catch (e: Exception) {
             Log.w(TAG, "callAdmin ${action.wire} refused", e)
+            if (action == CallAdminAction.END && room === r) endingForAll = false
             GroupCallAdmin.errorText((e as? FirebaseFunctionsException)?.code?.name)
         }
     }
