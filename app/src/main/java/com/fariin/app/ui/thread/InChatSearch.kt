@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -215,20 +216,28 @@ private fun StepButton(icon: androidx.compose.ui.graphics.vector.ImageVector, la
 
 /** One list row (iOS InChatSearchRow). */
 internal data class SearchRow(val id: String, val name: String, val photoUrl: String?, val atMillis: Double,
-                              val text: String, val outgoing: Boolean, val read: Boolean, val squircle: Boolean = false)
+                              val text: String, val outgoing: Boolean, val read: Boolean, val squircle: Boolean = false,
+                              val thumb: String? = null, val blurhash: String? = null)
 
 /** iOS searchListRows: newest first; a channel's posts are the channel's (its name, photo and shape, no ticks). */
-internal fun searchRows(ui: ThreadUi, matches: List<ChatSearch.Item>): List<SearchRow> = matches.reversed().map { m ->
+internal fun searchRows(ui: ThreadUi, matches: List<ChatSearch.Item>): List<SearchRow> {
+  // iOS: a loaded photo or video shows its small preview before the line (never a view-once one).
+  val byId = ui.messages.associateBy { it.id }
+  return matches.reversed().map { m ->
+    val live = byId[m.id]?.takeIf { (it.type == "image" || it.type == "video") && !it.viewOnce }
     val ch = ui.channel
-    if (ch != null) SearchRow(m.id, ui.title, ui.photoUrl, m.atMillis, m.text, outgoing = false, read = false, squircle = true)
+    if (ch != null) SearchRow(m.id, ui.title, ui.photoUrl, m.atMillis, m.text, outgoing = false, read = false, squircle = true,
+        thumb = live?.thumb, blurhash = live?.blurhash)
     else {
         val mine = m.authorId == ui.me
         SearchRow(m.id,
             name = if (mine) "You" else if (ui.isGroup) ui.names[m.authorId] ?: "User" else ui.title,
             photoUrl = ui.photos[m.authorId] ?: if (mine) ui.myPhoto else if (ui.isGroup) null else ui.photoUrl,
             atMillis = m.atMillis, text = m.text, outgoing = mine,
-            read = mine && m.atMillis <= ui.receipts.otherLastReadMillis)
+            read = mine && m.atMillis <= ui.receipts.otherLastReadMillis,
+            thumb = live?.thumb, blurhash = live?.blurhash)
     }
+  }
 }
 
 /**
@@ -264,11 +273,19 @@ internal fun SearchResultsList(rows: List<SearchRow>, terms: List<String>, top: 
                             Text(ChatSearch.dateText(r.atMillis, is24h), fontSize = 15.sp, color = c.secondary, maxLines = 1)
                         }
                         val sn = ChatSearch.snippet(r.text, terms)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        val pic = if (r.thumb != null || r.blurhash != null) rememberPlaceholder(r.thumb, r.blurhash) else null
+                        if (pic != null) {
+                            androidx.compose.foundation.Image(pic, null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                modifier = Modifier.size(20.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(3.dp)))
+                            Spacer(Modifier.width(6.dp))
+                        }
                         Text(buildAnnotatedString {
                             append(sn.text)
                             addStyle(SpanStyle(color = c.secondary), 0, sn.text.length)
                             for (m in sn.marks) addStyle(SpanStyle(color = c.label), m.first, m.last + 1)
                         }, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                     HorizontalDivider(Modifier.align(Alignment.BottomStart), thickness = 0.5.dp, color = c.separator)
                 }
