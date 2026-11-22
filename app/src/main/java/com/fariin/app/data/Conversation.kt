@@ -35,6 +35,8 @@ data class Conversation(
     val pinOrder: Map<String, Double> = emptyMap(),
     val markedUnread: Map<String, Boolean> = emptyMap(),
     val delivered: Map<String, Double> = emptyMap(),
+    /** Per member, when they last read this chat (`lastRead`); no stamp with read receipts off. */
+    val lastRead: Map<String, Double> = emptyMap(),
     /** iOS lastPlayedVoice: per person, the send time of the newest voice note they played. */
     val lastPlayedVoice: Map<String, Double> = emptyMap(),
     val lastHeld: Boolean = false,
@@ -211,10 +213,14 @@ data class Conversation(
             // iOS canStartCall: a closed group (ended, suspended, disabled) starts no calls.
             !ended && !fariinLocked()
 
+    /** iOS lastReadByOther: a zero count AND their lastRead at or after the last message, so a
+     *  reader with read receipts off never turns my list tick blue (opening zeroes the count). */
     fun lastReadByOther(me: String): Boolean {
-        if (isGroup) return others(me).all { (unreadCount[it] ?: 0) <= 0 }
+        if (updatedAtMillis <= 0) return false
+        if (isGroup) return others(me).all { (unreadCount[it] ?: 0) <= 0 && (lastRead[it] ?: 0.0) >= updatedAtMillis }
         if (lastHeld) return false
-        return (unreadCount[otherUid(me)] ?: 0) <= 0
+        val other = otherUid(me)
+        return (unreadCount[other] ?: 0) <= 0 && (lastRead[other] ?: 0.0) >= updatedAtMillis
     }
 
     /** The old shared copy, or my private BlockList (users/{me}/blocked) once it has loaded. */
@@ -297,6 +303,7 @@ data class Conversation(
                 pinOrder = doubleMap(data["pinOrder"]),
                 markedUnread = boolMap(data["markedUnread"]),
                 delivered = doubleMap(data["delivered"]),
+                lastRead = doubleMap(data["lastRead"]),
                 lastPlayedVoice = doubleMap(data["lastPlayedVoice"]),
                 lastHeld = data["lastHeld"] as? Boolean ?: false,
                 admins = stringList(data["admins"]),
