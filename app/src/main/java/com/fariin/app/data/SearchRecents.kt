@@ -16,8 +16,10 @@ object SearchRecents {
     const val CAP = 20
     private const val PREFS = "fariin_search"
 
-    /** kind "chat": key is a conversation id; kind "person": key is a uid. */
-    data class Entry(val kind: String, val key: String, val title: String, val handle: String = "", val photo: String = "") {
+    /** kind "chat": key is a conversation id; kind "person": key is a uid; kind "group": a public
+     *  group or channel opened from Global Search (iOS Kind.group), key its cid, [channel] for a channel. */
+    data class Entry(val kind: String, val key: String, val title: String, val handle: String = "", val photo: String = "",
+                     val channel: Boolean = false) {
         val id get() = "$kind:$key"
     }
 
@@ -33,14 +35,19 @@ object SearchRecents {
             val a = JSONArray(raw)
             for (i in 0 until a.length()) {
                 val o = a.getJSONObject(i)
-                entries += Entry(o.getString("k"), o.getString("key"), o.optString("t"), o.optString("h"), o.optString("p"))
+                entries += Entry(o.getString("k"), o.getString("key"), o.optString("t"), o.optString("h"), o.optString("p"), o.optBoolean("c"))
             }
         }
     }
 
     fun recordChat(c: Context, me: String, conv: Conversation) {
         val other = if (conv.isGroup || conv.isChannel) "" else conv.otherUid(me)
-        remember(c, me, Entry("chat", conv.id, conv.displayName(me)), twin = if (other.isEmpty()) null else "person:$other")
+        remember(c, me, Entry("chat", conv.id, conv.displayName(me)), twin = if (other.isEmpty()) "group:${conv.id}" else "person:$other")
+    }
+
+    /** A public group or channel tapped in Global Search (iOS record(group:)). */
+    fun recordGroup(c: Context, me: String, h: PublicGroupHit) {
+        remember(c, me, Entry("group", h.cid, h.title, h.handle, h.photoUrl ?: "", h.isChannel), twin = "chat:${h.cid}")
     }
 
     fun recordPerson(c: Context, me: String, p: Person, chatId: String?) {
@@ -68,7 +75,7 @@ object SearchRecents {
 
     private fun save(c: Context, me: String) {
         val a = JSONArray()
-        entries.forEach { a.put(JSONObject().put("k", it.kind).put("key", it.key).put("t", it.title).put("h", it.handle).put("p", it.photo)) }
+        entries.forEach { a.put(JSONObject().put("k", it.kind).put("key", it.key).put("t", it.title).put("h", it.handle).put("p", it.photo).put("c", it.channel)) }
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("recent.$me", a.toString()).apply()
     }
 

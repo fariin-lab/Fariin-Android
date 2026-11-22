@@ -879,7 +879,8 @@ fun ChatListScreen(
                             if (recents.isNotEmpty()) {
                                 item(key = "h-recent") { RecentHeader { SearchRecents.clear(appCtx, me) } }
                                 items(recents, key = { "r-" + it.id }, contentType = { "chat" }) { e ->
-                                    val conv = if (e.kind == "chat") byId[e.key] else null
+                                    // A public group I am in now draws as its chat (iOS Recent .group).
+                                    val conv = if (e.kind == "chat" || e.kind == "group") byId[e.key] else null
                                     // A long press offers Remove from Recent (iOS 7571e6bf5); results keep no menu.
                                     var removeMenu by remember { mutableStateOf(false) }
                                     Box {
@@ -888,6 +889,22 @@ fun ChatListScreen(
                                             val p = com.fariin.app.data.Person(e.key, e.title, e.handle, e.photo.ifEmpty { null })
                                             PersonRow(p, onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); removeMenu = true }) {
                                                 scope.launch { people.startChat(p)?.let { cid -> SearchRecents.recordPerson(appCtx, me, p, cid); searching = false; query = ""; people.chat(cid) } ?: run { searching = false; query = ""; people.contact(p.uid) } }   // the chat can't be made (their Messages setting): their page, never a dead tap (owner 2026-11-10)
+                                            }
+                                        }
+                                        else if (e.kind == "group") {
+                                            // Not in it: the public group or channel from what was saved (iOS PublicGroupHitRow).
+                                            Row(Modifier.fillMaxWidth().combinedClickable(
+                                                onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); removeMenu = true }) {
+                                                SearchRecents.recordGroup(appCtx, me, com.fariin.app.data.PublicGroupHit(e.key, e.handle, e.title, e.photo.ifEmpty { null }, 0, false, false, e.channel))
+                                                if (e.channel) channels.open(e.key) else publicGroupOpen = e.key
+                                            }.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                Avatar(e.photo.ifEmpty { null }, 54.dp, Modifier.padding(vertical = 9.dp), squircle = e.channel, kind = com.fariin.app.ui.components.AvatarKind.of(true, e.channel))
+                                                Spacer(Modifier.width(16.dp))
+                                                Column(Modifier.weight(1f)) {
+                                                    Text(e.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium,
+                                                        color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                    if (e.handle.isNotEmpty()) Text("@${e.handle}", style = MaterialTheme.typography.bodyMedium, color = c.secondary, maxLines = 1)
+                                                }
                                             }
                                         }
                                         com.fariin.app.ui.components.GlassDropdown(removeMenu, onDismissRequest = { removeMenu = false },
@@ -969,6 +986,8 @@ fun ChatListScreen(
                     if (searching && newPeople.isEmpty() && newGroups.isNotEmpty()) item(key = "h-global") { SectionHeader("Global Search") }
                     if (searching) items(newGroups, key = { "g-" + it.cid }) { h ->
                         Row(Modifier.fillMaxWidth().clickable {
+                            // Kept under Recent (iOS RecentSearches record(group:)).
+                            SearchRecents.recordGroup(appCtx, me, h)
                             if (h.isChannel) channels.open(h.cid) else publicGroupOpen = h.cid
                         }.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                             Avatar(h.photoUrl, 54.dp, Modifier.padding(vertical = 9.dp), squircle = h.isChannel, kind = com.fariin.app.ui.components.AvatarKind.of(true, h.isChannel))
