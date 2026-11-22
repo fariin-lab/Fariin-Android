@@ -229,12 +229,11 @@ fun rememberChannelThread(cid: String, me: String, doc: Map<String, Any?>, messa
             preview = r.preview
             ChannelGuestPreviews.cache[cid] = r.preview
             CryptoHub.notePlainGroup(cid)   // read from outside = public and not end-to-end encrypted
-        } else if (r is ChannelService.PreviewResult.Found && !r.preview.isMember) {
-            // A public group, not a channel: the guest's header and Join bar (GroupGuest.kt).
-            com.fariin.app.ui.people.GroupGuestPreviews.cache[cid] = r.preview
-        } else if (r is ChannelService.PreviewResult.Refused) {
-            // Banned or closed: the guest's Join bar goes grey with the server's words.
-            com.fariin.app.ui.people.GroupGuestPreviews.noteRefused(cid, r.text)
+        } else {
+            // A public group, not a channel: the guest's header and Join bar (GroupGuest.kt). The
+            // fresh answer replaces the kept copy whole (member, requested), so a stale one never
+            // hides Join; a refusal (banned, closed) greys it with the server's words.
+            com.fariin.app.ui.people.GroupGuestPreviews.adopt(cid, r, left = false)
         }
         } finally { ChannelGuestPreviews.answered[cid] = true }
     }

@@ -67,6 +67,22 @@ object GroupGuestPreviews {
         }
     }
 
+    /**
+     * The server's fresh answer as the guest page opens (iOS load): it replaces the kept copy whole,
+     * `isMember` and `requested` too, so a stale copy never hides or greys Join. [left]: I just left,
+     * so its member flag is not trusted yet.
+     */
+    fun adopt(cid: String, r: ChannelService.PreviewResult, left: Boolean) {
+        when (r) {
+            is ChannelService.PreviewResult.Found -> if (!r.preview.isChannel) {
+                cache[cid] = if (left) r.preview.copy(isMember = false) else r.preview
+                refused.remove(cid)
+            }
+            is ChannelService.PreviewResult.Refused -> noteRefused(cid, r.text)
+            is ChannelService.PreviewResult.Failed -> {}
+        }
+    }
+
     /** True for a join error that sticks (the server's "banned" words), kept like a refusal. */
     fun keepIfBanned(cid: String, words: String?): Boolean {
         if (words == null || !words.contains("banned", ignoreCase = true)) return false
@@ -93,11 +109,11 @@ fun rememberGroupGuest(cid: String, me: String, doc: Map<String, Any?>, isChanne
     val inDoc = !left && me in ((doc["users"] as? List<*>) ?: emptyList<Any>())
     val listed = !left && com.fariin.app.data.CryptoHub.listedConversation(cid)?.users?.contains(me) == true
     val p = GroupGuestPreviews.cache[cid]
-    // Opened as a member before, so no preview was asked for: ask now.
+    // Just left: ask the server again once, even with a kept copy, and take its answer whole.
+    // A guest who was never in it is asked by the chat page's own first ask (ChannelRoute), the same way.
     LaunchedEffect(cid, left) {
-        if (!left || isChannel || GroupGuestPreviews.cache[cid] != null) return@LaunchedEffect
-        val r = ChannelService.preview(cid)
-        if (r is ChannelService.PreviewResult.Found && !r.preview.isChannel) GroupGuestPreviews.cache[cid] = r.preview.copy(isMember = false)
+        if (!left || isChannel) return@LaunchedEffect
+        GroupGuestPreviews.adopt(cid, ChannelService.preview(cid), left = true)
     }
     var joining by remember(cid) { mutableStateOf(false) }
     var requested by remember(cid) { mutableStateOf(false) }
