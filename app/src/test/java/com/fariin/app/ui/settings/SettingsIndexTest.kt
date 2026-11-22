@@ -89,6 +89,10 @@ class SettingsIndexTest {
         assertEquals(PAGE_APP_LOCK, e.page)
     }
 
+    @Test fun noRowThePageDoesNotHave() {
+        assertTrue(SettingsIndex.entries.none { it.title == "Clear Media" })
+    }
+
     @Test fun idsAreUnique() {
         val ids = SettingsIndex.entries.map { it.id }
         assertEquals(ids.size, ids.toSet().size)

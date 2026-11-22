@@ -179,7 +179,7 @@ internal object SettingsIndex {
         val sd = listOf(SD)
         page("Manage storage", sd, "manage storage space usage cache free up", PAGE_MANAGE_STORAGE)
         row("Keep Media", sd + "Manage storage", "keep media forever days auto delete old photos", PAGE_MANAGE_STORAGE)
-        row("Clear Media", sd + "Manage storage", "clear media delete videos voice notes free space", PAGE_MANAGE_STORAGE)
+        // No Clear Media: the Android Storage page has no such button (iOS has), so search must not offer it.
         row("Clear Cache", sd + "Manage storage", "clear cache free space temporary", PAGE_MANAGE_STORAGE)
         for ((k, label) in SettingsRules.autoKinds)
             page(label, sd + "Media auto-download", "auto download automatic media wifi wi-fi mobile data cellular ${label.lowercase()}", PAGE_AUTODL + k)
