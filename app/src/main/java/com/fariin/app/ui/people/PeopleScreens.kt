@@ -153,7 +153,8 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
         }
     }
     fun uidOf(conv: Conversation) = com.fariin.app.crypto.Wire.otherUid(conv.id, me)
-    val frequent = remember(people) { if (people.size >= 6) people.sortedByDescending { it.updatedAtMillis }.take(3) else emptyList() }
+    // By the time I see on the row (iOS displayUpdatedAt): a message a block held back does not lift a chat.
+    val frequent = remember(people, me) { if (people.size >= 6) people.sortedByDescending { it.displayUpdatedAt(me) }.take(3) else emptyList() }
     val sections = remember(people, me) {
         people.groupBy { conv -> conv.displayName(me).trim().firstOrNull()?.takeIf { it.isLetter() }?.uppercaseChar()?.toString() ?: "#" }
             .toSortedMap(compareBy<String> { it == "#" }.thenBy { it })
