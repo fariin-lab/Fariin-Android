@@ -559,6 +559,7 @@ internal fun PostStatsPage(cid: String, mid: String, onBack: () -> Unit) {
         } catch (e: Exception) {
             val code = (e as? FirebaseFunctionsException)?.code?.name
             failure = if (code == "PERMISSION_DENIED") "Only the channel's owner and admins can see statistics."
+                else if (code == "NOT_FOUND") "This post no longer exists."
                 else "Couldn't load statistics. Check your connection and try again."
             retry = code != "PERMISSION_DENIED"
         }
