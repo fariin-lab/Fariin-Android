@@ -263,7 +263,8 @@ fun CallScreen(
                 .semantics { contentDescription = ui.peerName })
         }
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-            val status = if (ui.held && s.live) "On hold" else CallMachine.label(s, now)
+            // iOS statusText: hold is said only while active; Ringing and Reconnecting keep their words.
+            val status = if (ui.held && s.phase == CallPhase.ACTIVE) "On hold" else CallMachine.label(s, now)
             CallHeader(
                 name = ui.peerName, status = status, markUid = ui.peerUid.takeIf { it != "demo" },
                 muted = ui.remoteMuted && connected, mutedLabel = "${ui.peerName.substringBefore(' ')} is muted",
@@ -859,7 +860,7 @@ fun PipScreen(ui: CallUi) {
     LaunchedEffect(ui.status.connectedAtMs) { while (true) { now = System.currentTimeMillis(); delay(1000) } }
     val s = ui.status
     val connected = s.phase == CallPhase.ACTIVE || s.phase == CallPhase.RECONNECTING
-    val status = if (ui.held && s.live) "On hold" else CallMachine.label(s, now)
+    val status = if (ui.held && s.phase == CallPhase.ACTIVE) "On hold" else CallMachine.label(s, now)
     val theirMute = ui.remoteMuted && connected
     BoxWithConstraints(Modifier.fillMaxSize().background(PipFill), contentAlignment = Alignment.Center) {
         val roomy = maxHeight >= 180.dp
