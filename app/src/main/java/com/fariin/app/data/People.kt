@@ -432,8 +432,11 @@ class FirestorePeople(
         try { st.child("profiles/$me-poster.jpg").delete().await() } catch (_: Exception) {}
     }
 
+    /** iOS PrivacyPrefs.isContact: a request chat counts once accepted; an old chat once it has a message. */
     private suspend fun isContact(uid: String): Boolean =
-        CryptoHub.listedConversation(Wire.directCid(me, uid))?.let { !it.isGroup && (it.startedBy.isEmpty() || it.accepted) } ?: false
+        CryptoHub.listedConversation(Wire.directCid(me, uid))?.let {
+            !it.isGroup && (if (it.startedBy.isNotEmpty()) it.accepted else it.lastMessageCipher.isNotEmpty())
+        } ?: false
 
     /** ChatService.createGroup (a plain group, e2ee false, as iOS makes them now). */
     override suspend fun createGroup(title: String, members: List<String>, photo: ByteArray?, permissions: Map<String, Boolean>): String {
