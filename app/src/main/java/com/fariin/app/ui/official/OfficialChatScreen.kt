@@ -542,6 +542,7 @@ fun OfficialRow(view: OfficialChannel.View, onOpen: () -> Unit,
     val muted = view.state.isMutedNow(System.currentTimeMillis().toDouble())
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var menu by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
     Box {
     Row(Modifier.fillMaxWidth().combinedClickable(onClick = onOpen, onLongClick = {
             haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); menu = true })
@@ -593,10 +594,20 @@ fun OfficialRow(view: OfficialChannel.View, onOpen: () -> Unit,
         val archived = view.state.archived
         androidx.compose.material3.DropdownMenuItem(text = { Text(if (unread > 0) "Mark as Read" else "Mark as Unread") },
             onClick = { menu = false; if (unread > 0) OfficialChannel.markRead() else OfficialChannel.markUnread() })
+        // One Mute / Unmute, as the iOS row (ChatService.setMuted: Always, or off).
+        androidx.compose.material3.DropdownMenuItem(text = { Text(if (muted) "Unmute" else "Mute") },
+            onClick = { menu = false; OfficialChannel.setMuted(!muted) })
         androidx.compose.material3.DropdownMenuItem(text = { Text(if (pinned) "Unpin" else "Pin") },
             onClick = { menu = false; OfficialChannel.setPinned(!pinned) })
         androidx.compose.material3.DropdownMenuItem(text = { Text(if (archived) "Unarchive" else "Archive") },
             onClick = { menu = false; OfficialChannel.setArchived(!archived) })
+        // Delete clears the chat for me, the row going until a new note comes (iOS deleteForMe).
+        androidx.compose.material3.DropdownMenuItem(text = { Text("Delete", color = c.red) },
+            onClick = { menu = false; confirmDelete = true })
     }
+    if (confirmDelete) GlassAlert(onDismissRequest = { confirmDelete = false }, title = { Text("Delete this chat?") },
+        text = { Text("This removes the chat from your list. It comes back if you get a new message.") },
+        confirmButton = { TextButton({ confirmDelete = false; OfficialChannel.clearHistory() }) { Text("Delete Chat", color = c.red) } },
+        dismissButton = { TextButton({ confirmDelete = false }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
     }
 }
