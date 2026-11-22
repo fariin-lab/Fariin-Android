@@ -2280,6 +2280,8 @@ class ThreadRepository(
             val blobs = buildList {
                 for (k in listOf("imageUrl", "videoUrl", "thumbUrl", "audioUrl", "fileUrl")) (data[k] as? String)?.let(::add)
                 (data["album"] as? List<*>)?.forEach { ((it as? Map<*, *>)?.get("imageUrl") as? String)?.let(::add) }
+                // The link card's sealed picture goes too (iOS storageUrls).
+                ((data["linkPreview"] as? Map<*, *>)?.get("imageUrl") as? String)?.let(::add)
             }.filter { it.startsWith("https://") || it.startsWith("gs://") }
             var marked = false
             if (data["deleted"] != true) {
