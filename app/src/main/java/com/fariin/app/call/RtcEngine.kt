@@ -107,6 +107,8 @@ class RtcEngine(
     private var surfaceHelper: SurfaceTextureHelper? = null
     private var capturing = false
     var frontCamera = true; private set
+    /** The side the next camera start opens (a flip while paused is kept for it). */
+    private var wantFront = true
     private var acceptChannel: DataChannel? = null
     private var screenCapturer: ScreenCapturerAndroid? = null
     private var videoSender: livekit.org.webrtc.RtpSender? = null
@@ -216,8 +218,18 @@ class RtcEngine(
     }
 
     fun flipCamera() {
+        // Camera paused (on hold): there is nothing to switch, so keep the choice and open that
+        // side on the next start (iOS switchCamera). A stopped capturer refused the switch.
+        if (!capturing) {
+            wantFront = !frontCamera
+            frontCamera = wantFront
+            try { capturer?.dispose() } catch (_: Exception) {}
+            capturer = null
+            surfaceHelper?.dispose(); surfaceHelper = null
+            return
+        }
         capturer?.switchCamera(object : CameraVideoCapturer.CameraSwitchHandler {
-            override fun onCameraSwitchDone(front: Boolean) { frontCamera = front }
+            override fun onCameraSwitchDone(front: Boolean) { frontCamera = front; wantFront = front }
             override fun onCameraSwitchError(e: String?) { Log.w(TAG, "flip failed: $e") }
         })
     }
@@ -241,7 +253,7 @@ class RtcEngine(
     private fun makeCapturer(): CameraVideoCapturer? {
         val en = Camera2Enumerator(context)
         val names = en.deviceNames
-        val pick = names.firstOrNull { en.isFrontFacing(it) } ?: names.firstOrNull() ?: return null
+        val pick = names.firstOrNull { en.isFrontFacing(it) == wantFront } ?: names.firstOrNull() ?: return null
         frontCamera = en.isFrontFacing(pick)
         return en.createCapturer(pick, null)
     }
