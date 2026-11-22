@@ -134,6 +134,7 @@ internal fun BubbleStyleChooser(
     val savedDecor = remember { BubbleStyles.decorations() }
     var decor by remember { mutableStateOf(savedDecor) }
     var plusNote by remember { mutableStateOf(false) }
+    var plusPage by remember { mutableStateOf(false) }
     var category by remember {
         mutableStateOf(BubbleArt.find(saved)?.section ?: COLOR)
     }
@@ -216,10 +217,17 @@ internal fun BubbleStyleChooser(
             }
         }
     }
+    // A picture style that is Plus for this account (iOS): Learn More opens its Plus page.
+    val pictureNote = plusNote && BubbleStyles.pictureLocked(selected)
+    val notNow: (@Composable () -> Unit)? = if (pictureNote) { { TextButton({ plusNote = false }) { Text("Not Now", color = c.accent) } } } else null
     if (plusNote) GlassAlert(onDismissRequest = { plusNote = false },
         title = { Text("Fariin Plus") },
-        text = { Text("This style is part of Fariin Plus, coming soon. The free styles are ready to use now.") },
-        confirmButton = { TextButton({ plusNote = false }) { Text("OK", color = c.accent) } }, containerColor = c.card)
+        text = { Text(if (pictureNote) "Picture bubble styles are part of Fariin Plus. Colors stay free for everyone."
+            else "This style is part of Fariin Plus, coming soon. The free styles are ready to use now.") },
+        confirmButton = { TextButton({ plusNote = false; if (pictureNote) plusPage = true }) { Text(if (pictureNote) "Learn More" else "OK", color = c.accent) } },
+        dismissButton = notNow,
+        containerColor = c.card)
+    if (plusPage) PlusGateSheet("pictureBubbles") { plusPage = false }
 }
 
 /**

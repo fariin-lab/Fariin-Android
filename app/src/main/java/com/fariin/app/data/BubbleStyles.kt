@@ -92,8 +92,14 @@ object BubbleStyles {
         version.intValue++
     }
 
-    /** May I pick it: every picture style; a colour style unless it is Plus (not on sale yet). */
-    fun mayUse(id: String?): Boolean = id == null || BubbleArt.find(id) != null || find(id)?.plus == false
+    /**
+     * A picture style that is Fariin Plus for this account (iOS pictureLocked): plusConfig feature
+     * `pictureBubbles` is "locked". Off or on: pictures are free. Colours are never locked.
+     */
+    fun pictureLocked(id: String?): Boolean = BubbleArt.find(id) != null && PlusStore.state("pictureBubbles") == PlusStore.State.LOCKED
+
+    /** May I pick it (and send it): a picture style unless locked; a colour style unless it is Plus (not on sale yet). */
+    fun mayUse(id: String?): Boolean = id == null || (BubbleArt.find(id) != null && !pictureLocked(id)) || find(id)?.plus == false
 
     // ---- One chat's own style (owner 2026-11-07), as the per-chat wallpaper ----
     // `bubbleStyle.chat.<cid>`: a style id, or [NONE] for "this chat has no style" (opts out of the
