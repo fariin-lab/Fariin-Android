@@ -70,6 +70,20 @@ class VoiceRecorder(private val context: Context) {
     private val _level = MutableStateFlow(0f)
     val level: StateFlow<Float> = _level
 
+    // Other sound (music, a video) is turned down while the mic captures, as iOS .duckOthers does.
+    private val duckFocus by lazy {
+        android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+            .setAudioAttributes(android.media.AudioAttributes.Builder()
+                .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH).build())
+            .setOnAudioFocusChangeListener { }
+            .build()
+    }
+    private fun duck(on: Boolean) {
+        val am = context.getSystemService(android.media.AudioManager::class.java) ?: return
+        runCatching { if (on) am.requestAudioFocus(duckFocus) else am.abandonAudioFocusRequest(duckFocus) }
+    }
+
     val isRecording: Boolean get() = wanted
     val isPaused: Boolean get() = paused
 
@@ -82,6 +96,7 @@ class VoiceRecorder(private val context: Context) {
         wanted = true; paused = false
         levels.clear()
         _elapsed.value = 0.0; _level.value = 0f
+        duck(true)
         scope.launch(audio) {
             banked = 0.0
             openRecorder()
@@ -158,6 +173,7 @@ class VoiceRecorder(private val context: Context) {
     fun pause(onReady: (Review?) -> Unit) {
         if (!wanted || paused) { onReady(null); return }
         paused = true
+        duck(false)
         val endAt = SystemClock.elapsedRealtime()
         meter?.cancel()
         _level.value = 0f
@@ -194,6 +210,7 @@ class VoiceRecorder(private val context: Context) {
     fun resume() {
         if (!wanted || !paused) return
         paused = false
+        duck(true)
         scope.launch(audio) {
             dropJoined()
             openRecorder()
@@ -204,6 +221,7 @@ class VoiceRecorder(private val context: Context) {
     fun finish(onDone: (Result?) -> Unit) {
         if (!wanted) { onDone(null); return }
         wanted = false
+        duck(false)
         val wasPaused = paused
         paused = false
         val endAt = SystemClock.elapsedRealtime()
@@ -229,6 +247,7 @@ class VoiceRecorder(private val context: Context) {
     fun cancel() {
         if (!wanted && recorder == null) return
         wanted = false; paused = false
+        duck(false)
         meter?.cancel()
         _elapsed.value = 0.0; _level.value = 0f
         scope.launch(audio) {
