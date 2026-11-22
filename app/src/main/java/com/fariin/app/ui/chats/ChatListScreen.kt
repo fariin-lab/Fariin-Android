@@ -508,7 +508,8 @@ fun ChatListScreen(
                         count = selected.size,
                         allPinned = selectedConvs.all { it.isPinned(me) },
                         allMuted = selectedConvs.all { it.isMuted(me, System.currentTimeMillis().toDouble()) },
-                        allUnread = selectedConvs.all { it.hasUnreadMark(me) },
+                        // iOS: a blocked chat shows no badge, so it offers Unread, never Read.
+                        allUnread = selectedConvs.all { !it.isBlockedByMe(me) && it.hasUnreadMark(me) },
                         archive = showArchive,
                         onClose = { selected = emptySet(); selectMode = false },
                         onPin = {
@@ -538,7 +539,7 @@ fun ChatListScreen(
                         },
                         onDelete = { confirmDelete = true },
                         onReadToggle = {
-                            val unread = !selectedConvs.all { it.hasUnreadMark(me) }
+                            val unread = !selectedConvs.all { !it.isBlockedByMe(me) && it.hasUnreadMark(me) }
                             act(if (unread) "Marked as unread" else "Marked as read") { ChatListActions.setUnread(me, it, unread) }
                         },
                         onSelectAll = { selected = shown.map { it.id }.toSet() },
