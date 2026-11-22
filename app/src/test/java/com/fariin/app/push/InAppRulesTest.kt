@@ -21,6 +21,13 @@ class InAppRulesTest {
         assertEquals(InAppRoute.Nothing, InAppRules.route(NotifDecision.Skip("chat is open"), false, false, on))
     }
 
+    @Test fun fariinsOwnMessageSpeaksAsFariin() {
+        val r = InAppRules.route(spec(key = "official-fariin", title = "New login", plain = true), true, false, on, localPhoto = "https://x/p.jpg") as InAppRoute.InApp
+        assertEquals(InAppBanner("official-fariin", "Fariin", "New login: Hello", null), r.banner)
+        val same = InAppRules.route(spec(key = "official-fariin", title = "Fariin", plain = true), true, false, on) as InAppRoute.InApp
+        assertEquals("Hello", same.banner?.body)
+    }
+
     @Test fun behindIsTheSystemNotification() {
         assertEquals(InAppRoute.System, InAppRules.route(spec(), inFront = false, locked = false, prefs = on))
     }

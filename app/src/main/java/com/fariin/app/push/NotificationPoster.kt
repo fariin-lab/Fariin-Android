@@ -271,7 +271,9 @@ object NotificationPoster {
     fun postReplyAlert(c: Context, title: String, body: String, cid: String, mid: String, rid: String = "", aid: String = "",
                        /** The push kind: a reaction gets its own notification, not the reply's (audit A14). */ kind: String = "",
                        /** The Activity item (marked read on tap) and, for a quote in a public channel, where it is. */
-                       act: String = "", wcid: String = "", wmid: String = "") {
+                       act: String = "", wcid: String = "", wmid: String = "",
+                       /** In front with In-App Preview or Sounds off: in the list only, no drop-down, no tone (iOS willPresent). */
+                       quiet: Boolean = false) {
         ensureChannels(c)
         val nmc = NotificationManagerCompat.from(c)
         if (!nmc.areNotificationsEnabled()) return
@@ -299,12 +301,49 @@ object NotificationPoster {
             .setContentText(body)
             .setContentIntent(tap)
             .setAutoCancel(true)
+            .setSilent(quiet)
             .build()
         // One notification per comment (the server sends one push, then "N new replies to your
         // comment" in its place), one per post for an admin's summary.
         val pre = if (kind == "replyReact") "react" else "replies"
         nmc.notify(if (rid.isNotEmpty()) "$pre-$cid/$mid/$rid" else "$pre-$cid/$mid", ID, n)
     }
+
+    /**
+     * "Wants you back in the call" (server groupCallNudge) when the push reached the app: the
+     * server's words, one per group (tag). A tap and Join do the same: the call's invitation
+     * (MainActivity reads the same keys a system-drawn one carries). [quiet] = in front with In-App
+     * Preview off or the App Lock page up: in the list only, the tone is ours.
+     */
+    @SuppressLint("MissingPermission")
+    fun postGroupNudge(c: Context, title: String, body: String, nudge: com.fariin.app.data.GroupNudge, quiet: Boolean) {
+        ensureChannels(c)
+        val nmc = NotificationManagerCompat.from(c)
+        if (!nmc.areNotificationsEnabled()) return
+        val open = Intent(c, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            nudge.extras().forEach { (k, v) -> putExtra(k, v) }
+        }
+        val tap = PendingIntent.getActivity(c, ("n${nudge.cid}").hashCode(), open,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val n = NotificationCompat.Builder(c, NotifChannel.CALLS.id)
+            .setSmallIcon(R.drawable.ic_stat_fariin)
+            .setColor(Color.rgb(0x1E, 0x88, 0xE5))
+            .setContentTitle(title)
+            .setContentText(body)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setContentIntent(tap)
+            .addAction(if (nudge.video) R.drawable.ic_call_video else R.drawable.ic_call_voice, "Join", tap)
+            .setAutoCancel(true)
+            .setSilent(quiet)
+            .build()
+        nmc.notify(nudgeTag(nudge.cid), ID, n)
+    }
+
+    fun nudgeTag(cid: String) = "groupnudge-$cid"
+
+    /** Opened or joined: the group's nudge leaves the list. */
+    fun clearGroupNudge(c: Context, cid: String) = NotificationManagerCompat.from(c).cancel(nudgeTag(cid), ID)
 
     /** "Posted a new story" with the app open: one per author (tag), a tap opens the Stories tab. */
     @SuppressLint("MissingPermission")

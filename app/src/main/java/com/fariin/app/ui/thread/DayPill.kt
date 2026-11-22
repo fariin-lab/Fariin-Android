@@ -47,6 +47,13 @@ internal fun FloatingDayPill(listState: LazyListState, messages: List<Message>, 
         val idx = topRow ?: return@remember null
         list.getOrNull(list.size - 1 - idx)?.let { ThreadLogic.dayLabel(it.createdAtMillis, nowMillis) }
     }
+    FloatingDayPill(listState, label, modifier)
+}
+
+/** The same pill for any list: [label] is the day of the topmost row on screen (the official
+ *  chat passes its own). Shows and fades exactly as above. */
+@Composable
+internal fun FloatingDayPill(listState: LazyListState, label: String?, modifier: Modifier = Modifier) {
     var revealed by remember { mutableStateOf(false) }   // iOS didReveal: not on the open's own scrolls
     var shown by remember { mutableStateOf(false) }
     LaunchedEffect(listState) {

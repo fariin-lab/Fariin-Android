@@ -94,6 +94,16 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     // from a profile or a photo builds the chat again, and by then the count is 0 because it was read;
     // saved with the page, the line stays where it was. The scroll still restores the reader's place.
     val dividerAt = androidx.compose.runtime.saveable.rememberSaveable(cid) { mutableStateOf(unreadAtOpen) }
+    // iOS openReadPass: a chat the cached list does not hold yet (a notification or a link tapped
+    // before the list loaded) takes its unread count from the server's chat doc, until the first
+    // server answer for the messages places the divider. Only a count above 0 is taken; not channels.
+    val unlistedAtOpen = remember(cid) { CryptoHub.listedConversation(cid) == null }
+    LaunchedEffect(s.conv, s.synced) {
+        if (!unlistedAtOpen || s.synced || dividerAt.value > 0 || s.conv.isEmpty()) return@LaunchedEffect
+        val c = Conversation.fromFirestore(cid, s.conv)
+        if (c.isChannel) return@LaunchedEffect
+        c.unread(me).takeIf { it > 0 }?.let { dividerAt.value = it }
+    }
     // Message requests in a 1:1 (iOS requestStance / cannotMessageThem / otherHasKey / keyAccepted).
     val otherUid = if (conv?.isGroup == true) "" else com.fariin.app.crypto.Wire.otherUid(cid, me)
     val keyAccepted = androidx.compose.runtime.saveable.rememberSaveable(cid) { mutableStateOf(false) }
@@ -391,6 +401,8 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         // Drafts kept per chat (iOS Drafts): the box comes back with what was left in it.
         draft = remember(cid) { Drafts.text(cid) },
         onDraft = { Drafts.set(cid, it) },
+        draftFmt = remember(cid) { Drafts.format(cid, Drafts.text(cid)) },
+        onDraftFormat = { t, f -> Drafts.setFormat(cid, t, f) },
         onPin = { m ->
             vm.viewModelScope.launch {
                 when (vm.repo.pin(m)) {
@@ -427,8 +439,12 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         // The sheet's Send (owner 2026-11-07, the reference's forward): the forwards oldest first,
         // then the note as its own message in each chat. One chat picked opens it at once, so the
         // forward is seen arriving; the work runs off this screen so leaving it does not stop it.
-        onForwardWithNote = { msgs, targets, note ->
+        onForwardWithNote = onForwardWithNote@{ msgs, targets, note ->
+            // The last door (iOS sendAll): Restricted chat may have come on while the sheet was open.
+            if (com.fariin.app.data.ChatRestrictions.isOn(cid)) return@onForwardWithNote
             val land = targets.singleOrNull()?.takeIf { it != cid }
+            // Back into this same chat: it lands in front of me, so no toast (iOS sendAll).
+            val backHere = targets.singleOrNull() == cid
             val ordered = msgs.sortedBy { it.createdAtMillis }
             // One chat picked: the forwards are already in it, sending, when it opens (owner 2026-11-14,
             // the big messengers' forward: you and the message land together, not the message later).
@@ -467,7 +483,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
                 val said = when {
                     // Deleted by their author before they went (Forwarder.Gone): said as such, not "try again".
                     gone > 0 && gone == ordered.size -> if (gone == 1) "This message was deleted." else "These messages were deleted."
-                    failedChats == 0 -> if (land != null) null else if (targets.size > 1) "Forwarded to ${targets.size} chats" else "Forwarded"
+                    failedChats == 0 -> if (land != null || backHere) null else if (targets.size > 1) "Sent to ${targets.size} chats" else "Forwarded"
                     failedChats == msgs.size * targets.size -> "Couldn't forward. Try again."
                     else -> "Some messages couldn't be forwarded."
                 }

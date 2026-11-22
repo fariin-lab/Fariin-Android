@@ -157,6 +157,30 @@ object GroupRing {
      */
     fun onLinkNudge(context: Context, d: Map<String, String>) = linkInvite(context, d, nudge = true)
 
+    /**
+     * A group chat's nudge, tapped (server groupCallNudge, the banner's Join or the notification):
+     * the same invitation screen with Ignore and Join; Join joins that group's call as the chat's
+     * Join bar does. Nothing when I am already in or joining a call, a ring is up, or the call ended
+     * (iOS openNudge).
+     */
+    fun onGroupNudge(context: Context, n: com.fariin.app.data.GroupNudge) {
+        val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
+        if (n.callerUid == me) return
+        app = context.applicationContext
+        if (_invite.value != null || GroupCall.ui.value.cid != null || CallManager.ui.value.status.live) return
+        scope.launch {
+            val doc = (try { db.collection("groupCalls").document(n.cid).get().await().data } catch (_: Exception) { null }) ?: return@launch
+            if (doc["active"] != true || doc["kind"] == "adhoc") return@launch
+            val conv = try { db.collection("conversations").document(n.cid).get().await().data } catch (_: Exception) { null }
+            val photos = (conv?.get("photos") as? Map<*, *>).orEmpty()
+            val title = (conv?.get("title") as? String)?.takeIf { it.isNotEmpty() } ?: n.title ?: "Group"
+            val started = (doc["startedAt"] as? Timestamp)?.toDate()?.time ?: n.startedAtMs ?: System.currentTimeMillis()
+            val faces = if (n.callerUid.isEmpty()) emptyList() else listOf(RingFace(n.callerUid, n.callerName, photos[n.callerUid] as? String))
+            if (_invite.value != null || GroupCall.ui.value.cid != null) return@launch
+            ring(GroupInvite(n.cid, title, doc["video"] == true || n.video, n.callerUid, started, faces, nudge = true))
+        }
+    }
+
     private fun linkInvite(context: Context, d: Map<String, String>, nudge: Boolean) {
         val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         val roomId = d["roomId"].orEmpty()

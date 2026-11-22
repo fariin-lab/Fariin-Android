@@ -298,7 +298,11 @@ object LocalDb {
                 summaries[cid] = text to c.getLong(3)
                 v.put("body", org.json.JSONObject().put("text", text).put("type", c.getString(5) ?: "text")
                     .put("authorId", c.getString(4) ?: "").put("deleted", deleted).put("readAt", readAt ?: org.json.JSONObject.NULL).toString())
-            } else { v.putNull("last_id"); v.putNull("last_at"); summaries.remove(cid) }
+            } else {
+                // No message left: the old line's words go too (only my read mark stays).
+                v.putNull("last_id"); v.putNull("last_at"); summaries.remove(cid)
+                v.put("body", org.json.JSONObject().put("readAt", readAt ?: org.json.JSONObject.NULL).toString())
+            }
             if (db.update("chats", v, "cid = ?", arrayOf(cid)) == 0) { v.put("cid", cid); db.insert("chats", null, v) }
         }
     }
@@ -367,7 +371,30 @@ object LocalDb {
     /** Disappearing messages leave the file when they leave the screen. */
     fun purgeExpired(uid: String) {
         io.launch {
-            db(uid)?.let { runCatching { it.delete("messages", "expires_at IS NOT NULL AND expires_at <= ?", arrayOf(System.currentTimeMillis().toString())) } }
+            db(uid)?.let { d -> runCatching {
+                val now = arrayOf(System.currentTimeMillis().toString())
+                // The chats losing a message get their list row worked out again (iOS), so the
+                // gone message's words do not stay in the chats row or in memory.
+                // Their media files on this phone go too (iOS forgetLocalCopies): a message that ran
+                // out while the app was closed never reached the chat's own burn.
+                val files = HashMap<String, MutableSet<String>>()
+                d.rawQuery("SELECT cid, body FROM messages WHERE expires_at IS NOT NULL AND expires_at <= ?", now).use { c ->
+                    while (c.moveToNext()) {
+                        val urls = files.getOrPut(c.getString(0)) { HashSet() }
+                        val body = c.getString(1) ?: continue
+                        if (body == "{}" || body.isEmpty()) continue
+                        runCatching { LocalJson.decodeMessage(org.json.JSONObject(body)) }.getOrNull()?.let { m ->
+                            urls += com.fariin.app.data.OnceStub.mediaUrls(m)
+                            for (a in m.album) urls += listOfNotNull(a.imageUrl, a.videoUrl).filter { it.isNotEmpty() }
+                        }
+                    }
+                }
+                val touched = files.keys
+                if (touched.isEmpty()) return@runCatching
+                d.delete("messages", "expires_at IS NOT NULL AND expires_at <= ?", now)
+                for (cid in touched) refreshSummary(d, cid)
+                app?.let { ctx -> for ((cid, urls) in files) dropCached(ctx, cid, urls) }
+            } }
         }
     }
 
@@ -395,10 +422,12 @@ object LocalDb {
         }.getOrDefault(emptyList())
     }
 
-    /** Every message row, oldest first, handed to [each] one at a time (a big history never sits in memory whole). */
+    /** Every message row, oldest first, handed to [each] one at a time (a big history never sits in memory whole).
+     *  A disappearing message whose time is up never goes into a backup, even before the purge ran. */
     fun eachRawMessage(uid: String, each: (Map<String, Any?>) -> Unit) {
         val db = db(uid) ?: return
-        db.rawQuery("SELECT ${MESSAGE_COLUMNS.joinToString()} FROM messages ORDER BY created_at, cid, id", null).use { c ->
+        db.rawQuery("SELECT ${MESSAGE_COLUMNS.joinToString()} FROM messages WHERE expires_at IS NULL OR expires_at > ? ORDER BY created_at, cid, id",
+            arrayOf(System.currentTimeMillis().toString())).use { c ->
             while (c.moveToNext()) each(MESSAGE_COLUMNS.mapIndexed { i, k -> k to cell(c, i) }.toMap())
         }
     }

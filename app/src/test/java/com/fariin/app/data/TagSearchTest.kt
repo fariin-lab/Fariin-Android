@@ -24,4 +24,10 @@ class TagSearchTest {
         val sp = TagSearch.find(s).single()
         assertEquals("#news", s.substring(sp.start, sp.end))
     }
+
+    @Test fun aMarkInsideATagKeepsItWhole() {
+        // "#cafe" with a combining accent on the e: one tag, as iOS \p{M}.
+        val t = "#cafe\u0301 x"
+        assertEquals(listOf(0 to 6), TagSearch.find(t).map { it.start to it.end })
+    }
 }

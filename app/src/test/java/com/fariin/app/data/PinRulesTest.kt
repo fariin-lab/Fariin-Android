@@ -79,6 +79,22 @@ class PinRulesTest {
         assertEquals(SelectRules.Split(1, 1), SelectRules.split(listOf(mine, theirs), me, false))
     }
 
+    @Test fun deleteNeedsEveryPickDeletable() {
+        val mine = msg(id = "1")
+        val theirs = msg(id = "2", author = "them")
+        // A 1:1 always deletes (Delete for Me).
+        assertTrue(SelectRules.deletable(listOf(mine, theirs), me, isGroup = false, adminMayDelete = false))
+        // A group: one I may not delete turns the bin off for the whole pick (iOS allSatisfy).
+        assertTrue(SelectRules.deletable(listOf(mine), me, isGroup = true, adminMayDelete = false))
+        assertFalse(SelectRules.deletable(listOf(mine, theirs), me, isGroup = true, adminMayDelete = false))
+        assertTrue(SelectRules.deletable(listOf(mine, theirs), me, isGroup = true, adminMayDelete = true))
+        // A tombstone in a group is already gone for everyone: nothing to delete.
+        assertFalse(SelectRules.deletable(listOf(mine, mine.copy(id = "3", deleted = true)), me, isGroup = true, adminMayDelete = true))
+        // A notice needs the group's delete right; none here.
+        assertFalse(SelectRules.deletable(listOf(mine, msg(id = "4", type = "system")), me, isGroup = true, adminMayDelete = true))
+        assertFalse(SelectRules.deletable(emptyList(), me, isGroup = false, adminMayDelete = false))
+    }
+
     @Test fun forwardNeedsEveryPickForwardableAndAtMost32() {
         assertTrue(SelectRules.forwardable(listOf(msg(), msg(id = "2"))))
         assertFalse(SelectRules.forwardable(listOf(msg(), msg(id = "2").copy(deleted = true))))
@@ -93,5 +109,11 @@ class PinRulesTest {
         assertFalse(SelectRules.selectable(msg(type = "system")))
         assertFalse(SelectRules.selectable(msg(text = PinRules.markerText("x", "a photo"))))
         assertTrue(SelectRules.selectable(msg().copy(deleted = true)))
+        // A call record ticks (iOS); it never forwards and in a group never deletes.
+        val call = msg(id = "c", type = "call", text = "")
+        assertTrue(SelectRules.selectable(call))
+        assertFalse(SelectRules.forwardable(listOf(call)))
+        assertTrue(SelectRules.deletable(listOf(call), me, isGroup = false, adminMayDelete = false))
+        assertFalse(SelectRules.deletable(listOf(call), me, isGroup = true, adminMayDelete = true))
     }
 }

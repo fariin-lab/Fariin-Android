@@ -444,12 +444,16 @@ class FirestorePeople(
 
     /** ChatService.createGroup (a plain group, e2ee false, as iOS makes them now). */
     override suspend fun createGroup(title: String, members: List<String>, photo: ByteArray?, permissions: Map<String, Boolean>): String {
-        val people = members.filter { it != me }.mapNotNull { profile(it) }
+        val asked = members.filter { it != me && it.isNotEmpty() }.distinct()
+        val people = asked.mapNotNull { profile(it) }
         val allowed = people.filter { Person.allows(it.privacy, "groups", isContact(it.uid)) }
         // Their "Groups" privacy refused them: said, not dropped in silence (iOS ChatService.sayRefused).
         val refused = people - allowed.toSet()
         if (refused.isNotEmpty()) com.fariin.app.ui.components.Snack.show(GroupRules.refusedSentence(refused.map { it.shownName }), long = true)
-        val users = (allowed.map { it.uid } + me).distinct()
+        // Only a refusal keeps someone out (iOS groupAddRefusers): a profile that could not be read
+        // (offline, slow) was dropped from the group without a word.
+        val refusedIds = refused.map { it.uid }.toSet()
+        val users = (asked.filter { it !in refusedIds } + me).distinct()
         val mine = profile(me)
         val names = HashMap<String, String>(); val photos = HashMap<String, String>()
         for (p in allowed + listOfNotNull(mine)) { names[p.uid] = p.name.ifEmpty { p.handle }; p.photoUrl?.let { photos[p.uid] = it } }
@@ -485,7 +489,8 @@ class FirestorePeople(
                 saved = try {
                     val sref = FirebaseStorage.getInstance().reference.child("profiles/group_${ref.id}.jpg")
                     sref.putBytes(jpeg, StorageMetadata.Builder().setContentType("image/jpeg").build()).await()
-                    ref.update(mapOf("avatarUrl" to sref.downloadUrl.await().toString(), "updatedAt" to FieldValue.serverTimestamp())).await()
+                    // No updatedAt (iOS uploadGroupAvatar): a photo is not a message, so the chat does not jump.
+                    ref.update(mapOf("avatarUrl" to sref.downloadUrl.await().toString())).await()
                     true
                 } catch (_: Exception) { false }
                 if (saved) break
@@ -739,7 +744,8 @@ object GroupRules {
      * member becomes one; when I own the group, an admin (else the first member) becomes the owner
      * with "<name> is now the owner"; then "<me> left".
      */
-    fun leavePlan(me: String, myName: String, data: Map<String, Any?>): LeavePlan {
+    fun leavePlan(me: String, myName: String, data: Map<String, Any?>,
+                  nowMs: Double = System.currentTimeMillis().toDouble()): LeavePlan {
         val users = (data["users"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
         val admins = (data["admins"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
         val names = (data["names"] as? Map<*, *>)?.mapNotNull { (k, v) -> (k as? String)?.let { it to (v as? String ?: "") } }?.toMap() ?: emptyMap()
@@ -762,6 +768,11 @@ object GroupRules {
         }
         val left = "$myName left"
         notices.add(left)
+        // iOS canNotice: no lines when the message rule would refuse mine (admins-only group and I
+        // am not staff, muted, or the group closed), so a refused line cannot refuse the leave.
+        val canNotice = GroupAdmins.announcementBlock(data, me) == null &&
+            !MemberRestrict.isMuted(data, me, nowMs) && !GroupMod.blocksSending(data, nowMs)
+        if (!canNotice) return LeavePlan(update, emptyList(), ownerHeir)
         update["lastMessage"] = left
         update["lastSender"] = me
         return LeavePlan(update, notices, ownerHeir)

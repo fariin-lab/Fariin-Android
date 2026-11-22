@@ -79,6 +79,9 @@ class MessageRulesTest {
         assertEquals("t2", MessageRules.unreadDividerId(ms, me, 2))
         assertNull(MessageRules.unreadDividerId(ms, me, 0))
         assertNull(MessageRules.unreadDividerId(ms, me, 4))   // more unread than held
+        // A pin notice between them is skipped, not counted as unread.
+        val pinned = ms + Message(id = "p1", authorId = "a", text = PinRules.markerText("t1", "x"), createdAtMillis = 9.0)
+        assertEquals("t2", MessageRules.unreadDividerId(pinned, me, 2))
     }
 
     @Test fun usernameRules() {
@@ -123,6 +126,16 @@ class MessageRulesTest {
         assertEquals(listOf("Ali left"), plain.notices)
         assertEquals("You own this group. If you leave, Bilan becomes the owner.", GroupRules.ownerLeaveLine("Bilan"))
         assertEquals("A, B and 2 others", GroupRules.addedWho(listOf("A", "B", "C", "D")))
+    }
+
+    @Test fun leavingAnAdminsOnlyGroupWritesNoLines() {
+        // iOS canNotice: the message rule would refuse my line, so the leave goes without it.
+        val data = mapOf<String, Any?>("type" to "group", "users" to listOf(me, "a", "b"), "admins" to listOf("b"),
+            "createdBy" to "b", "onlyAdminsSend" to true)
+        val plan = GroupRules.leavePlan(me, "Abdi", data)
+        assertTrue(plan.notices.isEmpty())
+        assertNull(plan.update["lastMessage"])
+        assertEquals(listOf("Bilan left"), GroupRules.leavePlan("b", "Bilan", data).notices.takeLast(1))
     }
 
     @Test fun messageParsesReactions() {

@@ -320,7 +320,8 @@ fun OfficialChatScreen(onBack: () -> Unit, onInfo: (() -> Unit)? = null) {
             }
         }
     }) { top ->
-        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState,
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+        LazyColumn(Modifier.fillMaxSize(), state = listState,
             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = top + 12.dp, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             // Never a blank page: the ring until the first answer, then words if there is nothing.
@@ -347,6 +348,17 @@ fun OfficialChatScreen(onBack: () -> Unit, onInfo: (() -> Unit)? = null) {
                         com.fariin.app.data.MessageRules.nextReaction(view.state.reactions[a.id], quick)) }) else null,
                     current = a.id == current)
             }
+        }
+        // The day of the topmost note while scrolling (iOS floating date pill, OfficialChatView
+        // dayLabelFor), the normal chat's pill. The list runs oldest first, so the top is the first row.
+        val topDay by androidx.compose.runtime.remember(listState) {
+            androidx.compose.runtime.derivedStateOf {
+                listState.layoutInfo.visibleItemsInfo.firstOrNull()?.key?.let { k -> view.visible.firstOrNull { it.id == k } }
+                    ?.let { com.fariin.app.data.ThreadLogic.officialDayLabel(it.sortAt, System.currentTimeMillis().toDouble()) }
+            }
+        }
+        if (!searching) com.fariin.app.ui.thread.FloatingDayPill(listState, topDay,
+            Modifier.align(Alignment.TopCenter).padding(top = top + 8.dp))
         }
         // The chat's own selection bar: Delete, "N Selected", Forward.
         if (selecting) Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),

@@ -13,7 +13,8 @@ object TagSearch {
      * `#` then letters, digits or _ with at least one letter or _, not glued to a word or another `#`;
      * `$` then 1 to 8 ASCII letters, not glued, not followed by a letter or digit ($100 is no tag).
      */
-    private val HASH = Regex("""(?<![\p{L}\p{N}_#&])#([\p{L}\p{N}_]{1,64})""")
+    // Marks count as part of a word (iOS \p{M}): a vowel sign or accent mark must not end the tag.
+    private val HASH = Regex("""(?<![\p{L}\p{M}\p{N}_#&])#([\p{L}\p{M}\p{N}_]{1,64})""")
     private val CASH = Regex("""(?<![\p{L}\p{N}_$])\$([A-Za-z]{1,8})(?![\p{L}\p{N}_])""")
 
     /** Every tag in [text], in order, as UTF-16 ranges with the lowercased tag. */

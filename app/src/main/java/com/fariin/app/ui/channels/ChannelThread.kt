@@ -123,7 +123,7 @@ fun PostViews(color: Color) {
     Spacer(Modifier.width(2.dp))
     // A new count fades in (iOS pops 24) rather than swapping in one frame.
     Text(ChannelRules.compactCount(v) + "  ", fontSize = 11.sp, color = color, maxLines = 1,
-        modifier = Modifier.fadeOnChange(ChannelRules.compactCount(v)).semantics { contentDescription = "$v views" })
+        modifier = Modifier.fadeOnChange(ChannelRules.compactCount(v)).semantics { contentDescription = if (v == 1) "1 view" else "$v views" })
 }
 
 /** The chat is ticking rows (Select): a post's share button hides, as iOS. */

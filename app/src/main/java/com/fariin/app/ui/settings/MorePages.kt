@@ -561,8 +561,14 @@ private fun ChatsSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
         }
         // iOS ChatsSettingsView: the last row, red, with what it does written under it.
         // iOS: greyed and dead while it runs or when there is no chat to clear.
-        val canClear = !clearing && com.fariin.app.data.CryptoHub.listedAll().isNotEmpty()
-        SettingsSection(footer = "Deletes every message, photo, video and call from all your devices. It cannot be undone.") {
+        // listedAll() is a plain map, not state: look again each second until the list has loaded,
+        // or the row stays grey when the page was drawn first.
+        var hasChats by remember { mutableStateOf(com.fariin.app.data.CryptoHub.listedAll().isNotEmpty()) }
+        LaunchedEffect(Unit) {
+            while (!hasChats) { kotlinx.coroutines.delay(1000); hasChats = com.fariin.app.data.CryptoHub.listedAll().isNotEmpty() }
+        }
+        val canClear = !clearing && hasChats
+        SettingsSection(footer = "Deletes every message, photo, video and call in your chats from all your devices. Channels you follow and the Fariin chat are kept. It cannot be undone.") {
             SettingsRow("Clear Chat History", trailing = Trailing.NONE,
                 titleColor = if (canClear) Fariin.colors.red else Fariin.colors.red.copy(alpha = 0.4f), last = true,
                 badge = NewBadgeSpots.CHATS_CLEAR_HISTORY) { if (canClear) confirmClear = true }
@@ -575,12 +581,17 @@ private fun ChatsSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
             val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return@YesNo
             clearing = true
             clearScope.launch {
-                // Each chat as the per-chat Delete does it (clearedAt, written on the server so every
-                // device of mine follows). My copy only: the other person keeps theirs. Channels I
-                // follow are left as they are (iOS unfollows them here; clearing is not leaving).
-                val ok = com.fariin.app.data.CryptoHub.listedAll().filter { !it.isFollower(me) }
-                    .map { com.fariin.app.ui.chats.ChatListActions.deleteForMe(me, it) }.all { it }
-                com.fariin.app.data.OfficialChannel.clearHistory()
+                // Every chat in the list, as iOS clearEverything (ChatService.deleteForMe each): my own
+                // clearedAt mark, written on the server so every device of mine follows; the other
+                // person keeps theirs. A channel I only follow is left as it is (no clear mark for a follower). The Fariin chat
+                // is not in the list, so iOS leaves it as it is ([ClearHistoryRules]).
+                val ok = com.fariin.app.data.CryptoHub.listedAll().map { c ->
+                    when (com.fariin.app.data.ClearHistoryRules.step(me, c)) {
+                        com.fariin.app.data.ClearHistoryRules.Step.CLEAR_MARK -> com.fariin.app.ui.chats.ChatListActions.deleteForMe(me, c)
+                        com.fariin.app.data.ClearHistoryRules.Step.SKIP -> true
+                        com.fariin.app.data.ClearHistoryRules.Step.CLEAR_OFFICIAL -> { com.fariin.app.data.OfficialChannel.clearHistory(); true }
+                    }
+                }.all { it }
                 clearing = false
                 com.fariin.app.ui.components.Snack.show(if (ok) "Chat history cleared" else "Couldn't clear every chat. Check your connection and try again.")
             }

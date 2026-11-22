@@ -849,6 +849,9 @@ class ThreadRepository(
     /** Due messages: the files this phone opened go, and the server is asked to delete (it re-reads
      *  every id and refuses anything not really due). Each id once per run. */
     private fun burn(due: List<Message>) {
+        // It leaves the phone's history at the same moment it leaves the screen (iOS burnDue),
+        // not only at the next app start.
+        if (me.isNotEmpty()) com.fariin.app.local.LocalDb.purgeExpired(me)
         val fresh = synchronized(burned) { due.filter { burned.add(it.id) } }
         if (fresh.isEmpty()) return
         media?.let { md ->
@@ -933,12 +936,14 @@ class ThreadRepository(
         // iOS ThreadView.send: one bubble holds 2,500 (owner 2026-10-29); longer text goes out as
         // several messages, in order, each one waiting for the one before. The reply, the
         // @-mentions and the link card ride the first (a mention pings once, not once per bubble).
-        // The bold does not survive the split (iOS): the runs were made for the whole text.
+        // Each part keeps its own bold and links (iOS 2026-11-19: before, every part went out plain).
         val parts = MessageLength.splitForBubbles(t)
         if (parts.size > 1) {
+            val partFmt = TextFormat.forParts(fmt, t, parts)
             var before: kotlinx.coroutines.Job? = null
             parts.forEachIndexed { i, p ->
-                before = sendOne(p, if (i == 0) reply else null, if (i == 0) mentions else emptyList(), before, card = i == 0)
+                before = sendOne(p, if (i == 0) reply else null, if (i == 0) mentions else emptyList(), before, card = i == 0,
+                    fmt = partFmt[i])
             }
             return
         }
@@ -2454,7 +2459,8 @@ class ThreadRepository(
     // ------------------------------------------------------------------ pins (iOS ChatService pins)
 
     /** The pinned messages by id, fetched on their own so a pin older than the loaded page still
-     *  draws in the bar (iOS pinnedPreviews). A tombstone or a missing document is left out. */
+     *  draws in the bar (iOS pinnedPreviews). A tombstone, or a document the server says is not
+     *  there, is kept as deleted (iOS pinnedGone), so the bar and See All leave it out. */
     private val _pinned = MutableStateFlow<Map<String, Message>>(emptyMap())
     val pinned: StateFlow<Map<String, Message>> = _pinned.asStateFlow()
     private val pinFetching = ConcurrentHashMap.newKeySet<String>()
@@ -2468,7 +2474,10 @@ class ThreadRepository(
                     val d = msgRef(id).get().await()
                     if (d.exists()) {
                         val m = parse(d)
-                        if (!m.deleted) _pinned.update { it + (id to m) }
+                        _pinned.update { it + (id to m) }
+                    } else if (!d.metadata.isFromCache) {
+                        // Proven gone: a stand-in marked deleted, so the bar stops saying "Tap to view".
+                        _pinned.update { it + (id to Message(id = id, authorId = "", text = "", createdAtMillis = 0.0, deleted = true)) }
                     }
                 } catch (_: Exception) {
                 } finally { pinFetching.remove(id) }
@@ -2526,6 +2535,7 @@ class ThreadRepository(
             .get().await()
         // Clear Chat (iOS loadChat): what the chat no longer shows, its search does not find.
         val clearedMs = maxOf(clearedAtForMe(), CryptoHub.listedConversation(cid)?.clearedAt?.get(me) ?: 0.0)
+        val now = System.currentTimeMillis().toDouble()
         return snap.documents.mapNotNull { d ->
             val m = Message.fromFirestore(d.id, d.data ?: emptyMap(), cid) { raw, author -> crypto.decrypt(raw, cid, author) }
             when {
@@ -2533,7 +2543,9 @@ class ThreadRepository(
                 HiddenMessages.isHidden(m.id) -> null
                 m.authorId != me && BlockList.hides(m.authorId, m.createdAtMillis) -> null
                 m.text == Message.NOT_ENCRYPTED -> null
-                else -> ChatSearch.searchText(m)?.let { ChatSearch.Item(m.id, it, m.authorId, m.createdAtMillis) }
+                // Ran out on the timer, the server has not deleted it yet: search never finds it.
+                Disappearing.isExpired(m, now) -> null
+                else -> ChatSearch.searchText(m)?.let { ChatSearch.Item(m.id, it, m.authorId, m.createdAtMillis, expiresAtMillis = m.expiresAtMillis) }
             }
         }
     }

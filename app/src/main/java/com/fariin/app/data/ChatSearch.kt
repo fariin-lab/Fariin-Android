@@ -191,7 +191,9 @@ object ChatSearch {
 
     /** One message in the corpus: its id, words, author and time. */
     data class Item(val id: String, val text: String, val authorId: String, val atMillis: Double,
-                    val tokens: List<String> = tokens(text))
+                    val tokens: List<String> = tokens(text),
+                    /** The disappearing stamp: a saved corpus never finds it once it has run out. */
+                    val expiresAtMillis: Double? = null)
 
     /**
      * iOS updateSearchMatches: the corpus and the loaded window merged by id, matched, oldest to
@@ -206,7 +208,8 @@ object ChatSearch {
         val pool = ArrayList<Item>()
         for (m in corpus) if (seen.add(m.id)) pool.add(m)
         for (m in window) if (seen.add(m.id)) pool.add(m)
-        return pool.filter { matches(it.tokens, terms) }.sortedBy { it.atMillis }.takeLast(MAX_RESULTS)
+        val now = System.currentTimeMillis().toDouble()
+        return pool.filter { (it.expiresAtMillis?.let { e -> e > now } ?: true) && matches(it.tokens, terms) }.sortedBy { it.atMillis }.takeLast(MAX_RESULTS)
     }
 
     /**

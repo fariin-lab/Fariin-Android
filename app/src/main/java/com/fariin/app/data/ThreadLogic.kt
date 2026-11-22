@@ -141,6 +141,20 @@ object ThreadLogic {
         }
     }
 
+    private val officialDayFormat = DateTimeFormatter.ofPattern("EEE, MMM d")
+
+    /** The official Fariin chat's day (iOS OfficialChatView.dayLabel): Today, Yesterday, else the
+     *  short weekday, month and day ("Mon, Nov 2") with no year at any age. Phone's time zone. */
+    fun officialDayLabel(millis: Double, nowMillis: Double, zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String {
+        val d = Instant.ofEpochMilli(millis.toLong()).atZone(zone).toLocalDate()
+        val today = Instant.ofEpochMilli(nowMillis.toLong()).atZone(zone).toLocalDate()
+        return when (d) {
+            today -> "Today"
+            today.minusDays(1) -> "Yesterday"
+            else -> officialDayFormat.withLocale(locale).format(d)
+        }
+    }
+
     /** The pinned list's day (iOS PinnedMessagesSheet.dayLabel): Today, Yesterday, else always the
      *  short date with its year ("Nov 2, 2019"), never the long form the chat uses past six months. */
     fun pinnedDayLabel(millis: Double, nowMillis: Double, zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String {

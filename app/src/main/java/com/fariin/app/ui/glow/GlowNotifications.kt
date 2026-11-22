@@ -103,10 +103,9 @@ suspend fun loadGlowEvents(me: String, mine: List<Story>, conversations: List<Co
         }
     }
     if (me.isNotEmpty()) {
-        val who: (String) -> Pair<String, String?> = { u ->
-            val c = conversations.firstOrNull { !it.isGroup && it.users.contains(u) }
-            (c?.names?.get(u) ?: "") to c?.photos?.get(u)
-        }
+        // The same names the viewers sheet uses (iOS fetchViewers): my 1:1 chat, else a group, else
+        // "Someone". These lists also fill StoryViewersCache, so they must not carry empty names.
+        val who: (String) -> Pair<String, String?> = { u -> com.fariin.app.data.StoryService.who(u, conversations, me) }
         val service = StoryService(me)
         mine.map { s -> async { s to service.fetchViewers(s.id, who)?.also { com.fariin.app.ui.stories.StoryViewersCache.put(s.id, it) } } }.awaitAll().forEach { (s, viewers) ->
             for (v in viewers ?: return@forEach) {

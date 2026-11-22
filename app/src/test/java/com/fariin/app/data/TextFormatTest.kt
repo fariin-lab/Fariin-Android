@@ -26,6 +26,9 @@ class TextFormatTest {
     @Test fun parseDropsRunsOutsideTheTextAndUnknownKinds() {
         val p = TextFormat.parse("""[[0,2,"b"],[3,9,"b"],[1,1,"i"],[-1,2,"b"],[4,0,"b"],["x",1,"b"]]""", 5)
         assertEquals(listOf(Span(0, 2)), p)
+        // iOS TextFormat.parse: a run that only runs past the end is cut there.
+        assertEquals(listOf(Span(3, 5)), TextFormat.parse("""[[3,4,"b"]]""", 5))
+        assertTrue(TextFormat.parse("""[[5,1,"b"]]""", 5).isEmpty())
     }
 
     @Test fun parseOfJunkIsNoBold() {

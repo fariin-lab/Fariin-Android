@@ -103,8 +103,11 @@ object PinRules {
 object SelectRules {
     val MAX_FORWARD: Int get() = com.fariin.app.data.AppConfig.int(com.fariin.app.data.AppConfig.K.forwardSelectionMax)
 
-    /** Rows that take a tick: a person's message or a tombstone; never a notice, call or pin line. */
-    fun selectable(m: Message): Boolean = !m.isSystem && !m.isCall && PinRules.notice(m.text) == null
+    /**
+     * Rows that take a tick: a person's message, a tombstone or a call record (iOS: a call's menu
+     * has Select, owner 2026-09-27); never a notice or pin line.
+     */
+    fun selectable(m: Message): Boolean = !m.isSystem && PinRules.notice(m.text) == null
 
     /**
      * ThreadView.canDeleteNotice (owner 2026-10-29): a group notice that I, holding "Delete messages",
@@ -125,6 +128,18 @@ object SelectRules {
         val n = picked.count { MessageRules.canDeleteForEveryone(it, me, adminMayDelete, owner, channel) }
         return Split(n, picked.size - n)
     }
+
+    /**
+     * ThreadView.selectionCanBeDeleted: the bin is live only when EVERY pick may go (not just one).
+     * A notice needs canDeleteNotice; anything else canDeleteHere (a 1:1 always, a group only what
+     * goes for everyone or is my own unsent one).
+     */
+    fun deletable(picked: List<Message>, me: String, isGroup: Boolean, adminMayDelete: Boolean, owner: String = "",
+                  channel: Boolean = false, groupDoc: Map<String, Any?> = emptyMap()): Boolean =
+        picked.isNotEmpty() && picked.all { m ->
+            if (m.isSystem) canDeleteNotice(m, groupDoc, me)
+            else !isGroup || m.sendState != null || MessageRules.canDeleteForEveryone(m, me, adminMayDelete, owner, channel)
+        }
 
     fun forwardable(picked: List<Message>): Boolean =
         picked.isNotEmpty() && picked.size <= MAX_FORWARD && picked.all(MessageRules::canForward)

@@ -99,8 +99,9 @@ object MessageRules {
     /** A swipe replies to a story react-bar emoji too (iOS 2fff7ecc8); it still has no long press. */
     fun canSwipeReply(m: Message, mayReply: Boolean): Boolean = mayReply && canReply(m)
 
-    /** Info: my own delivered message in a group (iOS). */
-    fun canInfo(m: Message, me: String, isGroup: Boolean): Boolean = isGroup && m.authorId == me && m.sendState == null
+    /** Info: my own delivered message in a group, never in a channel (iOS). */
+    fun canInfo(m: Message, me: String, isGroup: Boolean, isChannel: Boolean = false): Boolean =
+        isGroup && !isChannel && m.authorId == me && m.sendState == null
 
     data class Chip(val emoji: String, val count: Int, val mine: Boolean, val faces: List<String>)
 
@@ -300,7 +301,8 @@ object MessageRules {
         if (unread <= 0) return null
         var left = unread
         for (m in messages.asReversed()) {
-            if (m.authorId == me || m.isSystem) continue
+            // Pin notices never count, as on iOS (unreadBoundary skips pinNotice rows).
+            if (m.authorId == me || m.isSystem || PinRules.notice(m.text) != null) continue
             left--
             if (left == 0) return m.rowId
         }

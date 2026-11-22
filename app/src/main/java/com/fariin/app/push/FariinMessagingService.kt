@@ -67,6 +67,13 @@ class FariinMessagingService : FirebaseMessagingService() {
             android.os.Handler(android.os.Looper.getMainLooper()).post { com.fariin.app.call.GroupRing.onLinkNudge(applicationContext, d) }
             return
         }
+        // "<name> wants you back in the call" (server groupCallNudge). In front: our banner with Join
+        // (iOS showNudge); behind: our notification. A tap or Join opens the call's invitation.
+        if (message.data["type"] == com.fariin.app.data.GroupNudgeRules.TYPE) {
+            val n = com.fariin.app.data.GroupNudgeRules.parse(message.data) ?: return
+            runBlocking { withTimeoutOrNull(NUDGE_TIMEOUT_MS) { showGroupNudge(applicationContext, n, message.notification?.title, message.notification?.body) } }
+            return
+        }
         if (message.data["type"] == "groupcall") {
             val cid = message.data["cid"].orEmpty()
             android.os.Handler(android.os.Looper.getMainLooper()).post { com.fariin.app.call.GroupRing.onPush(applicationContext, cid) }
@@ -89,10 +96,17 @@ class FariinMessagingService : FirebaseMessagingService() {
         // A reply alert (owner 2026-11-06): its own notification, whose tap opens that post's Replies.
         // Shown even while that channel is open (fix contract 2026-11-09): the tap opens the sheet there.
         com.fariin.app.data.PostReplyRules.alertTarget(message.data["kind"], message.data["cid"], message.data["mid"])?.let { (cid, mid) ->
+            // In front the In-App switches apply to it too (iOS willPresent): Preview off keeps it in
+            // the list without the drop-down, Sounds off plays nothing. A channel cannot drop down
+            // without its tone, so either one off posts it quietly and the tone and buzz are ours.
+            val inApp = if (com.fariin.app.AppLifecycle.inFront) InAppNotify.prefs(applicationContext) else null
+            val quiet = inApp != null && !(inApp.preview && inApp.sound)
             if (Push.pushOn(applicationContext)) NotificationPoster.postReplyAlert(applicationContext,
                 message.notification?.title ?: message.data["t"] ?: "Fariin", message.notification?.body ?: message.data["b"] ?: "New reply", cid, mid,
                 message.data["rid"].orEmpty(), message.data["aid"].orEmpty(), message.data["kind"].orEmpty(),
-                act = message.data["act"].orEmpty(), wcid = message.data["wcid"].orEmpty(), wmid = message.data["wmid"].orEmpty())
+                act = message.data["act"].orEmpty(), wcid = message.data["wcid"].orEmpty(), wmid = message.data["wmid"].orEmpty(),
+                quiet = quiet)
+            if (quiet && Push.pushOn(applicationContext)) InAppNotify.present(applicationContext, InAppRoute.InApp(null, inApp!!.sound, inApp.vibrate))
             return
         }
         val p = PushData.parse(message.data, message.notification?.title, message.notification?.body)
@@ -106,6 +120,41 @@ class FariinMessagingService : FirebaseMessagingService() {
         private const val PHOTO_TIMEOUT_MS = 4_000L
         private const val KEY_TIMEOUT_MS = 3_000L
         private const val HANDLE_TIMEOUT_MS = 15_000L
+        private const val NUDGE_TIMEOUT_MS = 5_000L
+
+        /** The group nudge (GroupNudgeRules.route): skipped when I am in that call, it ended, or the group is muted. */
+        private suspend fun showGroupNudge(c: Context, n: com.fariin.app.data.GroupNudge, title: String?, body: String?) {
+            val me = com.fariin.app.Fb.auth.currentUser?.uid.orEmpty()
+            if (me.isEmpty()) return
+            val db = com.fariin.app.Fb.db
+            val call = try { db.collection("groupCalls").document(n.cid).get().await() } catch (_: Exception) { null }
+            val conv = try { db.collection("conversations").document(n.cid).get().await() } catch (_: Exception) { null }
+            val active = call?.let { it.exists() && it.getBoolean("active") == true }
+            val muted = ((conv?.get("mutedBy") as? Map<*, *>)?.get(me) as? Number)?.toLong() ?: 0L
+            val inFront = com.fariin.app.AppLifecycle.inFront
+            val prefs = InAppNotify.prefs(c)
+            val show = com.fariin.app.data.GroupNudgeRules.route(n, me, Push.pushOn(c),
+                blocked = com.fariin.app.data.BlockList.state.value.contains(n.callerUid),
+                myCallCid = com.fariin.app.call.GroupCall.ui.value.cid, callActive = active,
+                mutedUntilMs = muted, nowMs = System.currentTimeMillis(),
+                inFront = inFront, locked = appLockShowing(c), preview = prefs.preview)
+            val head = title?.takeIf { it.isNotEmpty() } ?: n.title ?: "Group call"
+            val words = body?.takeIf { it.isNotEmpty() } ?: com.fariin.app.data.GroupNudgeRules.fallbackBody(n)
+            when (show) {
+                com.fariin.app.data.NudgeShow.NOTHING -> {}
+                com.fariin.app.data.NudgeShow.NOTIFICATION -> NotificationPoster.postGroupNudge(c, head, words, n, quiet = false)
+                com.fariin.app.data.NudgeShow.QUIET_NOTIFICATION -> {
+                    NotificationPoster.postGroupNudge(c, head, words, n, quiet = true)
+                    InAppNotify.present(c, InAppRoute.InApp(null, prefs.sound, prefs.vibrate))
+                }
+                com.fariin.app.data.NudgeShow.BANNER -> {
+                    // iOS InAppBannerCenter.showNudge: their face, "NAME" over "wants to talk", Join.
+                    val face = (conv?.get("photos") as? Map<*, *>)?.get(n.callerUid) as? String
+                    InAppNotify.present(c, InAppRoute.InApp(InAppBanner(n.cid, n.callerName, "wants to talk", face?.ifEmpty { null }, nudge = n),
+                        prefs.sound, prefs.vibrate))
+                }
+            }
+        }
 
         suspend fun handle(c: Context, p: PushData) {
             DeviceRegistry.init(c)

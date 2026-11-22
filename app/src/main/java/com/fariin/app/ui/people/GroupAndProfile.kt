@@ -735,10 +735,16 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
     com.fariin.app.ui.components.GlassColumnPage(false, Modifier.background(c.bgSecondary), bar = {
         Box(Modifier.fillMaxWidth().background(c.bgSecondary).statusBarsPadding()) {
             when (step) {
-                1 -> bar("Add Members", onBack) { TextAction("Next", picked.isNotEmpty()) { step = 2 } }
+                // Skip with nobody ticked (iOS NewGroupView: a group may start with only me), Next once someone is.
+                1 -> bar("Add Members", onBack) { TextAction(if (picked.isEmpty()) "Skip" else "Next", true) { step = 2 } }
                 3 -> com.fariin.app.ui.components.FloatingTopBar("Permissions", onBack = { step = 2 }, container = c.bgSecondary)
                 else -> bar("New Group", { step = 1 }) {
                     TextAction("Create", title.isNotBlank() && !busy) {
+                        // "Create new groups" switched off from the server while this page was open (iOS
+                        // Flags.groupCreateEnabled): said in words, not a bare "Try again".
+                        if (!com.fariin.app.data.AppFeatures.groupCreate) {
+                            error = "Creating new groups isn't available right now."; return@TextAction
+                        }
                         busy = true
                         scope.launch {
                             // At most N groups owned (iOS NewGroupView): the server counts, and says so here.
@@ -754,6 +760,15 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
                                 // Not awaited (iOS: a detached task), so Create does not wait on the network.
                                 if (timer > 0) kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
                                     .launch { runCatching { api.setDisappear(cid, timer) } }
+                                // The invite link is made with the group (iOS NewGroupView), behind the chat: once
+                                // more after 3 s if the group was not on the server yet. Both failing is fine, the
+                                // Invite Links page still makes one when it opens.
+                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
+                                    if (runCatching { com.fariin.app.channel.ChannelService.createPrimaryLink(cid) }.getOrNull() == null) {
+                                        kotlinx.coroutines.delay(3_000)
+                                        runCatching { com.fariin.app.channel.ChannelService.createPrimaryLink(cid) }
+                                    }
+                                }
                                 // "New group" on the new-account card is done.
                                 com.fariin.app.ui.chats.GetStartedStore.markDone(gsCtx, com.fariin.app.ui.chats.GetStartedCard.NEW_GROUP)
                                 onCreated(cid)
@@ -778,8 +793,10 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 SettingsSection(header = "What members can do", footer = "Admins can always do these. Switch one off and only admins can.") {
                     com.fariin.app.ui.channels.SwitchLine("Send messages", canSend) { canSend = it }
-                    com.fariin.app.ui.channels.SwitchLine("Add members", canAdd) { canAdd = it }
-                    com.fariin.app.ui.channels.SwitchLine("Start group calls", canCall, last = true) { canCall = it }
+                    // Group calls switched off from the server: no calls switch (iOS CallFeatures.groupCalls).
+                    val calls = com.fariin.app.data.AppFeatures.groupCalls
+                    com.fariin.app.ui.channels.SwitchLine("Add members", canAdd, last = !calls) { canAdd = it }
+                    if (calls) com.fariin.app.ui.channels.SwitchLine("Start group calls", canCall, last = true) { canCall = it }
                 }
             }
         } else {
@@ -811,7 +828,9 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
             NewGroupTimerSection(timer) { timer = it }
             // iOS: the Permissions row with how many switches are on, and the "change this later" line.
             SettingsSection(footer = "What members can do. You can change this later in the group's settings.") {
-                SettingsRow("Permissions", value = "${listOf(canSend, canAdd, canCall).count { it }}/3", last = true) { step = 3 }
+                // iOS permissionsCount: the calls switch counts only while group calls are on.
+                val on = listOf(canSend, canAdd) + (if (com.fariin.app.data.AppFeatures.groupCalls) listOf(canCall) else emptyList())
+                SettingsRow("Permissions", value = "${on.count { it }}/${on.size}", last = true) { step = 3 }
             }
             // No "Members · N" heading on this page (iOS, owner 2026-10-20): it counted me but listed
             // only the others, so two over one row read as a mistake.

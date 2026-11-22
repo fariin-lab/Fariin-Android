@@ -112,9 +112,11 @@ object AdminDelete {
     internal val scope by lazy { CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate) }
 }
 
+/** [onProceed] runs after Proceed only (select mode closes then, as iOS bulkDelete does). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun AdminDeleteSheet(picked: List<Message>, ui: ThreadUi, actions: ThreadActions, onDismiss: () -> Unit) {
+internal fun AdminDeleteSheet(picked: List<Message>, ui: ThreadUi, actions: ThreadActions, onDismiss: () -> Unit,
+                              onProceed: () -> Unit = {}) {
     val c = Fariin.colors
     val doc = ui.groupDoc
     val me = ui.me
@@ -150,6 +152,7 @@ internal fun AdminDeleteSheet(picked: List<Message>, ui: ThreadUi, actions: Thre
         val names = authors.associateWith { name(it) }
         val cid = ui.cid
         onDismiss()
+        onProceed()
         // The picked ones through the single delete (the media viewer closes on it), the rest as one plan.
         picked.forEach { actions.onDeleteForEveryone(it) }
         val more = deleteMsgs.drop(picked.size)

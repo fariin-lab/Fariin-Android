@@ -294,6 +294,12 @@ fun ChatListScreen(
     // Fariin Plus chat folders: the chosen folder (null for All Chats, or for everyone without them).
     // It takes the place of the menu's filter; the archive keeps its own list.
     val folder = if (showArchive) null else com.fariin.app.data.ChatFoldersStore.current
+    // A menu filter that has just become a tab (a folder with its rule was added) goes back to All (iOS).
+    val takenFilters = com.fariin.app.data.ChatFoldersStore.menuFiltersTaken
+    LaunchedEffect(takenFilters) {
+        val name = when (filter) { FILTER_UNREAD -> "unread"; FILTER_GROUPS -> "groups"; FILTER_CHANNELS -> "channels"; else -> null }
+        if (name != null && name in takenFilters) filter = FILTER_ALL
+    }
     // Kept until the list, the filter or the page changes: these were rebuilt on every recomposition
     // (each scroll-driven or badge change), a cost a 2-core phone felt on every tab.
     val filtered = remember(source, filter, showArchive, me, folder) {
@@ -379,7 +385,14 @@ fun ChatListScreen(
     // its latest time; pinnable (kept on this phone). Not in the Archive or a filtered list.
     val activity by com.fariin.app.data.ActivityFeed.summary.collectAsState()
     val activityPin by com.fariin.app.data.ActivityFeed.pinned.collectAsState()
-    val activityShown = !showArchive && filter == FILTER_ALL && folder == null && activity?.let { it.at > 0 } == true
+    // On All; on Unread (and in an Only Show Unread folder) only while unread; not on Groups,
+    // Channels or another folder (iOS activityRow).
+    val activityShown = !showArchive && activity?.let { a -> a.at > 0 && when {
+        folder != null -> folder.unreadOnly && a.unread > 0
+        filter == FILTER_ALL -> true
+        filter == FILTER_UNREAD -> a.unread > 0
+        else -> false
+    } } == true
     val activityPinned = activityShown && activityPin
     val activityMuted by com.fariin.app.data.ActivityFeed.muted.collectAsState()
     // "Activity" is found by the chat search like a chat title.
@@ -648,7 +661,10 @@ fun ChatListScreen(
                                     }
                                 }
                                 if (!showArchive) OverflowMenu(moreAnchor, onOpen = { items -> moreItems = items; moreOpen = true },
-                                    filter = filter, onFilter = { filter = it },
+                                    // A menu filter and a folder tab never both narrow the list (iOS menuFilterSection):
+                                    // picking a filter selects All Chats, and nothing is ticked while a folder is chosen.
+                                    filter = if (folder != null) -1 else filter,
+                                    onFilter = { filter = it; com.fariin.app.data.ChatFoldersStore.select(com.fariin.app.data.ChatFolder.ALL.id) },
                                     requests = state.requests.size,
                                     // Off from the admin panel = no entry (iOS: owner 2026-10-18). Live:
                                     // reading `revision` redraws this when the panel switch flips.
@@ -691,7 +707,8 @@ fun ChatListScreen(
                             onEdit = { folderEdit = it }, onManage = {
                                 com.fariin.app.ui.settings.SettingsLink.request(com.fariin.app.ui.settings.PAGE_CHAT_FOLDERS)
                                 onSettings()
-                            }, card = listCard?.takeIf { !searching && !selecting && filter == FILTER_ALL && folder == null }) }
+                            }, card = listCard?.takeIf { !searching && !selecting && filter == FILTER_ALL && folder == null },
+                            onPick = { filter = FILTER_ALL }) }
                         }
                     }
                 }
@@ -778,13 +795,13 @@ fun ChatListScreen(
                     query.isNotBlank() -> Centered(null, "No results", null)
                     showArchive -> Centered(fi(R.drawable.ic_archive), "Nothing archived", "Chats you archive and stories you hide will show here.")
                     folder != null -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Text("Nothing here right now", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label)
+                        // iOS's words since the tabs redesign: one line and the way to change the folder;
+                        // the tabs above are the way back.
+                        Text("No chats in this folder right now.", fontSize = 15.sp, color = c.secondary,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(horizontal = 32.dp))
                         Spacer(Modifier.height(16.dp))
                         Text("Edit Folder", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.accent,
                             modifier = Modifier.clip(CircleShape).clickable { folderEdit = folder }.padding(horizontal = 16.dp, vertical = 10.dp))
-                        Text("Show All Chats", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.accent,
-                            modifier = Modifier.clip(CircleShape).clickable { com.fariin.app.data.ChatFoldersStore.select(com.fariin.app.data.ChatFolder.ALL.id) }
-                                .padding(horizontal = 16.dp, vertical = 10.dp))
                     }
                     filter == FILTER_UNREAD -> Centered(ImageVector.cachedVector(R.drawable.ic_sf_checkmark_circle), "No unread chats", "You're all caught up.")
                     filter == FILTER_GROUPS -> Centered(fi(R.drawable.ic_gs_group_type), "No groups yet", "Groups you join will appear here.",
@@ -949,10 +966,29 @@ fun ChatListScreen(
                                     // A long press offers Remove from Recent (iOS 7571e6bf5); results keep no menu.
                                     var removeMenu by remember { mutableStateOf(false) }
                                     Box {
-                                        if (conv != null) rowHold(conv) { removeMenu = true }
+                                        if (conv != null) {
+                                            // Recent is who, not what was said (iOS RecentRow): face, name, and a
+                                            // person's last seen or a group's member count. No last message, time or ticks.
+                                            val other = if (conv.isGroup || conv.isChannel) "" else conv.otherUid(me)
+                                            var seen by remember(conv.id) { mutableStateOf(other.takeIf { it.isNotEmpty() }?.let { com.fariin.app.data.RecentLastSeen.cached(me, it) }) }
+                                            if (other.isNotEmpty()) LaunchedEffect(conv.id) { seen = com.fariin.app.data.RecentLastSeen.load(appCtx, me, other) }
+                                            val followers by com.fariin.app.channel.ChannelFollows.docs.collectAsState()
+                                            val bias by com.fariin.app.channel.ChannelFollows.biasFlow.collectAsState()
+                                            val count = if (other.isNotEmpty()) null else com.fariin.app.data.GroupLinkCards.countLine(
+                                                if (conv.isChannel) com.fariin.app.channel.ChannelRules.subscriberCount(
+                                                    (followers[conv.id]?.get("followerCount") as? Number)?.toInt() ?: 0, conv.users.size, bias[conv.id] ?: 0)
+                                                else conv.users.size, conv.isChannel)
+                                            RecentChatRow(conv, me, line = count, seen = seen,
+                                                onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); removeMenu = true }) {
+                                                SearchRecents.recordChat(appCtx, me, conv); searching = false; query = ""; onOpen(conv)
+                                            }
+                                        }
                                         else if (e.kind == "person") {
                                             val p = com.fariin.app.data.Person(e.key, e.title, e.handle, e.photo.ifEmpty { null })
-                                            PersonRow(p, onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); removeMenu = true }) {
+                                            // Their last seen under the name, read once when the row shows (iOS RecentRow).
+                                            var seen by remember(e.key) { mutableStateOf(com.fariin.app.data.RecentLastSeen.cached(me, e.key)) }
+                                            LaunchedEffect(e.key) { seen = com.fariin.app.data.RecentLastSeen.load(appCtx, me, e.key) }
+                                            PersonRow(p, recent = true, seen = seen, onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); removeMenu = true }) {
                                                 scope.launch { people.startChat(p)?.let { cid -> SearchRecents.recordPerson(appCtx, me, p, cid); searching = false; query = ""; people.chat(cid) } ?: run { searching = false; query = ""; people.contact(p.uid) } }   // the chat can't be made (their Messages setting): their page, never a dead tap (owner 2026-11-10)
                                             }
                                         }
@@ -1387,7 +1423,8 @@ private fun OverflowMenu(
         // A filter that already is a folder (by its rule) leaves the menu (iOS 2026-11-20).
         if (!folders.hasFolderFor("unread")) item("Unread", R.drawable.ic_menu_unread, filter == FILTER_UNREAD) { onFilter(FILTER_UNREAD) } else null,
         if (com.fariin.app.data.AppFeatures.groups && !folders.hasFolderFor("groups")) item("Groups", R.drawable.ic_gs_group_type, filter == FILTER_GROUPS) { onFilter(FILTER_GROUPS) } else null,
-        if (!folders.hasFolderFor("channels")) item("Channels", R.drawable.ic_sf_megaphone, filter == FILTER_CHANNELS) { onFilter(FILTER_CHANNELS) } else null,
+        // Channels sit with Groups: both gone while the panel has groups off (iOS menuFilterSection).
+        if (com.fariin.app.data.AppFeatures.groups && !folders.hasFolderFor("channels")) item("Channels", R.drawable.ic_sf_megaphone, filter == FILTER_CHANNELS) { onFilter(FILTER_CHANNELS) } else null,
         // People with folders: the tabs can be put away and brought back.
         if (folders.active) item(if (folders.tabsHidden) "Show Folder Tabs" else "Hide Folder Tabs", R.drawable.ic_story_folder) {
             folders.hideTabs(!folders.tabsHidden)
@@ -1467,7 +1504,8 @@ private fun Centered(icon: ImageVector?, title: String, body: String?, action: P
 /** Section label, Material style: small, in the brand blue, 16 from the edge. */
 /** A person found by username (iOS newPersonRow): photo, name, the @handle in blue. */
 @Composable
-private fun PersonRow(p: com.fariin.app.data.Person, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
+private fun PersonRow(p: com.fariin.app.data.Person, recent: Boolean = false, seen: com.fariin.app.data.Presence.Seen? = null,
+                      onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().combinedClickable(onLongClick = onLongClick, onClick = onClick).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
         Avatar(p.photoUrl, 54.dp, Modifier.padding(vertical = 9.dp))
@@ -1475,7 +1513,31 @@ private fun PersonRow(p: com.fariin.app.data.Person, onLongClick: (() -> Unit)? 
         Column(Modifier.weight(1f)) {
             Text(p.name.ifEmpty { p.handle }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium,
                 color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (p.handle.isNotEmpty()) Text("@" + p.handle, style = MaterialTheme.typography.bodyMedium, color = c.secondary, maxLines = 1)
+            // Under Recent the line is their last seen, not the @handle (iOS RecentRow); "online" in the action colour.
+            if (recent) seen?.let { Text(it.text, style = MaterialTheme.typography.bodyMedium, color = if (it.online) c.accent else c.secondary, maxLines = 1) }
+            else if (p.handle.isNotEmpty()) Text("@" + p.handle, style = MaterialTheme.typography.bodyMedium, color = c.secondary, maxLines = 1)
+        }
+    }
+}
+
+/** A chat under Recent (iOS RecentRow): face, name with its mark, and one grey line under it. */
+@Composable
+private fun RecentChatRow(conv: Conversation, me: String, line: String?, seen: com.fariin.app.data.Presence.Seen?,
+                          onLongClick: () -> Unit, onClick: () -> Unit) {
+    val c = Fariin.colors
+    Row(Modifier.fillMaxWidth().combinedClickable(onLongClick = onLongClick, onClick = onClick).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Avatar(conv.displayPhoto(me), 54.dp, Modifier.padding(vertical = 9.dp), squircle = conv.isChannel,
+            kind = com.fariin.app.ui.components.AvatarKind.of(conv.isGroup, conv.isChannel))
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(conv.displayName(me), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium,
+                    color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                ChatRowVerifiedMark(conv, me)
+            }
+            val text = line ?: seen?.text
+            if (text != null) Text(text, style = MaterialTheme.typography.bodyMedium,
+                color = if (line == null && seen?.online == true) c.accent else c.secondary, maxLines = 1)
         }
     }
 }

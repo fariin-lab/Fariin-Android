@@ -15,7 +15,7 @@ object OnceStub {
     /** The stub of [m]. A row with no type gets the one its link says, so it still draws as view-once. */
     fun stub(m: Message): Message = Message(
         id = m.id, authorId = m.authorId, text = "",
-        type = m.type ?: if (m.audioUrl != null) "audio" else "image",
+        type = m.type ?: when { m.audioUrl != null -> "audio"; m.videoUrl != null -> "video"; else -> "image" },
         createdAtMillis = m.createdAtMillis, hasServerTime = m.hasServerTime,
         clientTs = m.clientTs, clientId = m.clientId, replyTo = m.replyTo, reactions = m.reactions,
         expiresAtMillis = m.expiresAtMillis, disappearSeconds = m.disappearSeconds,

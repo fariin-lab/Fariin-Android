@@ -46,6 +46,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.text.font.FontFamily
@@ -410,6 +416,8 @@ private fun ThreadContent(
     val selecting = selected.isNotEmpty()
     var bulkDelete by remember { mutableStateOf(false) }
     var bulkForward by remember { mutableStateOf<List<Message>?>(null) }
+    // iOS adminDeleteRequestFor: a group admin's pick holding other members' messages opens the admin sheet.
+    var adminBulk by remember { mutableStateOf<List<Message>?>(null) }
     BackHandler(enabled = selecting) { selected.clear() }
     val rowEnv = remember { RowEnv() }
     fun toggle(m: Message) { if (m.rowId in selected) selected.remove(m.rowId) else selected.add(m.rowId) }
@@ -449,7 +457,7 @@ private fun ThreadContent(
     val swipeOn = remember(ui.me) { SwipeActions.on(swipeCtx, ui.me) }
     // A message's words keep their bold on the clipboard (iOS bold-everywhere); any other text goes plain.
     fun copyOf(m: com.fariin.app.data.Message, t: String) =
-        if (t == m.text && m.bold.isNotEmpty()) BoldClip.copy(swipeCtx, t, m.bold) else clipboard.setText(androidx.compose.ui.text.AnnotatedString(t))
+        if (t == m.text && (m.bold.isNotEmpty() || m.links.isNotEmpty())) BoldClip.copy(swipeCtx, t, m.bold, m.links) else clipboard.setText(androidx.compose.ui.text.AnnotatedString(t))
     fun swipeMenu(m: com.fariin.app.data.Message): (() -> Pair<SwipeActions.Slot?, SwipeActions.Slot?>)? {
         if (!swipeOn || !SwipeActions.hasMenu(m)) return null
         return {
@@ -629,13 +637,16 @@ private fun ThreadContent(
     if (bulkDelete) BulkDeleteDialog(picked, ui, onDismiss = { bulkDelete = false }) { plan ->
         actions.onDeleteMany(plan); selected.clear()
     }
+    adminBulk?.let { p -> AdminDeleteSheet(p, ui, actions, onDismiss = { adminBulk = null }, onProceed = { selected.clear() }) }
     val ch = ui.channel
     Isolated { postMenuFor?.let { m ->
         if (ch != null) com.fariin.app.ui.channels.ChannelPostMenu(ch, m, onDismiss = { postMenuFor = null; postPreview = null }, preview = postPreview,
             onCopy = { copyOf(m, it); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
             onDelete = { deleteFor = it }, onQuote = { quoteFor = it }, onForward = { forwardFor = it },
             // The owner's and admins' own tools, as the chat menu has them (iOS uses one menu for both).
-            onSelect = if (com.fariin.app.data.SelectRules.selectable(m)) ({ selected.clear(); selected.add(it.rowId) }) else null,
+            // No Select for a follower or visitor: nothing of theirs to delete (iOS selectionShowsDelete).
+            onSelect = if (com.fariin.app.data.SelectRules.selectable(m) && ch.role == com.fariin.app.channel.ChannelRules.Role.ADMIN)
+                ({ selected.clear(); selected.add(it.rowId) }) else null,
             onEdit = if (MessageRules.canEdit(m, ui.me, System.currentTimeMillis().toDouble(), channel = true) && !com.fariin.app.data.CardRules.isCard(m.text))
                 ({ editing = it; replyTo = null }) else null,
             onEditHistory = { historyFor = it },
@@ -661,8 +672,20 @@ private fun ThreadContent(
     // The divider is placed once, from the unread count at open (iOS anchors it the same way).
     // Counted only on the server's first answer: the phone's saved copy can lack the very messages
     // that are unread, and counting back through it put the divider on old, read rows.
-    val dividerId = remember(ui.loaded && ui.synced) {
-        if (ui.loaded && ui.synced) MessageRules.unreadDividerId(ui.messages, ui.me, ui.dividerAt) else null
+    // More unread than the rows held: no divider at first; asked again as older pages come in, and
+    // placed once enough is loaded (iOS anchorUnread runs again on each new count). Counted only up
+    // to the newest row of that first answer, so messages arriving later never move it. A divider
+    // placed late only draws; the open's landing on it is for the first answer alone.
+    val dividerHold = remember(ui.cid) { arrayOfNulls<String>(2) }   // [0] the open's newest row, [1] the divider
+    val dividerAtOpen = remember(ui.cid) { booleanArrayOf(true) }
+    val dividerId = remember(ui.cid, ui.loaded && ui.synced, ui.messages.size) {
+        if (dividerHold[1] == null && ui.loaded && ui.synced && ui.dividerAt > 0) {
+            val mark = dividerHold[0] ?: (ui.messages.lastOrNull()?.rowId ?: "").also { dividerHold[0] = it }
+            val upTo = ui.messages.indexOfLast { it.rowId == mark }
+            dividerHold[1] = if (upTo < 0) null else MessageRules.unreadDividerId(ui.messages.subList(0, upTo + 1), ui.me, ui.dividerAt)
+            if (dividerHold[1] == null) dividerAtOpen[0] = false
+        }
+        dividerHold[1]
     }
     // At the bottom = the newest row in view (the list is reversed). Read receipts follow it.
     val atBottom by remember { derivedStateOf { listState.firstVisibleItemIndex <= 1 } }
@@ -780,7 +803,9 @@ private fun ThreadContent(
     LaunchedEffect(ui.messages.lastOrNull()?.rowId) {
         // At a restored place only my own new send (still on its way) brings the list down.
         if (heldPlace) { if (ui.messages.lastOrNull()?.let { it.authorId == ui.me && it.sendState != null } == true) heldPlace = false else return@LaunchedEffect }
-        if (stick || listState.firstVisibleItemIndex <= 1 || ui.messages.lastOrNull()?.authorId == ui.me) {
+        // Scrolled up, only my own send from this phone (still on its way) brings the list down, as
+        // on iOS. A message of mine from another device lands like anyone's: no jump, no count.
+        if (stick || listState.firstVisibleItemIndex <= 1 || ui.messages.lastOrNull()?.let { it.authorId == ui.me && it.sendState != null } == true) {
             // Someone else's message landing live: the list glides up to it (iOS), instead of every
             // row jumping in one frame. My own sends, the open and history loads still snap.
             // The default scroll spring took ~0.1 s on the Pixel; iOS's glide is ~0.25 s (owner's
@@ -821,6 +846,7 @@ private fun ThreadContent(
         val id = dividerId ?: return@LaunchedEffect
         if (landedOnUnread) return@LaunchedEffect
         landedOnUnread = true
+        if (!dividerAtOpen[0]) return@LaunchedEffect   // placed later, while reading: no jump
         val i = ui.messages.indexOfFirst { it.rowId == id }
         if (i < 0) return@LaunchedEffect
         val idx = ui.messages.size - 1 - i   // the list is reversed
@@ -966,7 +992,8 @@ private fun ThreadContent(
             val list = uiNow.value.messages
             val i = list.indexOfFirst { it.id == id }
             if (!found || i < 0) {
-                val gone = list.none { it.id == id } && uiNow.value.pinned[id] == null
+                // Deleted only when proven (iOS pinnedGone); a pin not read yet opens the list instead.
+                val gone = list.firstOrNull { it.id == id }?.deleted ?: (uiNow.value.pinned[id]?.deleted == true)
                 // iOS: out of reach from the pinned bar, the pinned list opens instead of a notice.
                 if (gone) actions.onNotice("Pinned message was deleted")
                 else if (advance) showPins.value = true
@@ -1077,6 +1104,9 @@ private fun ThreadContent(
     // The chat itself changed (a message came, was edited or deleted): results follow, the list stays put.
     LaunchedEffect(ui.messages) { if (search.active) search.update(ui.messages, force = true, navigate = false) }
     val pins = visiblePins(ui)
+    // iOS: the bar always starts on the newest pin (the last in pin order) whenever the pins change;
+    // a tap then walks on through the rest.
+    LaunchedEffect(pins) { pinIndex = (pins.size - 1).coerceAtLeast(0) }
     // The header and the pinned capsule float over the top of the chat (iOS): the messages run under
     // them and fade out behind a soft wash, and the list is padded by their height so nothing hides.
     // Started at the header's usual height (status bar + the 52 dp row) so the top fade is there on
@@ -1239,6 +1269,21 @@ private fun ThreadContent(
             } else if (ui.messages.isEmpty() && ch != null) {
                 // An empty channel shows its own card (iOS: the channel card from the first frame).
                 com.fariin.app.ui.channels.ChannelIntroCard(ch, Modifier.align(Alignment.Center))
+            } else if (ui.messages.isEmpty() && !ui.isGroup && ch == null && !ui.notAMember) {
+                // iOS encryptionNotice: an empty 1:1 says it is end-to-end encrypted, Learn more opens
+                // the safety page. Groups never get this line (they are not end-to-end encrypted).
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                Column(Modifier.align(Alignment.Center).padding(horizontal = 40.dp).clip(RoundedCornerShape(14.dp))
+                    .clickable { com.fariin.app.ui.settings.openWeb(ctx, "https://fariin.com/safety") }
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_sf_lock), null, tint = c.secondary, modifier = Modifier.size(15.dp))
+                    Spacer(Modifier.height(4.dp))
+                    Text(androidx.compose.ui.text.buildAnnotatedString {
+                        append("Messages and calls are end-to-end encrypted. Only people in this chat can read or listen to them.")
+                        pushStyle(androidx.compose.ui.text.SpanStyle(color = c.blue)); append(" Learn more"); pop()
+                    }, fontSize = 13.sp, color = c.secondary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                }
             } else if (ui.messages.isEmpty()) {
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("No messages here yet", fontSize = 15.sp, color = c.secondary)
@@ -1554,14 +1599,19 @@ private fun ThreadContent(
                     search.index = (search.index + d).coerceIn(0, maxOf(0, search.matches.size - 1)); goToMatch()
                 }, onList = { search.asList = it })
             } else if (kind == 1) {
-                val canDelete = picked.isNotEmpty() && (!ui.isGroup ||
-                    picked.any { it.sendState != null || MessageRules.canDeleteForEveryone(it, ui.me, ui.adminMayDelete, ui.ownerId, channel = ui.channel != null) })
+                // iOS selectionCanBeDeleted: every pick must be one I may delete, not just one of them.
+                val canDelete = com.fariin.app.data.SelectRules.deletable(picked, ui.me, ui.isGroup, ui.adminMayDelete, ui.ownerId,
+                    channel = ui.channel != null, groupDoc = ui.groupDoc)
                 SelectionBar(
                     deleteEnabled = canDelete,
                     forwardEnabled = !restrictedNow && com.fariin.app.data.SelectRules.forwardable(picked),
                     copyEnabled = !restrictedNow && picked.any(MessageRules::canCopy),
                     busy = false,
-                    onDelete = { bulkDelete = true },
+                    onDelete = {
+                        // The picks as they are now: the sheet keeps them while it is open.
+                        val p = picked
+                        if (ui.isGroup && AdminDelete.opens(ui.groupDoc, ui.me, p)) adminBulk = p else bulkDelete = true
+                    },
                     onForward = { bulkForward = picked.sortedBy { it.createdAtMillis } },
                     onCopy = {
                         clipboard.setText(androidx.compose.ui.text.AnnotatedString(com.fariin.app.data.SelectRules.copyText(picked)))
@@ -1761,8 +1811,8 @@ private fun ThreadContent(
                         com.fariin.app.data.GroupAdmins.slows(doc, ui.me)) com.fariin.app.data.MessageLength.splitForBubbles(whole) else emptyList()
                     val rest = if (parts.size > 1) parts.drop(1).joinToString("\n\n") else null
                     val t = if (rest != null) parts[0] else whole
-                    // A group's text carries no format runs (they are a channel post's), so the first part goes plain.
-                    val fmt = if (rest != null) null else wholeFmt
+                    // The first part keeps its own bold and links (iOS slices them per part).
+                    val fmt = if (rest != null) com.fariin.app.data.TextFormat.forParts(wholeFmt, whole.trim(), parts)[0] else wholeFmt
                     // Links typed or added through Format > Link both count (iOS).
                     val anyLink = com.fariin.app.data.GroupAdmins.hasLink(t) ||
                         (fmt != null && com.fariin.app.data.TextFormat.parseLinks(fmt, t.length).isNotEmpty())
@@ -1864,6 +1914,7 @@ private fun ThreadContent(
                     },
                     refill = composerRefill, onRefilled = steady0 { composerRefill = null },
                     initialDraft = actions.draft, onDraft = steady1 { d: String -> actions.onDraft(d); linkText = d },
+                    initialDraftFmt = actions.draftFmt, onDraftFormat = steady2(actions.onDraftFormat),
                     // A channel's admin writes a "Broadcast", with the post-without-sound bell (iOS).
                     placeholder = if (ch != null) "Broadcast"
                         else if (slowLeft > 0) "Slow mode · %d:%02d".format(slowLeft / 60, slowLeft % 60) else "Message",
@@ -1948,13 +1999,13 @@ private fun youNotice(m: Message, ui: ThreadUi): String {
     val t = noticeText(m)
     // The shared wallpaper notice (iOS 4df24f5a5): "You ..." for the setter, else the contact's name here.
     if (m.isSystem) for (suffix in listOf(com.fariin.app.data.SharedWallpapers.SET_SUFFIX, com.fariin.app.data.SharedWallpapers.REMOVED_SUFFIX)) {
-        if (t.endsWith(suffix)) return (if (m.authorId == ui.me) "You" else ui.names[m.authorId]?.takeIf { it.isNotEmpty() } ?: ui.title) + suffix
+        if (t.endsWith(suffix)) return personName(ui, m.authorId) + suffix
     }
     // Restricted Chat notices are worded per reader (iOS restrictedAction): "You" for mine, the
     // person's current name for theirs, and "Restricted Chat" / "Restricted Group" capitalised.
     if (m.isSystem) for (action in RESTRICTED_ACTIONS) {
         if (t.endsWith(" $action", ignoreCase = true)) {
-            val who = if (m.authorId == ui.me) "You" else ui.names[m.authorId]?.takeIf { it.isNotEmpty() } ?: ui.title
+            val who = personName(ui, m.authorId)
             val said = action.replace("Restricted chat", "Restricted Chat").replace("Restricted group", "Restricted Group")
             return "$who $said"
         }
@@ -2219,6 +2270,8 @@ private val senderPalette = listOf(
  */
 internal fun personName(ui: ThreadUi, uid: String): String = when {
     uid == ui.me -> "You"
+    // A 1:1 says the chat's own name (iOS personName: title), so a deleted account reads "Deleted Account".
+    !ui.isGroup && ui.channel == null -> ui.title.ifEmpty { ui.names[uid].orEmpty() }
     ui.isGroup && ui.channel == null -> ui.names[uid]?.takeIf { it.isNotEmpty() } ?: "User"
     else -> ui.names[uid] ?: ui.title
 }
@@ -2338,8 +2391,14 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             return@Row
         }
         com.fariin.app.data.StoryReplyRules.reactionGlyph(m, showSender)?.let { glyph ->
-            StoryReaction(ui, m, glyph, isMe, tick, is24h)
-            return@Row
+            // Only while the story is live (iOS `!sr.unavailable`): once it is gone the ordinary
+            // layout below says "Story unavailable" over the emoji, not a dead card.
+            val feed by com.fariin.app.data.LiveStories.state.collectAsState()
+            val r = m.replyTo
+            if (r != null && com.fariin.app.data.LiveStories.find(feed, r.id, r.authorId) != null) {
+                StoryReaction(ui, m, glyph, isMe, tick, is24h)
+                return@Row
+            }
         }
         // Stickers and GIFs (StickerGifBubbles.kt): the name, Forwarded and the quote above them.
         if (m.isSticker || m.isGif) {
@@ -2365,7 +2424,10 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                     gifCaption?.let { cap ->
                         Box(Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
                             TextWithMeta(cap, LocalBubbleText.current.copy(color = ink), linkInk = if (isMe) Color.White else Fariin.colors.blue,
-                                tags = ui.channel != null) { if (gifQuote == null) Meta(m, tick, isMe, is24h) else Spacer(Modifier) }
+                                bold = remember(cap, m.mentions, ui.names) { com.fariin.app.data.MentionRules.ranges(cap, m.mentions, ui.names) },
+                                fmtBold = remember(cap, m.bold) { if (m.bold.isEmpty()) emptyList() else com.fariin.app.data.TextFormat.ranges(m.bold) },
+                                ownLinks = m.links, tags = true, lined = isMe,
+                                mentionInk = if (isMe) null else Fariin.colors.blue) { if (gifQuote == null) Meta(m, tick, isMe, is24h) else Spacer(Modifier) }
                         }
                     }
                     gifQuote?.let { q ->
@@ -2520,8 +2582,9 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 linkInk = if (m.deleted) null else styled?.ink ?: if (isMe) Color.White else c.blue,
                 // The author's own links (Format > Link), only over the words they were made for.
                 ownLinks = if (m.deleted || m.links.isEmpty() || body != m.text) emptyList() else m.links,
-                // A channel post's #tags and $tags open Tag Search.
-                tags = ui.channel != null && !m.deleted,
+                // #tags and $tags open Tag Search in every chat (iOS 2026-11-21, was channel posts only).
+                tags = !m.deleted,
+                lined = isMe || styled != null,
                 // iOS BubbleText: on an incoming bubble the mentions also wear the accent colour.
                 mentionInk = if (m.deleted || isMe) null else styled?.ink ?: c.blue,
             )
@@ -2711,8 +2774,12 @@ private fun MediaRow(
                 // With pills, the time goes with them (it joins their last row), as a text post's.
                 // A channel post's caption opens Tag Search from its #tags too, as its text does (2026-11-20:
                 // "clip #ovntest" under a video was plain text).
+                // As the text's own words (iOS mediaBody): mentions, the author's bold and links, tags in every chat.
                 TextWithMeta(caption, LocalBubbleText.current.copy(color = ink), linkInk = if (isMe) Color.White else c.blue,
-                    tags = ui.channel != null && !m.deleted) {
+                    bold = remember(caption, m.mentions, ui.names) { com.fariin.app.data.MentionRules.ranges(caption, m.mentions, ui.names) },
+                    fmtBold = remember(caption, m.bold) { if (m.bold.isEmpty() || caption != m.text) emptyList() else com.fariin.app.data.TextFormat.ranges(m.bold) },
+                    ownLinks = if (m.links.isEmpty() || caption != m.text) emptyList() else m.links,
+                    tags = !m.deleted, lined = isMe, mentionInk = if (isMe) null else c.blue) {
                     if (chips.isEmpty() && mediaQuote == null) Meta(m, tick, isMe, is24h) else Spacer(Modifier)
                 }
             }
@@ -2956,6 +3023,8 @@ private fun tickDescription(t: Tick) = when (t) {
 @Composable
 private fun TextWithMeta(text: String, style: TextStyle, bold: List<IntRange> = emptyList(), fmtBold: List<IntRange> = emptyList(),
                          linkInk: Color? = null, ownLinks: List<com.fariin.app.data.TextFormat.Link> = emptyList(), tags: Boolean = false,
+                         /** My bubble or a bubble style: linked words and tags get a line (iOS BubbleText). */
+                         lined: Boolean = false,
                          /** The mentions' colour on an incoming bubble (iOS BubbleText accent); null keeps the text colour. */
                          mentionInk: Color? = null,
                          meta: @Composable () -> Unit) {
@@ -2965,10 +3034,10 @@ private fun TextWithMeta(text: String, style: TextStyle, bold: List<IntRange> = 
         val term = LocalSearchTerm.current
         // Outside the list (the long-press menu's copy) the links are drawn but take no taps.
         val tap = LocalBubbleLinkTap.current ?: NoLinkTap
-        Text(remember(text, term, bold, fmtBold, linkInk, tap, ownLinks, tags, mentionInk) {
+        Text(remember(text, term, bold, fmtBold, linkInk, tap, ownLinks, tags, lined, mentionInk) {
             // The post's own bold in the bold weight, same size; the mentions keep their semibold.
             val marked = mentionMarked(searchMarked(text, term), bold).let { if (fmtBold.isEmpty()) it else boldMarked(it, fmtBold) }
-            val linked = if (linkInk == null) marked else linkMarked(marked, bold, linkInk, tap, ownLinks, tags)
+            val linked = if (linkInk == null) marked else linkMarked(marked, bold, linkInk, tap, ownLinks, tags, lined)
             // Last, so the mention's colour wins over a link style on the same words (iOS order).
             if (mentionInk == null || bold.isEmpty()) linked else androidx.compose.ui.text.AnnotatedString.Builder(linked).apply {
                 for (r in bold) if (r.last < linked.length) addStyle(androidx.compose.ui.text.SpanStyle(color = mentionInk), r.first, r.last + 1)
@@ -3058,6 +3127,8 @@ private fun Composer(
     boldable: Boolean = false,
     onTyping: (Boolean) -> Unit = {},
     initialDraft: String = "", onDraft: (String) -> Unit = {},
+    /** The draft's bold and links (iOS Drafts.format): put back with its words, kept as they change. */
+    initialDraftFmt: String? = null, onDraftFormat: (String, String?) -> Unit = { _, _ -> },
     /** Words to put back in the field (a key, then the text): what a held-back send did not take. */
     refill: Pair<Long, String>? = null, onRefilled: () -> Unit = {},
     me: String = "", onSticker: (com.fariin.app.data.StickerRef) -> Unit = {},
@@ -3100,9 +3171,12 @@ private fun Composer(
     // iOS mentionMap: the members picked from the @ list, by name; resolved against the text at send.
     var picks by remember { mutableStateOf(emptyMap<String, List<String>>()) }
     // The field's bold runs (TextFormat), kept in step with every change to its words.
-    var boxBold by remember { mutableStateOf(emptyList<com.fariin.app.data.TextFormat.Span>()) }
+    // A draft coming back brings its own (iOS restoreDraft, 2026-11-19).
+    var boxBold by remember { mutableStateOf(if (boldable) com.fariin.app.data.TextFormat.parse(initialDraftFmt, initialDraft.length)
+        else emptyList<com.fariin.app.data.TextFormat.Span>()) }
     // ...and its links (iOS Format > Link), the same way.
-    var boxLinks by remember { mutableStateOf(emptyList<com.fariin.app.data.TextFormat.Link>()) }
+    var boxLinks by remember { mutableStateOf(if (boldable) com.fariin.app.data.TextFormat.parseLinks(initialDraftFmt, initialDraft.length)
+        else emptyList<com.fariin.app.data.TextFormat.Link>()) }
     // Add Link / Edit Link: the selection it is for, while the dialog is up.
     var linkFor by remember { mutableStateOf<IntRange?>(null) }
     // Edit puts the message's words in the field (keyed by message id, so it happens once).
@@ -3121,15 +3195,26 @@ private fun Composer(
     LaunchedEffect(refill?.first) { refill?.let { if (prefill == null) { draft = it.second; picks = emptyMap() }; onRefilled() } }
     // Every change outside an edit is the chat's draft (sent = cleared below).
     LaunchedEffect(draft) { if (prefill == null && !wasEditing) { kept = draft; onDraft(draft) } }
+    // Its bold and links go with it, measured on the trimmed words (iOS Drafts.setFormat).
+    LaunchedEffect(draft, boxBold, boxLinks) {
+        if (prefill == null && !wasEditing && boldable) onDraftFormat(draft, com.fariin.app.data.TextFormat.serialize(
+            com.fariin.app.data.TextFormat.forTrimmed(boxBold, draft), draft.trim().length,
+            com.fariin.app.data.TextFormat.linksForTrimmed(boxLinks, draft)))
+    }
 
-    // iOS typing: on while there are words (refreshed every 10 s so the 15 s expiry stays armed),
-    // off when the field empties, after 5 s without a keystroke, or when the composer goes.
+    // iOS typing: "on" only from a keystroke (a draft coming back or an edit's words are not
+    // typing, and nothing goes while editing a sent message), re-sent at most every 10 s while keys
+    // keep coming (the other side drops it after 15 s), "off" 3 s after the last keystroke, when
+    // the field empties, or when the composer goes.
     var lastKey by remember { mutableStateOf(0L) }
-    LaunchedEffect(draft.isNotBlank(), lastKey) {
-        if (draft.isBlank()) { onTyping(false); return@LaunchedEffect }
-        onTyping(true)
-        kotlinx.coroutines.delay(5_000)
-        onTyping(false)
+    val typingSentAt = remember { longArrayOf(0L) }
+    LaunchedEffect(draft.isNotBlank(), lastKey, prefill != null) {
+        val now = System.currentTimeMillis()
+        val typing = draft.isNotBlank() && prefill == null && lastKey > 0 && now - lastKey < 3_000
+        if (!typing) { onTyping(false); typingSentAt[0] = 0L; return@LaunchedEffect }
+        if (typingSentAt[0] == 0L || now - typingSentAt[0] >= 10_000) { onTyping(true); typingSentAt[0] = now }
+        kotlinx.coroutines.delay(3_000 - (now - lastKey))
+        onTyping(false); typingSentAt[0] = 0L
     }
     DisposableEffect(Unit) { onDispose { onTyping(false) } }
     val recorder = remember { VoiceRecorder(context.applicationContext) }
@@ -3152,6 +3237,43 @@ private fun Composer(
     DisposableEffect(Unit) { onDispose { onRecording(false) } }
     var locked by remember { mutableStateOf(false) }
     androidx.compose.runtime.SideEffect { lockedNow[0] = locked }
+    // The words in the field go out: Send's tap, its effect menu and a hardware Return all come here.
+    // onSend holds slow mode and the group's rules, and saves an open edit instead of sending.
+    fun sendTyped() {
+        val t = draft
+        val ids = mentions?.let { com.fariin.app.data.MentionRules.forSend(t.trim(), picks, it.members) } ?: emptyList()
+        // The runs measured on the words as sent (trimmed), as iOS does.
+        val fmt = if (boldable) com.fariin.app.data.TextFormat.serialize(
+            com.fariin.app.data.TextFormat.forTrimmed(boxBold, t), t.trim().length,
+            com.fariin.app.data.TextFormat.linksForTrimmed(boxLinks, t)) else null
+        picks = emptyMap()
+        boxBold = emptyList()
+        boxLinks = emptyList()
+        draft = ""
+        onSend(t, ids, fmt)
+    }
+    // iOS pressesBegan: a HARDWARE keyboard's Return (or Cmd+Return) sends; Shift or Alt+Return
+    // makes a new line. The on-screen keyboard's Enter is never caught here: it types a new line.
+    // Nothing to send (or the mic is busy): the key types a new line as always. The key's release
+    // after a send is swallowed too, so the field never sees half a press.
+    val returnSent = remember { booleanArrayOf(false) }
+    fun hardwareReturn(e: androidx.compose.ui.input.key.KeyEvent): Boolean {
+        val k = e.key
+        if (k != androidx.compose.ui.input.key.Key.Enter && k != androidx.compose.ui.input.key.Key.NumPadEnter) return false
+        if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyUp) return returnSent[0].also { returnSent[0] = false }
+        if (e.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) return false
+        val n = e.nativeKeyEvent
+        val hardware = n.deviceId != android.view.KeyCharacterMap.VIRTUAL_KEYBOARD &&
+            (n.flags and android.view.KeyEvent.FLAG_SOFT_KEYBOARD) == 0 && n.device?.isVirtual == false
+        if (!hardware || n.repeatCount > 0) return false
+        if (e.isShiftPressed || e.isAltPressed || e.isCtrlPressed) return false
+        // An input method still composing a word owns the key.
+        if (boxValue.composition != null) return false
+        if ((draft.isBlank() && !sendsWithoutText) || recording || locked) return false
+        sendTyped()
+        returnSent[0] = true
+        return true
+    }
     var reviewing by remember { mutableStateOf(false) }
     var review by remember { mutableStateOf<VoiceRecorder.Review?>(null) }
     // A note kept from the last visit comes back paused, ready to listen to, send, bin or carry on.
@@ -3418,11 +3540,14 @@ private fun Composer(
                                     androidx.compose.ui.text.input.TextFieldValue(t, androidx.compose.ui.text.TextRange(at))
                                 } ?: return@BasicTextField
                             val now = System.currentTimeMillis()
-                            if (now - lastKey > 10_000 || draft.isBlank()) lastKey = now
+                            if (fv.text != boxValue.text) lastKey = now   // a real change of words, not a cursor move
                             // What is typed or pasted starts regular, even next to bold.
                             if (boldable) boxBold = com.fariin.app.data.TextFormat.adjust(boxBold, boxValue.text, fv.text)
                                 .let { b -> val got = BoldClip.pasted(context, boxValue.text, fv.text); if (got.isEmpty()) b else com.fariin.app.data.TextFormat.normalize(b + got, fv.text.length) }
                             if (boldable && boxLinks.isNotEmpty()) boxLinks = com.fariin.app.data.TextFormat.adjustLinks(boxLinks, boxValue.text, fv.text)
+                            // Linked words pasted keep their link (iOS pastedBold reads links too).
+                            if (boldable) BoldClip.pastedLinks(context, boxValue.text, fv.text).takeIf { it.isNotEmpty() }?.let { got ->
+                                boxLinks = com.fariin.app.data.TextFormat.normalizeLinks(boxLinks + got, fv.text.length) }
                             boxValue = fv
                             draft = fv.text
                         },
@@ -3436,6 +3561,8 @@ private fun Composer(
                             // the keyboard rose over the panel and both stood stacked (owner 2026-11-08). Close it.
                             .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial); if (emojiOpen) { panelToKeys = true; emojiOpen = false } } }
                             .boldMenuItem(boldable, hasSelection = { !boxValue.selection.collapsed }, onBold = boldBar.onBold, onLink = openLink)
+                            // A hardware keyboard's Return sends (iOS); the on-screen one is untouched.
+                            .onPreviewKeyEvent { hardwareReturn(it) }
                             // Screen readers: the placeholder is a separate Text, so the field names itself.
                             .semantics { contentDescription = placeholder },
                     )
@@ -3478,19 +3605,7 @@ private fun Composer(
                 }
             } else if ((draft.isNotBlank() || sendsWithoutText) && !recording) {
                 var fxMenu by remember { mutableStateOf(false) }
-                val sendNow = {
-                        val t = draft
-                        val ids = mentions?.let { com.fariin.app.data.MentionRules.forSend(t.trim(), picks, it.members) } ?: emptyList()
-                        // The runs measured on the words as sent (trimmed), as iOS does.
-                        val fmt = if (boldable) com.fariin.app.data.TextFormat.serialize(
-                            com.fariin.app.data.TextFormat.forTrimmed(boxBold, t), t.trim().length,
-                            com.fariin.app.data.TextFormat.linksForTrimmed(boxLinks, t)) else null
-                        picks = emptyMap()
-                        boxBold = emptyList()
-                        boxLinks = emptyList()
-                        draft = ""
-                        onSend(t, ids, fmt)
-                }
+                val sendNow = { sendTyped() }
                 val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
                 val holdable = effects != com.fariin.app.data.PlusStore.State.OFF && prefill == null && draft.isNotBlank()
                 Box(
@@ -4138,6 +4253,23 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ThreadRow(
                 com.fariin.app.data.Disappearing.noticeLine(
                     personName(ui, m.authorId), m.disappearSeconds),
                 icon = true)
+            // Select mode: a call record takes a tick too (iOS: its menu has Select). A tap ticks,
+            // never the call-back question.
+            m.isCall && ch == null && selecting -> Row(
+                Modifier.fillMaxWidth().background(selLit).pointerInput(m.rowId) { detectTapGestures(onTap = { env.toggle(m) }) },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SelectTick(ticked)
+                Box(Modifier.weight(1f)) {
+                    val theirs = ui.isGroup && m.callerUid != ui.me
+                    CallBubble(m, ui.me, is24h, myFill(), receivedFill(),
+                        peerUid = if (ui.isGroup) null else com.fariin.app.crypto.Wire.otherUid(ui.cid, ui.me),
+                        title = ui.title, photoUrl = ui.photoUrl,
+                        callerName = if (theirs) ui.names[m.callerUid ?: m.authorId] ?: "Someone" else null,
+                        callerPhoto = if (theirs) ui.photos[m.callerUid ?: m.authorId] else null)
+                    Box(Modifier.matchParentSize().pointerInput(m.rowId) { detectTapGestures(onTap = { env.toggle(m) }) })
+                }
+            }
             // A call record: the iOS call bubble (CallBubble.kt); tap asks, then calls back.
             m.isCall && ch == null -> {
                 val theirs = ui.isGroup && m.callerUid != ui.me

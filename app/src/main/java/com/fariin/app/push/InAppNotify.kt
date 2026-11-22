@@ -17,7 +17,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 /** One in-app banner: the chat it opens, the name, the words, the face (a URL the Avatar loads). */
-data class InAppBanner(val cid: String, val title: String, val body: String, val photo: String?)
+data class InAppBanner(val cid: String, val title: String, val body: String, val photo: String?,
+                       /** A group call nudge: a Join pill, and a tap opens the call's invitation, not the chat. */
+                       val nudge: com.fariin.app.data.GroupNudge? = null)
 
 /** Settings > Notifications > In-App Notifications (prefs "fariin_push", each absent = on). */
 data class InAppPrefs(val sound: Boolean = true, val vibrate: Boolean = true, val preview: Boolean = true)
@@ -53,10 +55,16 @@ object InAppRules {
         val s = (decision as? NotifDecision.Show)?.spec ?: return InAppRoute.Nothing
         if (!inFront) return InAppRoute.System
         if (!s.opensChat || s.channel != NotifChannel.MESSAGES) return InAppRoute.System
-        val banner = if (prefs.preview && !locked) {
+        val banner = if (!prefs.preview || locked) null else if (s.key == com.fariin.app.data.OfficialChannel.CID) {
+            // Fariin's own messages ("New login") speak as Fariin with its mark, the title in front
+            // of the words (iOS InAppBannerCenter.show). The host draws the mark for this cid.
+            val head = s.title.trim()
+            val words = if (head.isEmpty() || head == com.fariin.app.data.OfficialChannel.NAME) s.body else "$head: ${s.body}"
+            InAppBanner(s.key, com.fariin.app.data.OfficialChannel.NAME, words, null)
+        } else {
             val photo = if (s.plain) localPhoto else if (s.isGroup) s.groupPhoto ?: localPhoto else s.senderPhoto ?: localPhoto
             InAppBanner(s.key, s.title.ifBlank { "New message" }, s.body, photo)
-        } else null
+        }
         return InAppRoute.InApp(banner, prefs.sound, prefs.vibrate)
     }
 }
