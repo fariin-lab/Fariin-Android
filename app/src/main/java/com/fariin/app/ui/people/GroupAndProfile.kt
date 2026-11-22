@@ -232,6 +232,17 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
                         // Only the step the server can refuse is waited for (the name check, 5 s at
                         // most); the rest finishes after the page closes (iOS loading audit 2026-11-17).
                         val newName = name.trim().takeIf { it != me?.name }
+                        // Without a loaded profile the bio is only empty, not cleared by anyone (iOS).
+                        // Tidied again on the way out, as iOS tidyBio: an old bio may still hold line breaks.
+                        val newAbout = about.takeIf { me != null && about.trim() != me?.about?.trim() }
+                            ?.let { com.fariin.app.data.ProfileWrites.oneParagraph(it) }
+                        // iOS save(): a name or bio change with no network is refused up front, in
+                        // the sign-in screens' words. A photo-only change needs no network here.
+                        if ((newName != null || newAbout != null) && com.fariin.app.data.ConnectionStatus.offline) {
+                            error = com.fariin.app.data.AuthMessages.OFFLINE
+                            busy = false; saving = false
+                            return@launch
+                        }
                         if (newName != null) api.checkName(newName)
                         val jpeg = stagedJpeg
                         val remove = stagedRemove && jpeg == null
@@ -239,8 +250,6 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
                         // mine down (no Plus needed for that); a new clip replaces it.
                         val video = stagedVideo
                         val hadVideo = com.fariin.app.data.AvatarVideoIndex.mine() != null
-                        // Without a loaded profile the bio is only empty, not cleared by anyone (iOS).
-                        val newAbout = about.takeIf { me != null && about.trim() != me?.about?.trim() }
                         onBack()
                         profileSaveScope.launch {
                             try {
