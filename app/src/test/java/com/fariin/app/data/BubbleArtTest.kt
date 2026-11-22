@@ -363,8 +363,13 @@ class BubbleArtTest {
         assertEquals("Default", BubbleStyles.name(null))
         assertTrue(BubbleStyles.known("skull") && BubbleStyles.known("mint"))
         assertFalse(BubbleStyles.known("rainbow"))
-        assertTrue(BubbleStyles.mayUse("skull") && BubbleStyles.mayUse("mint") && BubbleStyles.mayUse(null))
-        assertFalse(BubbleStyles.mayUse("glass"))
+        val free = { false }
+        assertTrue(BubbleStyles.mayUse("skull", free) && BubbleStyles.mayUse("mint", free) && BubbleStyles.mayUse(null, free))
+        assertFalse(BubbleStyles.mayUse("glass", free))
+        // Locked by Plus: a picture style is refused, a free colour is not.
+        val locked = { true }
+        assertFalse(BubbleStyles.mayUse("skull", locked))
+        assertTrue(BubbleStyles.mayUse("mint", locked))
         assertNull(BubbleArt.find("mint"))
     }
 
