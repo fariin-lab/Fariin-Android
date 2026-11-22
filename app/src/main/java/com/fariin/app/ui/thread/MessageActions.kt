@@ -417,11 +417,14 @@ internal fun ReactionChips(m: Message, ui: ThreadUi, isMe: Boolean, onTap: (Stri
             val seen = remember(chip.emoji) { intArrayOf(-1) }
             LaunchedEffect(chip.emoji, chip.count, chip.mine) {
                 val key = chip.count * 2 + if (chip.mine) 1 else 0
-                if (seen[0] != -1 && seen[0] != key && anim) {
+                // Noted before the pop: a quick tap back (A, B, A) cancels the pop mid-way, and with
+                // the old key still kept the chip stayed small for good.
+                val before = seen[0]
+                seen[0] = key
+                if (before != -1 && before != key && anim) {
                     scale.snapTo(0.7f)
                     scale.animateTo(1f, com.fariin.app.ui.components.Motion.pop())
-                }
-                seen[0] = key
+                } else if (scale.value != 1f) scale.snapTo(1f)
             }
             Row(
                 Modifier.padding(end = 4.dp).graphicsLayer { scaleX = scale.value; scaleY = scale.value }.clip(CircleShape)

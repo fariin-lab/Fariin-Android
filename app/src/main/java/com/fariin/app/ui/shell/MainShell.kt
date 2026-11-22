@@ -567,6 +567,8 @@ private fun TabItem(t: TabSpec, selected: Boolean, badge: Int, photo: String?, a
     val pop = remember { Animatable(1f) }
     LaunchedEffect(selected) {
         if (selected && animate && !lite) { pop.snapTo(0.86f); pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 500f)) }
+        // A quick tap on another tab cancels the pop mid-way: without this the icon stayed small.
+        else if (pop.value != 1f) pop.snapTo(1f)
     }
     val desc = if (badge > 0) "${t.label}, $badge ${if (t.id == TAB_CALLS) "missed" else "unread"}" else t.label
     Box(
