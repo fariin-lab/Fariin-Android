@@ -128,8 +128,12 @@ class PinRulesTest {
         assertFalse(SelectRules.canDeleteNotice(pin, group, me))
         // The group's owner may.
         assertTrue(SelectRules.canDeleteNotice(pin, group, "boss"))
-        // Its author may clear their own (iOS: adminCan || authorId == me).
+        // Its author may clear their own pin line (iOS: adminCan || own pinNotice).
         assertTrue(SelectRules.canDeleteNotice(pin, group, "a"))
+        // But not their own "joined" or other system notice: admins only.
+        val joined = msg(author = "a", type = "system", at = nowMs)
+        assertFalse(SelectRules.canDeleteNotice(joined, group, "a"))
+        assertTrue(SelectRules.canDeleteNotice(joined, group, "boss"))
         // Not in a 1:1, never a tombstone.
         assertFalse(SelectRules.canDeleteNotice(pin, group - "type", "boss"))
         assertFalse(SelectRules.canDeleteNotice(pin.copy(deleted = true), group, "boss"))

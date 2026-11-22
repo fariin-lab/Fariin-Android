@@ -117,9 +117,11 @@ object SelectRules {
     fun canDeleteNotice(m: Message, groupDoc: Map<String, Any?>, me: String): Boolean {
         if (!isNotice(m) || m.deleted || (groupDoc["type"] as? String) != "group") return false
         val t = GroupAdmins.Team.from(groupDoc)
-        // iOS: an admin holding the right, or my own notice (my "pinned" line) inside the window.
+        // iOS (bbbdcbd89): an admin holding the right may clear any notice; the author only their
+        // own "pinned" line (inside the window). Joined, left and other notices are admins only.
         val right = t.can(me, GroupAdmins.Right.DELETE_MESSAGES)
-        if (!right && m.authorId != me) return false
+        val ownPin = PinRules.notice(m.text) != null && m.authorId == me
+        if (!right && !ownPin) return false
         return MessageRules.canDeleteForEveryone(m, me, adminMayDelete = right,
             authorIsOwner = t.isOwner(m.authorId), iAmOwner = t.isOwner(me))
     }
