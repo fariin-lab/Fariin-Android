@@ -40,6 +40,8 @@ object VoicePlayer {
         /** The chat the open note belongs to, and who sent it (the bar away from that chat). */
         val cid: String? = null,
         val author: String = "",
+        /** The open note's message (a playlist's own message for a song): the bar's tap lands on it. */
+        val messageId: String? = null,
         /**
          * Paused by the person on its bubble, not by a call or unplugged headphones (iOS pausedByUser):
          * they were done with it, so leaving the chat shows no bar for it.
@@ -364,7 +366,7 @@ object VoicePlayer {
         if (music == null) VoiceEar.watch(context) { player }   // raise to ear, as iOS (voice notes only)
         watchCalls()
         _state.value = _state.value.copy(id = id, playing = true, failed = _state.value.failed - id, cid = cid, author = author,
-            pausedByUser = false, music = music)
+            messageId = messageId ?: music?.messageId, pausedByUser = false, music = music)
         ticker?.cancel()
         ticker = main.launch { while (isActive) { tick(); delay(50) } }
     }

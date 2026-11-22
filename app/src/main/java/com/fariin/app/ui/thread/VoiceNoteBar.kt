@@ -40,7 +40,7 @@ import com.fariin.app.R
 /**
  * A voice message still open after its chat was left (iOS VoiceNoteBar): pause or play, who it is
  * from over "Voice Message", the chat's speed, and close. The progress runs along the bottom edge.
- * Shown only away from the chat it belongs to; a tap on it goes back there.
+ * Shown only away from the chat it belongs to; a tap on it goes back there, at the note.
  */
 @Composable
 fun VoiceNoteBar(here: String?, me: String, modifier: Modifier = Modifier, onOpen: (String) -> Unit) {
@@ -71,7 +71,12 @@ private fun VoiceNoteBarBody(s: VoicePlayer.State, me: String, modifier: Modifie
     val music = s.music
     val rate = VoicePlayer.rate(cid)
     Box(modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).height(44.dp).clip(RoundedCornerShape(22.dp))
-        .background(c.card).clickable { onOpen(cid) }
+        // iOS PlayerAccessory tap: back to the chat AT the playing message (the jump the shared
+        // media's Go to Message uses: the chat scrolls to it and lights it once it is open).
+        .background(c.card).clickable {
+            s.messageId?.let { com.fariin.app.data.QuoteStore.pendingJump.value = com.fariin.app.data.QuoteStore.Jump(cid, it) }
+            onOpen(cid)
+        }
         // iOS: a sideways drag anywhere on the bar moves the note to that point of its width.
         .pointerInput(s.id) {
             val id = s.id ?: return@pointerInput
