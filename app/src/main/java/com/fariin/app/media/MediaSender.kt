@@ -73,9 +73,11 @@ class MediaSender(
     var fwdChannelJson: String? = null
 
     private suspend fun setMsg(batch: com.google.firebase.firestore.WriteBatch, ref: com.google.firebase.firestore.DocumentReference,
-                               members: List<String>?, msg: Map<String, Any>) {
+                               members: List<String>?, msg: Map<String, Any>, reply: Message.ReplyRef? = null) {
         val fc = sealOrNull(fwdChannelJson, members)
         var out = if (fc != null) msg + ("fwdChannel" to fc) else msg
+        // A photo sent while replying: replyTo sealed as a text reply seals it (iOS sendImage).
+        if (reply != null) out = out + ("replyTo" to com.fariin.app.data.ReplyQuoteRules.wire(reply, seal(reply.text, members)))
         quoteId?.takeIf { com.fariin.app.data.QuoteRules.isQid(it) }?.let { out = out + ("quote" to com.fariin.app.data.QuoteStore.wire(it)) }
         // The group or channel it came from (iOS sealedForwardSource), only beside `forwarded`. A
         // plain group's seal hands the JSON back, so there the map itself goes. A failed seal drops only this.
@@ -164,6 +166,7 @@ class MediaSender(
 
     suspend fun image(
         prep: PhotoPrep, caption: String, viewOnce: Boolean, forwarded: Boolean, clientId: String?, clientTs: Double,
+        reply: Message.ReplyRef? = null,
     ) {
         val members = members()
         val (cipher, meta) = sealBytes(prep.jpeg, members)
@@ -177,7 +180,7 @@ class MediaSender(
         val thumb = if (viewOnce) null else sealOrNull(prep.thumbB64, members)
         val batch = db.batch()
         setMsg(batch, msgRef, members, MediaMessages.image(me, url, meta, captionCipher, clientTs, clientId, prep.width, prep.height,
-            blur, thumb, FieldValue.serverTimestamp(), viewOnce = viewOnce, forwarded = forwarded))
+            blur, thumb, FieldValue.serverTimestamp(), viewOnce = viewOnce, forwarded = forwarded), reply)
         // A view-once photo publishes NO thumbnail to the conversation doc (iOS audit).
         batch.update(convRef, MediaMessages.convUpdate(me,
             if (viewOnce) MediaRules.VIEW_ONCE_PREVIEW else MediaRules.PHOTO_PREVIEW, others(members),

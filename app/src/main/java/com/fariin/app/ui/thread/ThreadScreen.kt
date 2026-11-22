@@ -251,7 +251,7 @@ fun ThreadScreen(
     onSendVoice: (VoiceRecorder.Result, Message?) -> Unit = { _, _ -> },
     actions: ThreadActions = ThreadActions(),
     /** The attach sheet's sends (media worker): photos/videos + caption + view-once, and a file. */
-    onSendPick: (List<Uri>, String, Boolean) -> Unit = { l, _, _ -> l.firstOrNull()?.let(onSendPhoto) },
+    onSendPick: (List<Uri>, String, Boolean, Message?) -> Unit = { l, _, _, _ -> l.firstOrNull()?.let(onSendPhoto) },
     onSendFile: (Uri) -> Unit = {},
     /** Several files at once, in order (Add files > Photos). */
     onSendFiles: (List<Uri>) -> Unit = { it.forEach(onSendFile) },
@@ -351,7 +351,7 @@ private fun ThreadContent(
     onSendPhoto: (Uri) -> Unit,
     onSendVoice: (VoiceRecorder.Result, Message?) -> Unit,
     actions: ThreadActions,
-    onSendPick: (List<Uri>, String, Boolean) -> Unit,
+    onSendPick: (List<Uri>, String, Boolean, Message?) -> Unit,
     onSendFile: (Uri) -> Unit,
     onSendFiles: (List<Uri>) -> Unit,
 ) {
@@ -460,7 +460,7 @@ private fun ThreadContent(
         }
     }
     var viewing by remember { mutableStateOf<Viewing?>(null) }
-    viewing?.let { v -> MediaViewer(v, viewerHost(ui, actions, onSendPick)) { viewing = null } }
+    viewing?.let { v -> MediaViewer(v, viewerHost(ui, actions) { l, c, o -> onSendPick(l, c, o, null) }) { viewing = null } }
     // Leaving the chat no longer stops its note (iOS VoiceNotePlayer): it plays on, with the bar elsewhere.
     val context = LocalContext.current
     val is24h = remember { DateFormat.is24HourFormat(context) }
@@ -1781,7 +1781,11 @@ private fun ThreadContent(
                             uris.size > com.fariin.app.media.MediaRules.ALBUM_MAX_ITEMS)
                             "Send one message at a time: one video, or up to ${com.fariin.app.media.MediaRules.ALBUM_MAX_ITEMS} photos as one album." else null
                         val stop = slow() ?: many ?: kinds.firstNotNullOfOrNull { held(it) }
-                        if (stop != null) actions.onNotice(stop) else { sendMotion.arm(SendMotion.Kind.MEDIA, ui.messages, sendAnim); onSendPick(uris, cap, once) }
+                        if (stop != null) actions.onNotice(stop) else { sendMotion.arm(SendMotion.Kind.MEDIA, ui.messages, sendAnim)
+                            // A lone photo carries the reply and closes the bar (iOS sendPhoto); an album, a video stay as iOS.
+                            val re = if (uris.size == 1 && kinds == listOf(com.fariin.app.data.GroupAdmins.SendKind.PHOTOS)) replyTo else null
+                            if (re != null) replyTo = null
+                            onSendPick(uris, cap, once, re) }
                     },
                     onSendFile = { u -> val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.FILES); if (stop != null) actions.onNotice(stop) else onSendFile(u) },
                     onSendFiles = { l -> val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.FILES); if (stop != null) actions.onNotice(stop) else onSendFiles(l) },

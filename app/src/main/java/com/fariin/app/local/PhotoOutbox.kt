@@ -22,6 +22,8 @@ object PhotoOutbox {
         val wave: List<Int> = emptyList(),
         /** An album's tiles ("album": [path] is the first tile's picture). */
         val items: List<Item> = emptyList(),
+        /** The message a photo or voice note replies to (id, author, quote line), so a restart keeps it. */
+        val replyId: String? = null, val replyAuthor: String? = null, val replyText: String? = null,
     )
 
     /** One album tile: its prepared picture ([path]; a clip's poster) and, for a clip, the clip. */
@@ -50,7 +52,8 @@ object PhotoOutbox {
                     o.optJSONArray("items")?.let { ia -> (0 until ia.length()).mapNotNull { j -> ia.optJSONObject(j)?.let { t ->
                         Item(t.getString("path"), t.optInt("w"), t.optInt("h"), t.optString("blur").ifEmpty { null },
                             t.optString("thumb").ifEmpty { null }, t.optString("clip").ifEmpty { null }, t.optDouble("dur", 0.0))
-                    } } }.orEmpty())
+                    } } }.orEmpty(),
+                    o.optString("reId").ifEmpty { null }, o.optString("reAuthor").ifEmpty { null }, o.optString("reText").ifEmpty { null })
             }.toMutableList()
         }.getOrDefault(mutableListOf())
     }
@@ -61,7 +64,8 @@ object PhotoOutbox {
             .put("w", e.width).put("h", e.height).put("blur", e.blurhash ?: "").put("thumb", e.thumb ?: "")
             .put("cap", e.caption).put("once", e.viewOnce).put("kind", e.kind).put("poster", e.poster ?: "").put("dur", e.duration).put("wave", e.wave.joinToString(","))
             .put("items", JSONArray().also { ia -> e.items.forEach { t -> ia.put(JSONObject().put("path", t.path).put("w", t.width).put("h", t.height)
-                .put("blur", t.blurhash ?: "").put("thumb", t.thumb ?: "").put("clip", t.clip ?: "").put("dur", t.duration)) } }))
+                .put("blur", t.blurhash ?: "").put("thumb", t.thumb ?: "").put("clip", t.clip ?: "").put("dur", t.duration)) } })
+            .put("reId", e.replyId ?: "").put("reAuthor", e.replyAuthor ?: "").put("reText", e.replyText ?: ""))
         prefs?.edit()?.apply { if (list.isEmpty()) remove(uid) else putString(uid, a.toString()) }?.apply()
     }
 

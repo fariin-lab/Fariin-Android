@@ -521,7 +521,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     CompositionLocalProvider(LocalChatMedia provides vm.repo.media, LocalUploadCancel provides uploadCancel) {
         ThreadScreen(ui, onBack = onBack, onSend = vm.repo::sendText, onLoadOlder = vm.repo::loadOlderPage, onRetry = vm.repo::retry,
             onSendPhoto = { uri -> vm.repo.sendPhoto(app, uri) }, onSendVoice = { r, re -> vm.repo.sendVoice(r, re) }, actions = actions,
-            onSendPick = { uris, caption, once -> vm.repo.sendPick(app, uris, caption, once) },
+            onSendPick = { uris, caption, once, re -> vm.repo.sendPick(app, uris, caption, once, re) },
             onSendFile = { uri -> vm.repo.sendDocument(app, uri) { notice = it } },
             onSendFiles = { uris -> vm.repo.sendDocuments(app, uris) { notice = it } })
     }

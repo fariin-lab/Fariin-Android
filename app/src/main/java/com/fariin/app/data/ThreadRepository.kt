@@ -1141,7 +1141,10 @@ class ThreadRepository(
      * view-once (one photo only). One item = a photo or video message; more = albums of ten
      * (Limits.albumMaxItems), in order, the caption on the first.
      */
-    fun sendPick(context: Context, uris: List<Uri>, caption: String, viewOnce: Boolean) {
+    fun sendPick(context: Context, uris: List<Uri>, caption: String, viewOnce: Boolean) = sendPick(context, uris, caption, viewOnce, null)
+
+    /** As above; a lone photo picked while replying carries the reply (iOS sendPhoto: sendImage replyTo). */
+    fun sendPick(context: Context, uris: List<Uri>, caption: String, viewOnce: Boolean, reply: Message?) {
         val m = media ?: return
         if (uris.isEmpty()) return
         val tap = System.currentTimeMillis().toDouble()
@@ -1155,6 +1158,8 @@ class ThreadRepository(
                 async { if (kinds[i]) LocalPreview.videoShape(context, u) else LocalPreview.photoShape(context, u) }
             }.awaitAll()
             val chunks = MediaRules.albumChunks(picked.indices.toList())
+            // Only a single photo takes the reply: an album, a video or a file does not on iOS.
+            val ref = if (picked.size == 1 && !kinds[0]) reply?.let { ReplyQuoteRules.ref(it) } else null
             // The pictures themselves, decoded small in the background; the bubbles wait a moment
             // for them so the first frame already shows the photo, never longer than that.
             val lone = chunks.size == 1 && chunks[0].size == 1
@@ -1178,7 +1183,7 @@ class ThreadRepository(
                 pending[clientId] = if (chunk.size == 1) Message(
                     id = clientId, authorId = me, text = words, type = if (kinds[idx[0]]) "video" else "image",
                     createdAtMillis = ts, hasServerTime = false, clientTs = ts, clientId = clientId,
-                    sendState = Message.SendState.SENDING, viewOnce = once,
+                    sendState = Message.SendState.SENDING, viewOnce = once, replyTo = ref,
                     width = first?.width?.toDouble(), height = first?.height?.toDouble(), duration = first?.duration,
                     localUri = if (once) null else chunk[0].toString(),
                 ) else Message(
@@ -1224,8 +1229,9 @@ class ThreadRepository(
                         rebuild()
                         // Written down before the upload, so a kill (offline, say) cannot lose it (PhotoOutbox).
                         com.fariin.app.local.PhotoOutbox.add(me, com.fariin.app.local.PhotoOutbox.Entry(cid, clientId, ts,
-                            local.absolutePath, prep.width, prep.height, prep.blurhash, prep.thumbB64, words, once))
-                        val work: suspend () -> Unit = { sender.image(prep, words, once, false, clientId, ts); com.fariin.app.local.PhotoOutbox.remove(me, clientId) }
+                            local.absolutePath, prep.width, prep.height, prep.blurhash, prep.thumbB64, words, once,
+                            replyId = ref?.id, replyAuthor = ref?.authorId, replyText = ref?.text))
+                        val work: suspend () -> Unit = { sender.image(prep, words, once, false, clientId, ts, reply = ref); com.fariin.app.local.PhotoOutbox.remove(me, clientId) }
                         retryMedia[clientId] = work
                         work()
                     } else {
@@ -1772,9 +1778,12 @@ class ThreadRepository(
             val voice = e.kind == "voice"
             if (e.kind == "album") { resumeAlbum(e); continue }
             if (video && e.poster?.let { File(it).exists() } != true) { com.fariin.app.local.PhotoOutbox.remove(me, e.clientId); continue }
+            // The reply it was sent under, kept across the restart.
+            val ref = if (e.replyId != null && e.replyAuthor != null) Message.ReplyRef(e.replyId, e.replyAuthor, e.replyText ?: "") else null
+            if (voice && ref != null) voiceReplies[e.clientId] = ref
             pending[e.clientId] = Message(
                 id = e.clientId, authorId = me, text = e.caption, type = if (voice) "audio" else if (video) "video" else "image", createdAtMillis = e.ts, hasServerTime = false,
-                clientTs = e.ts, clientId = e.clientId, sendState = Message.SendState.SENDING, viewOnce = e.viewOnce,
+                clientTs = e.ts, clientId = e.clientId, sendState = Message.SendState.SENDING, viewOnce = e.viewOnce, replyTo = ref,
                 width = e.width.toDouble(), height = e.height.toDouble(), thumb = if (e.viewOnce) null else e.thumb,
                 localPath = if (video) e.poster else e.path, duration = if (video || voice) e.duration else null,
                 waveform = if (voice && !e.viewOnce) e.wave else emptyList(),
@@ -1798,7 +1807,7 @@ class ThreadRepository(
                     sender.video(v, e.caption, false, e.clientId, e.ts)
                 } else if (!landed) {
                     val prep = PhotoPrep(f.readBytes(), e.width, e.height, e.blurhash, e.thumb)
-                    sender.image(prep, e.caption, e.viewOnce, false, e.clientId, e.ts)
+                    sender.image(prep, e.caption, e.viewOnce, false, e.clientId, e.ts, reply = ref)
                 }
                 com.fariin.app.local.PhotoOutbox.remove(me, e.clientId)
             }
@@ -1920,7 +1929,8 @@ class ThreadRepository(
         rebuild()
         // Written down first, so a kill (offline, say) cannot lose the note (PhotoOutbox).
         com.fariin.app.local.PhotoOutbox.add(me, com.fariin.app.local.PhotoOutbox.Entry(cid, clientId, tap, r.file.absolutePath,
-            0, 0, null, null, "", r.viewOnce, kind = "voice", duration = r.duration, wave = r.waveform))
+            0, 0, null, null, "", r.viewOnce, kind = "voice", duration = r.duration, wave = r.waveform,
+            replyId = ref?.id, replyAuthor = ref?.authorId, replyText = ref?.text))
         scope.launch(Dispatchers.IO) {
             try {
                 voiceNow(r, clientId, tap)
@@ -2133,13 +2143,7 @@ class ThreadRepository(
     }
 
     /** iOS replyEnc: {id, authorId, text sealed like the message}, plus a story quote's flags. */
-    private fun replyMap(r: Message.ReplyRef, sealed: String): Map<String, Any> {
-        val e = hashMapOf<String, Any>("id" to r.id, "authorId" to r.authorId, "text" to sealed)
-        if (r.isStatus) e["isStatus"] = true
-        if (r.isReaction) e["isReaction"] = true
-        if (!r.storyThumb.isNullOrEmpty()) e["storyThumb"] = r.storyThumb   // plain story URL, not sealed
-        return e
-    }
+    private fun replyMap(r: Message.ReplyRef, sealed: String): Map<String, Any> = ReplyQuoteRules.wire(r, sealed)
 
     /**
      * A reply from the story viewer (iOS StoryViewer reply: ChatService.sendText with a status

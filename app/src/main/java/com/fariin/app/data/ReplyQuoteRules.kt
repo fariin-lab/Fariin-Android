@@ -22,6 +22,15 @@ object ReplyQuoteRules {
     /** The reply to send for [m]: its id, author and quote line (capped as before). */
     fun ref(m: Message): Message.ReplyRef = Message.ReplyRef(m.id, m.authorId, quoteText(m).take(200))
 
+    /** iOS replyEnc: {id, authorId, text sealed like the message}, plus a story quote's flags. */
+    fun wire(r: Message.ReplyRef, sealed: String): Map<String, Any> {
+        val e = hashMapOf<String, Any>("id" to r.id, "authorId" to r.authorId, "text" to sealed)
+        if (r.isStatus) e["isStatus"] = true
+        if (r.isReaction) e["isReaction"] = true
+        if (!r.storyThumb.isNullOrEmpty()) e["storyThumb"] = r.storyThumb   // plain story URL, not sealed
+        return e
+    }
+
     private val GLYPHS = listOf("📹 ", "📞 ", "📷 ", "🎥 ", "🎤 ", "📄 ")
 
     /** A quote line drawn next to our own small icon loses the emoji it travelled with. */
