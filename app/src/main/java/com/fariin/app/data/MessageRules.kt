@@ -268,7 +268,9 @@ object MessageRules {
             left--
             if (left == 0) return m.rowId
         }
-        return messages.firstOrNull { it.authorId != me && !it.isSystem }?.rowId
+        // More unread than the rows held (iOS unreadBoundary): no divider, rather than one above a
+        // row that is not the first unread. The chat opens at the newest and the arrow shows the count.
+        return null
     }
 }
 

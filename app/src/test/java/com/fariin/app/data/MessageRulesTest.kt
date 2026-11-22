@@ -78,6 +78,7 @@ class MessageRulesTest {
             Message(id = id, authorId = au, text = "x", createdAtMillis = i.toDouble()) }
         assertEquals("t2", MessageRules.unreadDividerId(ms, me, 2))
         assertNull(MessageRules.unreadDividerId(ms, me, 0))
+        assertNull(MessageRules.unreadDividerId(ms, me, 4))   // more unread than held
     }
 
     @Test fun usernameRules() {
