@@ -390,12 +390,15 @@ fun MessageRequestsScreen(api: PeopleApi, requests: List<Conversation>, onBack: 
     // Requests older than the live list's window (iOS needWholeList("requests")): read once when the
     // page opens, the live ones win where both have a chat.
     var older by remember { mutableStateOf<List<Conversation>>(emptyList()) }
+    // While that read runs the page shows a spinner, not "No message requests" (iOS loadingWholeList).
+    var olderLoading by remember { mutableStateOf(true) }
     LaunchedEffect(me) {
-        if (me.isEmpty() || me == com.fariin.app.ui.debug.DemoChats.ME) return@LaunchedEffect
+        if (me.isEmpty() || me == com.fariin.app.ui.debug.DemoChats.ME) { olderLoading = false; return@LaunchedEffect }
         older = runCatching { com.fariin.app.data.OlderChats.beyondWindow(me, com.fariin.app.data.ChatsNow.all) }.getOrDefault(emptyList())
             .filter { com.fariin.app.data.ChatList.isIncomingRequest(it, me) && !it.isCleared(me) &&
                 !com.fariin.app.data.BlockList.contains(it.otherUid(me)) }
             .distinctBy { it.id }
+        olderLoading = false
     }
     val list = remember(requests, older, gone) {
         val live = requests.map { it.id }.toSet()
@@ -407,6 +410,10 @@ fun MessageRequestsScreen(api: PeopleApi, requests: List<Conversation>, onBack: 
     com.fariin.app.ui.components.GlassBarPage(false, Modifier.background(c.bg), page = c.bg, frosted = true,
         bar = { PageBar("Message Requests", onBack = onBack) }) { top -> Column(Modifier.fillMaxSize()) {
         androidx.compose.foundation.layout.Spacer(Modifier.height(top))
+        if (list.isEmpty() && olderLoading) {
+            com.fariin.app.ui.components.PageLoading()
+            return@Column
+        }
         if (list.isEmpty()) {
             Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Text("No message requests", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label)
