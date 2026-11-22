@@ -32,4 +32,18 @@ object AppBadgeRules {
     fun afterPush(lastKnown: Int, countsHere: Boolean, listLive: Boolean = false): Int =
         // A live chat list already holds the new message in its total: adding one counted it twice.
         maxOf(0, lastKnown) + if (countsHere && !listLive) 1 else 0
+
+    /** What can move the stored number. */
+    sealed interface Event {
+        /** A chat list snapshot arrived: its total is the truth. */
+        data class Snapshot(val total: Int) : Event
+        /** A message push. [live]: the chat list listener is registered, so its snapshot counts it. */
+        data class Push(val countsHere: Boolean, val live: Boolean) : Event
+    }
+
+    /** The stored number after [e]: a snapshot replaces it, a push with no listener adds one. */
+    fun next(lastKnown: Int, e: Event): Int = when (e) {
+        is Event.Snapshot -> maxOf(0, e.total)
+        is Event.Push -> afterPush(lastKnown, e.countsHere, e.live)
+    }
 }

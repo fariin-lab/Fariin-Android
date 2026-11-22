@@ -1,5 +1,6 @@
 package com.fariin.app.data
 
+import com.fariin.app.data.AppBadgeRules.Event
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -69,5 +70,35 @@ class AppBadgeRulesTest {
         var u = 0
         repeat(2) { u = AppBadgeRules.afterPush(u, countsHere = true, listLive = false) }
         assertEquals(2, u)
+    }
+
+    // Phone 2026-11-22: unread 0, Home, 8 s, a friend sends 2. The listener stays up behind Home,
+    // so its snapshots set the number and the pushes add nothing: 2, not 3.
+    @Test fun twoPushesWhileLiveStayAtListTotal() {
+        var n = 0
+        n = AppBadgeRules.next(n, Event.Push(countsHere = true, live = true))
+        n = AppBadgeRules.next(n, Event.Snapshot(AppBadgeRules.total(listOf(chat("a", 1)), me, incoming = none)))
+        n = AppBadgeRules.next(n, Event.Push(countsHere = true, live = true))
+        n = AppBadgeRules.next(n, Event.Snapshot(AppBadgeRules.total(listOf(chat("a", 2)), me, incoming = none)))
+        assertEquals(2, n)
+        // A push that lands after its snapshot adds nothing either.
+        assertEquals(2, AppBadgeRules.next(n, Event.Push(countsHere = true, live = true)))
+    }
+
+    @Test fun twoPushesWithNoListenerFromZeroMakeTwo() {
+        var n = 0
+        repeat(2) { n = AppBadgeRules.next(n, Event.Push(countsHere = true, live = false)) }
+        assertEquals(2, n)
+        // A push that does not count here (open chat, channel) adds nothing.
+        assertEquals(2, AppBadgeRules.next(n, Event.Push(countsHere = false, live = false)))
+    }
+
+    @Test fun snapshotReplacesBumpedNumber() {
+        var n = 0
+        repeat(2) { n = AppBadgeRules.next(n, Event.Push(countsHere = true, live = false)) }
+        // The app opens: the list says 1 (one was read elsewhere), and that wins.
+        assertEquals(1, AppBadgeRules.next(n, Event.Snapshot(AppBadgeRules.total(listOf(chat("a", 1)), me, incoming = none))))
+        assertEquals(3, AppBadgeRules.next(n, Event.Snapshot(3)))
+        assertEquals(0, AppBadgeRules.next(n, Event.Snapshot(-1)))
     }
 }
