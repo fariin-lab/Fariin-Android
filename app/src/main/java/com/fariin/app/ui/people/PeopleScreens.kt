@@ -440,6 +440,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     var person by remember { mutableStateOf<Person?>(ProfileMemo.get(uid)) }
     // Fariin Plus profile visitors: tell the server I opened this profile (silent, hourly at most).
     LaunchedEffect(uid) { if (uid != me) com.fariin.app.data.PlusVisitors.record(uid) }
+    // Their photo as their Photo privacy allows (profile() blanks it); the chat's copy only until it is read.
+    val shownPhoto = if (person != null) person?.photoUrl else conv?.photos?.get(uid)
     var addingToGroup by remember { mutableStateOf(false) }
     var sharingProfile by remember { mutableStateOf(false) }
     var giftOpen by remember { mutableStateOf(false) }
@@ -470,7 +472,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     if (nickname) {
         val nickMotion = com.fariin.app.ui.components.rememberSheetMotion { nickname = false }
         com.fariin.app.ui.components.FariinSheetDialog(nickMotion, fill = c.bgSecondary, typing = true) {
-            SetNicknamePage(uid, person?.photoUrl ?: conv?.photos?.get(uid), sheet = nickMotion, onBack = { nickMotion.close() })
+            SetNicknamePage(uid, shownPhoto, sheet = nickMotion, onBack = { nickMotion.close() })
         }
     }
     // The chat's timer, live (either person may change it; iOS ContactInfoView).
@@ -525,7 +527,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         // A sheet over the profile, as iOS (owner 2026-11-08).
         val safetyMotion = com.fariin.app.ui.components.rememberSheetMotion { showSafety = false }
         com.fariin.app.ui.components.FariinSheetDialog(safetyMotion, fill = c.bg) {
-            VerifyEncryptionPage(cid, name, person?.photoUrl ?: conv?.photos?.get(uid), myPhotoUrl, safety, sheet = safetyMotion, onClose = { safetyMotion.close() })
+            VerifyEncryptionPage(cid, name, shownPhoto, myPhotoUrl, safety, sheet = safetyMotion, onClose = { safetyMotion.close() })
         }
     }
     // Block, Unblock, Delete Chat: one bottom sheet that fits its words, the person's photo
@@ -564,12 +566,14 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                     if (ok) onBack() else notice = failed
                     ok
                 }))
-            what == "clearMine" -> Triple("Clear your messages?",
-                "This deletes the messages you sent in this chat. It can't be undone.",
+            // iOS (owner 2026-11-10): every message, for me only, the same watermark as Delete Chat;
+            // the old hard delete of my own messages was refused by the rules and did nothing.
+            what == "clearMine" -> Triple("Clear all messages?",
+                "All messages in this chat are removed for you only. $who still has them.",
                 listOf(PersonAction("Clear") {
-                    val id = conv?.id
-                    val ok = id != null && com.fariin.app.ui.chats.ChatListActions.clearMyMessages(me, id)
-                    com.fariin.app.ui.components.Snack.show(if (ok) "Your messages were cleared" else "Couldn't clear. Check your connection and try again.")
+                    val chat = conv ?: com.fariin.app.data.CryptoHub.listedConversation(cid)
+                    val ok = chat != null && com.fariin.app.ui.chats.ChatListActions.deleteForMe(me, chat)
+                    com.fariin.app.ui.components.Snack.show(if (ok) "Messages cleared" else "Couldn't clear. Check your connection and try again.")
                     ok
                 }))
             what == "unblock" -> Triple("Unblock $who?", "They will be able to message and call you again.",
@@ -586,7 +590,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                     ok
                 }))
         }
-        PersonConfirmSheet(person?.photoUrl ?: conv?.photos?.get(uid), name, title, body, actions, onDismiss = { ask = null })
+        PersonConfirmSheet(shownPhoto, name, title, body, actions, onDismiss = { ask = null })
     }
     if (glowOn) com.fariin.app.ui.glow.GlowDoorHost(glowDoor)
     notice?.let { n -> com.fariin.app.ui.components.GlassAlert(onDismissRequest = { notice = null }, text = { Text(n) },
@@ -601,7 +605,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     // under Glow Story and a divider when Glow is on, as iOS orders the menu.
     val wallpaper: () -> Unit = { com.fariin.app.ui.settings.ChatWallpaperLink.request(cid); onBack() }
     val addToGroup: (() -> Unit)? = if (uid != me) ({ addingToGroup = true }) else null
-    val clearMine: (() -> Unit)? = if (uid != me && conv != null) ({ ask = "clearMine" }) else null
+    val clearMine: (() -> Unit)? = if (uid != me && (conv ?: com.fariin.app.data.CryptoHub.listedConversation(cid)) != null) ({ ask = "clearMine" }) else null
     val shareProfile: (() -> Unit)? = if (uid != me) ({ sharingProfile = true }) else null
     // iOS Export Chat: only where a real 1:1 chat exists, never on my own page.
     val chat = conv ?: com.fariin.app.data.CryptoHub.listedConversation(cid)
@@ -653,7 +657,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         if (sharingProfile) com.fariin.app.ui.thread.ForwardSheet(me, onDismiss = { sharingProfile = false }, title = "Share Profile") { targets ->
             sharingProfile = false
             val shownName = person?.shownName ?: conv?.displayName(me) ?: ""
-            val photo = person?.photoUrl ?: conv?.photos?.get(uid) ?: ""
+            val photo = shownPhoto ?: ""
             val card = com.fariin.app.data.CardRules.CONTACT + uid + "|" + photo + "|" + shownName
             val crypto = com.fariin.app.data.CryptoHub.get(shareCtx.applicationContext)
             scope.launch {
@@ -684,7 +688,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                                 haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                                 photo.show()
                             }).semantics { contentDescription = "Profile photo" } else Modifier)) {
-                Avatar(person?.photoUrl ?: conv?.photos?.get(uid), 100.dp, onResolved = photo::resolved,
+                Avatar(shownPhoto, 100.dp, onResolved = photo::resolved,
                     modifier = Modifier.profilePhotoSource(photo).then(Modifier.profileMeltSource(melt)))
                 if (avVideo != null) com.fariin.app.ui.people.AvatarVideoLayer(uid, avVideo,
                     Modifier.size(100.dp).clip(CircleShape))
@@ -718,7 +722,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                 // iOS ContactInfoView: Voice and Video circles, never on my own page or a blocked person's.
                 if (uid != me && !blocked) {
                     val ctx = androidx.compose.ui.platform.LocalContext.current
-                    val photo = person?.photoUrl ?: conv?.photos?.get(uid)
+                    val photo = shownPhoto
                     ActionTile("Voice", ImageVector.cachedVector(com.fariin.app.R.drawable.ic_call_voice), share) {
                         com.fariin.app.ui.call.CallActivity.startDial(ctx, uid, name, photo, video = false)
                     }
@@ -728,7 +732,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                 }
                 // Mute opens the times menu, as groups and channels do (iOS muteMenuItems, owner
                 // 2026-11-10); Unmute is one tap.
-                Box(share.glassMenuAnchor(personMuteAnchor)) {
+                if (uid != me) Box(share.glassMenuAnchor(personMuteAnchor)) {
                     ActionTile(if (muted) "Unmute" else "Mute",
                         if (muted) ImageVector.cachedVector(com.fariin.app.R.drawable.ic_bell)
                         else ImageVector.cachedVector(com.fariin.app.R.drawable.ic_bell_off), Modifier.fillMaxWidth()) {
@@ -778,7 +782,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             // iOS dangerCard: a blocked person's page is Delete Chat and Unblock and nothing else
             // (no Report while blocked, owner 2026-09-27); Delete Chat only where a chat exists.
             val deletable = conv ?: com.fariin.app.data.CryptoHub.listedConversation(cid)
-            SettingsSection {
+            // Never on my own page (iOS isSelf): no Block or Report of myself.
+            if (uid != me) SettingsSection {
                 if (blocked) {
                     if (deletable != null) SettingsRow("Delete Chat", titleColor = c.red, trailing = Trailing.NONE) { ask = "delete" }
                     SettingsRow("Unblock $name", titleColor = c.red, trailing = Trailing.NONE, last = true) { ask = "unblock" }
@@ -797,9 +802,9 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             com.fariin.app.ui.components.PageEndSpace()
         }
     }
-    if (giftOpen) com.fariin.app.ui.settings.GiftPlusSheet(uid, name, person?.photoUrl ?: conv?.photos?.get(uid)) { giftOpen = false }
+    if (giftOpen) com.fariin.app.ui.settings.GiftPlusSheet(uid, name, shownPhoto) { giftOpen = false }
     // Over the page, under the menus and the photo viewer: the photo's melting copy.
-    com.fariin.app.ui.components.ProfileMeltOverlay(melt, 100.dp) { Avatar(person?.photoUrl ?: conv?.photos?.get(uid), 100.dp) }
+    com.fariin.app.ui.components.ProfileMeltOverlay(melt, 100.dp) { Avatar(shownPhoto, 100.dp) }
     com.fariin.app.ui.components.GlassMenu(moreOpen, moreAnchor, buildList {
         if (shareProfile != null) add(com.fariin.app.ui.components.GlassMenuItem("Share Profile",
             androidx.compose.ui.res.painterResource(R.drawable.ic_link_share)) { shareProfile() })
@@ -811,7 +816,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             androidx.compose.ui.res.painterResource(R.drawable.ic_wallpaper)) { wallpaper() })
         if (exportChat != null) add(com.fariin.app.ui.components.GlassMenuItem("Export Chat",
             androidx.compose.ui.res.painterResource(R.drawable.ic_save_down)) { exportChat() })
-        if (clearMine != null) add(com.fariin.app.ui.components.GlassMenuItem("Clear My Messages",
+        if (clearMine != null) add(com.fariin.app.ui.components.GlassMenuItem("Clear Messages",
             androidx.compose.ui.res.painterResource(R.drawable.ic_sf_trash), danger = true, divider = true) { clearMine() })
     }, backdrop = if (menuGlass) menuBackdrop else null, onDismiss = { moreOpen = false })
     // "Mute this chat for…" (iOS muteMenuItems): 1 hour, 8 hours, 1 day, 1 week, Always.
@@ -820,7 +825,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             com.fariin.app.ui.components.GlassMenuItem(label, null) { setMute(com.fariin.app.data.GroupInfoCircles.muteUntil(hours)) }
         }, backdrop = if (menuGlass) menuBackdrop else null, caption = "Mute this chat for…", onDismiss = { personMuteMenu = false })
     // Over everything on the page: the round photo, out of the avatar and back into it.
-    com.fariin.app.ui.photo.ProfilePhotoViewer(photo, person?.photoUrl ?: conv?.photos?.get(uid),
+    com.fariin.app.ui.photo.ProfilePhotoViewer(photo, shownPhoto,
         style = com.fariin.app.ui.photo.ProfilePhotoStyle(landsSquare = true),   // the whole photo, not a circle (owner 2026-11-13)
         bar = com.fariin.app.ui.photo.ProfilePhotoBar(leavesOnClose = true))
     }
@@ -922,7 +927,7 @@ private fun ShareProfileItem(onClick: () -> Unit) {
 @Composable
 private fun ClearMineItem(onClick: () -> Unit) {
     val c = Fariin.colors
-    androidx.compose.material3.DropdownMenuItem(text = { Text("Clear My Messages", color = c.red) },
+    androidx.compose.material3.DropdownMenuItem(text = { Text("Clear Messages", color = c.red) },
         leadingIcon = { Icon(ImageVector.cachedVector(R.drawable.ic_sf_trash), null, tint = c.red) }, onClick = onClick)
 }
 

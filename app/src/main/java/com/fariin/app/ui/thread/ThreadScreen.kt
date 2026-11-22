@@ -188,6 +188,8 @@ data class ThreadUi(
     val dividerAt: Int = 0,
     /** A 1:1 message request's bar in place of the composer (RequestBars), or null. */
     val requestBar: RequestBar? = null,
+    /** My one first message to a stranger (iOS requestStance .firstMessage): text only. */
+    val knock: Boolean = false,
     /** A channel: posts drawn as the channel speaking, views, counts-only reactions, follower bar. */
     val channel: com.fariin.app.ui.channels.ChannelThreadUi? = null,
     /** A chat that may be a channel I visit, its answer not back yet: drawn as a loading ring. */
@@ -1613,7 +1615,8 @@ private fun ThreadContent(
                 // while editing went out as a NEW post and the edit sat unsaved. The server allows an
                 // edit to change only the words, so "+", camera, GIFs and stickers say so instead.
                 // (The text send ignores this while editing: Save is the edit itself.)
-                val editHold = if (editing != null) "Finish editing first. A photo or video can't be added to a message you're editing; save or cancel the edit, then send it as a new message." else null
+                val knockHold = if (ui.knock) "Your first message to someone new can only be text. You can send photos, voice and more once they reply." else null
+                val editHold = knockHold ?: if (editing != null) "Finish editing first. A photo or video can't be added to a message you're editing; save or cancel the edit, then send it as a new message." else null
                 fun slow(): String? = editHold ?: if (!ui.isGroup || doc.isEmpty()) null else com.fariin.app.data.GroupAdmins.slowWait(doc, ui.me,
                     ui.messages.lastOrNull { it.authorId == ui.me && !it.isSystem }?.createdAtMillis, System.currentTimeMillis().toDouble())
                 val mediaOff = if (ui.isGroup && doc.isNotEmpty()) com.fariin.app.data.GroupAdmins.mediaOff(doc, ui.me) else null
@@ -1699,7 +1702,7 @@ private fun ThreadContent(
                     boldable = true,
                     onTyping = steady1(actions.onTyping),
                     onRecording = steady1 { r: Boolean -> voiceRecording = r }, onCapturing = steady1(actions.onRecordingVoice),
-                    voiceOff = held(com.fariin.app.data.GroupAdmins.SendKind.VOICE) ?: (if (slowLeft > 0) slow() else null),
+                    voiceOff = knockHold ?: held(com.fariin.app.data.GroupAdmins.SendKind.VOICE) ?: (if (slowLeft > 0) slow() else null),
                     onVoiceOff = steady1(actions.onNotice),
                     onRowPlaced = steady1 { r: androidx.compose.ui.geometry.Rect? -> sendMotion.composerRow = r },
                     // Fariin Plus send effects: 1:1s and groups, not channels, not the first message

@@ -209,6 +209,8 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         unreadAtOpen = unreadAtOpen,
         dividerAt = dividerAt.value,
         requestBar = requestBar,
+        knock = conv != null && !conv.isGroup && channel == null &&
+            com.fariin.app.data.Requests.stance(conv, me) == com.fariin.app.data.Requests.Stance.FIRST_MESSAGE,
         channel = channel,
         channelWaiting = channel == null && com.fariin.app.ui.channels.ChannelGuestPreviews.waiting(cid, me, channelDoc),
         pinnedIds = com.fariin.app.data.PinRules.pinnedIds(s.conv),

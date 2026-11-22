@@ -163,7 +163,12 @@ class FirestorePeople(
         db.collection("users").document(uid).get().await().data?.let { Person.from(uid, it) }?.let { p ->
             // ⛔ THEIR BIO ONLY WHEN THEIR "Bio" PRIVACY LETS ME SEE IT (iOS ContactInfoView.gatedAbout,
             // PrivacyPrefs.allows "bio"). Blanked here, where every page that shows a person gets it.
-            if (uid == me || Person.allows(p.privacy, "bio", isContact(uid))) p else p.copy(about = "")
+            // Their photo likewise (iOS gatedPhotoUrl, PrivacyPrefs.allows "photo").
+            if (uid == me) p else {
+                val contact = isContact(uid)
+                p.copy(about = if (Person.allows(p.privacy, "bio", contact)) p.about else "",
+                    photoUrl = if (Person.allows(p.privacy, "photo", contact)) p.photoUrl else null)
+            }
         }
     } catch (_: Exception) { null }
 
