@@ -229,6 +229,10 @@ internal fun AppIconPage(pop: () -> Unit) {
             // App Library and keeps its own small notification icon, so the line names what changes here.
             Text("The icon changes on your Home screen and in the app list.", fontSize = 13.sp, color = c.secondary,
                 modifier = Modifier.padding(horizontal = 4.dp))
+            // iOS: says what the star means, only while the Plus icons are shown.
+            if (com.fariin.app.data.PlusStore.state("appIcons") != com.fariin.app.data.PlusStore.State.OFF)
+                Text("Icons with a star come with Fariin Plus.", fontSize = 13.sp, color = c.secondary,
+                    modifier = Modifier.padding(horizontal = 4.dp))
             Spacer(Modifier.size(com.fariin.app.ui.shell.bottomBarInset()))
         }
     }
