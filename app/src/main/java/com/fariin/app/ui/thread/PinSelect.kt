@@ -398,11 +398,27 @@ internal fun BulkDeleteDialog(picked: List<Message>, ui: ThreadUi, onDismiss: ()
         onPlan(SelectRules.plan(picked, everyone, ui.me, ui.isGroup, ui.adminMayDelete, ui.ownerId))
     }
     val n = picked.size
+    // A channel says "post" (iOS). When every pick may go for everyone, one question: Delete and
+    // Cancel, removed for all followers (iOS GlassConfirmDoor, owner 2026-11-11).
+    val channel = ui.channel != null || ui.groupDoc["channel"] == true
+    val noun = if (channel) "post" else "message"
+    if (channel && hasMine && split.onlyMe == 0) {
+        GlassAlert(
+            onDismissRequest = onDismiss,
+            title = if (n == 1) "Delete this post?" else "Delete $n posts?",
+            message = if (n == 1) "It will be removed for all followers." else "They will be removed for all followers.",
+            actions = listOf(
+                com.fariin.app.ui.components.GlassAlertAction("Delete", com.fariin.app.ui.components.GlassAlertStyle.Red) { go(true) },
+                com.fariin.app.ui.components.GlassAlertAction("Cancel", com.fariin.app.ui.components.GlassAlertStyle.Bold) {},
+            ),
+        )
+        return
+    }
     // One stacked glass pill per choice (owner 2026-11-10: all three were packed into one pill, so
     // Delete for Me and Cancel were cut off).
     GlassAlert(
         onDismissRequest = onDismiss,
-        title = "Delete $n message${if (n == 1) "" else "s"}?",
+        title = "Delete $n $noun${if (n == 1) "" else "s"}?",
         message = if (hasMine && split.onlyMe > 0) {
             if (ui.isGroup) "Delete for Everyone removes ${split.everyone} of these for everyone. You can't delete the other ${split.onlyMe}."
             else "Delete for Everyone removes ${split.everyone} of these for everyone. The other ${split.onlyMe} will only be removed from your side."
