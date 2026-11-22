@@ -771,6 +771,8 @@ class MainActivity : ComponentActivity() {
         }
         val cid = intent?.getStringExtra(PushRouter.EXTRA_OPEN_CID)?.takeIf { it.isNotEmpty() } ?: return
         intent.removeExtra(PushRouter.EXTRA_OPEN_CID)
+        // A cid becomes a document id and a page route: an empty or slashed one is refused (iOS didReceive).
+        if (!com.fariin.app.channel.ChannelRules.safeId(cid)) return
         intent.getStringExtra(com.fariin.app.push.NotificationPoster.EXTRA_REPLIES_MID)?.takeIf { it.isNotEmpty() }?.let { mid ->
             intent.removeExtra(com.fariin.app.push.NotificationPoster.EXTRA_REPLIES_MID)
             com.fariin.app.ui.channels.PostQuotesSheet.pendingFocus.value = com.fariin.app.data.PostReplyRules.focusOf(mid,
