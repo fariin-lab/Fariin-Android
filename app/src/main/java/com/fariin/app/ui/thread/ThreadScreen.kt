@@ -2356,8 +2356,14 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             return@Row
         }
         com.fariin.app.data.StoryReplyRules.reactionGlyph(m, showSender)?.let { glyph ->
-            StoryReaction(ui, m, glyph, isMe, tick, is24h)
-            return@Row
+            // Only while the story is live (iOS `!sr.unavailable`): once it is gone the ordinary
+            // layout below says "Story unavailable" over the emoji, not a dead card.
+            val feed by com.fariin.app.data.LiveStories.state.collectAsState()
+            val r = m.replyTo
+            if (r != null && com.fariin.app.data.LiveStories.find(feed, r.id, r.authorId) != null) {
+                StoryReaction(ui, m, glyph, isMe, tick, is24h)
+                return@Row
+            }
         }
         // Stickers and GIFs (StickerGifBubbles.kt): the name, Forwarded and the quote above them.
         if (m.isSticker || m.isGif) {
