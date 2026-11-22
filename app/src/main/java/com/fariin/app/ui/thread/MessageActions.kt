@@ -282,9 +282,11 @@ internal fun MessageMenu(
                 isNew = com.fariin.app.ui.components.isNew(it.badge),
             )
         }
-        val mine = m.reactions[ui.me]
+        // Mine as drawn, a double tap still on its way included; a pick shows at once (ReactNow), as
+        // iOS setMyReactionLocally does for every reaction path, not only the double tap.
+        val mine = ReactNow.mine(m, ui.me)
         MessageMenuOverlay(source, rows, reactable = canReact(m, ui), mine = mine,
-            onReact = { e -> actions.onReact(m, MessageRules.nextReaction(mine, e)) },
+            onReact = { e -> val next = MessageRules.nextReaction(mine, e); ReactNow.set(m, next); actions.onReact(m, next) },
             onDismiss = onDismiss, preview = preview, onLifted = onLifted, onLanded = onLanded)
         return
     }
@@ -299,7 +301,7 @@ internal fun MessageMenu(
         Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
             val reactable = canReact(m, ui)
             if (reactable) {
-                val mine = m.reactions[ui.me]
+                val mine = ReactNow.mine(m, ui.me)
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                         .floating(RoundedCornerShape(28.dp)).padding(horizontal = 6.dp, vertical = 4.dp),
@@ -310,7 +312,7 @@ internal fun MessageMenu(
                         Box(
                             Modifier.size(48.dp).clip(CircleShape)
                                 .background(if (mine == e) androidx.compose.material3.MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
-                                .clickable { actions.onReact(m, MessageRules.nextReaction(mine, e)); onDismiss() },
+                                .clickable { val next = MessageRules.nextReaction(mine, e); ReactNow.set(m, next); actions.onReact(m, next); onDismiss() },
                             contentAlignment = Alignment.Center,
                         ) { Text(e, fontSize = 28.sp) }
                     }
