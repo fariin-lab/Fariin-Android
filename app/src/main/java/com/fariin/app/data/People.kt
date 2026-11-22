@@ -254,7 +254,9 @@ class FirestorePeople(
             error("block limit")
         }
         if (on) {
-            ref.set(mapOf("at" to FieldValue.serverTimestamp())).await()
+            // The block's start is written once (iOS setBlocked): blocking again never moves it, which
+            // would show what they sent in between.
+            if (!BlockList.contains(uid) && !ref.get().await().exists()) ref.set(mapOf("at" to FieldValue.serverTimestamp())).await()
             // Blocking the person I am on a 1:1 call with ends that call (owner 2026-11-08: it ran on
             // until hung up). An ordinary hang-up from my side, so they see the call end and nothing
             // that says they were blocked. Group calls are left alone.
@@ -277,9 +279,11 @@ class FirestorePeople(
             "other" to uid, "from" to com.google.firebase.Timestamp(java.util.Date(since)), "to" to FieldValue.serverTimestamp()))
         batch.delete(ref)
         batch.commit().await()
+        // Unblocked: what they sent during the block is not unread for me (iOS unreadCount.<me> = 0).
         try {
             conv(Wire.directCid(me, uid)).update(mapOf("blockedBy.$me" to FieldValue.delete(),
-                "blockedAt.$me" to FieldValue.delete(), "blockClearedAt.$me" to FieldValue.delete())).await()
+                "blockedAt.$me" to FieldValue.delete(), "blockClearedAt.$me" to FieldValue.delete(),
+                "unreadCount.$me" to 0)).await()
         } catch (_: Exception) {}
     }
 

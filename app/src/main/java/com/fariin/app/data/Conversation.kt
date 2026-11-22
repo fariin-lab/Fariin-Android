@@ -229,11 +229,16 @@ data class Conversation(
     /** Freezes the list time while the newest message is one a block holds back. */
     private fun hiddenLastSince(me: String): Double? {
         if (isGroup || updatedAtMillis <= 0) return null
+        // My private list first (iOS Models: the block time from users/{me}/blocked and its
+        // blockHistory spans), then the old shared copy.
+        val other = otherUid(me)
+        val mine = BlockList.snapshot.takeIf { it.owner == me }
         if (isBlockedByMe(me)) {
-            val since = blockedAt[me] ?: 0.0
+            val since = mine?.entries?.get(other) ?: blockedAt[me] ?: 0.0
             return if (since > 0 && updatedAtMillis > since) since else null
         }
-        if (lastSender != otherUid(me)) return null
+        if (lastSender != other) return null
+        mine?.spans?.get(other)?.firstOrNull { updatedAtMillis in it }?.let { return it.start }
         val at = blockedAt[me] ?: 0.0
         val cleared = blockClearedAt[me] ?: 0.0
         if (at > 0 && cleared >= at && updatedAtMillis in at..cleared) return at

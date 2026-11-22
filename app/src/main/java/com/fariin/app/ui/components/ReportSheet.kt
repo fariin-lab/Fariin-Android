@@ -111,7 +111,10 @@ private fun ReportSheet(t: ReportTarget, me: String, onDismiss: () -> Unit) {
     var shareText by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    val canBlock = ReportRules.canBlock(t, me)
+    // Already blocked (Block and Report, or earlier): no Block switch or row, and the report still says
+    // block (iOS alreadyBlocked / preBlocked).
+    val alreadyBlocked = t.personUid?.let { com.fariin.app.data.BlockList.contains(it) } == true
+    val canBlock = ReportRules.canBlock(t, me) && !alreadyBlocked
     val animate = animationsOn()
     val density = LocalDensity.current
     // Each page's own height, so the sheet settles to the page now showing (not mid-slide sizes).
@@ -142,7 +145,7 @@ private fun ReportSheet(t: ReportTarget, me: String, onDismiss: () -> Unit) {
         if (busy) return
         busy = true; error = null
         scope.launch {
-            val blockNow = canBlock && block
+            val blockNow = (canBlock && block) || alreadyBlocked
             val refused = withContext(NonCancellable) {
                 ReportSender.send(t, r, ReportRules.note(r, note), blockNow, sub, shareText)
             }

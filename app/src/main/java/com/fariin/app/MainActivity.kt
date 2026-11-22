@@ -183,6 +183,23 @@ class MainActivity : ComponentActivity() {
                             text = { androidx.compose.material3.Text(com.fariin.app.call.CallPrivacyIndex.TEXT) },
                             confirmButton = { androidx.compose.material3.TextButton(onClick = { com.fariin.app.call.CallPrivacyIndex.refused.value = false }) {
                                 androidx.compose.material3.Text("OK") } })
+                        val callNotice by com.fariin.app.call.CallPrivacyIndex.notice.collectAsState()
+                        val noticeScope = androidx.compose.runtime.rememberCoroutineScope()
+                        val noticeCtx = androidx.compose.ui.platform.LocalContext.current
+                        callNotice?.let { n ->
+                            val close = { com.fariin.app.call.CallPrivacyIndex.notice.value = null }
+                            com.fariin.app.ui.components.GlassAlert(onDismissRequest = close,
+                                title = { androidx.compose.material3.Text(n.title) },
+                                text = { androidx.compose.material3.Text(n.text) },
+                                confirmButton = { androidx.compose.material3.TextButton(onClick = {
+                                    close()
+                                    n.unblock?.let { uid -> noticeScope.launch {
+                                        com.fariin.app.data.FirestorePeople(me ?: return@launch, com.fariin.app.data.CryptoHub.get(noticeCtx.applicationContext)).setBlocked(uid, false)
+                                    } }
+                                }) { androidx.compose.material3.Text(if (n.unblock != null) "Unblock" else "OK") } },
+                                dismissButton = if (n.unblock != null) ({ androidx.compose.material3.TextButton(onClick = close) {
+                                    androidx.compose.material3.Text("Cancel") } }) else null)
+                        }
                     }
                     // A required or suggested update from the server covers everything (iOS AppUpdateGate).
                     com.fariin.app.system.AppUpdateLayer()

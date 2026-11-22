@@ -448,6 +448,8 @@ data class Message(
                 pollTallyAt = (data["pollTallyAt"] as? Number)?.toDouble() ?: 0.0,
                 reactions = (data["reactions"] as? Map<*, *>)?.mapNotNull { (k, v) ->
                     val uid = k as? String ?: return@mapNotNull null
+                    // Someone I blocked: their reactions are not shown, 1:1 or group (iOS).
+                    if (BlockList.contains(uid)) return@mapNotNull null
                     val raw = v as? String ?: return@mapNotNull null
                     val e = if (raw.startsWith("enc")) open(raw, uid) else raw
                     if (e.isEmpty() || e == Wire.NOT_READY || e == Wire.LOCKED) null else uid to e

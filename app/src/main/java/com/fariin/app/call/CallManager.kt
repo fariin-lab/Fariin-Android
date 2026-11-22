@@ -324,6 +324,8 @@ object CallManager {
             // The server's verdict comes BEFORE the busy decision (iOS audit M-014): a blocked or
             // privacy-refused caller gets no write at all, so "busy" never shows I am on a call.
             if (signaling.screenRefused(me, d.id)) return@launch
+            // My own block list too, so a failed server read never lets someone I blocked ring (iOS).
+            if (com.fariin.app.data.BlockList.contains(d.caller)) return@launch
             if (status.live) {
                 // Already in a call (also one started during the read above): busy, as iOS
                 // endRingIfUnclaimed with busy.
