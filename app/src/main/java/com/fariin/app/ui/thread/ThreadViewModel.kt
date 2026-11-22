@@ -313,7 +313,9 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         onAtBottom = { atBottom.value = it },
         onOpenPerson = { uid -> nav.contact(uid) },
         onMessagePerson = { other -> nav.chat(com.fariin.app.crypto.Wire.directCid(me, other)) },
-        onTitleClick = {
+        onTitleClick = click@{
+            // iOS: a group Fariin suspended or disabled opens nothing from its header.
+            if (conv?.fariinLocked() == true) return@click
             InChatSearchLink.openedFrom = cid   // the info page's Search circle shows only when opened from here
             if (channel != null) channelNav.page(cid) else if (conv?.isGroup == true) nav.group(cid) else conv?.otherUid(me)?.takeIf { it.isNotEmpty() }?.let(nav.contact)
         },
