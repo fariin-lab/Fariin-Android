@@ -102,8 +102,7 @@ object GroupManage {
             "adminRights.$uid" to rights,
             "adminBy.$uid" to me,
             "adminEdit" to mapOf("uid" to uid, "by" to me),
-            "updatedAt" to FieldValue.serverTimestamp(),
-        )
+        )   // no `updatedAt` (iOS): not a message, see setPermission
         if (team.isOwner(me) || team.can(me, GroupAdmins.Right.BAN_USERS)) {
             data["restrictedFlags.$uid"] = FieldValue.delete()
             data["restrictedUntil.$uid"] = FieldValue.delete()
@@ -118,8 +117,7 @@ object GroupManage {
             "adminRights.$uid" to FieldValue.delete(),
             "adminBy.$uid" to FieldValue.delete(),
             "adminEdit" to mapOf("uid" to uid, "by" to me),
-            "updatedAt" to FieldValue.serverTimestamp(),
-        )).await()
+        )).await()   // no `updatedAt` (iOS): see setPermission
     }
 
     /** setAdminRights. */
@@ -127,8 +125,7 @@ object GroupManage {
         conv(cid).update(mapOf(
             "adminRights.$uid" to rights,
             "adminEdit" to mapOf("uid" to uid, "by" to me),
-            "updatedAt" to FieldValue.serverTimestamp(),
-        )).await()
+        )).await()   // no `updatedAt` (iOS): see setPermission
     }
 
     /**
