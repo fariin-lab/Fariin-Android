@@ -891,12 +891,16 @@ fun ChatListScreen(
                                     SearchRecents.recordChat(appCtx, me, conv); searching = false; query = ""; onOpen(conv)
                                 }, onRemove = { conv -> topHidden = TopPeersHidden.hide(appCtx, me, conv.id) })
                             }
-                            val recents = SearchRecents.entries.toList()
+                            // A remembered chat is drawn only while it is a chat I can see: never an
+                            // archived or cleared one, nor a request to me (iOS recentModel).
+                            val recentById = state.all.filter { !it.isArchived(me) && !it.isCleared(me) &&
+                                !com.fariin.app.data.ChatList.isIncomingRequest(it, me) }.associateBy { it.id }
+                            val recents = SearchRecents.entries.toList().filter { it.kind != "chat" || recentById.containsKey(it.key) }
                             if (recents.isNotEmpty()) {
                                 item(key = "h-recent") { RecentHeader { SearchRecents.clear(appCtx, me) } }
                                 items(recents, key = { "r-" + it.id }, contentType = { "chat" }) { e ->
                                     // A public group I am in now draws as its chat (iOS Recent .group).
-                                    val conv = if (e.kind == "chat" || e.kind == "group") byId[e.key] else null
+                                    val conv = if (e.kind == "chat" || e.kind == "group") recentById[e.key] else null
                                     // A long press offers Remove from Recent (iOS 7571e6bf5); results keep no menu.
                                     var removeMenu by remember { mutableStateOf(false) }
                                     Box {
