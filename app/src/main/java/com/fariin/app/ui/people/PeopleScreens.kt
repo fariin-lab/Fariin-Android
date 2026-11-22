@@ -454,7 +454,9 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     // Fariin Plus profile visitors: tell the server I opened this profile (silent, hourly at most).
     LaunchedEffect(uid) { if (uid != me) com.fariin.app.data.PlusVisitors.record(uid) }
     // Their photo as their Photo privacy allows (profile() blanks it); the chat's copy only until it is read.
-    val shownPhoto = if (person != null) person?.photoUrl else conv?.photos?.get(uid)
+    // A deleted account (purged, iOS photoUrl(for:)) has no picture, not even one this phone remembers.
+    val gone = conv != null && !conv.isGroup && conv.isDeletedAccount(uid)
+    val shownPhoto = if (gone) null else if (person != null) person?.photoUrl else conv?.photos?.get(uid)
     var addingToGroup by remember { mutableStateOf(false) }
     var sharingProfile by remember { mutableStateOf(false) }
     var giftOpen by remember { mutableStateOf(false) }
@@ -469,7 +471,9 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     // Counts toward their profile views in Insights (iOS ProfileViews.record on ContactInfoView).
     LaunchedEffect(uid) { com.fariin.app.data.ProfileViews.record(uid, me) }
     // A name I saved for them wins (iOS ContactNames); Edit opens Set nickname.
-    val name = com.fariin.app.data.ContactNames.name(uid) ?: person?.shownName ?: conv?.names?.get(uid) ?: ""
+    // A deleted account is "Deleted Account", never the old name a remembered copy still holds.
+    val name = com.fariin.app.data.ContactNames.name(uid)
+        ?: (if (gone) Conversation.DELETED_ACCOUNT_NAME else null) ?: person?.shownName ?: conv?.names?.get(uid) ?: ""
     val cid = conv?.id ?: Wire.directCid(me, uid)
     // iOS: Search only on the page opened from this person's chat; it goes back there and opens it.
     val fromChat = androidx.compose.runtime.saveable.rememberSaveable { com.fariin.app.ui.thread.InChatSearchLink.takeOpenedFrom(cid) }
