@@ -145,6 +145,8 @@ object CallManager {
     private var peerBeatChangedAt = 0L
     private var myBeatAckedAt = 0L
     private var ringShown: String? = null
+    /** A camera showed in this call, mine or theirs (iOS everVideo): the chat row then says video call. */
+    private var everVideo = false
 
     fun init(context: Context) {
         if (::app.isInitialized) return
@@ -165,6 +167,10 @@ object CallManager {
         // The screen goes dark at the ear during a voice call on the earpiece.
         main.launch {
             ui.collect { u -> CallProximity.set(app, CallRouting.proximityWanted(u.status.phase, u.cameraOn || u.sharing || u.remoteScreen, u.route.current)) }
+        }
+        // iOS noteVideo: any camera coming on during the call, mine or theirs, is remembered.
+        main.launch {
+            ui.collect { u -> if (u.status.live && (u.cameraOn || u.remoteCameraOn)) everVideo = true }
         }
         // The calling sound from the dial to the pick-up, and the chime when their camera comes on (iOS).
         main.launch {
@@ -1058,7 +1064,9 @@ object CallManager {
         val convId = cid
         val connected = before.connectedAtMs != null
         val dur = before.connectedAtMs?.let { ((System.currentTimeMillis() - it) / 1000).toInt() } ?: 0
-        val video = before.video || _ui.value.cameraOn
+        // iOS startedAsVideo || everVideo: a voice call where a camera came on (and went off again)
+        // is still a video call in the chat, on both phones.
+        val video = before.video || everVideo || _ui.value.cameraOn || _ui.value.remoteCameraOn
         stopScreenShare(signal = false)
         val outcome = if (!recordWritten && id != null && peerUid.isNotEmpty())
             CallWire.recordOutcome(s.endReason, before.isCaller, before.callDocCreated, connected, before.accepted) else null
@@ -1164,6 +1172,7 @@ object CallManager {
         negotiationVersion = 0; appliedRestart = 0; restartRequestsSeen = 0; restartRequestsSent = 0
         engineIceAt = 0L; relayRefreshTries = 0; relayRefreshTriedAt = 0L
         lastPeerBeat = 0.0; peerBeatChangedAt = 0L; myBeatAckedAt = 0L
+        everVideo = false
     }
 
     // ================================================================== helpers
