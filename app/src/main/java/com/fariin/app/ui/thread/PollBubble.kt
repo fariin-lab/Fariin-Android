@@ -281,7 +281,8 @@ private fun PollCardBody(m: Message, poll: PollCard, ctx: PollContext, isMe: Boo
         }
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (poll.hideVoters) "Anonymous" else "Public votes", fontSize = 12.sp, color = pal.secondary,
+            // A channel never shows who voted, so its poll reads "Anonymous" too (iOS).
+            Text(if (hideFaces) "Anonymous" else "Public votes", fontSize = 12.sp, color = pal.secondary,
                 modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(enabled = m.sendState == null) { results = true })
             pollTimeLeft(poll.endsAt, open)?.let {
                 Spacer(Modifier.width(4.dp))
