@@ -25,19 +25,35 @@ object TextFormat {
     data class Link(val start: Int, val end: Int, val url: String)
 
     /**
-     * The address as the wire may carry it: http/https with a dotted host, mailto:, tel:, fariin:,
-     * kulan:; a bare "fariin.com" or "www.x.com" gets https:// in front. At most 2048 characters, no
-     * spaces. Anything else (javascript:, file:, ...) is null.
+     * The address as the wire may carry it (iOS TextLink.cleanURL): http/https with a dotted host
+     * (or localhost), mailto:, tel:, fariin:, kulan:; a bare "fariin.com" or "site.com:8080" gets
+     * https:// in front, a bare "a@b.com" gets mailto:. At most 2048 characters, no spaces, no
+     * invisible characters (they hide what the address is). Anything else (javascript:, file:, ...) is null.
      */
     fun cleanUrl(raw: String): String? {
         val t = raw.trim()
         if (t.isEmpty() || t.length > 2048 || t.any { it.isWhitespace() }) return null
+        if (t.any { it in "\u200B\u200C\u200D\u2060\uFEFF\u202E" }) return null
         val low = t.lowercase()
-        for (p in listOf("mailto:", "tel:", "fariin:", "kulan:")) if (low.startsWith(p)) return if (t.length > p.length) t else null
-        val withScheme = if (low.startsWith("http://") || low.startsWith("https://")) t
-            else if (Regex("""^[a-z][a-z0-9+.-]*:""").containsMatchIn(low)) return null
-            else "https://$t"
-        val host = withScheme.substringAfter("://").substringBefore('/').substringBefore('?').substringBefore('#').substringAfterLast('@')
+        val scheme = Regex("""^[a-z][a-z0-9+.-]*:""").find(low)?.value?.dropLast(1)
+        for (p in listOf("fariin", "kulan")) if (scheme == p) return t
+        if (scheme == "tel") return if (t.length > 4) t else null
+        val s = when {
+            scheme == "mailto" -> t
+            scheme == "http" || scheme == "https" -> t
+            '@' in t && '/' !in t && ':' !in t -> "mailto:$t"
+            // "site.com:8080" is a host and a port, not a scheme.
+            scheme != null && !Regex("""^[a-z0-9.-]+:[0-9]""").containsMatchIn(low) -> return null
+            else -> "https://$t"
+        }
+        if (s.startsWith("mailto:", ignoreCase = true)) {
+            val addr = s.substring(7).substringBefore('?')
+            return if (addr.contains('@') && !addr.startsWith('@') && !addr.endsWith('@')) s else null
+        }
+        val withScheme = s
+        val host = withScheme.substringAfter("://").substringBefore('/').substringBefore('?').substringBefore('#')
+            .substringAfterLast('@').substringBefore(':')
+        if (host.lowercase() == "localhost") return if (withScheme.length > 2048) null else withScheme
         if (!host.contains('.') || host.startsWith('.') || host.endsWith('.')) return null
         return if (withScheme.length > 2048) null else withScheme
     }

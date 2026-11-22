@@ -17,7 +17,16 @@ class TextFormatLinkTest {
         assertEquals("fariin:chat/x", TextFormat.cleanUrl("fariin:chat/x"))
         assertNull(TextFormat.cleanUrl("javascript:alert(1)"))
         assertNull(TextFormat.cleanUrl("file:///etc/passwd"))
-        assertNull(TextFormat.cleanUrl("https://localhost"))
+        // iOS TextLink.cleanURL: localhost is a host, a port is not a scheme, a bare address is mail.
+        assertEquals("https://localhost", TextFormat.cleanUrl("https://localhost"))
+        assertEquals("https://site.com:8080/a", TextFormat.cleanUrl("site.com:8080/a"))
+        assertEquals("https://fariin.com/a?t=1:30", TextFormat.cleanUrl("fariin.com/a?t=1:30"))
+        assertEquals("mailto:a@b.co", TextFormat.cleanUrl("a@b.co"))
+        assertNull(TextFormat.cleanUrl("mailto:"))
+        assertNull(TextFormat.cleanUrl("mailto:nobody"))
+        assertNull(TextFormat.cleanUrl("https://fari\u200Bin.com"))
+        assertNull(TextFormat.cleanUrl("https://x.com/\u202Egpj.exe"))
+        assertNull(TextFormat.cleanUrl("data:text/html,x"))
         assertNull(TextFormat.cleanUrl("a b.com"))
         assertNull(TextFormat.cleanUrl("https://x.com/" + "a".repeat(2048)))
     }
