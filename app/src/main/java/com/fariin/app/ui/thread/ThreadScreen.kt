@@ -1619,7 +1619,7 @@ private fun ThreadContent(
                 // reply bar does; text keeps the pencil.
                 editing?.let { e -> banner = {
                     val pic = hasReplyThumb(e)
-                    ComposerBanner("Edit message", e.text.ifEmpty { replyLine(e, e.bodyText) },
+                    ComposerBanner("Edit Message", e.text.ifEmpty { replyLine(e, e.bodyText) },
                         thumb = if (pic) ({ ReplyThumb(e, 36.dp, fadeIn = true) }) else null,
                         icon = if (pic) null else R.drawable.ic_sf_pencil) { editing = null }
                 } }
