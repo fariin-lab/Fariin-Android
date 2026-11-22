@@ -27,6 +27,15 @@ class PushTapRouteTest {
         assertFalse(PushTapRoute.opens(OpenGate.Result.CHAT_GONE))
     }
 
+    @Test fun visitorOpensOnlyAQuoteWithItsChannel() {
+        assertTrue(PushTapRoute.quoteOpens(OpenGate.Result.VISITOR))
+        assertTrue(PushTapRoute.quoteOpens(OpenGate.Result.OPEN))
+        assertFalse(PushTapRoute.quoteOpens(OpenGate.Result.REFUSED))
+        assertFalse(PushTapRoute.quoteOpens(OpenGate.Result.CHAT_GONE))
+        // Any other kind: a channel I do not follow does not open.
+        assertFalse(PushTapRoute.opens(OpenGate.Result.VISITOR))
+    }
+
     @Test fun noUserYetThenUserArrivesOpens() = runBlocking {
         val uids = MutableStateFlow<String?>(null)
         var asked = false

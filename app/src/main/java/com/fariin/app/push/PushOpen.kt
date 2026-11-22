@@ -37,6 +37,15 @@ object PushTapRoute {
     fun opens(gate: com.fariin.app.data.OpenGate.Result): Boolean =
         gate == com.fariin.app.data.OpenGate.Result.OPEN || gate == com.fariin.app.data.OpenGate.Result.POST_GONE
 
+    /**
+     * A quote push that carries its public channel (`wcid`): may it open thread/{wcid} at the
+     * quoting message (`wmid`)? A channel I do not follow (VISITOR) opens too, as its visitor page,
+     * read only with Follow (iOS ChannelPostLink.open). Every other kind keeps [opens], where
+     * VISITOR does not open (iOS didReceive).
+     */
+    fun quoteOpens(gate: com.fariin.app.data.OpenGate.Result): Boolean =
+        gate == com.fariin.app.data.OpenGate.Result.OPEN || gate == com.fariin.app.data.OpenGate.Result.VISITOR
+
     /** How long a cold-start tap waits for the saved sign-in to come back before it opens anyway. */
     const val AUTH_WAIT_MS = 5_000L
 

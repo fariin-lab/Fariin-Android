@@ -725,7 +725,8 @@ class MainActivity : ComponentActivity() {
             lifecycleScope.launch {
                 // Checked first (iOS OpenGate): a deleted post or channel says so instead of a dead screen.
                 val gate = com.fariin.app.data.OpenGate.check(wcid ?: cid, if (wcid != null) wmid else mid)
-                if (gate != com.fariin.app.data.OpenGate.Result.OPEN) {
+                // A quote's public channel I do not follow (VISITOR) opens below, as its visitor page.
+                if (gate != com.fariin.app.data.OpenGate.Result.OPEN && !(wcid != null && com.fariin.app.push.PushTapRoute.quoteOpens(gate))) {
                     // The post alone is gone: iOS still opens the channel, at its newest, and says so.
                     val note = if (gate == com.fariin.app.data.OpenGate.Result.POST_GONE && wcid != null) "This message was deleted"
                         else com.fariin.app.data.OpenGate.notice(gate)
@@ -737,7 +738,8 @@ class MainActivity : ComponentActivity() {
                     return@launch
                 }
                 if (wcid != null) {
-                    // The quoting message, in that public channel.
+                    // The quoting message, in that public channel: "thread/{cid}" draws it read only,
+                    // with Follow, for a visitor (rememberChannelThread, Role.VISITOR).
                     PushRouter.pendingMid.value = wmid?.let { com.fariin.app.push.PushOpen(wcid, it, android.os.SystemClock.elapsedRealtime()) }
                     PushRouter.pendingOpen.value = wcid
                     return@launch
