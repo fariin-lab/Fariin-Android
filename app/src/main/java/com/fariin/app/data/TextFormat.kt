@@ -33,7 +33,8 @@ object TextFormat {
     fun cleanUrl(raw: String): String? {
         val t = raw.trim()
         if (t.isEmpty() || t.length > 2048 || t.any { it.isWhitespace() }) return null
-        if (t.any { it in "\u200B\u200C\u200D\u2060\uFEFF\u202E" }) return null
+        // Hidden or direction characters can make a link read as another address: refuse them all.
+        if (t.any { it in "\u200B\u200C\u200D\u200E\u200F\u2060\uFEFF\u00AD" || it in '\u202A'..'\u202E' || it in '\u2066'..'\u2069' }) return null
         val low = t.lowercase()
         val scheme = Regex("""^[a-z][a-z0-9+.-]*:""").find(low)?.value?.dropLast(1)
         for (p in listOf("fariin", "kulan")) if (scheme == p) return t
@@ -71,7 +72,7 @@ object TextFormat {
             // iOS normalizedLinks: a link running past the words is cut at their end.
             if (loc < 0 || len <= 0 || loc >= textLength) continue
             val url = cleanUrl(r.optString(3)) ?: continue
-            found.add(Link(loc, loc + minOf(len, textLength), url))
+            found.add(Link(loc, minOf(loc + len, textLength), url))
         }
         return normalizeLinks(found, textLength)
     }
