@@ -430,7 +430,8 @@ class MainActivity : ComponentActivity() {
         LaunchedEffect(pending) {
             val cid = pending ?: return@LaunchedEffect
             PushRouter.pendingOpen.value = null
-            nav.navigate("thread/$cid") { launchSingleTop = true }
+            // The official chat is its own page, not a thread (iOS opens it for its pushes).
+            nav.navigate(com.fariin.app.push.PushTapRoute.route(cid)) { launchSingleTop = true }
         }
         // The launcher's long-press New Chat / New Story (system/SystemRouter).
         val launcherAsk by com.fariin.app.system.SystemRouter.pending.collectAsState()
