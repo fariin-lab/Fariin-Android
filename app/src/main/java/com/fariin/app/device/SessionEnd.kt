@@ -235,6 +235,7 @@ object SessionEnd {
         com.fariin.app.data.OfficialStories.reset(c)
         com.fariin.app.data.ChannelStories.stop()
         com.fariin.app.data.ThreadSeed.clear()
+        com.fariin.app.data.ClearCuts.reset()   // this account's Clear Messages cuts, by chat id
         com.fariin.app.data.FormerGroups.clear()   // groups this account was removed from, by chat id
         com.fariin.app.data.QuoteStore.reset()   // the quote cards this account was shown
         com.fariin.app.data.ChatsNow.list = emptyList(); com.fariin.app.data.ChatsNow.all = emptyList()   // the live list restricted-chat checks read

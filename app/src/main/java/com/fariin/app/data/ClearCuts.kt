@@ -38,6 +38,9 @@ object ClearCuts {
     /** Undo, or a clear the server refused: the hidden messages come straight back. */
     fun show(cid: String) { _cuts.value = _cuts.value - cid }
 
+    /** Sign-out: the cuts are keyed by chat id, so the next account in the same chat keeps its messages. */
+    fun reset() { _cuts.value = emptyMap(); newest.clear() }
+
     /** Hidden by a waiting or finished Clear Messages: a sent message at or before the cut. */
     fun hides(cut: Double?, m: Message): Boolean = cut != null && m.sendState == null && m.createdAtMillis <= cut
 
