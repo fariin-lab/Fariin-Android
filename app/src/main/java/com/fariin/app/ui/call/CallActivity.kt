@@ -476,10 +476,25 @@ class CallActivity : ComponentActivity() {
 
     private var restored = false
 
+    /** Opened by a ring or call notification button (answer, decline, hang up): App Lock never holds it up. */
+    private var buttonStart = false
+
+    override fun onResume() {
+        super.onResume()
+        val button = buttonStart
+        buttonStart = false
+        // App Lock covers only an ongoing call reopened after leaving Fariin, never a ring.
+        val phase = CallManager.ui.value.status.phase
+        val ongoing = !button && !ringMode && !isInPictureInPictureMode &&
+            (groupMode || phase == CallPhase.OUTGOING || phase == CallPhase.ACTIVE || phase == CallPhase.RECONNECTING)
+        com.fariin.app.security.AppLock.onCallScreenShown(this, ongoing)
+    }
+
     private fun handle(i: Intent?) {
         i ?: return
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         i.getStringExtra(EXTRA_DEMO)?.takeIf { debuggable }?.let { demo(it); i.removeExtra(EXTRA_DEMO); return }
+        if (i.action != null) buttonStart = true
         when (i.action) {
             GroupRing.ACTION_RING -> { i.action = null; if (GroupRing.invite.value != null) ringMode = true else finish(); return }
             GroupRing.ACTION_DECLINE -> { i.action = null; GroupRing.decline(); finish(); return }

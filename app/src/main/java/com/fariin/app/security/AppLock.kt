@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.os.SystemClock
 import android.view.WindowManager
 
@@ -18,8 +19,8 @@ import android.view.WindowManager
  * App Lock asks for the phone's own screen lock (fingerprint, face or PIN through BiometricPrompt,
  * LockActivity) when Fariin comes back after the delay, and on a cold start. Screen Security sets
  * FLAG_SECURE on every window: no screenshots, a blank card in Recents. App Lock turns it on too
- * (iOS shows the switch forced on while App Lock is on). The call screens are never locked, so an
- * incoming call can be answered.
+ * (iOS shows the switch forced on while App Lock is on). A ringing call is never locked, so it can
+ * be answered; an ongoing call reopened after leaving Fariin is (see [onCallScreenShown]).
  */
 object AppLock {
     private const val PREFS = "fariin_security"
@@ -71,7 +72,7 @@ object AppLock {
 
     /** Unlocked: any time out of sight before this (Home from the lock page, the phone's PIN page
      *  covering it) is settled, so the screen under the lock does not ask a second time. */
-    fun onUnlocked() { unlocked = true; pending = false }
+    fun onUnlocked() { unlocked = true; pending = false; callPending = false }
 
     private val live = mutableSetOf<Activity>()
     private fun reapply() { live.forEach { apply(it) } }
@@ -101,7 +102,32 @@ object AppLock {
     private fun callScreen(a: Activity) = a !is LockActivity && a.javaClass.simpleName.contains("Call")
     private fun exempt(a: Activity) = a is LockActivity || callScreen(a)
 
-    private fun hidden() { backgroundAt = SystemClock.elapsedRealtime(); pending = true }
+    /** Like [pending], but only set when Fariin was left with the screen on (Home, Recents). A
+     *  call screen that comes back after the screen went dark (the phone at the ear) never asks. */
+    private var callPending = false
+
+    private fun hidden() {
+        backgroundAt = SystemClock.elapsedRealtime(); pending = true
+        if ((app.getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive) callPending = true
+    }
+
+    /**
+     * The call screen came to the front (CallActivity.onResume). An ongoing call reopened after
+     * Fariin was left (Recents, the ongoing call notification) asks for the unlock as the main
+     * screen does, with a lock page in the call's own task; the call and its sound go on under it.
+     * [ongoing] is false for a ring and for the answer, decline and hang-up buttons: never held up.
+     */
+    fun onCallScreenShown(a: Activity, ongoing: Boolean) {
+        if (!ongoing || !callPending) return
+        // Shown over the phone's own lock screen: that lock is in front already.
+        if ((a.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked) return
+        callPending = false
+        if (live.any { it is LockActivity && !it.isFinishing && it.taskId == a.taskId }) return
+        if (shouldLock(enabled(), unlocked, backgroundAt, SystemClock.elapsedRealtime(), delaySeconds())) {
+            unlocked = false
+            a.startActivity(Intent(a, LockActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION))
+        }
+    }
 
     /**
      * The call screen entered or left picture-in-picture. [byButton]: its own minimize, inside the
@@ -120,6 +146,7 @@ object AppLock {
                 started++
                 if (!callScreen(a)) appStarted++
                 if (exempt(a)) return
+                callPending = false     // back in the app: a call opened from here does not ask
                 // Checked on the first app screen after the app was out of sight, even when a call
                 // in picture-in-picture (or a call that woke the app) kept an activity started.
                 // Not unlocked yet (a cold start, or a lock page that a notification or widget tap
