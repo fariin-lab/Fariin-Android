@@ -2389,7 +2389,10 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                     gifCaption?.let { cap ->
                         Box(Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
                             TextWithMeta(cap, LocalBubbleText.current.copy(color = ink), linkInk = if (isMe) Color.White else Fariin.colors.blue,
-                                tags = ui.channel != null) { if (gifQuote == null) Meta(m, tick, isMe, is24h) else Spacer(Modifier) }
+                                bold = remember(cap, m.mentions, ui.names) { com.fariin.app.data.MentionRules.ranges(cap, m.mentions, ui.names) },
+                                fmtBold = remember(cap, m.bold) { if (m.bold.isEmpty()) emptyList() else com.fariin.app.data.TextFormat.ranges(m.bold) },
+                                ownLinks = m.links, tags = true, lined = isMe,
+                                mentionInk = if (isMe) null else Fariin.colors.blue) { if (gifQuote == null) Meta(m, tick, isMe, is24h) else Spacer(Modifier) }
                         }
                     }
                     gifQuote?.let { q ->
@@ -2736,8 +2739,12 @@ private fun MediaRow(
                 // With pills, the time goes with them (it joins their last row), as a text post's.
                 // A channel post's caption opens Tag Search from its #tags too, as its text does (2026-11-20:
                 // "clip #ovntest" under a video was plain text).
+                // As the text's own words (iOS mediaBody): mentions, the author's bold and links, tags in every chat.
                 TextWithMeta(caption, LocalBubbleText.current.copy(color = ink), linkInk = if (isMe) Color.White else c.blue,
-                    tags = ui.channel != null && !m.deleted) {
+                    bold = remember(caption, m.mentions, ui.names) { com.fariin.app.data.MentionRules.ranges(caption, m.mentions, ui.names) },
+                    fmtBold = remember(caption, m.bold) { if (m.bold.isEmpty() || caption != m.text) emptyList() else com.fariin.app.data.TextFormat.ranges(m.bold) },
+                    ownLinks = if (m.links.isEmpty() || caption != m.text) emptyList() else m.links,
+                    tags = !m.deleted, lined = isMe, mentionInk = if (isMe) null else c.blue) {
                     if (chips.isEmpty() && mediaQuote == null) Meta(m, tick, isMe, is24h) else Spacer(Modifier)
                 }
             }
