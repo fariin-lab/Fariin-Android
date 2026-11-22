@@ -3140,14 +3140,19 @@ private fun Composer(
     // Every change outside an edit is the chat's draft (sent = cleared below).
     LaunchedEffect(draft) { if (prefill == null && !wasEditing) { kept = draft; onDraft(draft) } }
 
-    // iOS typing: on while there are words (refreshed every 10 s so the 15 s expiry stays armed),
-    // off when the field empties, after 5 s without a keystroke, or when the composer goes.
+    // iOS typing: "on" only from a keystroke (a draft coming back or an edit's words are not
+    // typing, and nothing goes while editing a sent message), re-sent at most every 10 s while keys
+    // keep coming (the other side drops it after 15 s), "off" 3 s after the last keystroke, when
+    // the field empties, or when the composer goes.
     var lastKey by remember { mutableStateOf(0L) }
-    LaunchedEffect(draft.isNotBlank(), lastKey) {
-        if (draft.isBlank()) { onTyping(false); return@LaunchedEffect }
-        onTyping(true)
-        kotlinx.coroutines.delay(5_000)
-        onTyping(false)
+    val typingSentAt = remember { longArrayOf(0L) }
+    LaunchedEffect(draft.isNotBlank(), lastKey, prefill != null) {
+        val now = System.currentTimeMillis()
+        val typing = draft.isNotBlank() && prefill == null && lastKey > 0 && now - lastKey < 3_000
+        if (!typing) { onTyping(false); typingSentAt[0] = 0L; return@LaunchedEffect }
+        if (typingSentAt[0] == 0L || now - typingSentAt[0] >= 10_000) { onTyping(true); typingSentAt[0] = now }
+        kotlinx.coroutines.delay(3_000 - (now - lastKey))
+        onTyping(false); typingSentAt[0] = 0L
     }
     DisposableEffect(Unit) { onDispose { onTyping(false) } }
     val recorder = remember { VoiceRecorder(context.applicationContext) }
@@ -3406,7 +3411,7 @@ private fun Composer(
                                     androidx.compose.ui.text.input.TextFieldValue(t, androidx.compose.ui.text.TextRange(at))
                                 } ?: return@BasicTextField
                             val now = System.currentTimeMillis()
-                            if (now - lastKey > 10_000 || draft.isBlank()) lastKey = now
+                            if (fv.text != boxValue.text) lastKey = now   // a real change of words, not a cursor move
                             // What is typed or pasted starts regular, even next to bold.
                             if (boldable) boxBold = com.fariin.app.data.TextFormat.adjust(boxBold, boxValue.text, fv.text)
                                 .let { b -> val got = BoldClip.pasted(context, boxValue.text, fv.text); if (got.isEmpty()) b else com.fariin.app.data.TextFormat.normalize(b + got, fv.text.length) }
