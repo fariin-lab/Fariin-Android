@@ -326,7 +326,7 @@ private fun GroupAdminsPage(cid: String, me: String, onBack: () -> Unit, push: (
                     SettingsRow("Add Admin", icon = rememberVectorPainter(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_add_member)), titleColor = c.accent,
                         trailing = Trailing.NONE) { push(GroupPage.Choose) }
                 }
-                team.sortedAdmins().forEach { uid ->
+                team.sortedAdmins(me).forEach { uid ->
                     PersonLine(team.photos[uid]?.ifEmpty { null }, if (uid == me) "You" else team.names[uid] ?: "Admin",
                         onClick = { push(GroupPage.Rights(uid)) },
                         detail = GroupAdmins.promotedBy(uid, team.owner, team.adminBy, me, team.names)) {

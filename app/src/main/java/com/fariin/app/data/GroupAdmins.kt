@@ -97,10 +97,10 @@ object GroupAdmins {
             !closed && target != me && !isOwner(target) && users.contains(target) &&
                 can(me, Right.BAN_USERS) && (!admins.contains(target) || isOwner(me))
 
-        /** GroupAdminsView.split: the admins, owner first, then by name. */
-        fun sortedAdmins(): List<String> {
+        /** GroupAdminsView.split: the admins, owner first, then me ([me], as iOS GroupMembers.sorted), then by name. */
+        fun sortedAdmins(me: String = ""): List<String> {
             val all = (admins + listOfNotNull(owner.takeIf { it.isNotEmpty() && users.contains(it) })).distinct().filter { users.contains(it) }
-            return all.sortedWith(compareBy({ it != owner }, { (names[it] ?: "").lowercase() }))
+            return all.sortedWith(compareBy({ it != owner }, { me.isEmpty() || it != me }, { (names[it] ?: "").lowercase() }))
         }
 
         /** Members who are not admins, by name: the Choose Member list. */
