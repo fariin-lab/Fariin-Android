@@ -726,7 +726,14 @@ class MainActivity : ComponentActivity() {
                 // Checked first (iOS OpenGate): a deleted post or channel says so instead of a dead screen.
                 val gate = com.fariin.app.data.OpenGate.check(wcid ?: cid, if (wcid != null) wmid else mid)
                 if (gate != com.fariin.app.data.OpenGate.Result.OPEN) {
-                    com.fariin.app.data.OpenGate.notice(gate).takeIf { it.isNotEmpty() }?.let { com.fariin.app.ui.components.Snack.show(it) }
+                    // The post alone is gone: iOS still opens the channel, at its newest, and says so.
+                    val note = if (gate == com.fariin.app.data.OpenGate.Result.POST_GONE && wcid != null) "This message was deleted"
+                        else com.fariin.app.data.OpenGate.notice(gate)
+                    note.takeIf { it.isNotEmpty() }?.let { com.fariin.app.ui.components.Snack.show(it) }
+                    if (gate == com.fariin.app.data.OpenGate.Result.POST_GONE) {
+                        PushRouter.pendingMid.value = null
+                        PushRouter.pendingOpen.value = wcid ?: cid
+                    }
                     return@launch
                 }
                 if (wcid != null) {
