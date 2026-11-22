@@ -261,7 +261,7 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
                                 if (newName != null) api.writeName(newName)
                                 if (newAbout != null) com.fariin.app.data.ProfileWrites.saveAbout(api.me, newAbout)
                             } catch (e: kotlinx.coroutines.CancellationException) { throw e
-                            } catch (_: Exception) { failure = "Couldn't save your profile. Try again." }
+                            } catch (_: Exception) { failure = "Your profile could not be saved. Try again." }
                             try {
                                 // The held photo goes now (iOS: nothing changes until Save).
                                 jpeg?.let { j ->
@@ -272,8 +272,8 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
                                 if (video != null) com.fariin.app.data.AvatarVideoService.publishInBackground(appCtx, video)
                                 else if (hadVideo && (jpeg != null || remove)) com.fariin.app.data.AvatarVideoService.removeInBackground()
                             } catch (e: kotlinx.coroutines.CancellationException) { throw e
-                            } catch (e: com.fariin.app.data.LimitReached) { failure = e.message ?: "Couldn't save your profile."
-                            } catch (_: Exception) { failure = "Couldn't save your profile. Try again." }
+                            } catch (e: com.fariin.app.data.LimitReached) { failure = e.message ?: "Your photo could not be uploaded. Try again."
+                            } catch (_: Exception) { failure = if (remove) "Your photo could not be removed. Try again." else "Your photo could not be uploaded. Try again." }
                             failure?.let { com.fariin.app.ui.components.Snack.show(it) }
                         }
                     } catch (e: IllegalArgumentException) { error = e.message ?: "That name can’t be used." }
