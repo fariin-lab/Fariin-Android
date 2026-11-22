@@ -169,6 +169,8 @@ internal object SettingsIndex {
         page("Disappearing Messages", pr, "disappearing messages timer auto delete default", PAGE_DISAPPEAR_DEFAULT)
         if (com.fariin.app.crypto.KeyBackup.ENABLED) page("Backup PIN", pr, "backup pin restore messages reinstall new phone key", PAGE_KEY_BACKUP)
         page("App Lock", pr, "app lock fingerprint face unlock passcode pin lock", PAGE_APP_LOCK)
+        // iOS "Require Face ID": the page's first switch, by its Android name.
+        row("Require Screen Lock", pr + "App Lock", "require screen lock fingerprint face passcode pin biometrics unlock", PAGE_APP_LOCK)
         row("Auto-Lock", pr + "App Lock", "auto lock timer immediately minutes", PAGE_APP_LOCK)
         row("Screen Security", pr + "App Lock", "screen security screenshot recent apps hide", PAGE_APP_LOCK)
         page("My Reports", pr, "my reports reported report status", PAGE_MY_REPORTS)

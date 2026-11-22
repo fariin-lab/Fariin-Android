@@ -82,6 +82,13 @@ class SettingsIndexTest {
         assertTrue(SettingsIndex.matching("family").isEmpty())
     }
 
+    @Test fun appLockSwitchIsFound() {
+        val e = SettingsIndex.matching("biometrics").first()
+        assertEquals("Require Screen Lock", e.title)
+        assertEquals(listOf("Privacy & Security", "App Lock"), e.path)
+        assertEquals(PAGE_APP_LOCK, e.page)
+    }
+
     @Test fun idsAreUnique() {
         val ids = SettingsIndex.entries.map { it.id }
         assertEquals(ids.size, ids.toSet().size)
