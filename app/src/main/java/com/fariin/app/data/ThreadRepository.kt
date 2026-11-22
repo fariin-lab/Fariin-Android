@@ -1233,8 +1233,9 @@ class ThreadRepository(
                         com.fariin.app.local.PhotoOutbox.add(me, com.fariin.app.local.PhotoOutbox.Entry(cid, clientId, ts,
                             local.absolutePath, prep.width, prep.height, prep.blurhash, prep.thumbB64, words, once,
                             replyId = re?.id, replyAuthor = re?.authorId, replyText = re?.text))
-                        // A view-once photo keeps no plain copy on my phone once it is up (as the one-time voice note).
-                        val work: suspend () -> Unit = { sender.image(prep, words, once, false, clientId, ts, reply = re); com.fariin.app.local.PhotoOutbox.remove(me, clientId); if (once) local.delete() }
+                        // A view-once photo keeps no plain copy on my phone once it is up (as the one-time voice note),
+                        // nor the photo editor's copy in cache/edited when it was drawn on or cropped first.
+                        val work: suspend () -> Unit = { sender.image(prep, words, once, false, clientId, ts, reply = re); com.fariin.app.local.PhotoOutbox.remove(me, clientId); if (once) { local.delete(); com.fariin.app.ui.thread.deleteEditedCopy(context, chunk[0]) } }
                         retryMedia[clientId] = work
                         work()
                     } else {

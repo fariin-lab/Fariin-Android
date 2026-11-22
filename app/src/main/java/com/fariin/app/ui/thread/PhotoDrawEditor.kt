@@ -394,6 +394,22 @@ internal suspend fun saveEditedPhoto(ctx: android.content.Context, b: Bitmap): U
     }.getOrNull()
 }
 
+/** Deletes the editor's own copy behind [uri] (a view-once photo after it is sent). Anything that is not
+ *  our provider's edited/edit-*.jpg inside cache/edited, such as a gallery photo, is left alone. */
+internal fun deleteEditedCopy(ctx: android.content.Context, uri: Uri) {
+    runCatching {
+        if (uri.scheme != "content" || uri.authority != ctx.packageName + ".files") return
+        val seg = uri.pathSegments
+        if (seg.size != 2 || seg[0] != "edited") return
+        val name = seg[1]
+        if (!name.startsWith("edit-") || !name.endsWith(".jpg") || name.contains('/') || name.contains("..")) return
+        val dir = File(ctx.cacheDir, "edited").canonicalFile
+        val f = File(dir, name).canonicalFile
+        if (f.parentFile != dir || !f.isFile) return
+        f.delete()
+    }
+}
+
 /** Edited copies are read once by the send or the attach sheet; a day later they are only clutter. */
 private fun sweepOldEdits(ctx: android.content.Context) {
     val cutoff = System.currentTimeMillis() - 24 * 60 * 60 * 1000L
