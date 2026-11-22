@@ -378,7 +378,12 @@ fun JoinLinkScreen(keyText: String, videoFromPath: Boolean, onBack: () -> Unit) 
     // The pre-join screen is iOS CallLobbyView now, in the call's own activity (CallLobbyScreen):
     // the lobby and the call are one screen in two states, as on iOS. This route only hands over.
     val ctx = LocalContext.current
-    LaunchedEffect(keyText) { CallActivity.startLobby(ctx, keyText, videoFromPath); onBack() }
+    LaunchedEffect(keyText) {
+        // iOS openLobby: the admin panel's Call Links switch off says so instead of opening.
+        if (!com.fariin.app.data.AppFeatures.callLinks) Snack.show("Call links aren't available yet")
+        else CallActivity.startLobby(ctx, keyText, videoFromPath)
+        onBack()
+    }
     Box(Modifier.fillMaxSize().background(Color.Black))
 }
 
