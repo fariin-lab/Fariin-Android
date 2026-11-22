@@ -204,5 +204,7 @@ class ChatsViewModel(
 }
 
 /** Chats with something unread, the number on the Chats tab (blocked chats do not count). */
-fun unreadChatsBadge(chats: List<Conversation>, me: String): Int =
-    chats.count { !it.isBlockedByMe(me) && it.hasUnreadMark(me) }
+fun unreadChatsBadge(chats: List<Conversation>, me: String, official: Conversation? = null): Int =
+    chats.count { !it.isBlockedByMe(me) && it.hasUnreadMark(me) } +
+        // The official channel counts too, muted or not (iOS MainShell unreadChatsBadge).
+        if (official != null && !official.isCleared(me) && !official.isArchived(me) && official.hasUnreadMark(me)) 1 else 0

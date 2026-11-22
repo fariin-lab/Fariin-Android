@@ -152,7 +152,8 @@ fun MainShell(
     // does not run the whole shell again (its listeners, badges and the rest).
     val tabState = rememberSaveable { mutableIntStateOf(TAB_CHATS) }
     var tab by tabState
-    val unread = unreadChatsBadge(chats.chats, me)
+    val officialView by com.fariin.app.data.OfficialChannel.view.collectAsState()
+    val unread = unreadChatsBadge(chats.chats, me, com.fariin.app.data.OfficialChannel.listEntry(officialView, me))
     // The call history, read here so the Calls tab's missed badge counts from any tab (iOS
     // MainShell callsRepo). Each chat's calls are re-read only when that chat moves.
     val callsRepo = remember { com.fariin.app.data.CallsRepository() }
