@@ -687,7 +687,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     // iOS ••• "Change Wallpaper", only from the chat (it goes back there and opens its picker);
     // under Glow Story and a divider when Glow is on, as iOS orders the menu.
     val wallpaper: () -> Unit = { com.fariin.app.ui.settings.ChatWallpaperLink.request(cid); onBack() }
-    val addToGroup: (() -> Unit)? = if (uid != me) ({ addingToGroup = true }) else null
+    // With groups switched off on the server there is no group to add them to (iOS Flags.groupsEnabled).
+    val addToGroup: (() -> Unit)? = if (uid != me && com.fariin.app.data.AppFeatures.groups) ({ addingToGroup = true }) else null
     val clearMine: (() -> Unit)? = if (uid != me && (conv ?: com.fariin.app.data.CryptoHub.listedConversation(cid)) != null) ({ ask = "clearMine" }) else null
     val shareProfile: (() -> Unit)? = if (uid != me) ({ sharingProfile = true }) else null
     // iOS Export Chat: only where a real 1:1 chat exists, never on my own page.
@@ -829,7 +830,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                     com.fariin.app.ui.thread.InChatSearchLink.searchFromInfo(cid, onBack)
                 }
                 // The "…" menu as the row's last circle, as iOS (owner 2026-11-10).
-                if (uid != me && !glowOn && (fromChat || addToGroup != null)) Box(share.glassMenuAnchor(moreAnchor)) {
+                // Always there on someone else's page (iOS: !isSelf), groups on or off.
+                if (uid != me && !glowOn) Box(share.glassMenuAnchor(moreAnchor)) {
                     ActionTile("More", ImageVector.cachedVector(R.drawable.ic_more_ios), Modifier.fillMaxWidth()) { moreOpen = true }
                 }
             }
@@ -864,7 +866,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             }
             // iOS: after the settings card, and only when the chat has photos or videos.
             SharedMediaCard(cid, shared) { allMedia = true }
-            if (uid != me) GroupsInCommonSection(commonGroups, me, onAdd = { addingToGroup = true },
+            if (uid != me && com.fariin.app.data.AppFeatures.groups) GroupsInCommonSection(commonGroups, me, onAdd = { addingToGroup = true },
                 onSeeAll = { allGroups = true }, onOpenChat = onOpenChat)
             // iOS dangerCard: a blocked person's page is Delete Chat and Unblock and nothing else
             // (no Report while blocked, owner 2026-09-27); Delete Chat only where a chat exists.
