@@ -598,20 +598,72 @@ object GroupCall {
         connectRoom(app, tag, _ui.value.title, video, requireLive = true, pass = pass)
     }
 
+    /** iOS linkDocListener and waitTask, beside requestReg while I wait at a link's door. */
+    private var linkDocReg: ListenerRegistration? = null
+    private var waitJob: Job? = null
+
+    private fun stopWaiting() {
+        requestReg?.remove(); requestReg = null
+        linkDocReg?.remove(); linkDocReg = null
+        waitJob?.cancel(); waitJob = null
+    }
+
     private fun waitForYes(app: Context, tag: String, roomId: String, video: Boolean) {
         val me = com.fariin.app.Fb.auth.currentUser?.uid
         if (me == null) { fail("Call failed"); return }
         _ui.value = _ui.value.copy(waiting = true)
-        requestReg?.remove()
-        requestReg = db.collection("callLinks").document(roomId).collection("requests").document(me)
-            .addSnapshotListener { s, _ ->
-                if (_ui.value.cid != tag || s == null || !s.exists()) return@addSnapshotListener
-                when (s.getString("status")) {
-                    "approved" -> { requestReg?.remove(); requestReg = null; scope.launch { askLinkPass(app, tag, roomId, video) } }
-                    "denied" -> { requestReg?.remove(); requestReg = null; fail("Request denied") }
-                }
+        stopWaiting()
+        val request = db.collection("callLinks").document(roomId).collection("requests").document(me)
+        // iOS admit: runs once, even when the yes and "approval off" land together.
+        var done = false
+        fun admit(dropKnock: Boolean) {
+            if (done || _ui.value.cid != tag) return
+            done = true
+            stopWaiting()
+            if (dropKnock) request.delete()
+            scope.launch { askLinkPass(app, tag, roomId, video) }
+        }
+        fun end(notice: String) {
+            if (done || _ui.value.cid != tag) return
+            done = true
+            stopWaiting()
+            fail(notice)
+        }
+        var sawMine = false
+        requestReg = request.addSnapshotListener { s, _ ->
+            if (_ui.value.cid != tag || s == null) return@addSnapshotListener
+            if (!s.exists()) {
+                // iOS M-024: my knock was deleted with the link, not just not cached yet.
+                if (sawMine && !s.metadata.isFromCache) end(LINK_GONE)
+                return@addSnapshotListener
             }
+            sawMine = true
+            when (s.getString("status")) {
+                "approved" -> admit(dropKnock = false)
+                "denied" -> end("Request denied")
+            }
+        }
+        // iOS linkDocListener: the link deleted or revoked means nobody will answer; approval
+        // switched off on the link is a yes for everyone waiting.
+        linkDocReg = db.collection("callLinks").document(roomId).addSnapshotListener { s, _ ->
+            if (_ui.value.cid != tag || s == null) return@addSnapshotListener
+            val d = s.data
+            if (!s.metadata.isFromCache && (d == null || d["revoked"] == true)) { end(LINK_GONE); return@addSnapshotListener }
+            val r = d?.get("restrictions") as? String ?: return@addSnapshotListener
+            if (r != "adminApproval") admit(dropKnock = true)
+        }
+        // iOS waitTask (M-070 / M-024): the knock is renewed after a minute, and after two minutes
+        // with no answer the wait ends. leave() withdraws the knock.
+        waitJob = scope.launch {
+            delay(60_000)
+            if (done || _ui.value.cid != tag) return@launch
+            try { functions.getHttpsCallable("groupCallToken").call(CallLinkWire.tokenRequest(roomId)) } catch (_: Exception) {}
+            delay(60_000)
+            if (_ui.value.cid == tag && _ui.value.waiting) end("The host didn't let you in")
+        }
     }
+
+    private const val LINK_GONE = "This call link is no longer valid"
 
     /** iOS joinNotice for a link: gone, full, turned away, blocked by the host. */
     private fun linkNotice(e: Exception): String {
@@ -1245,7 +1297,7 @@ object GroupCall {
         // Hung up (or failed) before the room was up: the doc already rings the others; stop it.
         else if (cid != null && adhocWritten && GroupCallWire.isAdhoc(cid)) stopAdhocRing(cid)
         adhocWritten = false; adhocJoining = false; adhocMembers = emptyList()
-        requestReg?.remove(); requestReg = null
+        stopWaiting()
         requestsReg?.remove(); requestsReg = null
         groupReg?.remove(); groupReg = null
         team = null; linkKey = null; passRole = CallRole.PARTICIPANT; sawMicBlocked = false; firstSeen.clear(); screenSince.clear(); cameraWaitSince.clear()
