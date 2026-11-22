@@ -204,6 +204,7 @@ object SessionEnd {
         }
         // Each chat's newest stored line, in memory by chat id: never the next account's preview.
         com.fariin.app.local.LocalDb.forgetSummaries()
+        com.fariin.app.data.HiddenLast.clear(c)   // the list line kept after a delete for me (opened text)
         com.fariin.app.local.Drafts.clear()
         com.fariin.app.local.SendQueue.wipe()
         com.fariin.app.local.Cursors.reset()   // delivery marks sent, by chat id: the next account writes its own

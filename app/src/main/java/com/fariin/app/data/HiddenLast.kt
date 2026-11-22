@@ -39,6 +39,12 @@ object HiddenLast {
         return if (c.updatedAtMillis <= at + 5_000) line else null
     }
 
+    /** Sign-out: these lines are this account's own (opened text), never the next one's. */
+    fun clear(c: Context) {
+        lines = emptyMap(); loaded = true
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY).apply()
+    }
+
     private fun save(c: Context) {
         val o = JSONObject()
         lines.forEach { (k, v) -> o.put(k, JSONObject().put("at", v.first).put("line", v.second)) }
