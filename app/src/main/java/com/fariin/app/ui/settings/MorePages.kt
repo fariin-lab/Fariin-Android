@@ -440,26 +440,35 @@ private fun NotificationsPage(pop: () -> Unit) {
         SettingsSection(footer = "A short sound when your message reaches Fariin.") {
             SwitchRow("Sound When Sent", sent, last = true, badge = NewBadgeSpots.NOTIFICATIONS_SENT_SOUND) { sent = it; p.edit().putBoolean("chat.sentSound", it).apply() }
         }
-        SettingsSection(footer = "Undo all custom notification settings, including muted chats.") {
-            SettingsRow("Reset All Notifications", trailing = Trailing.NONE, titleColor = Fariin.colors.red, last = true,
+        // Only when there is something to undo (iOS hasAnythingToReset): grey and still otherwise.
+        val now = System.currentTimeMillis().toDouble()
+        val canReset = !push || !preview || !inSound || !inVibrate || !inPreview || !sent
+            || com.fariin.app.push.MessageTones.hasAnyCustom(ctx)
+            || (me != null && com.fariin.app.data.CryptoHub.listedAll().any { it.isMuted(me, now) })
+        SettingsSection(footer = "Undo all custom notification settings, including per-chat sounds and muted chats.") {
+            SettingsRow("Reset All Notifications", trailing = Trailing.NONE,
+                titleColor = if (canReset && !resetting) Fariin.colors.red else Fariin.colors.tertiary, last = true,
                 badge = NewBadgeSpots.NOTIFICATIONS_RESET_ALL,
-                accessory = { if (resetting) com.fariin.app.ui.components.FariinSpinner(size = 20.dp) }) { if (!resetting) reset = true }
+                accessory = { if (resetting) com.fariin.app.ui.components.FariinSpinner(size = 20.dp) }) { if (!resetting && canReset) reset = true }
         }
     }
-    if (reset) YesNo("Reset all notifications?", "Every muted chat goes back to normal notifications.", "Reset", onYes = {
+    if (reset) YesNo("Reset all notifications?", "Every muted chat goes back to normal notifications, and custom chat sounds return to the default.", "Reset", onYes = {
         reset = false
         p.edit().putBoolean(Push.PUSH_ON, true).putBoolean("notif.preview", true).putBoolean("notif.inAppSound", true)
             .putBoolean("notif.inAppVibrate", true).putBoolean("notif.inAppPreview", true).putBoolean("chat.sentSound", true).apply()
         push = true; preview = true; inSound = true; inVibrate = true; inPreview = true; sent = true
+        com.fariin.app.push.MessageTones.clearAll(ctx)   // per-chat sounds (iOS SoundStore.clearAllCustom)
         Push.register(ctx)
         if (me != null) {
             resetting = true
             scope.launch {
                 val savedAccount = saveAccount("notifPush", true) and saveAccount("notifPreview", true)
-                val db = com.fariin.app.Fb.db
                 var unmuteFailed = 0
-                for (c in com.fariin.app.data.CryptoHub.listedAll()) if ((c.mutedBy[me] ?: 0.0) > System.currentTimeMillis()) {
-                    val ok = runCatching { db.collection("conversations").document(c.id).set(mapOf("mutedBy" to mapOf(me to 0.0)), SetOptions.merge()).await() }.isSuccess
+                // isMuted + setMute, as iOS: a channel I only follow keeps its mute on my follow
+                // entry, not in mutedBy, so the old mutedBy-only loop left those muted.
+                val at = System.currentTimeMillis().toDouble()
+                for (c in com.fariin.app.data.CryptoHub.listedAll()) if (c.isMuted(me, at)) {
+                    val ok = runCatching { com.fariin.app.ui.chats.ChatListActions.setMute(me, c, 0.0) }.getOrDefault(false)
                     if (!ok) unmuteFailed++
                 }
                 resetting = false
