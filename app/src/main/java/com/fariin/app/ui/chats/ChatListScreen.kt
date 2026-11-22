@@ -1096,9 +1096,6 @@ fun ChatListScreen(
         val plan = ChatListActions.deletePlan(me, targets)
         val single = targets.singleOrNull()
         val singleKind = single?.let { ChatListActions.deleteKind(me, it) }
-        // One person-to-person chat may also take my own sent messages off the server (the same
-        // clearMyMessages as "Clear your messages" on the person's page).
-        val one = single?.takeIf { singleKind == DeleteKind.HIDE && !it.isGroup && me != com.fariin.app.ui.debug.DemoChats.ME }
         fun done() {
             confirmDelete = false
             if (swipeDelete == null) { selected = emptySet(); selectMode = false }
@@ -1146,14 +1143,6 @@ fun ChatListScreen(
                             }
                         }
                     },
-                    if (one != null) com.fariin.app.ui.components.CarefulButton("Delete My Messages for Everyone", com.fariin.app.ui.components.CarefulKind.DESTRUCTIVE) {
-                        done()
-                        scope.launch {
-                            val cleared = ChatListActions.clearMyMessages(me, one.id)
-                            val ok = cleared && ChatListActions.deleteForMe(me, one)
-                            Snack.show(if (ok) "Chat deleted. Your messages are gone for everyone." else "Couldn't delete. Try again.")
-                        }
-                    } else null,
                 ),
             )))
     }

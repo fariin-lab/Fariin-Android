@@ -190,9 +190,9 @@ object ChatListActions {
                     DeletePlan("Leave Channel?", "Are you sure you want to leave $name?", "Leave Channel")
                 DeleteKind.LEAVE_GROUP ->
                     DeletePlan("Delete Group?", "Are you sure you want to leave $name?", "Delete Group")
+                // iOS MainShell: the same words for a person and a former group; the other person keeps theirs.
                 DeleteKind.HIDE ->
-                    if (one.isGroup) DeletePlan("Delete this chat?", "This removes the chat from your list. It comes back if you get a new message.", "Delete Chat")
-                    else DeletePlan("Delete this chat?", "Delete for Me removes the chat from your list. The other person keeps their copy, unless you also delete your messages for everyone.", "Delete for Me")
+                    DeletePlan("Delete this chat?", "This removes the chat from your list. It comes back if you get a new message.", "Delete Chat")
             }
         }
         val groups = kinds.count { it == DeleteKind.LEAVE_GROUP }

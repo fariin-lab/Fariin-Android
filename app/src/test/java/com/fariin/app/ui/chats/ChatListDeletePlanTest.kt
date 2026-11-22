@@ -26,7 +26,7 @@ class ChatListDeletePlanTest {
             ChatListActions.deletePlan(me, listOf(followed)))
         assertEquals("Leave Channel", ChatListActions.deletePlan(me, listOf(myChannel)).button)
         assertEquals("Delete Group", ChatListActions.deletePlan(me, listOf(group)).button)
-        assertEquals("Delete for Me", ChatListActions.deletePlan(me, listOf(dm)).button)
+        assertEquals("Delete Chat", ChatListActions.deletePlan(me, listOf(dm)).button)
         assertEquals("Delete Chat", ChatListActions.deletePlan(me, listOf(formerGroup)).button)
     }
 
