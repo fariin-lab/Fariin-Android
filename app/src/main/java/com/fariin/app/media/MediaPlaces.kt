@@ -107,7 +107,9 @@ object AutoDownload {
         val cm = c.getSystemService(ConnectivityManager::class.java)
         val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
         (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) &&
-            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED) &&
+            // iOS treats Low Data Mode as cellular: with Data Saver on, "Wi-Fi only" kinds wait too.
+            cm.restrictBackgroundStatus != ConnectivityManager.RESTRICT_BACKGROUND_STATUS_ENABLED
     }.getOrDefault(false)
 }
 
@@ -142,8 +144,10 @@ object GallerySaver {
 
     /** Copies [file] into Pictures/Fariin or Movies/Fariin. True when it landed. */
     fun save(c: Context, file: File, isVideo: Boolean): Boolean = runCatching {
-        val name = "Fariin_${System.currentTimeMillis()}" + if (isVideo) ".mp4" else ".jpg"
-        val mime = if (isVideo) "video/mp4" else "image/jpeg"
+        val head = ByteArray(16)
+        val n = file.inputStream().use { it.read(head) }
+        val (ext, mime) = fileType(if (n > 0) head.copyOf(n) else ByteArray(0), isVideo)
+        val name = "Fariin_${System.currentTimeMillis()}.$ext"
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
             put(MediaStore.MediaColumns.MIME_TYPE, mime)
@@ -170,6 +174,24 @@ object GallerySaver {
         }
         true
     }.getOrDefault(false)
+
+    /** The real kind of the saved bytes from their first bytes (iOS saves the original photo as it is):
+     *  extension and MIME. Unknown bytes keep the old jpg / mp4. */
+    fun fileType(head: ByteArray, isVideo: Boolean): Pair<String, String> {
+        fun at(i: Int, vararg b: Int) = head.size >= i + b.size && b.indices.all { head[i + it] == b[it].toByte() }
+        fun ascii(i: Int, t: String) = at(i, *t.map { it.code }.toIntArray())
+        if (isVideo) {
+            if (ascii(4, "ftyp") && ascii(8, "qt  ")) return "mov" to "video/quicktime"
+            return "mp4" to "video/mp4"
+        }
+        return when {
+            at(0, 0x89, 0x50, 0x4E, 0x47) -> "png" to "image/png"
+            ascii(0, "GIF8") -> "gif" to "image/gif"
+            ascii(0, "RIFF") && ascii(8, "WEBP") -> "webp" to "image/webp"
+            ascii(4, "ftyp") && (ascii(8, "heic") || ascii(8, "heix") || ascii(8, "mif1")) -> "heic" to "image/heic"
+            else -> "jpg" to "image/jpeg"
+        }
+    }
 
     /** Saves a photo, a video or every tile of an album; the words for the notice. */
     suspend fun saveMessage(c: Context, media: ChatMedia?, m: com.fariin.app.data.Message): String =
