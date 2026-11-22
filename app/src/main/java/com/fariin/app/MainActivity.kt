@@ -589,7 +589,7 @@ class MainActivity : ComponentActivity() {
                 enterTransition = com.fariin.app.ui.components.Motion.enter(), exitTransition = com.fariin.app.ui.components.Motion.exit(),
                 popEnterTransition = com.fariin.app.ui.components.Motion.popEnter(), popExitTransition = com.fariin.app.ui.components.Motion.popExit()) {
                 peopleRoutes(nav, people, chats = { chatsState.value.chats }, requests = { chatsState.value.requests },
-                    groupDoc = { com.fariin.app.ui.people.liveGroupDoc(it) })
+                    groupDoc = { com.fariin.app.ui.people.liveGroupDoc(it) }, decryptor = decryptor)
                 channelRoutes(nav, me, chats = { chatsState.value.chats })
                 // A real (see-through) box, never an empty page: with nothing to measure, the page
                 // change back to it could freeze half way (owner 2026-11-03, the stuck back arrow).

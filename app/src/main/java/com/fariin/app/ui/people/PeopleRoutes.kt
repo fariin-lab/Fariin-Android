@@ -21,6 +21,8 @@ fun NavGraphBuilder.peopleRoutes(
     chats: () -> List<Conversation>,
     requests: () -> List<Conversation>,
     groupDoc: @Composable (String) -> Map<String, Any?>,
+    /** Opens the first message for the Message Requests rows (null in the demo: no preview). */
+    decryptor: com.fariin.app.data.MessageDecryptor? = null,
 ) {
     val openChat: (String) -> Unit = { cid -> nav.navigate("thread/$cid") { popUpTo("main"); launchSingleTop = true } }
     page("newchat") {
@@ -49,7 +51,7 @@ fun NavGraphBuilder.peopleRoutes(
             }
         })
     }
-    page("requests") { MessageRequestsScreen(api, requests(), onBack = { nav.popBackStack() }, onOpenChat = openChat) }
+    page("requests") { MessageRequestsScreen(api, requests(), onBack = { nav.popBackStack() }, onOpenChat = openChat, decryptor = decryptor) }
     page("contact/{uid}") { e ->
         val uid = e.arguments?.getString("uid") ?: return@page
         val conv = chats().firstOrNull { !it.isGroup && it.users.contains(uid) }

@@ -362,7 +362,8 @@ fun ChatKeySheet(api: PeopleApi, p: Person, onDismiss: () -> Unit, onOpened: (St
  * Each row: Accept, Delete (they can't send another request for 7 days; not a block), Block.
  */
 @Composable
-fun MessageRequestsScreen(api: PeopleApi, requests: List<Conversation>, onBack: () -> Unit, onOpenChat: (String) -> Unit) {
+fun MessageRequestsScreen(api: PeopleApi, requests: List<Conversation>, onBack: () -> Unit, onOpenChat: (String) -> Unit,
+                          decryptor: com.fariin.app.data.MessageDecryptor? = null) {
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
     val me = api.me
@@ -428,7 +429,9 @@ fun MessageRequestsScreen(api: PeopleApi, requests: List<Conversation>, onBack: 
             items(list, key = { it.id }) { conv ->
                 val other = conv.otherUid(me)
                 Column {
-                    PersonRow(conv.displayPhoto(me), conv.displayName(me), "Wants to message you", onClick = { onOpenChat(conv.id) })
+                    // The chat list's own row, as iOS: their first message, its time and the unread count.
+                    if (decryptor != null) com.fariin.app.ui.chats.ChatRow(conv, me, decryptor, onOpen = { onOpenChat(conv.id) })
+                    else PersonRow(conv.displayPhoto(me), conv.displayName(me), "Wants to message you", onClick = { onOpenChat(conv.id) })
                     Row(Modifier.fillMaxWidth().padding(start = 72.dp, end = 16.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Pill("Accept", c.accent, c.onAccent) {
                             // Stays on the page, as iOS: a list opened to clear it keeps going. Tap the row to open.
