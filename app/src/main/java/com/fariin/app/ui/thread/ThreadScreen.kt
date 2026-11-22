@@ -1787,7 +1787,14 @@ private fun ThreadContent(
                             onSendPick(uris, cap, once, re) }
                     },
                     onSendFile = { u -> val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.FILES); if (stop != null) actions.onNotice(stop) else { val re = replyTo; replyTo = null; onSendFile(u, re) } },
-                    onSendFiles = { l -> val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.FILES); if (stop != null) actions.onNotice(stop) else { val re = replyTo; replyTo = null; onSendFiles(l, re) } },
+                    // Several files (or photos as files) are several messages; slow mode keeps only the
+                    // first, so the pick is refused (iOS slowRefusesBatch).
+                    onSendFiles = { l ->
+                        val many = if (l.size > 1 && ui.isGroup && doc.isNotEmpty() && com.fariin.app.data.GroupAdmins.slows(doc, ui.me))
+                            "Slow mode is on. Send one message at a time." else null
+                        val stop = slow() ?: many ?: held(com.fariin.app.data.GroupAdmins.SendKind.FILES)
+                        if (stop != null) actions.onNotice(stop) else { val re = replyTo; replyTo = null; onSendFiles(l, re) }
+                    },
                     mediaOff = mediaOff,
                     // iOS: the Poll tile is in groups only, held back like the other kinds.
                     onPoll = if (ui.isGroup) ({
