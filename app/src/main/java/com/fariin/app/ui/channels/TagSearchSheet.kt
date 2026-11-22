@@ -93,6 +93,10 @@ fun TagSearchSheet(tag: String, startFollowing: Boolean, onClose: () -> Unit, on
         }
     }
     LaunchedEffect(tab) { load(true) }
+    // Locked (iOS TagPostsSheet): the account's own Plus state, or the server's answer.
+    val locked = com.fariin.app.data.PlusStore.state("tagSearch") == com.fariin.app.data.PlusStore.State.LOCKED || phase == "locked"
+    var gate by remember { mutableStateOf(false) }
+    if (gate) com.fariin.app.ui.settings.PlusGateSheet("tagSearch") { gate = false }
     nested?.let { t -> TagSearchSheet(t, startFollowing, onClose = { nested = null }, onOpenChannel = { cid -> nested = null; onOpenChannel(cid) }) }
 
     ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -106,7 +110,7 @@ fun TagSearchSheet(tag: String, startFollowing: Boolean, onClose: () -> Unit, on
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(tag, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1)
                     // The count folds in under the tag, the title easing up, not jumping (iOS pops 95).
-                    com.fariin.app.ui.components.AppearText(if (phase == "on") (if (count == 1) "1 post" else "$count posts") else null) {
+                    com.fariin.app.ui.components.AppearText(if (phase == "on" && !locked) (if (count == 1) "1 post" else "$count posts") else null) {
                         Text(it, fontSize = 13.sp, color = c.secondary)
                     }
                 }
@@ -122,12 +126,12 @@ fun TagSearchSheet(tag: String, startFollowing: Boolean, onClose: () -> Unit, on
                 }
             }
             Spacer(Modifier.height(8.dp))
-            when (phase) {
+            when (if (locked) "locked" else phase) {
                 "loading" -> Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     repeat(4) { Box(Modifier.fillMaxWidth().height(96.dp).clip(RoundedCornerShape(16.dp)).background(c.placeholderFill)) }
                 }
                 "failed" -> Middle("Couldn't load the posts.", "Retry") { phase = "loading"; load(true) }
-                "locked" -> Middle("Tag Search isn't available right now.", null) {}
+                "locked" -> TagLocked(tag) { gate = true }
                 else -> if (rows.isEmpty()) Middle("No Results", null) {} else LazyColumn(Modifier.fillMaxWidth()) {
                     items(rows, key = { it.channel.cid + "/" + it.post.mid }) { r ->
                         TagRow(r, onTag = { t -> if (t != tag) nested = t }) { onClose(); onOpenChannel(r.channel.cid) }
@@ -140,6 +144,25 @@ fun TagSearchSheet(tag: String, startFollowing: Boolean, onClose: () -> Unit, on
                     }
                 }
             }
+        }
+    }
+}
+
+/** The locked look (iOS TagPostsLocked): the Plus star, what the feature does, and the button to the gate. */
+@Composable
+private fun TagLocked(tag: String, onUnlock: () -> Unit) {
+    val c = Fariin.colors
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 48.dp).clip(RoundedCornerShape(30.dp))
+        .background(c.card).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        com.fariin.app.ui.settings.PlusBadgeImage(56.dp)
+        Text("See every post with $tag", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.label,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Text("With Fariin Plus, a tap on a tag shows the posts from all channels that use it.", fontSize = 15.sp,
+            color = c.secondary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Box(Modifier.padding(top = 8.dp).fillMaxWidth().height(50.dp).clip(CircleShape)
+            .background(com.fariin.app.ui.settings.PlusBlue).clickable(onClick = onUnlock), contentAlignment = Alignment.Center) {
+            Text("Unlock with Fariin Plus", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = androidx.compose.ui.graphics.Color.White)
         }
     }
 }
