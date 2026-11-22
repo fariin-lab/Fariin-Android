@@ -1287,6 +1287,11 @@ private fun StoryPage(
     val mine = story.authorUid == me
     val poster = mine || ownerBar(story)
     var holding by remember { mutableStateOf(false) }
+    // A real hold (finger still past 220 ms), not a drag or a pinch: the header and bars fade out
+    // so the story is seen alone, and come back on release (iOS isHolding, 0.2 s).
+    var heldStill by remember(story.id) { mutableStateOf(false) }
+    val headerFade by androidx.compose.animation.core.animateFloatAsState(if (heldStill) 0f else 1f,
+        androidx.compose.animation.core.tween(200, easing = androidx.compose.animation.core.LinearEasing), label = "holdFade")
     var loaded by remember(story.id) { mutableStateOf(false) }
     var progress by remember(story.id) { mutableFloatStateOf(0f) }
     // The ... menu holds the story still while it is open (iOS pauses under its menu).
@@ -1392,11 +1397,11 @@ private fun StoryPage(
                     // Still and down for 220 ms is a hold (pause), not a tap.
                     val wait = if (!held && !vertical) maxOf(1L, 220L - (android.os.SystemClock.uptimeMillis() - down.uptimeMillis)) else Long.MAX_VALUE
                     val ev = withTimeoutOrNull(wait) { awaitPointerEvent() }
-                    if (ev == null) { held = true; holding = true; continue }
+                    if (ev == null) { held = true; holding = true; heldStill = true; continue }
                     // Two fingers: pinch zoom (reference viewer). The story holds still, the chrome
                     // fades, and letting go springs the picture back to its own size.
                     if (!vertical && ev.changes.count { it.pressed } >= 2) {
-                        holding = true; zooming = true
+                        holding = true; zooming = true; heldStill = false
                         val c0 = ev.calculateCentroid(useCurrent = true)
                         zoomOrigin = if (card.width > 0f && card.height > 0f) TransformOrigin(
                             ((c0.x - card.left) / card.width).coerceIn(0f, 1f), ((c0.y - card.top) / card.height).coerceIn(0f, 1f)) else TransformOrigin.Center
@@ -1437,6 +1442,7 @@ private fun StoryPage(
                     if (!vertical && abs(dx) > slop) { holding = false; break }
                     if (vertical) { ch.consume(); holding = true; onDrag(dy) }
                 }
+                heldStill = false
             }
         },
     ) {
@@ -1475,7 +1481,7 @@ private fun StoryPage(
             // (iOS chrome), so a card on its way down is the story alone (owner 2026-11-03).
             Column(
                 Modifier.fillMaxWidth()
-                    .graphicsLayer { alpha = chrome() * (2f - zoomScale).coerceIn(0f, 1f) }
+                    .graphicsLayer { alpha = chrome() * (2f - zoomScale).coerceIn(0f, 1f) * headerFade }
                     .drawBehind { drawRect(TopScrim, size = androidx.compose.ui.geometry.Size(size.width, 90.dp.toPx())) }
                     .padding(bottom = 18.dp),
             ) {
