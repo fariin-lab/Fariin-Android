@@ -5,6 +5,7 @@ import android.app.Application
 import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.WindowManager
@@ -92,6 +93,9 @@ object AppLock {
     private fun apply(a: Activity) {
         if (secureWindows(a) || (secureHolds[a.window] ?: 0) > 0) a.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         else a.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        // The call screen shows names and video. While App Lock is on, Recents gets no picture of
+        // it (Android 13+); older phones rely on the FLAG_SECURE above, which App Lock turns on.
+        if (callScreen(a) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) a.setRecentsScreenshotEnabled(!enabled(a))
     }
 
     private fun callScreen(a: Activity) = a !is LockActivity && a.javaClass.simpleName.contains("Call")
