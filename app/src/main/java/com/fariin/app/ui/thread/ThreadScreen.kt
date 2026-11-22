@@ -942,7 +942,7 @@ private fun ThreadContent(
                 actions.onNotice(if (gone) "Pinned message was deleted" else "Couldn't reach this message.")
                 return@launch
             }
-            listState.animateScrollToItem(list.size - 1 - i)
+            landCentred(listState, list.size - 1 - i)   // iOS list .message: stays if on screen, else centred
             val row = list[i].rowId
             flashId = row
             if (advance) pinIndex = com.fariin.app.data.PinRules.nextIndex(pinIndex, visiblePins(uiNow.value).size)
@@ -982,7 +982,7 @@ private fun ThreadContent(
         val list = uiNow.value.messages
         val i = list.indexOfFirst { it.id == j.mid }
         if (!found || i < 0) { actions.onNotice("Couldn't reach this post."); return@LaunchedEffect }
-        listState.animateScrollToItem(list.size - 1 - i)
+        landCentred(listState, list.size - 1 - i)   // iOS list .message: stays if on screen, else centred
         val row = list[i].rowId
         flashId = row
         kotlinx.coroutines.delay(2000)
@@ -1019,7 +1019,7 @@ private fun ThreadContent(
             val list = uiNow.value.messages
             val i = list.indexOfFirst { it.id == id }
             if (!found || i < 0) { actions.onNotice("That message isn't available"); return@launch }
-            listState.animateScrollToItem(list.size - 1 - i)
+            landCentred(listState, list.size - 1 - i)   // iOS list .message: stays if on screen, else centred
             val row = list[i].rowId
             flashId = row
             kotlinx.coroutines.delay(2000)
