@@ -946,7 +946,10 @@ private fun ThreadContent(
             val i = list.indexOfFirst { it.id == id }
             if (!found || i < 0) {
                 val gone = list.none { it.id == id } && uiNow.value.pinned[id] == null
-                actions.onNotice(if (gone) "Pinned message was deleted" else "Couldn't reach this message.")
+                // iOS: out of reach from the pinned bar, the pinned list opens instead of a notice.
+                if (gone) actions.onNotice("Pinned message was deleted")
+                else if (advance) showPins.value = true
+                else actions.onNotice("Couldn't reach this message.")
                 return@launch
             }
             landCentred(listState, list.size - 1 - i)   // iOS list .message: stays if on screen, else centred
