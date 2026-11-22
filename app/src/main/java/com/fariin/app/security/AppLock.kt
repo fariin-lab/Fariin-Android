@@ -63,7 +63,8 @@ object AppLock {
     /** Pure: should the lock show when the app comes to the front? */
     fun shouldLock(enabled: Boolean, unlocked: Boolean, backgroundAt: Long, now: Long, delaySeconds: Int): Boolean {
         if (!enabled) return false
-        if (backgroundAt < 0) return !unlocked                 // cold start
+        if (!unlocked) return true                             // cold start, or a lock never passed
+        if (backgroundAt < 0) return false
         return now - backgroundAt >= delaySeconds * 1000L
     }
 
@@ -117,8 +118,9 @@ object AppLock {
                 if (exempt(a)) return
                 // Checked on the first app screen after the app was out of sight, even when a call
                 // in picture-in-picture (or a call that woke the app) kept an activity started.
-                val cold = backgroundAt < 0 && !unlocked
-                if (!pending && !cold) return
+                // Not unlocked yet (a cold start, or a lock page that a notification or widget tap
+                // closed with CLEAR_TOP): checked on every start, so no tap gets past the lock.
+                if (!pending && unlocked) return
                 pending = false
                 if (live.any { it is LockActivity && !it.isFinishing }) return
                 val now = SystemClock.elapsedRealtime()

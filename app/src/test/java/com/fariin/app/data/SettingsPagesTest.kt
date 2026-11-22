@@ -65,6 +65,7 @@ class SettingsPagesTest {
         assertTrue(AppLock.shouldLock(true, true, 1000, 1000, 0))      // Immediately
         assertFalse(AppLock.shouldLock(true, true, 1000, 30_000, 60))  // inside 1 minute
         assertTrue(AppLock.shouldLock(true, true, 1000, 61_000, 60))
+        assertTrue(AppLock.shouldLock(true, false, 1000, 30_000, 60))  // lock still up, inside 1 minute
         assertEquals("After 5 minutes", AppLock.delayLabel(300))
     }
 
