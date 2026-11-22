@@ -206,6 +206,7 @@ object SessionEnd {
         com.fariin.app.local.LocalDb.forgetSummaries()
         com.fariin.app.local.Drafts.clear()
         com.fariin.app.local.SendQueue.wipe()
+        com.fariin.app.local.Cursors.reset()   // delivery marks sent, by chat id: the next account writes its own
         com.fariin.app.crypto.SafetyKeyLog.wipe()   // the next account starts its own key record (iOS)
         com.fariin.app.channel.ExploreCache.wipe(c)   // Explore's kept lists are per account (iOS SessionWipe)
         com.fariin.app.call.CallLinks.reset()
