@@ -198,8 +198,17 @@ fun Modifier.fadeOnChange(value: Any?): Modifier {
     // A layer only while a change is showing (a row at rest gets none): hidden in the composition
     // that brings the new value, then faded up.
     val changing = last[0] != value
-    if (!changing && !hide.value && !alpha.isRunning && alpha.value >= 1f) return this
-    return this.then(androidx.compose.ui.Modifier.graphicsLayer { this.alpha = if (changing || hide.value) 0f else alpha.value })
+    // Read the states BEFORE any short-circuit: in the composition that brings a new value, `changing`
+    // used to stop the reads, so nothing watched `hide` or the fade and the layer stayed at 0 until
+    // some other state recomposed this (an empty Profile Visitors page stayed blank for good).
+    val hidden = hide.value
+    val running = alpha.isRunning
+    if (!changing && !hidden && !running && alpha.value >= 1f) return this
+    return this.then(androidx.compose.ui.Modifier.graphicsLayer {
+        val h = hide.value
+        val a = alpha.value
+        this.alpha = if (changing || h) 0f else a
+    })
 }
 
 /** True from the second frame this screen has drawn: what appears after that is a real change. */
