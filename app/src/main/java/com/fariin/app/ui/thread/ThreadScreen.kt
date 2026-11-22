@@ -1826,11 +1826,24 @@ private fun noticeText(m: Message): String = when {
  * reads "You removed Bobby" on my phone. Swapped only while the text still starts with my name (or
  * "Someone", the writer's fallback); after a rename it stays as written. Others' notices untouched.
  */
+private val RESTRICTED_ACTIONS = listOf("turned on Restricted chat.", "turned off Restricted chat.",
+    "asked to turn off Restricted chat.", "kept Restricted chat on.",
+    "turned on Restricted group.", "turned off Restricted group.")
+
 private fun youNotice(m: Message, ui: ThreadUi): String {
     val t = noticeText(m)
     // The shared wallpaper notice (iOS 4df24f5a5): "You ..." for the setter, else the contact's name here.
     if (m.isSystem) for (suffix in listOf(com.fariin.app.data.SharedWallpapers.SET_SUFFIX, com.fariin.app.data.SharedWallpapers.REMOVED_SUFFIX)) {
         if (t.endsWith(suffix)) return (if (m.authorId == ui.me) "You" else ui.names[m.authorId]?.takeIf { it.isNotEmpty() } ?: ui.title) + suffix
+    }
+    // Restricted Chat notices are worded per reader (iOS restrictedAction): "You" for mine, the
+    // person's current name for theirs, and "Restricted Chat" / "Restricted Group" capitalised.
+    if (m.isSystem) for (action in RESTRICTED_ACTIONS) {
+        if (t.endsWith(" $action", ignoreCase = true)) {
+            val who = if (m.authorId == ui.me) "You" else ui.names[m.authorId]?.takeIf { it.isNotEmpty() } ?: ui.title
+            val said = action.replace("Restricted chat", "Restricted Chat").replace("Restricted group", "Restricted Group")
+            return "$who $said"
+        }
     }
     if (!m.isSystem || m.authorId.isEmpty() || m.authorId != ui.me) return t
     for (name in listOf(ui.names[ui.me].orEmpty(), "Someone")) {
