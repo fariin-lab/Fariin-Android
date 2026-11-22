@@ -113,8 +113,8 @@ class ChatsViewModel(
         // A chat with only a draft, a kept voice note or a call going on stays listed (iOS visible).
         .combine(com.fariin.app.local.Drafts.map.map { it.keys }
             .combine(com.fariin.app.media.VoiceDrafts.index.map { it.keys }) { a, v -> a + v }.distinctUntilChanged()
-            .combine(LiveCallRow.live) { d, call -> LiveCallRow.cid(me, call)?.let { d + it } ?: d }) { s, k -> s to k }
-        .map { (s, keep) -> sameRows(uiOf(s, keep)) }
+            .combine(LiveCallRow.live) { d, call -> d to LiveCallRow.cid(me, call) }) { s, k -> s to k }
+        .map { (s, k) -> val (d, live) = k; sameRows(uiOf(s, live?.let { d + it } ?: d, live)) }
         // Off the main thread (2026-11-20, Oppo profile: merging, hiding, delivery marks, the rows and
         // their comparison took ~60 ms of main-thread time per send in an open chat, each a late frame).
         .flowOn(kotlinx.coroutines.Dispatchers.Default)
@@ -140,10 +140,10 @@ class ChatsViewModel(
         return out
     }
 
-    private fun uiOf(s: ConversationsRepository.State, keep: Set<String>): ChatsUiState = when (s) {
+    private fun uiOf(s: ConversationsRepository.State, keep: Set<String>, live: String? = null): ChatsUiState = when (s) {
         ConversationsRepository.State.Loading -> ChatsUiState(loading = true)
         is ConversationsRepository.State.Loaded ->
-            ChatsUiState(loading = false, chats = ChatList.visible(s.conversations, me, keep).let { list ->
+            ChatsUiState(loading = false, chats = ChatList.visible(s.conversations, me, keep, live).let { list ->
                 // A closed chat whose newest message ran out on the timer: the preview is
                 // blanked until the server rewrites the summary (iOS burnedIfDue).
                 val now = System.currentTimeMillis().toDouble()

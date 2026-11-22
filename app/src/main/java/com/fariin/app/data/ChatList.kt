@@ -41,8 +41,9 @@ object ChatList {
     private fun rawIncoming(c: Conversation, me: String): Boolean =
         !c.isGroup && c.startedBy.isNotEmpty() && !c.accepted && c.lastSender.isNotEmpty() && c.lastSender != me
 
-    /** [keep]: chats with a draft (or a live call) that stay listed with nothing said yet (iOS). */
-    fun visible(all: List<Conversation>, me: String, keep: Set<String> = emptySet()): List<Conversation> =
+    /** [keep]: chats with a draft (or a live call) that stay listed with nothing said yet (iOS).
+     *  [live]: the chat I am on a call with, above even the pins until the call ends (iOS). */
+    fun visible(all: List<Conversation>, me: String, keep: Set<String> = emptySet(), live: String? = null): List<Conversation> =
         all.asSequence()
             .filter { !it.isCleared(me) && !it.isArchived(me) }
             .filter { !isIncomingRequest(it, me) }
@@ -56,6 +57,7 @@ object ChatList {
                 val ap = a.isPinned(me)
                 val bp = b.isPinned(me)
                 when {
+                    live != null && (a.id == live) != (b.id == live) -> if (a.id == live) -1 else 1
                     ap != bp -> if (ap) -1 else 1
                     ap && bp && a.pinRank(me) != b.pinRank(me) -> b.pinRank(me).compareTo(a.pinRank(me))
                     else -> b.listSortDate(me).compareTo(a.listSortDate(me))
