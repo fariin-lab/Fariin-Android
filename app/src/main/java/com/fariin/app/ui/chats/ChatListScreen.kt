@@ -1498,6 +1498,10 @@ internal fun ChatRow(
     val drafts = draftsState ?: com.fariin.app.local.Drafts.map.collectAsState()
     val draftState = remember(conv.id) { derivedStateOf { drafts.value[conv.id] } }
     val draft = draftState.value
+    // A kept voice note (iOS voiceDraftSecs): read once from the phone, then only this chat's entry.
+    LaunchedEffect(Unit) { com.fariin.app.media.VoiceDrafts.init(ctx0.applicationContext) }
+    val voiceDrafts = com.fariin.app.media.VoiceDrafts.index.collectAsState()
+    val voiceDraftSecs = remember(conv.id) { derivedStateOf { voiceDrafts.value[conv.id] ?: 0.0 } }.value
     val time = remember(conv.displayUpdatedAt(me), clockTick) { timeLabel(conv.displayUpdatedAt(me), DateFormat.is24HourFormat(context)) }
 
     Row(
@@ -1617,11 +1621,11 @@ internal fun ChatRow(
                     onCall != null -> 1
                     recording != null -> 2
                     typing != null -> 3
-                    !draft.isNullOrEmpty() -> 4
+                    voiceDraftSecs > 0 || !draft.isNullOrEmpty() -> 4
                     else -> 0
                 }
                 ChatRowPreviewText(conv, me, preview, draft, onCall, recording, typing, voiceUnplayed,
-                    modifier = Modifier.weight(1f).fadeOnChange(lineKind))
+                    modifier = Modifier.weight(1f).fadeOnChange(lineKind), voiceDraftSecs = voiceDraftSecs)
                 Spacer(Modifier.width(8.dp))
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),

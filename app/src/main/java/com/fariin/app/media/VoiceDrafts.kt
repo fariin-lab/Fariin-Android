@@ -12,6 +12,21 @@ object VoiceDrafts {
     class Draft(val file: File, val duration: Double, val levels: List<Float>)
 
     private const val PREFS = "fariin_voice_drafts"
+
+    /** Each chat's kept note length in seconds, for the list's red "Draft:" with the mic (iOS draftIndex). */
+    private val _index = kotlinx.coroutines.flow.MutableStateFlow<Map<String, Double>>(emptyMap())
+    val index: kotlinx.coroutines.flow.StateFlow<Map<String, Double>> = _index
+    @Volatile private var loaded = false
+
+    /** Reads the kept notes' lengths once, so the list knows them before any chat is opened. */
+    fun init(ctx: Context) {
+        if (loaded) return
+        loaded = true
+        val all = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).all
+        val m = HashMap<String, Double>()
+        for ((k, v) in all) (v as? String)?.substringBefore("|")?.toDoubleOrNull()?.let { if (it > 0) m[k] = it }
+        _index.value = _index.value + m
+    }
     private fun dir(ctx: Context) = File(ctx.filesDir, "voice-drafts").apply { mkdirs() }
     private fun target(ctx: Context, key: String) = File(dir(ctx), key.replace(Regex("[^A-Za-z0-9_-]"), "_") + ".m4a")
 
@@ -23,6 +38,7 @@ object VoiceDrafts {
         }
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(key, duration.toString() + "|" + levels.joinToString(",") { "%.3f".format(java.util.Locale.US, it) }).apply()
+        _index.value = _index.value + (key to duration)
     }
 
     /** The chat's kept note, or null. The record stays until [forget] (sent or binned). */
@@ -40,5 +56,6 @@ object VoiceDrafts {
     fun forget(ctx: Context, key: String) {
         if (key.isEmpty()) return
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(key).apply()
+        _index.value = _index.value - key
     }
 }

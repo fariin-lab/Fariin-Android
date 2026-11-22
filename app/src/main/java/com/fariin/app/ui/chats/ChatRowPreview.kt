@@ -196,6 +196,8 @@ internal fun ChatRowPreviewText(
     typing: String?,
     voiceUnplayed: Boolean,
     modifier: Modifier = Modifier,
+    /** A kept voice note's length (VoiceDrafts): "Draft:" in red, the mic, "0:05". */
+    voiceDraftSecs: Double = 0.0,
 ) {
     val c = Fariin.colors
     val density = LocalDensity.current
@@ -235,6 +237,14 @@ internal fun ChatRowPreviewText(
             pushStyle(SpanStyle(color = c.accent)); append(" $recording"); pop()
         }
         typing != null -> buildAnnotatedString { pushStyle(SpanStyle(color = c.accent)); append(typing); pop() }
+        // A kept voice note wins over a text draft (iOS): it is the thing most easily forgotten.
+        voiceDraftSecs > 0 -> buildAnnotatedString {
+            pushStyle(SpanStyle(color = c.red)); append("Draft: "); pop()
+            glyph("g", PreviewIcon.MIC, c.secondary, 13.dp)
+            appendInlineContent("g", "[mic]")
+            val s = voiceDraftSecs.toInt()
+            pushStyle(secondary); append(" %d:%02d".format(s / 60, s % 60)); pop()
+        }
         !draft.isNullOrEmpty() -> buildAnnotatedString {
             pushStyle(SpanStyle(color = c.red)); append("Draft: "); pop()
             pushStyle(secondary); append(draft.replace('\n', ' ')); pop()
