@@ -278,17 +278,9 @@ private fun ReactFaces(i: ActivityItem) {
     }
 }
 
-/** "now", "5m", "3h", "2d", then the date. */
-internal fun shortAgo(ms: Double, now: Long = System.currentTimeMillis()): String {
-    val s = maxOf(0L, (now - ms.toLong()) / 1000)
-    return when {
-        s < 60 -> "now"
-        s < 3600 -> "${s / 60}m"
-        s < 86_400 -> "${s / 3600}h"
-        s < 7 * 86_400 -> "${s / 86_400}d"
-        else -> java.text.SimpleDateFormat("MMM d", java.util.Locale.getDefault()).format(java.util.Date(ms.toLong()))
-    }
-}
+/** "now", "5m", "3h", "2d", "6w" (iOS ActivityTime.age). */
+internal fun shortAgo(ms: Double, now: Long = System.currentTimeMillis()): String =
+    com.fariin.app.data.ActivityRules.age(ms.toLong(), now)
 
 
 /**

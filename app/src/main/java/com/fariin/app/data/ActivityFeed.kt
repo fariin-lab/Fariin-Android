@@ -106,6 +106,18 @@ data class ActivityItem(
 data class ActivitySummary(val unread: Int, val kind: String, val name: String, val text: String, val emoji: String, val at: Double)
 
 object ActivityRules {
+    /** "now", "5m", "3h", "2d", "6w": an item's age (iOS ActivityTime.age). Weeks after a week, never a date. */
+    fun age(atMs: Long, nowMs: Long): String {
+        val s = maxOf(0L, nowMs - atMs) / 1000
+        return when {
+            s < 60 -> "now"
+            s < 3600 -> "${s / 60}m"
+            s < 86_400 -> "${s / 3600}h"
+            s < 7 * 86_400 -> "${s / 86_400}d"
+            else -> "${s / (7 * 86_400)}w"
+        }
+    }
+
     /** "Nan" or "Nan and 3 others". From the channel itself (from.u ""): the channel's name. */
     fun who(i: ActivityItem): String {
         val n = i.fromName.ifEmpty { i.chTitle.ifEmpty { "Someone" } }
