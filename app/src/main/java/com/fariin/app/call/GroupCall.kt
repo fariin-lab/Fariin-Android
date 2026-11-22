@@ -1133,13 +1133,15 @@ object GroupCall {
 
     /**
      * Share Screen / Stop Sharing in the capsule. True when the system's consent dialog should open
-     * now; a share already on (or on its way) is stopped instead. Never while someone else shares.
+     * now; a share already on (or on its way) is stopped instead. As iOS, someone else's share does
+     * not stop mine: the newest presenter takes the stage.
      */
     fun shareTapped(): Boolean {
         val g = _ui.value
         if (!g.joined || room == null) return false
         if (g.sharing || g.sharePending) { stopShare(); return false }
-        if (g.members.any { it.screen != null }) return false
+        // A voice-only pass (camera locked) sends no video, a screen included (iOS toggleScreenShare).
+        if (g.cameraLocked) return false
         _ui.value = g.copy(sharePending = true)
         return true
     }

@@ -1239,7 +1239,7 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
                     }
                     if (g.joined) row(if (g.myHand) "Lower Hand" else "Raise Hand",
                         if (g.myHand) R.drawable.ic_sf_hand_raised_fill else R.drawable.ic_sf_hand_raised, true) { onHand(!g.myHand) }
-                    if (shareOn || (g.joined && presenter == null && !g.cameraLocked)) row(
+                    if (shareOn || (g.joined && !g.cameraLocked)) row(
                         if (g.sharing) "Stop Sharing" else if (g.sharePending) "Cancel Sharing" else "Share Screen",
                         R.drawable.ic_share_screen, !g.joined) { chrome.touch(); onShare() }
                     if (g.cameraOn) row("Flip Camera", R.drawable.ic_flip_camera, false) { onFlip() }
