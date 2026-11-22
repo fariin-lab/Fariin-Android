@@ -78,12 +78,12 @@ internal fun Modifier.pastePictures(context: Context, onPictures: ((List<Pair<Ur
         .appendTextContextMenuComponents {
             // Builders run before the filters, so this clears what an earlier menu kept.
             fieldPaste[0] = null
-            if (PasteImage.hasPicture(context)) item(PastePictureKey, "Paste") { session ->
+            if (PasteImage.hasPicture(context)) item(PastePictureKey, "Paste") {
                 val pics = PasteImage.pictures(context, MediaRules.MEDIA_PER_PICK)
                 val words = fieldPaste[0]
-                if (pics != null) { session.close(); onPictures(pics) }
-                else if (words != null) words.onClick.invoke(session)
-                else session.close()
+                if (pics != null) { close(); onPictures(pics) }
+                else if (words != null) words.onClick.invoke(this)
+                else close()
             }
         }
         .onPreviewKeyEvent { e ->
