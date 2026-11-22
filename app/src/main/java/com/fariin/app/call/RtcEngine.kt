@@ -361,7 +361,10 @@ class RtcEngine(
             try {
                 val p = s.parameters
                 p.encodings.forEach {
-                    it.maxBitrateBps = if (on) 300_000 else null
+                    // Saver off: still a ceiling, as iOS. Uncapped, the encoder ramps until a weak link
+                    // queues and the voice breaks up. 2 Mbps, or 1 Mbps on a relay-only call (a stranger),
+                    // where every bit is relayed.
+                    it.maxBitrateBps = if (on) 300_000 else if (relayOnlyNow) 1_000_000 else 2_000_000
                     it.scaleResolutionDownBy = if (on) 2.0 else null
                 }
                 s.parameters = p
