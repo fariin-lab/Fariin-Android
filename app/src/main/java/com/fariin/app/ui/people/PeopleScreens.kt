@@ -721,14 +721,16 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         if (sharingProfile) com.fariin.app.ui.thread.ForwardSheet(me, onDismiss = { sharingProfile = false }, title = "Share Profile") { targets ->
             sharingProfile = false
             val shownName = person?.shownName ?: conv?.displayName(me) ?: ""
-            val photo = shownPhoto ?: ""
-            val card = com.fariin.app.data.CardRules.CONTACT + uid + "|" + photo + "|" + shownName
+            // iOS ContactInfoView.shareText: their profile link, which draws its own card; with no
+            // username there is no link, and the line is all there is to send.
+            val h = person?.handle.orEmpty()
+            val card = if (h.isEmpty()) "Chat with $shownName on Fariin" else com.fariin.app.data.QrRules.userLink(h)
             val crypto = com.fariin.app.data.CryptoHub.get(shareCtx.applicationContext)
             scope.launch {
                 var ok = true
                 for (cid in targets) {
                     val repo = com.fariin.app.data.ThreadRepository.openOrQuiet(cid, me, crypto, scope)
-                    try { repo.sendForwardedText(card, forwarded = false) } catch (_: Exception) { ok = false }
+                    try { repo.sendSharedLink(card) } catch (_: Exception) { ok = false }
                 }
                 com.fariin.app.ui.components.Snack.show(if (ok) "Sent" else "Couldn't send. Try again.")
             }
