@@ -1581,15 +1581,15 @@ private fun StoryPage(
                                 // The group's own staff neither hide nor report its stories (iOS StoryGroupStaffSeam.isStaff).
                                 val staff = !mine && mayDelete(story)
                                 if (!mine && maySave(story)) item("Save", ImageVector.cachedVector(R.drawable.ic_save_down), null, "save")
-                                // My own story (iOS): Save, Edit viewers, and Share when it went to Everyone.
+                                // My own story, in the iOS order: Edit viewers, Edit Story, Save, and Share when it went to Everyone.
                                 if (mine) {
-                                    item("Save", ImageVector.cachedVector(R.drawable.ic_save_down), null, "save")
+                                    if (com.fariin.app.data.PostedStoriesRules.canEditViewers(story)) item("Edit viewers", ImageVector.cachedVector(com.fariin.app.R.drawable.ic_gs_members), null, "viewers")
                                     // Edit Story (iOS 2026-11-20): a photo or a clip of mine.
                                     // Not a repost (its picture is somebody else's story) and not an expired one (iOS canEditCaption).
                                     // A group story too: iOS lets its author edit it (only the author, not the group's admins).
                                     if (story.repostOf == null
                                         && story.expiresAtMs > System.currentTimeMillis()) item("Edit Story", ImageVector.cachedVector(R.drawable.ic_sf_pencil), null, "edit")
-                                    if (com.fariin.app.data.PostedStoriesRules.canEditViewers(story)) item("Edit Viewers", ImageVector.cachedVector(com.fariin.app.R.drawable.ic_gs_members), null, "viewers")
+                                    item("Save", ImageVector.cachedVector(R.drawable.ic_save_down), null, "save")
                                     if (com.fariin.app.data.PostedStoriesRules.canShare(story)) item("Share", ImageVector.cachedVector(R.drawable.ic_link_share), null, "share")
                                 }
                                 // iOS: Get notifications first, for a person's story (not a group's).
