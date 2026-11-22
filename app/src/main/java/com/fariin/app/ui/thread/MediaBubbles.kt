@@ -4,6 +4,7 @@ import com.fariin.app.ui.components.fadeOnChange
 import com.fariin.app.ui.components.enterFade
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
@@ -489,7 +490,7 @@ internal fun VoiceBody(m: Message, cid: String, isMe: Boolean, width: Dp, meta: 
                     Spacer(Modifier.width(8.dp))
                     Box(
                         Modifier.width(40.dp).height(22.dp).clip(RoundedCornerShape(50)).background(tint.copy(alpha = 0.2f))
-                            .clickable { VoicePlayer.cycleRate(cid) },
+                            .clickable { VoicePlayer.cycleRate(cid) }.semantics { contentDescription = "Playback speed"; stateDescription = MediaRules.rateLabel(rate) },
                         contentAlignment = Alignment.Center,
                     ) { Text(MediaRules.rateLabel(rate), fontSize = 12.sp, color = tint) }
                     }

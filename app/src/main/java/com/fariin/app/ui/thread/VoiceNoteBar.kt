@@ -1,5 +1,8 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -84,7 +87,7 @@ private fun VoiceNoteBarBody(s: VoicePlayer.State, me: String, modifier: Modifie
                 Text("Voice message", fontSize = 11.sp, color = c.secondary, maxLines = 1)
             }
             Text(com.fariin.app.media.MediaRules.rateLabel(rate), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.secondary,
-                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { VoicePlayer.cycleRate(cid) }.padding(horizontal = 8.dp, vertical = 6.dp))
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { VoicePlayer.cycleRate(cid) }.semantics { contentDescription = "Playback speed"; stateDescription = com.fariin.app.media.MediaRules.rateLabel(rate) }.padding(horizontal = 8.dp, vertical = 6.dp))
             Box(Modifier.size(36.dp).clip(RoundedCornerShape(18.dp)).clickable { VoicePlayer.stop() }, contentAlignment = Alignment.Center) {
                 Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Close", tint = c.secondary, modifier = Modifier.size(18.dp))
             }
