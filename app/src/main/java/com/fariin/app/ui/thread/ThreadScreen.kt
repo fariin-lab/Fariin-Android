@@ -1781,8 +1781,8 @@ private fun ThreadContent(
                     onVoiceOff = steady1(actions.onNotice),
                     onRowPlaced = steady1 { r: androidx.compose.ui.geometry.Rect? -> sendMotion.composerRow = r },
                     // Fariin Plus send effects: 1:1s and groups, not channels, not the first message
-                    // in a chat, not while quoting or editing.
-                    effects = if (ch != null || editing != null || quoting != null || ui.messages.isEmpty()) com.fariin.app.data.PlusStore.State.OFF
+                    // to a stranger (iOS requestStance .firstMessage), not while quoting or editing.
+                    effects = if (ch != null || editing != null || quoting != null || ui.knock) com.fariin.app.data.PlusStore.State.OFF
                         else com.fariin.app.data.PlusStore.state("sendEffects"),
                     onPickFx = steady1 { id: String? -> if (id == null) fxPlusPage = true else fxNext.value = id },
                     onCamera = steady0 {
