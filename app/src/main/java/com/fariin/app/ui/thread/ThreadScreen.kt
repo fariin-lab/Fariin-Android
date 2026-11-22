@@ -635,7 +635,9 @@ private fun ThreadContent(
             onCopy = { copyOf(m, it); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
             onDelete = { deleteFor = it }, onQuote = { quoteFor = it }, onForward = { forwardFor = it },
             // The owner's and admins' own tools, as the chat menu has them (iOS uses one menu for both).
-            onSelect = if (com.fariin.app.data.SelectRules.selectable(m)) ({ selected.clear(); selected.add(it.rowId) }) else null,
+            // No Select for a follower or visitor: nothing of theirs to delete (iOS selectionShowsDelete).
+            onSelect = if (com.fariin.app.data.SelectRules.selectable(m) && ch.role == com.fariin.app.channel.ChannelRules.Role.ADMIN)
+                ({ selected.clear(); selected.add(it.rowId) }) else null,
             onEdit = if (MessageRules.canEdit(m, ui.me, System.currentTimeMillis().toDouble(), channel = true) && !com.fariin.app.data.CardRules.isCard(m.text))
                 ({ editing = it; replyTo = null }) else null,
             onEditHistory = { historyFor = it },
