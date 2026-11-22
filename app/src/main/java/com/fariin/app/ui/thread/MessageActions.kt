@@ -235,7 +235,7 @@ internal fun MessageMenu(
         }
         if (com.fariin.app.data.SelectRules.selectable(m)) add(MenuItem("Select", null, iconRes = com.fariin.app.R.drawable.ic_sf_checkmark_circle) { onSelect(m) })
         if (!m.deleted) {
-            if (MessageRules.canInfo(m, ui.me, ui.isGroup)) add(MenuItem("Info", null, iconRes = com.fariin.app.R.drawable.ic_sf_info_circle, badge = NewBadgeSpots.CHAT_MENU_INFO) { onInfo(m) })
+            if (MessageRules.canInfo(m, ui.me, ui.isGroup, ui.channel != null || ui.groupDoc["channel"] == true)) add(MenuItem("Info", null, iconRes = com.fariin.app.R.drawable.ic_sf_info_circle, badge = NewBadgeSpots.CHAT_MENU_INFO) { onInfo(m) })
             if (ui.canPin && com.fariin.app.data.PinRules.offers(m)) {
                 val pinnedNow = m.id in ui.pinnedIds
                 if (pinnedNow) add(MenuItem("Unpin", null, iconRes = com.fariin.app.R.drawable.ic_pin_menu, badge = NewBadgeSpots.CHAT_MENU_PIN) { actions.onUnpin(m.id) })
