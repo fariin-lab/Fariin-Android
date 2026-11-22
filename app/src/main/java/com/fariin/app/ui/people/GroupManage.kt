@@ -221,7 +221,7 @@ internal fun GroupManageRows(conv: Map<String, Any?>, me: String, cid: String = 
             badge = NewBadgeSpots.GROUP_SETTINGS_BANNED) { open(GroupPage.Banned) }
     }
     }
-    val (on, of) = GroupAdmins.permissionCount(conv)
+    val (on, of) = GroupAdmins.permissionCount(conv, com.fariin.app.data.AppFeatures.groupCalls)
     com.fariin.app.ui.settings.SettingsSection {
     SettingsRow("Permissions", icon = painterResource(R.drawable.ic_gs_permissions), value = "$on/$of", last = true,
         badge = NewBadgeSpots.GROUP_SETTINGS_PERMISSIONS) { open(GroupPage.Permissions) }
@@ -1055,10 +1055,12 @@ private fun PermissionsPage(cid: String, me: String, onBack: () -> Unit) {
                 SwitchLine("Add members", shown("add", doc["membersCanAdd"] == true), enabled = canEdit) { v ->
                     flip("add", v) { GroupManage.setPermission(cid, "membersCanAdd", v) }
                 }
-                SwitchLine("Change group info", shown("info", doc["membersCanEditInfo"] == true), enabled = canEdit) { v ->
+                // Start calls hides with group calls (iOS CallFeatures.groupCalls, a panel switch).
+                val calls = com.fariin.app.data.AppFeatures.groupCalls
+                SwitchLine("Change group info", shown("info", doc["membersCanEditInfo"] == true), enabled = canEdit, last = !calls) { v ->
                     flip("info", v) { GroupManage.setPermission(cid, "membersCanEditInfo", v) }
                 }
-                SwitchLine("Start calls", shown("calls", doc["onlyAdminsCall"] != true), enabled = canEdit, last = true) { v ->
+                if (calls) SwitchLine("Start calls", shown("calls", doc["onlyAdminsCall"] != true), enabled = canEdit, last = true) { v ->
                     flip("calls", v) { GroupManage.setPermission(cid, "onlyAdminsCall", !v) }
                 }
             }
