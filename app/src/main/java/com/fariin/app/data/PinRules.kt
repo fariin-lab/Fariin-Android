@@ -103,8 +103,11 @@ object PinRules {
 object SelectRules {
     val MAX_FORWARD: Int get() = com.fariin.app.data.AppConfig.int(com.fariin.app.data.AppConfig.K.forwardSelectionMax)
 
-    /** Rows that take a tick: a person's message or a tombstone; never a notice, call or pin line. */
-    fun selectable(m: Message): Boolean = !m.isSystem && !m.isCall && PinRules.notice(m.text) == null
+    /**
+     * Rows that take a tick: a person's message, a tombstone or a call record (iOS: a call's menu
+     * has Select, owner 2026-09-27); never a notice or pin line.
+     */
+    fun selectable(m: Message): Boolean = !m.isSystem && PinRules.notice(m.text) == null
 
     /**
      * ThreadView.canDeleteNotice (owner 2026-10-29): a group notice that I, holding "Delete messages",

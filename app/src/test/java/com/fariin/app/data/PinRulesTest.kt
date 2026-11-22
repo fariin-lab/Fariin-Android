@@ -109,5 +109,11 @@ class PinRulesTest {
         assertFalse(SelectRules.selectable(msg(type = "system")))
         assertFalse(SelectRules.selectable(msg(text = PinRules.markerText("x", "a photo"))))
         assertTrue(SelectRules.selectable(msg().copy(deleted = true)))
+        // A call record ticks (iOS); it never forwards and in a group never deletes.
+        val call = msg(id = "c", type = "call", text = "")
+        assertTrue(SelectRules.selectable(call))
+        assertFalse(SelectRules.forwardable(listOf(call)))
+        assertTrue(SelectRules.deletable(listOf(call), me, isGroup = false, adminMayDelete = false))
+        assertFalse(SelectRules.deletable(listOf(call), me, isGroup = true, adminMayDelete = true))
     }
 }

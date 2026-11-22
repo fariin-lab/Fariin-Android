@@ -4157,6 +4157,23 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ThreadRow(
                 com.fariin.app.data.Disappearing.noticeLine(
                     personName(ui, m.authorId), m.disappearSeconds),
                 icon = true)
+            // Select mode: a call record takes a tick too (iOS: its menu has Select). A tap ticks,
+            // never the call-back question.
+            m.isCall && ch == null && selecting -> Row(
+                Modifier.fillMaxWidth().background(selLit).pointerInput(m.rowId) { detectTapGestures(onTap = { env.toggle(m) }) },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SelectTick(ticked)
+                Box(Modifier.weight(1f)) {
+                    val theirs = ui.isGroup && m.callerUid != ui.me
+                    CallBubble(m, ui.me, is24h, myFill(), receivedFill(),
+                        peerUid = if (ui.isGroup) null else com.fariin.app.crypto.Wire.otherUid(ui.cid, ui.me),
+                        title = ui.title, photoUrl = ui.photoUrl,
+                        callerName = if (theirs) ui.names[m.callerUid ?: m.authorId] ?: "Someone" else null,
+                        callerPhoto = if (theirs) ui.photos[m.callerUid ?: m.authorId] else null)
+                    Box(Modifier.matchParentSize().pointerInput(m.rowId) { detectTapGestures(onTap = { env.toggle(m) }) })
+                }
+            }
             // A call record: the iOS call bubble (CallBubble.kt); tap asks, then calls back.
             m.isCall && ch == null -> {
                 val theirs = ui.isGroup && m.callerUid != ui.me
