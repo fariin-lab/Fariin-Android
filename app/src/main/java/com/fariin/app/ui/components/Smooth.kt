@@ -24,6 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.runtime.getValue
 import kotlinx.coroutines.launch
 
 /**
@@ -95,6 +97,47 @@ object Smooth {
 
 /** Size changes on the soft spring (nothing when animations are off). */
 fun Modifier.smoothSize(): Modifier = if (Smooth.on && !Smooth.plain) animateContentSize(Smooth.soft()) else this
+
+/** iOS ease-in-out, the composer's one clock for its send button and its reply / edit / quote bars. */
+val IosEaseInOut = androidx.compose.animation.core.CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
+
+/**
+ * 0 to 1 while [visible] turns on, back to 0 while it turns off: 200 ms on [IosEaseInOut] (iOS
+ * Clock.text). Starts where it stands, so a quick reopen turns back mid-way. Instant when
+ * animations are off.
+ */
+@Composable
+fun rememberShowing(visible: Boolean): androidx.compose.animation.core.Animatable<Float, androidx.compose.animation.core.AnimationVector1D> {
+    val p = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(if (visible) 1f else 0f) }
+    androidx.compose.runtime.LaunchedEffect(visible) {
+        val to = if (visible) 1f else 0f
+        if (Smooth.on) p.animateTo(to, tween(Motion.ms(200), easing = IosEaseInOut)) else p.snapTo(to)
+    }
+    return p
+}
+
+/**
+ * A bar over a bottom-anchored box (the composer's reply / edit / quote card), as iOS syncBanners:
+ * laid out at its final size from the first frame and only faded, while the box's height opens or
+ * closes by the bar's height on the SAME [progress]. The bar stays where it lands (the box's top
+ * edge uncovers it) and the field under it never moves. One clock for the fade and the height:
+ * no spring chasing another spring.
+ */
+@Composable
+fun RevealUp(progress: androidx.compose.animation.core.Animatable<Float, androidx.compose.animation.core.AnimationVector1D>,
+             content: @Composable () -> Unit) {
+    val gone by androidx.compose.runtime.remember { androidx.compose.runtime.derivedStateOf { progress.value == 0f } }
+    if (gone) return
+    // The progress is read only in layout and draw: one frame of the move is a re-layout, not a recompose.
+    androidx.compose.ui.layout.Layout(content,
+        Modifier.clipToBounds().graphicsLayer { alpha = progress.value }) { measurables, cs ->
+        val ps = measurables.map { it.measure(cs.copy(minHeight = 0, maxHeight = androidx.compose.ui.unit.Constraints.Infinity)) }
+        val w = ps.maxOfOrNull { it.width } ?: cs.minWidth
+        val full = ps.maxOfOrNull { it.height } ?: 0
+        val h = kotlin.math.round(full * progress.value).toInt()
+        layout(w, h) { ps.forEach { it.place(0, h - full) } }
+    }
+}
 
 /**
  * Shows or hides [content] with a fade (and its space, when [resize]). Until [visible] first changes

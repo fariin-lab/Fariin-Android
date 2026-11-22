@@ -103,6 +103,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -3181,15 +3182,23 @@ private fun Composer(
                 Spacer(Modifier.width(8.dp))
                 // The pill: 40 at one line, corners of 20 (a capsule until it grows), the field 14 in.
                 // With a reply open the box is solid, so the messages behind never show through it.
-                // The reply / edit / quote / forward card opens and closes with a fade and its height,
-                // and a field that grows a line follows on the spring (iOS pops 26, 29).
+                // The reply / edit / quote / forward card (iOS syncBanners, owner 2026-11-22 "not smooth"):
+                // ONE 200 ms ease-in-out clock for its fade, the box's height and the solid fill, the card
+                // at its final size from the first frame and the field never moving. It used to be an
+                // expand spring inside a resize spring with the fill flipping in one frame. The field
+                // growing a line keeps its own spring, on the field row only (iOS pops 26, 29).
                 val heldBanner = remember { arrayOfNulls<@Composable () -> Unit>(1) }
                 if (banner != null) heldBanner[0] = banner
-                Column(Modifier.weight(1f).floating(RoundedCornerShape(if (banner != null) 20.dp else 20.dp), fill = if (banner != null) c.card else null)
-                    .smoothSize()) {
-                com.fariin.app.ui.components.Appear(banner != null) { heldBanner[0]?.invoke() }
+                val showing = com.fariin.app.ui.components.rememberShowing(banner != null)
+                val pillShape = RoundedCornerShape(20.dp)
+                Column(Modifier.weight(1f).floating(pillShape)
+                    .drawBehind {
+                        val a = showing.value
+                        if (a > 0f) drawOutline(pillShape.createOutline(size, layoutDirection, this), c.card.copy(alpha = a))
+                    }) {
+                com.fariin.app.ui.components.RevealUp(showing) { heldBanner[0]?.invoke() }
                 Row(
-                    Modifier.fillMaxWidth().heightIn(min = COMPOSER_BUTTON),
+                    Modifier.fillMaxWidth().heightIn(min = COMPOSER_BUTTON).smoothSize(),
                     verticalAlignment = Alignment.Bottom,
                 ) {
                 Box(
