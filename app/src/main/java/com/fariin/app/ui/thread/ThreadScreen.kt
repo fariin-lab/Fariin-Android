@@ -1643,7 +1643,11 @@ private fun ThreadContent(
                     val long = if (editing == null && quoting == null && ui.isGroup && doc.isNotEmpty() &&
                         com.fariin.app.data.GroupAdmins.slows(doc, ui.me) && com.fariin.app.data.MessageLength.splitForBubbles(t).size > 1)
                         "Slow mode is on. Messages here can be up to ${com.fariin.app.data.MessageLength.BUBBLE_CHARS} characters." else null
-                    val stop = slow() ?: links ?: long
+                    // Text: only the slow-mode wait, never the media holds in slow() (the first message to
+                    // someone new is text, so the text-only hold must not refuse text itself).
+                    val wait = if (!ui.isGroup || doc.isEmpty()) null else com.fariin.app.data.GroupAdmins.slowWait(doc, ui.me,
+                        ui.messages.lastOrNull { it.authorId == ui.me && !it.isSystem }?.createdAtMillis, System.currentTimeMillis().toDouble())
+                    val stop = wait ?: links ?: long
                     if (stop != null && editing == null) actions.onNotice(stop) else send(t, ids, fmt)
                 }
                 if (attachOpen) AttachSheet(allowViewOnce = ui.channel == null, onDismiss = { attachOpen = false; attachCamera = false; AttachKeyboard.release() },
