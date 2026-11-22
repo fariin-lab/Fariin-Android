@@ -663,8 +663,20 @@ private fun ThreadContent(
     // The divider is placed once, from the unread count at open (iOS anchors it the same way).
     // Counted only on the server's first answer: the phone's saved copy can lack the very messages
     // that are unread, and counting back through it put the divider on old, read rows.
-    val dividerId = remember(ui.loaded && ui.synced) {
-        if (ui.loaded && ui.synced) MessageRules.unreadDividerId(ui.messages, ui.me, ui.dividerAt) else null
+    // More unread than the rows held: no divider at first; asked again as older pages come in, and
+    // placed once enough is loaded (iOS anchorUnread runs again on each new count). Counted only up
+    // to the newest row of that first answer, so messages arriving later never move it. A divider
+    // placed late only draws; the open's landing on it is for the first answer alone.
+    val dividerHold = remember(ui.cid) { arrayOfNulls<String>(2) }   // [0] the open's newest row, [1] the divider
+    val dividerAtOpen = remember(ui.cid) { booleanArrayOf(true) }
+    val dividerId = remember(ui.cid, ui.loaded && ui.synced, ui.messages.size) {
+        if (dividerHold[1] == null && ui.loaded && ui.synced && ui.dividerAt > 0) {
+            val mark = dividerHold[0] ?: (ui.messages.lastOrNull()?.rowId ?: "").also { dividerHold[0] = it }
+            val upTo = ui.messages.indexOfLast { it.rowId == mark }
+            dividerHold[1] = if (upTo < 0) null else MessageRules.unreadDividerId(ui.messages.subList(0, upTo + 1), ui.me, ui.dividerAt)
+            if (dividerHold[1] == null) dividerAtOpen[0] = false
+        }
+        dividerHold[1]
     }
     // At the bottom = the newest row in view (the list is reversed). Read receipts follow it.
     val atBottom by remember { derivedStateOf { listState.firstVisibleItemIndex <= 1 } }
@@ -825,6 +837,7 @@ private fun ThreadContent(
         val id = dividerId ?: return@LaunchedEffect
         if (landedOnUnread) return@LaunchedEffect
         landedOnUnread = true
+        if (!dividerAtOpen[0]) return@LaunchedEffect   // placed later, while reading: no jump
         val i = ui.messages.indexOfFirst { it.rowId == id }
         if (i < 0) return@LaunchedEffect
         val idx = ui.messages.size - 1 - i   // the list is reversed
