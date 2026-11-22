@@ -215,7 +215,8 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
         confirmButton = { androidx.compose.material3.TextButton({
             askDelete = false
             // As Delete Group: gone at once, Undo for a few seconds, then the server deletes it.
-            com.fariin.app.data.LeaveUndo.start(info.cid, info.title.ifEmpty { "the channel" }) {
+            com.fariin.app.data.LeaveUndo.start(info.cid, info.title.ifEmpty { "the channel" },
+                "Couldn't delete \"${info.title.ifEmpty { "the channel" }}\". Check your connection and try again.") {
                 com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
                     .getHttpsCallable("deleteGroup").call(mapOf("cid" to info.cid)).await()
             }

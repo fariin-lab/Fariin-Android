@@ -282,7 +282,7 @@ fun OfficialChatScreen(onBack: () -> Unit, onInfo: (() -> Unit)? = null) {
                             Text(OfficialChannel.NAME, fontSize = 17.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                                 color = c.label, maxLines = 1)
                             Spacer(Modifier.width(5.dp))
-                            com.fariin.app.ui.components.VerifiedSeal(c.blue, Modifier.size(16.dp), "Official")
+                            OfficialSeal(Modifier.size(16.dp))
                         }
                         Text(OfficialChannel.SUBTITLE, fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                             color = if (c.dark) Color(0xFFD1D1D1) else Color(0xFF525252), maxLines = 1)
@@ -476,12 +476,27 @@ private fun AnnouncementCard(a: Announcement, time: String, buttons: List<Announ
     }
 }
 
-/** The Fariin mark as its photo (iOS official-mark). */
+/** The Fariin chat's picture: the owner's (config/official photoUrl), else the bundled mark (iOS OfficialConfig.avatar). */
 @Composable
 fun OfficialAvatar(size: Dp) {
+    val url by com.fariin.app.data.OfficialConfig.photoUrl.collectAsState()
     // The whole picture is the photo, white bubble on black, cut to a circle (iOS official-mark).
-    Image(painterResource(R.drawable.official_mark), contentDescription = null, contentScale = ContentScale.Crop,
+    val mark = painterResource(R.drawable.official_mark)
+    if (url.isEmpty()) Image(mark, contentDescription = null, contentScale = ContentScale.Crop,
         modifier = Modifier.size(size).clip(CircleShape))
+    else coil3.compose.AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop,
+        placeholder = mark, error = mark, modifier = Modifier.size(size).clip(CircleShape))
+}
+
+/** The Fariin chat's badge as the owner set it: blue, gold (iOS VerifiedMark.gold) or none. */
+@Composable
+fun OfficialSeal(modifier: Modifier) {
+    val badge by com.fariin.app.data.OfficialConfig.badge.collectAsState()
+    when (badge) {
+        "none" -> {}
+        "gold" -> com.fariin.app.ui.components.VerifiedSeal(Color(0xFFE8B21E), modifier, "Official")
+        else -> com.fariin.app.ui.components.VerifiedSeal(Fariin.colors.blue, modifier, "Official")
+    }
 }
 
 /**
@@ -509,7 +524,7 @@ fun OfficialRow(view: OfficialChannel.View, onOpen: () -> Unit) {
                     Text(OfficialChannel.NAME, style = MaterialTheme.typography.titleMedium,
                         fontWeight = if (unread > 0) FontWeight.Bold else FontWeight.Medium, color = c.label, maxLines = 1)
                     Spacer(Modifier.width(4.dp))
-                    com.fariin.app.ui.components.VerifiedSeal(c.blue, Modifier.size(17.dp), "Official")
+                    OfficialSeal(Modifier.size(17.dp))
                     if (muted) {
                         Spacer(Modifier.width(6.dp))
                         Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_bell_off), contentDescription = "Muted", tint = c.tertiary, modifier = Modifier.size(15.dp))

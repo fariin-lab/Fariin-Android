@@ -81,7 +81,7 @@ fun OfficialInfoPage(onBack: () -> Unit, onSearch: () -> Unit, onOpenImage: (Str
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(OfficialChannel.NAME, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = c.label)
                     Spacer(Modifier.width(6.dp))
-                    com.fariin.app.ui.components.VerifiedSeal(c.blue, Modifier.size(22.dp), "Official")
+                    OfficialSeal(Modifier.size(22.dp))
                 }
                 Text(OfficialChannel.SUBTITLE, fontSize = 17.sp, color = c.secondary, modifier = Modifier.padding(top = 2.dp))
             }
