@@ -413,7 +413,7 @@ internal fun MessagesPrivacyPage(push: (String) -> Unit, pop: () -> Unit, userna
         if (keyShown && (stored == Audience.CONTACTS || keySet == true))
             SettingsSection(footer = if (stored == Audience.CONTACTS && keySet != true) "You haven't set a Chat Key, so nobody new can message you yet."
                 else "Anyone who knows your Chat Key can message and call you directly, whatever you choose above.") {
-            SettingsRow("Chat Key", value = if (keySet == true) "On" else "Off", last = true) { push(PAGE_CHAT_KEY) }
+            SettingsRow("Chat Key", value = ChatKey.mine() ?: if (keySet == true) "On" else "Off", last = true) { push(PAGE_CHAT_KEY) }
         }
         if (!usernameMode) SettingsSection(footer = "Turning one off stops you sending it. You will still see read receipts and typing from other people.") {
             SwitchRow("Read Receipts", PrivacyRules.flag(map, "readReceipts")) { on -> scope.launch { error = PrivacySettings.setFlag("readReceipts", on) } }
