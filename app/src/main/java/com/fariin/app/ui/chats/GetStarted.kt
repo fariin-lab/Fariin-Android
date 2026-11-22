@@ -66,7 +66,10 @@ object GetStartedStore {
     private fun p(c: Context) = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     fun isFinished(c: Context, uid: String) = uid.isEmpty() || p(c).getBoolean("$uid.finished", false)
-    fun finish(c: Context, uid: String) { p(c).edit().putBoolean("$uid.finished", true).apply(); version.intValue++ }
+    fun finish(c: Context, uid: String) {
+        if (uid.isEmpty() || p(c).getBoolean("$uid.finished", false)) return
+        p(c).edit().putBoolean("$uid.finished", true).apply(); version.intValue++
+    }
     fun reopen(c: Context, uid: String) { p(c).edit().putBoolean("$uid.finished", false).apply(); version.intValue++ }
     fun remove(c: Context, uid: String, card: GetStartedCard) {
         val set = p(c).getStringSet("$uid.removed", emptySet()).orEmpty() + card.name
@@ -78,7 +81,19 @@ object GetStartedStore {
         if (hasPhoto) addTo(c, "$uid.done", GetStartedCard.ADD_PHOTO)
         val removed = p(c).getStringSet("$uid.removed", emptySet()).orEmpty()
         val seen = p(c).getStringSet("$uid.seen", emptySet()).orEmpty()
-        return GetStartedCard.entries.filter { it != GetStartedCard.RESTORE && it != GetStartedCard.BACK_UP && it.name !in removed && it.name !in seen }
+        // New group only while making groups is switched on (iOS Flags.groupCreateEnabled).
+        val groups = com.fariin.app.data.AppFeatures.groupCreate
+        return GetStartedCard.entries.filter { it != GetStartedCard.RESTORE && it != GetStartedCard.BACK_UP && it.name !in removed && it.name !in seen &&
+            (groups || it != GetStartedCard.NEW_GROUP) }
+    }
+
+    /** iOS realChatCount: chats with a message in them, or groups; not the Fariin chat, a channel or a cleared one. */
+    fun realChatCount(all: List<com.fariin.app.data.Conversation>, me: String): Int {
+        val groups = com.fariin.app.data.AppFeatures.groups
+        return all.count { c ->
+            c.id != com.fariin.app.data.OfficialChannel.CID && !c.isChannel && !c.isCleared(me) &&
+                (groups || !c.isGroup) && (c.isGroup || c.lastMessageCipher.isNotEmpty())
+        }
     }
 
     // DONE STEPS (owner 2026-11-04: "when a task finishes it needs to show the user"): a done step

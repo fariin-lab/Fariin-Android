@@ -1008,8 +1008,14 @@ fun ChatListScreen(
         }
         // iOS getStartedLayer: Things you can do, for a new account with a short list.
         val gsVersion = GetStartedStore.version.intValue
+        // iOS realChatCount: every loaded chat (archived too) with a message in it, or a group;
+        // never the Fariin chat, a channel or a cleared chat. Five end the card for good.
+        val gsRealChats = remember(state.all) { GetStartedStore.realChatCount(state.all, me) }
+        LaunchedEffect(gsRealChats >= GetStartedStore.CHAT_LIMIT) {
+            if (gsRealChats >= GetStartedStore.CHAT_LIMIT) GetStartedStore.finish(appCtx, me)
+        }
         val gsShown = !state.loading && state.error == null && !searching && !selecting && !showArchive && filter == FILTER_ALL && folder == null &&
-            GetStartedStore.accountIsNew() && state.chats.count { !it.isChannel } < GetStartedStore.CHAT_LIMIT
+            GetStartedStore.accountIsNew() && gsRealChats < GetStartedStore.CHAT_LIMIT
         // After Skip on the restore screen, Restore leads the card (owner 2026-11-12), for any
         // account: the card then shows even when it was closed or the account is not new.
         val restoreLater by com.fariin.app.crypto.KeyBackup.later.collectAsState()
