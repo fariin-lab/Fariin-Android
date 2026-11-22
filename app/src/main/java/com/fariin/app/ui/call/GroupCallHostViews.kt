@@ -182,7 +182,9 @@ fun GroupAddPeopleSheet(g: GroupCallUi, onClose: () -> Unit) {
     // name, since a call link writes the people I add into the shared call doc.
     fun shownName(p: CallPerson) = com.fariin.app.data.ContactNames.name(p.uid) ?: p.name
     val q = query.trim()
-    val shown = people.filter { q.isEmpty() || shownName(it).contains(q, ignoreCase = true) || it.name.contains(q, ignoreCase = true) }
+    val matched = people.filter { q.isEmpty() || shownName(it).contains(q, ignoreCase = true) || it.name.contains(q, ignoreCase = true) }
+    // iOS sections: a group's members A to Z by the name shown; my chats stay newest first.
+    val shown = if (isLink) matched else matched.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { p: CallPerson -> shownName(p) })
     val action = if (isLink) "Add to call" else "Ring"
     ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = Color.Black, contentColor = Color.White, scrimColor = Color.Black.copy(alpha = 0.4f)) {
