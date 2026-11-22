@@ -398,7 +398,9 @@ fun MessageRequestsScreen(api: PeopleApi, requests: List<Conversation>, onBack: 
     }
     val list = remember(requests, older, gone) {
         val live = requests.map { it.id }.toSet()
+        // Newest first, as iOS sorts this page (displayUpdatedAt); the older ones used to sit at the end.
         (requests + older.filter { it.id !in live }).filter { it.id !in gone }
+            .sortedByDescending { it.displayUpdatedAt(me) }
     }
     // The white page with the shared frosted top (as Archive and the other pages); the bar was a grey band.
     com.fariin.app.ui.components.GlassBarPage(false, Modifier.background(c.bg), page = c.bg, frosted = true,
