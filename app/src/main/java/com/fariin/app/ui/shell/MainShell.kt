@@ -347,15 +347,12 @@ fun MainShell(
             )
         }
         // The screen stays on while a voice note plays (iOS SleepBlocker "voice-play"), so a long note
-        // is not cut off by the screen timing out. The window's flag, apart from any view's own.
+        // is not cut off by the screen timing out. Shared with recording through ScreenAwake.
         val voicePlaying = com.fariin.app.media.VoicePlayer.state.collectAsState().value.playing
         val shellView = androidx.compose.ui.platform.LocalView.current
         androidx.compose.runtime.DisposableEffect(voicePlaying) {
-            var c: android.content.Context? = shellView.context
-            while (c is android.content.ContextWrapper && c !is android.app.Activity) c = c.baseContext
-            val w = (c as? android.app.Activity)?.window
-            if (voicePlaying) w?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            onDispose { w?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+            if (voicePlaying) com.fariin.app.media.ScreenAwake.hold(com.fariin.app.media.ScreenAwake.VOICE_PLAY, shellView)
+            onDispose { com.fariin.app.media.ScreenAwake.release(com.fariin.app.media.ScreenAwake.VOICE_PLAY) }
         }
         // A voice message playing on after its chat was left (iOS VoiceNoteBar, story-seg-1115
         // 40a1005cd): at the bottom, just above the tab bar, on every tab; a tap opens its chat.

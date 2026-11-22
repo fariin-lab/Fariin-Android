@@ -197,8 +197,8 @@ private fun StepsPage(title: String, onCancel: (() -> Unit)?, content: @Composab
     // sleep would hide the code from the other phone's camera, or pause the transfer.
     val view = androidx.compose.ui.platform.LocalView.current
     androidx.compose.runtime.DisposableEffect(view) {
-        view.keepScreenOn = true
-        onDispose { view.keepScreenOn = false }
+        com.fariin.app.media.ScreenAwake.hold(com.fariin.app.media.ScreenAwake.CHAT_TRANSFER, view)
+        onDispose { com.fariin.app.media.ScreenAwake.release(com.fariin.app.media.ScreenAwake.CHAT_TRANSFER) }
     }
     Column(Modifier.fillMaxSize().background(c.bgSecondary).statusBarsPadding().navigationBarsPadding()) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 28.dp),

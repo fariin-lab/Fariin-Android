@@ -3322,8 +3322,8 @@ private fun Composer(
     // The screen stays on while the mic captures, not while paused for review (iOS SleepBlocker "voice-record").
     val recView = androidx.compose.ui.platform.LocalView.current
     DisposableEffect(capturing) {
-        if (capturing) recView.keepScreenOn = true
-        onDispose { if (capturing) recView.keepScreenOn = false }
+        if (capturing) com.fariin.app.media.ScreenAwake.hold(com.fariin.app.media.ScreenAwake.VOICE_RECORD, recView)
+        onDispose { com.fariin.app.media.ScreenAwake.release(com.fariin.app.media.ScreenAwake.VOICE_RECORD) }
     }
     // The "1": this note goes as a one-time listen. It arms ONE note (iOS resetRecordingState).
     var voiceOnce by remember { mutableStateOf(false) }
