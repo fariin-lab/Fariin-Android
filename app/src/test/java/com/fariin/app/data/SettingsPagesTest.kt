@@ -78,7 +78,9 @@ class SettingsPagesTest {
         assertEquals("always", SettingsRules.autoDefault("photos"))
         assertEquals("wifi", SettingsRules.autoDefault("videos"))
         assertFalse(SettingsRules.autoDownload("wifi", false))
-        assertEquals("1.5 MB", SettingsRules.bytes(1_572_864))
+        // Decimal units, as iOS ByteCountFormatter; nothing at all reads "None".
+        assertEquals("1.6 MB", SettingsRules.bytes(1_572_864))
+        assertEquals("None", SettingsRules.bytes(0))
         assertEquals("12 KB", SettingsRules.bytes(12_288))
     }
 

@@ -148,12 +148,8 @@ object SettingsRules {
         return if (left <= 0) 0 else ((left + 3599_999) / 3600_000).toInt()
     }
 
-    fun bytes(n: Long): String = when {
-        n < 1024 -> "$n B"
-        n < 1024 * 1024 -> "${n / 1024} KB"
-        n < 1024L * 1024 * 1024 -> String.format(java.util.Locale.US, "%.1f MB", n / 1048576.0)
-        else -> String.format(java.util.Locale.US, "%.2f GB", n / 1073741824.0)
-    }
+    /** iOS GroupInfoView.bytes: "None" for nothing, else ByteCountFormatter (decimal units). */
+    fun bytes(n: Long): String = if (n == 0L) "None" else com.fariin.app.media.MediaRules.fileSizeLabel(n)
 }
 
 /** One list of choices kept in prefs, with a check on the chosen one. */

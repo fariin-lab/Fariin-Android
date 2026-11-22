@@ -47,11 +47,8 @@ internal const val PAGE_CHAT_BACKUP = "chats:backup"
 /** "1 video", "3 videos", "1,240 messages". */
 private fun count(n: Int, word: String) = "%,d %s".format(n, if (n == 1) word else word + "s")
 
-private fun sizeWords(b: Long): String = when {
-    b >= 1_000_000 -> "%.1f MB".format(b / 1_000_000.0)
-    b >= 1_000 -> "${b / 1_000} KB"
-    else -> "$b bytes"
-}
+/** iOS ChatBackupViews.size: ByteCountFormatter. */
+private fun sizeWords(b: Long): String = com.fariin.app.media.MediaRules.fileSizeLabel(b)
 
 /**
  * Settings > Chats > Chat Backup (flow B of backup-flow-study.md, own words): status with Back Up

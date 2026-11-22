@@ -90,7 +90,7 @@ fun LowStorageSheet() {
     val need by LowStorage.need.collectAsState()
     val n = need ?: return
     val c = Fariin.colors
-    val needText = if (n >= 1_000_000_000) "%.1f GB".format(n / 1e9) else "${n / 1_000_000} MB"
+    val needText = com.fariin.app.media.MediaRules.fileSizeLabel(n)   // iOS LowStorage: ByteCountFormatter
     ModalBottomSheet(onDismissRequest = { LowStorage.need.value = null }, containerColor = sheetFill, shape = SheetShape) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("Your Phone Is Almost Full", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.label,
