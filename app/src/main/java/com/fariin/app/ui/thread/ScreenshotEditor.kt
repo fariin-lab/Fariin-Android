@@ -11,6 +11,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -391,7 +392,7 @@ private fun ShotRow(
     var layout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
     // Taps on the words find the letter under the finger (the drawn text keeps every place).
     val textTaps = Modifier.pointerInput(s.id) {
-        androidx.compose.foundation.gestures.detectTapGestures(
+        detectTapGestures(
             onTap = { p -> layout?.let { tapNow.value(it.getOffsetForPosition(p)) } },
             onLongPress = { longNow.value() })
     }
