@@ -115,7 +115,10 @@ fun CallsTab(me: String, conversations: List<Conversation>, demoCalls: List<Call
         LaunchedEffect(me, key) {
             // Off the main thread, as MainShell reads it: every call row's fields were parsed there
             // (Firestore field paths, ~110 ms of a chat's first open on the Oppo, 2026-11-21).
-            calls = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { repo.load(me, conversations) }
+            calls = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                // None from a person I blocked, as the shell's read (iOS CallsRepository !isBlockedByMe).
+                repo.load(me, conversations.filter { !it.isBlockedByMe(me) })
+            }
             loaded = true
         }
     }
