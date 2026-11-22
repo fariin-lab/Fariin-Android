@@ -156,7 +156,7 @@ class ThreadRepository(
      */
     private val failedMedia: MutableSet<String> = ConcurrentHashMap.newKeySet()
     private val processStartMs = ThreadRepositoryStart.ms
-    /** Song and playlist sends, by clientId: the kinds whose Resend picks up where it stopped (MediaSender.PlaylistUpload, FileUpload). */
+    /** File, song and playlist sends, by clientId: the kinds whose Resend picks up where it stopped (MediaSender.PlaylistUpload, FileUpload). */
     private val playlistSends: MutableSet<String> = ConcurrentHashMap.newKeySet()
     /** iOS localCards: the link card on my own bubble until the server copy carries it, by clientId. */
     private val localCards = ConcurrentHashMap<String, Message.LinkPreview>()
@@ -1333,10 +1333,10 @@ class ThreadRepository(
                 fileName = f.name, fileSize = f.bytes.size.toLong(), localPath = local.absolutePath,
             )
             rebuild()
-            // A song is a music message: a failed upload after its write shows failed and its Resend
-            // sends only the file (as a playlist's does); other documents keep their old way.
+            // Any file, song or not: a failed upload after its write shows failed and its Resend
+            // sends only the file into the same message (as a playlist's does).
             val song = com.fariin.app.media.MediaRules.isSong(f.name)
-            val upload = if (song) com.fariin.app.media.MediaSender.FileUpload() else null
+            val upload = com.fariin.app.media.MediaSender.FileUpload()
             // Written down first, so a kill cannot lose it (FileOutbox, iOS PendingUploadStore).
             keepFile(if (song) "song" else "file", clientId, tap, listOf(local), listOf(f.name), f.previewJpeg, ref = ref,
                 renames = listOfNotNull(rename))
@@ -1345,7 +1345,7 @@ class ThreadRepository(
                 playlistSends.remove(clientId)
                 com.fariin.app.local.FileOutbox.remove(me, clientId)
             }
-            if (song) playlistSends += clientId
+            playlistSends += clientId
             retryMedia[clientId] = work
             runMediaSend(clientId, work)
         }
@@ -1394,10 +1394,14 @@ class ThreadRepository(
                 val name = f.name
                 val preview = f.previewJpeg
                 keepFile("file", clientId, tap, listOf(local), listOf(name), preview, ref = re)
+                // As sendDocument: a failed upload after the write goes red, and Resend completes that message.
+                val upload = com.fariin.app.media.MediaSender.FileUpload()
                 val work: suspend () -> Unit = {
-                    sender.file(FilePrep(name, local.readBytes(), preview), false, clientId, tap, reply = re, save = fileSave(clientId))
+                    sender.file(FilePrep(name, local.readBytes(), preview), false, clientId, tap, reply = re, job = upload, save = fileSave(clientId))
+                    playlistSends.remove(clientId)
                     com.fariin.app.local.FileOutbox.remove(me, clientId)
                 }
+                playlistSends += clientId
                 retryMedia[clientId] = work
                 queued += clientId to work
                 rebuild()
