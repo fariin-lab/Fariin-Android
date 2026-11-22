@@ -66,6 +66,17 @@ object GroupCallWire {
     /** iOS: a group rings for 60 s; a call nobody joined by then ends. */
     val RING_WINDOW_MS: Long get() = com.fariin.app.data.AppConfig.int(com.fariin.app.data.AppConfig.K.groupRingSeconds) * 1000L
 
+    /** The server's GROUP_RING_MAX_MEMBERS: a bigger group's call is announced, not rung. */
+    const val GROUP_RING_MAX_MEMBERS = 16
+
+    /**
+     * iOS endIfNobodyAnswered: the ring minute ends the call only when someone was rung. The
+     * call doc's server-only `rung` says so; before the server writes it, a group of at most
+     * 16 members counts as rung.
+     */
+    fun rangAnyone(rung: List<*>?, memberCount: Int): Boolean =
+        rung?.isNotEmpty() ?: (memberCount <= GROUP_RING_MAX_MEMBERS)
+
     /**
      * Who may start a call in this chat, as the rules (groupCalls create: isGroupMember and
      * mayStartCall) and groupCallToken say: a member of a GROUP chat, and only an admin when the
@@ -642,9 +653,16 @@ object GroupCall {
             conv.set(GroupCallWire.convMarker(me, video, FieldValue.serverTimestamp()), SetOptions.merge()).await()
         } catch (e: Exception) { Log.w(TAG, "record not written", e) }
         com.fariin.app.data.CallsRepository.touch(cid)
-        // Nobody came in the ring window: the call ends (iOS endIfNobodyAnswered).
+        // Nobody came in the ring window: the call ends (iOS endIfNobodyAnswered), but only if
+        // someone was rung. A big group's call is only announced, so it stays open.
         scope.launch {
             delay(GroupCallWire.RING_WINDOW_MS)
+            if (room !== r || someoneCame || r.remoteParticipants.isNotEmpty()) return@launch
+            val d = try { ref.get(Source.SERVER).await().data } catch (_: Exception) { null }
+            val members = team?.users?.size
+                ?: try { (conv.get().await().get("users") as? List<*>)?.size } catch (_: Exception) { null }
+                ?: 0
+            if (!GroupCallWire.rangAnyone(d?.get("rung") as? List<*>, members)) return@launch
             if (room === r && !someoneCame && r.remoteParticipants.isEmpty()) leave()
         }
     }
