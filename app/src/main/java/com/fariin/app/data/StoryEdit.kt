@@ -12,6 +12,9 @@ import kotlinx.coroutines.tasks.await
  * - A new picture: uploaded create-only to `stories/{id}/e{rev}-{tail}/photo.jpg`, then ONE update of
  *   mediaUrl, blurThumb, stickers, mediaRev = old + 1, editedAt (and the caption with its time when it
  *   changed). The rules allow a new mediaUrl only with mediaRev + 1 and a URL under that folder.
+ * - A new clip (iOS replaceStoryMedia): the exported clip and its poster go to the same folder as
+ *   video.mp4 and thumb.jpg, and the update also carries thumbUrl, duration, width, height, bytes
+ *   and preloadPrefix.
  * The public copy of an Everyone story follows (best effort).
  */
 object StoryEdit {
@@ -30,13 +33,31 @@ object StoryEdit {
         if (newMedia != null) {
             val rev = ((ref.get().await().get("mediaRev") as? Number)?.toInt() ?: 0) + 1
             val tail = java.util.UUID.randomUUID().toString().replace("-", "").take(10)
-            val file = FirebaseStorage.getInstance().reference.child("stories/${story.id}/e$rev-$tail/photo.jpg")
-            val task = file.putBytes(newMedia.jpeg, StorageMetadata.Builder().setContentType("image/jpeg").build())
-            task.addOnProgressListener { s -> if (s.totalByteCount > 0) onProgress(s.bytesTransferred.toFloat() / s.totalByteCount) }
-            task.await()
-            val url = file.downloadUrl.await().toString()
-            update["mediaUrl"] = url
-            update["thumbUrl"] = ""
+            val folder = FirebaseStorage.getInstance().reference.child("stories/${story.id}/e$rev-$tail")
+            val clip = newMedia.video
+            if (clip != null) {
+                // The poster first, then the clip with the progress (iOS).
+                val thumb = folder.child("thumb.jpg")
+                thumb.putBytes(newMedia.jpeg, StorageMetadata.Builder().setContentType("image/jpeg").build()).await()
+                val file = folder.child("video.mp4")
+                val task = file.putFile(clip.file, StorageMetadata.Builder().setContentType("video/mp4").build())
+                task.addOnProgressListener { s -> if (s.totalByteCount > 0) onProgress(s.bytesTransferred.toFloat() / s.totalByteCount) }
+                task.await()
+                update["mediaUrl"] = file.downloadUrl.await().toString()
+                update["thumbUrl"] = thumb.downloadUrl.await().toString()
+                update["duration"] = clip.info.durationSec
+                update["width"] = clip.info.width
+                update["height"] = clip.info.height
+                update["bytes"] = clip.info.bytes
+                update["preloadPrefix"] = minOf(clip.info.bytes, 1536L * 1024)
+            } else {
+                val file = folder.child("photo.jpg")
+                val task = file.putBytes(newMedia.jpeg, StorageMetadata.Builder().setContentType("image/jpeg").build())
+                task.addOnProgressListener { s -> if (s.totalByteCount > 0) onProgress(s.bytesTransferred.toFloat() / s.totalByteCount) }
+                task.await()
+                update["mediaUrl"] = file.downloadUrl.await().toString()
+                update["thumbUrl"] = ""
+            }
             update["blurThumb"] = newMedia.blurThumb
             update["stickers"] = newMedia.stickers.map { StoryTaps.asMap(it) }
             update["mediaRev"] = rev
@@ -55,6 +76,11 @@ object StoryEdit {
                 mirror["mediaUrl"] = update["mediaUrl"] as String
                 mirror["blurThumb"] = newMedia.blurThumb
                 mirror["stickers"] = newMedia.stickers.map { StoryTaps.asMap(it) }
+                // A clip's poster and length follow too (iOS); a photo's mirror keeps its keys as before.
+                if (newMedia.video != null) {
+                    mirror["thumbUrl"] = update["thumbUrl"] as String
+                    mirror["duration"] = update["duration"] as Double
+                }
             }
             db.collection("users").document(me).collection("publicStories").document(story.id).update(mirror).await()
         }
@@ -62,7 +88,7 @@ object StoryEdit {
         @Suppress("UNCHECKED_CAST")
         val tokens = (live?.get("recipientUids") as? List<String>).orEmpty()
         if (captionChanged && story.groupId.isNullOrEmpty() && tokens.isNotEmpty()) {
-            val thumb = (update["mediaUrl"] as? String) ?: story.previewUrl
+            val thumb = if (newMedia?.video != null) update["thumbUrl"] as String else (update["mediaUrl"] as? String) ?: story.previewUrl
             StoryMentions.send(story.id, cap, thumb, emptySet(), me,
                 recipientTokens = tokens.toSet(), skipping = StoryMentions.handles(story.caption))
         }
