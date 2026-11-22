@@ -999,22 +999,21 @@ fun ChatListScreen(
                     }
                     // iOS ChatSearchPage: people under "Global Search", after everything local, the first
                     // three and then Show More. A tap opens the chat, which is what creates it.
-                    if (searching && newPeople.isNotEmpty()) {
-                        item(key = "h-global") { SectionHeader("Global Search") }
-                        items(if (peopleAll) newPeople else newPeople.take(3), key = { "p-" + it.uid }) { p ->
+                    // Public groups and channels I am not in yet, after the people (iOS ChatSearchPage).
+                    // People and groups are one section: three rows in all, then Show More (iOS).
+                    val newGroups = groupHits.filter { h -> !h.isMember && state.chats.none { it.id == h.cid } &&
+                        state.all.none { it.id == h.cid && it.isGroup && me in it.users } }
+                    val peopleShown = if (peopleAll) newPeople else newPeople.take(3)
+                    val groupsShown = if (peopleAll) newGroups else newGroups.take((3 - peopleShown.size).coerceAtLeast(0))
+                    if (searching && (peopleShown.isNotEmpty() || groupsShown.isNotEmpty())) item(key = "h-global") { SectionHeader("Global Search") }
+                    if (searching && peopleShown.isNotEmpty()) {
+                        items(peopleShown, key = { "p-" + it.uid }) { p ->
                             PersonRow(p) {
                                 scope.launch { people.startChat(p)?.let { cid -> SearchRecents.recordPerson(appCtx, me, p, cid); searching = false; query = ""; people.chat(cid) } ?: run { searching = false; query = ""; people.contact(p.uid) } }   // the chat can't be made (their Messages setting): their page, never a dead tap (owner 2026-11-10)
                             }
                         }
-                        if (!peopleAll && newPeople.size > 3) item(key = "p-more") {
-                            Text("Show More", color = c.accent, style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.fillMaxWidth().clickable { peopleAll = true }.padding(horizontal = 86.dp, vertical = 12.dp))
-                        }
                     }
-                    // Public groups and channels I am not in yet, after the people (iOS ChatSearchPage).
-                    val newGroups = groupHits.filter { h -> !h.isMember && state.chats.none { it.id == h.cid } }
-                    if (searching && newPeople.isEmpty() && newGroups.isNotEmpty()) item(key = "h-global") { SectionHeader("Global Search") }
-                    if (searching) items(newGroups, key = { "g-" + it.cid }) { h ->
+                    if (searching) items(groupsShown, key = { "g-" + it.cid }) { h ->
                         Row(Modifier.fillMaxWidth().clickable {
                             // Kept under Recent (iOS RecentSearches record(group:)).
                             SearchRecents.recordGroup(appCtx, me, h)
@@ -1032,6 +1031,10 @@ fun ChatListScreen(
                                 Text(h.subtitle, style = MaterialTheme.typography.bodyMedium, color = c.secondary, maxLines = 1)
                             }
                         }
+                    }
+                    if (searching && !peopleAll && newPeople.size + newGroups.size > 3) item(key = "p-more") {
+                        Text("Show More", color = c.accent, style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.fillMaxWidth().clickable { peopleAll = true }.padding(horizontal = 86.dp, vertical = 12.dp))
                     }
                 }
             }
