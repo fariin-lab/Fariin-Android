@@ -261,8 +261,21 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
             } catch (e: Exception) { following = false; error = ChannelService.errorText(e) }
         }
     }
+    // An admin who is not the owner may leave (iOS GroupInfoView: only the owner may not; the owner
+    // deletes the channel instead). An admin is a member, not a follower, so it is the group leave.
+    val adminMayLeave = role == Role.ADMIN && team != null && !team.isOwner(me)
     fun leave(fromUndo: Boolean) {
         undo = false
+        if (adminMayLeave) {
+            com.fariin.app.data.LeaveUndo.start(info.cid, info.title.ifEmpty { "the channel" },
+                "Couldn't leave the channel. Check your connection and try again.") {
+                com.fariin.app.ui.chats.ChatListActions.leave(me, info.cid)
+            }
+            com.fariin.app.ui.components.Snack.undo("You left the channel.", info.avatarUrl, true,
+                com.fariin.app.data.LeaveUndo.WINDOW_MS) { com.fariin.app.data.LeaveUndo.undo() }
+            onLeft()
+            return
+        }
         if (fromUndo) {
             scope.launch {
                 try { ChannelService.unfollow(info.cid); following = false }
@@ -304,9 +317,10 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     if (confirmLeave) com.fariin.app.ui.components.CarefulSheet(onDismiss = { confirmLeave = false }, steps = listOf(
         com.fariin.app.ui.components.CarefulStep(
             title = "Leave ${info.title.ifEmpty { "this channel" }}?",
-            body = if (muted) "You will stop getting its posts." else "You will stop getting its posts. To keep them without alerts, mute it instead.",
+            body = if (adminMayLeave) "You will stop getting its posts and will no longer be an admin."
+                else if (muted) "You will stop getting its posts." else "You will stop getting its posts. To keep them without alerts, mute it instead.",
             buttons = listOfNotNull(
-                if (!muted) com.fariin.app.ui.components.CarefulButton("Mute Instead", com.fariin.app.ui.components.CarefulKind.SOFT) {
+                if (!muted && !adminMayLeave) com.fariin.app.ui.components.CarefulButton("Mute Instead", com.fariin.app.ui.components.CarefulKind.SOFT) {
                     scope.launch {
                         val ok = runCatching { ChannelService.setMuted(info.cid, true, 0.0) }.getOrDefault(false)
                         com.fariin.app.ui.components.Snack.show(if (ok) "Muted. You still follow this channel." else com.fariin.app.data.GroupInfoCircles.MUTE_FAILED)
@@ -448,7 +462,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                 Spacer(Modifier.height(20.dp))
                 Card {
                     // Leave first, then Report (iOS order), with the Leave Group arrow.
-                    if (role == Role.FOLLOWER) FootRow("Leave Channel", ImageVector.cachedVector(R.drawable.ic_channel_leave), c.red) { confirmLeave = true }
+                    if (role == Role.FOLLOWER || adminMayLeave) FootRow("Leave Channel", ImageVector.cachedVector(R.drawable.ic_channel_leave), c.red) { confirmLeave = true }
                     if (role != Role.ADMIN) {
                         if (role == Role.FOLLOWER && com.fariin.app.ui.settings.SHOW_ROW_LINES) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 52.dp))
                         FootRow(if (reported) "Reported" else "Report Channel", ImageVector.cachedVector(com.fariin.app.R.drawable.ic_report),
@@ -462,7 +476,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                         FootRow(if (clearing) "Clearing\u2026" else "Clear Messages", ImageVector.cachedVector(R.drawable.ic_sf_eraser), c.red) { if (!clearing) askClear = true }
                         FootRow("Delete Channel", ImageVector.cachedVector(R.drawable.ic_sf_trash), c.red) { askDelete = true }
                     }
-                    else if (role == Role.ADMIN) Text("You run this channel. Only admins can post.", fontSize = 15.sp, color = c.secondary,
+                    else if (role == Role.ADMIN && !adminMayLeave) Text("You run this channel. Only admins can post.", fontSize = 15.sp, color = c.secondary,
                         modifier = Modifier.padding(16.dp))
                 }
                 if (info.createdAtMillis > 0) {
