@@ -912,7 +912,7 @@ fun StoryViewer(
                     canRepost = { st -> com.fariin.app.data.StoryRepostRules.allows(st, st.repostOf, me,
                         convs.firstOrNull { !it.isGroup && it.users.contains(st.authorUid) && it.users.contains(me) }?.isBlockedByMe(me) == true) },
                     onRepost = { st -> startRepost(st, g) },
-                    me = me, group = g, card = cardOf(g), active = page == pager.currentPage && !pager.isScrollInProgress,
+                    me = me, group = g, backward = page < pager.currentPage, card = cardOf(g), active = page == pager.currentPage && !pager.isScrollInProgress,
                     paused = postOpening || StoryAside.under != null || sheetFor != null || profileUid != null || confirmDelete != null || replyFocused || hero.live || reposting.value || guideUp || editViewersFor != null || reportUp,
                     // The bars and caption stay inside the shrinking card and fade as it shrinks (iOS);
                     // over a third of the pull they were gone in a frame on a quick swipe.
@@ -1202,6 +1202,8 @@ private fun StoryPage(
     onRepost: (Story) -> Unit,
     me: String,
     group: StoryGroup,
+    /** First shown as the ring before the current one (a swipe or tap back): a fully seen ring opens on its newest. */
+    backward: Boolean = false,
     /** Where the story card sits in this page, in pixels (the viewer's `cardOf`). */
     card: Rect,
     active: Boolean,
@@ -1250,7 +1252,7 @@ private fun StoryPage(
 ) {
     val stories = group.stories
     if (stories.isEmpty()) return
-    var index by rememberSaveable(group.key) { mutableIntStateOf(StoryRules.startIndex(group)) }
+    var index by rememberSaveable(group.key) { mutableIntStateOf(StoryRules.startIndex(group, backward)) }
     if (index > stories.lastIndex) index = stories.lastIndex
     // In the same frame the row lands, not one after it: the row hides the landed card's thumbnail
     // in that frame, so the page must already be showing that story (no flash of the old one).

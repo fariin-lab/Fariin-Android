@@ -168,11 +168,15 @@ object StoryRules {
 
     data class VideoInfo(val durationSec: Double, val width: Int, val height: Int, val bytes: Long)
 
-    /** Where the viewer opens a ring: the first story I have not seen, else the first (iOS). */
-    fun startIndex(g: StoryGroup): Int {
+    /**
+     * Where the viewer opens a ring: the first story I have not seen, else the first (iOS).
+     * Reached going BACK to a ring fully seen: its newest, so going back walks the timeline back
+     * (iOS startIndexForFullyRead).
+     */
+    fun startIndex(g: StoryGroup, backward: Boolean = false): Int {
         val seen = g.lastViewedAtMs ?: return 0
         val i = g.stories.indexOfFirst { it.createdAtMs > seen }
-        return if (i < 0) 0 else i
+        return if (i >= 0) i else if (backward) g.stories.lastIndex.coerceAtLeast(0) else 0
     }
 
     /** A tap's meaning: the left third goes back, the rest goes on (StoryUI tapStory). */
