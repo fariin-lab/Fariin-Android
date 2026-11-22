@@ -148,10 +148,13 @@ class ChatsViewModel(
                 val now = System.currentTimeMillis().toDouble()
                 list.map { com.fariin.app.data.Disappearing.burnedIfDue(it, now) }
             },
-                // A request from someone I blocked never shows (iOS hideAccountBlocked).
-                requests = s.conversations.filter { ChatList.isIncomingRequest(it, me) &&
+                // A request from someone I blocked, or one I cleared, never shows (iOS MessageRequestsView).
+                requests = s.conversations.filter { ChatList.isIncomingRequest(it, me) && !it.isCleared(me) &&
                     !com.fariin.app.data.BlockList.contains(it.otherUid(me)) },
-                archived = s.conversations.filter { it.isArchived(me) && !it.isCleared(me) && !ChatList.isIncomingRequest(it, me) }
+                // An auto-archived request shows here too, as on iOS (it stays on Message Requests as well);
+                // never one from someone I blocked.
+                archived = s.conversations.filter { it.isArchived(me) && !it.isCleared(me) &&
+                    !(ChatList.isIncomingRequest(it, me) && com.fariin.app.data.BlockList.contains(it.otherUid(me))) }
                     .sortedByDescending { it.displayUpdatedAt(me) },
                 all = s.conversations)
         is ConversationsRepository.State.Failed -> ChatsUiState(loading = false, error = s.message)

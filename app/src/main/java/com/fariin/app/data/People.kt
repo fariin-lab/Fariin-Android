@@ -163,7 +163,12 @@ class FirestorePeople(
         db.collection("users").document(uid).get().await().data?.let { Person.from(uid, it) }?.let { p ->
             // ⛔ THEIR BIO ONLY WHEN THEIR "Bio" PRIVACY LETS ME SEE IT (iOS ContactInfoView.gatedAbout,
             // PrivacyPrefs.allows "bio"). Blanked here, where every page that shows a person gets it.
-            if (uid == me || Person.allows(p.privacy, "bio", isContact(uid))) p else p.copy(about = "")
+            // Their photo likewise (iOS gatedPhotoUrl, PrivacyPrefs.allows "photo").
+            if (uid == me) p else {
+                val contact = isContact(uid)
+                p.copy(about = if (Person.allows(p.privacy, "bio", contact)) p.about else "",
+                    photoUrl = if (Person.allows(p.privacy, "photo", contact)) p.photoUrl else null)
+            }
         }
     } catch (_: Exception) { null }
 
@@ -450,14 +455,22 @@ class FirestorePeople(
         batch.commit()
         // The photo goes up behind the open chat.
         if (photo != null) kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
-            try {
-                val jpeg = squareJpeg(photo, 640, 80)
-                if (jpeg != null) {
+            // One retry after 3 s, then said (iOS NewGroupView: never a silent missing photo).
+            val jpeg = squareJpeg(photo, 640, 80) ?: return@launch
+            var saved = false
+            for (round in 0..1) {
+                if (round == 1) kotlinx.coroutines.delay(3_000)
+                saved = try {
                     val sref = FirebaseStorage.getInstance().reference.child("profiles/group_${ref.id}.jpg")
                     sref.putBytes(jpeg, StorageMetadata.Builder().setContentType("image/jpeg").build()).await()
                     ref.update(mapOf("avatarUrl" to sref.downloadUrl.await().toString(), "updatedAt" to FieldValue.serverTimestamp())).await()
-                }
-            } catch (_: Exception) {}
+                    true
+                } catch (_: Exception) { false }
+                if (saved) break
+            }
+            if (!saved) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                com.fariin.app.ui.components.Snack.show("The group photo was not saved. Set it in Edit.")
+            }
         }
         return ref.id
     }
@@ -525,6 +538,8 @@ class FirestorePeople(
             txn.update(ref, plan.update)
             null
         }.await()
+        // A link to it must open the join sheet again, not the old chat (iOS GroupLinkDoor.noteLeft).
+        com.fariin.app.ui.people.GroupLinkPreviews.forgetCid(cid)
     }
 
     /** ChatService.renameGroup: `title` + updatedAt, then "<me> renamed the group to ..." (best effort, as iOS). */

@@ -188,6 +188,8 @@ data class ThreadUi(
     val dividerAt: Int = 0,
     /** A 1:1 message request's bar in place of the composer (RequestBars), or null. */
     val requestBar: RequestBar? = null,
+    /** My one first message to a stranger (iOS requestStance .firstMessage): text only. */
+    val knock: Boolean = false,
     /** A channel: posts drawn as the channel speaking, views, counts-only reactions, follower bar. */
     val channel: com.fariin.app.ui.channels.ChannelThreadUi? = null,
     /** A chat that may be a channel I visit, its answer not back yet: drawn as a loading ring. */
@@ -196,6 +198,8 @@ data class ThreadUi(
      *  messages fetched by id for pins older than the loaded page. */
     val pinnedIds: List<String> = emptyList(),
     val pinned: Map<String, Message> = emptyMap(),
+    /** My Clear Chat / Clear Messages mark (ms): pins to messages up to it are not shown (iOS isClearedHere). */
+    val clearedAtMs: Double = 0.0,
     /** May I pin and unpin here (a 1:1 always; a group the Pin messages right). */
     val canPin: Boolean = false,
     /** The chat's disappearing timer in seconds (`disappearSeconds`, 0 = off). */
@@ -1614,7 +1618,8 @@ private fun ThreadContent(
                 // while editing went out as a NEW post and the edit sat unsaved. The server allows an
                 // edit to change only the words, so "+", camera, GIFs and stickers say so instead.
                 // (The text send ignores this while editing: Save is the edit itself.)
-                val editHold = if (editing != null) "Finish editing first. A photo or video can't be added to a message you're editing; save or cancel the edit, then send it as a new message." else null
+                val knockHold = if (ui.knock) "Your first message to someone new can only be text. You can send photos, voice and more once they reply." else null
+                val editHold = knockHold ?: if (editing != null) "Finish editing first. A photo or video can't be added to a message you're editing; save or cancel the edit, then send it as a new message." else null
                 fun slow(): String? = editHold ?: if (!ui.isGroup || doc.isEmpty()) null else com.fariin.app.data.GroupAdmins.slowWait(doc, ui.me,
                     ui.messages.lastOrNull { it.authorId == ui.me && !it.isSystem }?.createdAtMillis, System.currentTimeMillis().toDouble())
                 val mediaOff = if (ui.isGroup && doc.isNotEmpty()) com.fariin.app.data.GroupAdmins.mediaOff(doc, ui.me) else null
@@ -1700,7 +1705,7 @@ private fun ThreadContent(
                     boldable = true,
                     onTyping = steady1(actions.onTyping),
                     onRecording = steady1 { r: Boolean -> voiceRecording = r }, onCapturing = steady1(actions.onRecordingVoice),
-                    voiceOff = held(com.fariin.app.data.GroupAdmins.SendKind.VOICE) ?: (if (slowLeft > 0) slow() else null),
+                    voiceOff = knockHold ?: held(com.fariin.app.data.GroupAdmins.SendKind.VOICE) ?: (if (slowLeft > 0) slow() else null),
                     onVoiceOff = steady1(actions.onNotice),
                     onRowPlaced = steady1 { r: androidx.compose.ui.geometry.Rect? -> sendMotion.composerRow = r },
                     // Fariin Plus send effects: 1:1s and groups, not channels, not the first message
@@ -1753,10 +1758,18 @@ private fun ThreadContent(
     }
 }
 
-/** iOS visiblePinIds: pins I can see (not hidden for me, not a tombstone), in pin order. */
-private fun visiblePins(ui: ThreadUi): List<String> = ui.pinnedIds.filter { id ->
-    !com.fariin.app.data.HiddenMessages.isHidden(id) &&
-        (ui.messages.firstOrNull { it.id == id } ?: ui.pinned[id])?.deleted != true
+/**
+ * iOS visiblePinIds: pins I can see (not hidden for me, not a tombstone), in pin order; not a
+ * message I cleared here (Clear Chat / Clear Messages) and not one whose timer ran out.
+ */
+private fun visiblePins(ui: ThreadUi): List<String> {
+    val now = System.currentTimeMillis().toDouble()
+    return ui.pinnedIds.filter { id ->
+        val m = ui.messages.firstOrNull { it.id == id } ?: ui.pinned[id]
+        !com.fariin.app.data.HiddenMessages.isHidden(id) && m?.deleted != true &&
+            !(m != null && ui.clearedAtMs > 0 && m.createdAtMillis <= ui.clearedAtMs) &&
+            !(m?.expiresAtMillis?.let { it <= now } ?: false)
+    }
 }
 
 /** The round tick at the start of a row in select mode. */
@@ -2454,7 +2467,7 @@ private fun MediaRow(
                 }
                 // iOS MediaDownloadOverlay: a sealed clip comes down IN the bubble (sealed as one piece,
                 // it cannot stream), by the Videos auto-download rule or a tap; play only once it is here.
-                val clip = rememberGatedFile(if (ready && !busy && !streams) m.videoUrl else null, m.enc, com.fariin.app.media.AutoDownload.Kind.VIDEOS)
+                val clip = rememberGatedFile(if (ready && !busy && !streams) m.videoUrl else null, m.enc, com.fariin.app.media.AutoDownload.Kind.VIDEOS, m.fileSize)
                 val here = ready && clip.state == Fetch.DONE
                 PictureBox(m, local ?: m.thumbUrl, if (local != null) null else m.thumbEnc, maxW, RectangleShape, captionW, busy || !ready, onOpen = {
                     m.videoUrl?.let { onView(Viewing.Video(it, m.enc, msg = m)) }
@@ -3901,8 +3914,7 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ThreadRow(
                             }
                         }
                     }
-                    .doubleTapToReact(!m.deleted && m.sendState == null && !m.isSystem &&
-                        !com.fariin.app.data.GroupAdmins.reactionsHeldBack(ui.groupDoc, ui.me), key = m.id + ReactNow.mine(m, ui.me)) { env.react(m) }) {
+                    .doubleTapToReact(canReact(m, ui), key = m.id + ReactNow.mine(m, ui.me)) { env.react(m) }) {
                     MessageRow(ui, m, g, is24h, { env.failed(it) }, tick) { env.view(it) }
                     // iOS: a pill opens who reacted (channels keep their own chips).
                     ReactionChips(ReactNow.shown(m, ui.me), ui, m.authorId == ui.me) { env.reactors(m) }

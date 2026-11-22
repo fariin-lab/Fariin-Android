@@ -71,6 +71,21 @@ data class AnnouncementButton(val label: String, val action: String, val value: 
     }
 }
 
+/**
+ * iOS OfficialConfig (owner 2026-10-13 / 10-20): `config/official` sets the Fariin chat's badge
+ * ("blue" default, "gold", "none") and its picture (`photoUrl`, empty = the bundled mark).
+ */
+object OfficialConfig {
+    val badge = kotlinx.coroutines.flow.MutableStateFlow("blue")
+    val photoUrl = kotlinx.coroutines.flow.MutableStateFlow("")
+    /** A snapshot of config/official; a failed read (null) keeps what we have. */
+    fun take(d: Map<String, Any?>?) {
+        d ?: return
+        badge.value = (d["badge"] as? String)?.takeIf { it == "gold" || it == "none" } ?: "blue"
+        photoUrl.value = d["photoUrl"] as? String ?: ""
+    }
+}
+
 /** Who an announcement is for, read on the phone (iOS AnnouncementAudience). */
 data class AnnouncementAudience(
     val scope: String = "everyone",
@@ -389,6 +404,7 @@ object OfficialChannel {
         val user = db.collection("users").document(me)
         // No `where` on publishAt: a query fixed at attach time misses the next send. `reaches` decides.
         regs = listOf(
+            db.collection("config").document("official").addSnapshotListener { snap, _ -> OfficialConfig.take(snap?.data) },
             db.collection("announcements").orderBy("publishAt", Query.Direction.DESCENDING).limit(100)
                 .addSnapshotListener { snap, _ ->
                     if (snap != null) broadcast = snap.documents.map { Announcement.from(it.id, it.data ?: emptyMap()) }

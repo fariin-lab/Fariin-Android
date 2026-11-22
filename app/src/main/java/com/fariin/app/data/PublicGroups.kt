@@ -65,12 +65,20 @@ object PublicGroups {
     }
 
     /** "joined", "requested" or "already"; a refusal throws with the server's own words. */
-    suspend fun join(cid: String): String = try {
-        (fns.getHttpsCallable("joinPublicGroup").withTimeout(20, TimeUnit.SECONDS)
-            .call(mapOf("cid" to cid)).await().getData() as? Map<*, *>)?.get("status") as? String ?: "joined"
-    } catch (e: FirebaseFunctionsException) {
-        throw IllegalStateException(e.message ?: "Couldn't join. Try again.")
-    } catch (e: Exception) {
-        throw IllegalStateException("Couldn't join. Check your connection and try again.")
+    suspend fun join(cid: String): String {
+        // iOS GroupDirectory.join: offline said up front; the server's words only for a real refusal,
+        // never a bare code ("UNAVAILABLE", "INTERNAL") from a transport failure.
+        if (ConnectionStatus.state.value != ConnectionStatus.State.ONLINE) throw IllegalStateException("No internet connection. Try again.")
+        return try {
+            (fns.getHttpsCallable("joinPublicGroup").withTimeout(20, TimeUnit.SECONDS)
+                .call(mapOf("cid" to cid)).await().getData() as? Map<*, *>)?.get("status") as? String ?: "joined"
+        } catch (e: FirebaseFunctionsException) {
+            val transport = e.code in setOf(FirebaseFunctionsException.Code.UNAVAILABLE, FirebaseFunctionsException.Code.DEADLINE_EXCEEDED,
+                FirebaseFunctionsException.Code.INTERNAL, FirebaseFunctionsException.Code.UNKNOWN)
+            val words = e.message?.takeIf { it.isNotBlank() && it != e.code.name }
+            throw IllegalStateException(if (transport || words == null) "Couldn't join. Check your connection and try again." else words)
+        } catch (e: Exception) {
+            throw IllegalStateException("Couldn't join. Check your connection and try again.")
+        }
     }
 }

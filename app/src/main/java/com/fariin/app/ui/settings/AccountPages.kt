@@ -40,6 +40,8 @@ object AccountReport {
         now: Long, uid: String, name: String, handle: String, about: String, email: String?, joinedMs: Long?, hasPhoto: Boolean,
         providers: List<String>, privacy: Map<String, String>, devices: List<Device>?, blocked: List<Blocked>, chats: Int,
         fmt: (Long) -> String,
+        /** My profile links, "title: url" under ACCOUNT (iOS DataExport). */
+        links: List<com.fariin.app.data.ProfileLink> = emptyList(),
     ): String = buildString {
         append("Fariin, account information\n")
         append("Created ${fmt(now)}\n\n")
@@ -50,7 +52,12 @@ object AccountReport {
         append("Account ID: $uid\n")
         if (!email.isNullOrEmpty()) append("Email: $email\n")
         if (joinedMs != null) append("Joined: ${fmt(joinedMs)}\n")
-        append("Profile photo: ${if (hasPhoto) "Yes" else "No"}\n\n")
+        append("Profile photo: ${if (hasPhoto) "Yes" else "No"}\n")
+        if (links.isNotEmpty()) {
+            append("Links:\n")
+            for (l in links) append("  ${l.title}: ${l.url}\n")
+        }
+        append("\n")
         append("SIGN-IN METHODS\n")
         if (providers.isEmpty()) append("  None\n")
         for (p in providers) append("  ${providerName(p)}\n")
@@ -70,7 +77,8 @@ object AccountReport {
         append("\nACTIVITY\n")
         append("Chats: $chats\n\n")
         append("Messages are not in this file. One-to-one messages are end-to-end encrypted and only ")
-        append("your phones can read them.\n")
+        append("your phones can read them. To save a conversation, open the chat, tap the name at the top, ")
+        append("and choose Export Chat.\n")
     }
 
     /** True while an export is being read; a second tap meanwhile does nothing (one share sheet). */
@@ -112,7 +120,7 @@ object AccountReport {
         val text = build(
             System.currentTimeMillis(), uid, profile.name, profile.handle, profile.about, user.email, joined, profile.photoUrl != null,
             user.providerData.map { it.providerId }.filter { it != "firebase" }, Presence.privacyOf(me), devices, blocked,
-            CryptoHub.listedAll().count { !it.isCleared(uid) }, fmt = { df.format(Date(it)) },
+            CryptoHub.listedAll().count { !it.isCleared(uid) }, fmt = { df.format(Date(it)) }, links = profile.links,
         )
         // A file, as iOS DataExport (Fariin-Account-Information.txt): shared as text, picking a chat in the
         // sheet sent the whole account summary as a message. In the app's cache, shared read-only.

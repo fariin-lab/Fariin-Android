@@ -257,6 +257,10 @@ fun rememberChannelThread(cid: String, me: String, doc: Map<String, Any?>, messa
         held = { mid -> rx[cid]?.get(mid) },
         counts = { m -> served["$cid/${m.id}"] ?: m.reactionCounts },
         onFollow = {
+            // Offline: refused at once, before the tap does anything (iOS ChannelViews follow).
+            if (com.fariin.app.data.ConnectionStatus.state.value != com.fariin.app.data.ConnectionStatus.State.ONLINE) {
+                problem = "No internet connection. Try again."
+            } else {
             com.fariin.app.ui.components.SuccessHaptic.soft(followCtx)   // a soft tap on Follow (owner 2026-11-13)
             problem = null; joining = true
             scope.launch {
@@ -264,6 +268,7 @@ fun rememberChannelThread(cid: String, me: String, doc: Map<String, Any?>, messa
                     if (ChannelService.follow(cid) == "requested") { joining = false; notice(ChannelRules.REQUEST_SENT) }
                     else notice(ChannelRules.FOLLOWING_NOTICE)
                 } catch (e: Exception) { joining = false; problem = ChannelService.errorText(e) }
+            }
             }
         },
         onMute = { until -> scope.launch { if (!ChannelService.setMuted(cid, until != null, until ?: 0.0)) notice("Couldn't change that. Try again.") } },

@@ -111,4 +111,12 @@ class ChatSearchTest {
         assertEquals("Wed", ChatSearch.dateText(oct(28), false, now, zone, Locale.US))   // six days back
         assertEquals("10/27/26", ChatSearch.dateText(oct(27), false, now, zone, Locale.US))   // a week back
     }
+
+    @Test fun namePrefixMatchAsIos() {
+        assertTrue(ChatSearch.namePrefixMatch("abd", "Adnan Abdi"))
+        assertTrue(ChatSearch.namePrefixMatch("abdi ad", "Adnan Abdi"))
+        assertFalse(ChatSearch.namePrefixMatch("bdi", "Adnan Abdi"))
+        assertTrue(ChatSearch.namePrefixMatch("cafe", "Café Team"))
+        assertTrue(ChatSearch.namePrefixMatch("  ", "Anyone"))
+    }
 }

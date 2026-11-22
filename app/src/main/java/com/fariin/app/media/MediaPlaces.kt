@@ -96,6 +96,13 @@ object AutoDownload {
 
     fun allowedNow(c: Context, k: Kind): Boolean = allowed(policy(c, k), onWifi(c))
 
+    /** iOS photoAutoBytes / maxAutoBytes: a photo over the panel's MB (8), anything else over 200 MB, waits for a tap. */
+    fun capBytes(k: Kind): Long = if (k == Kind.PHOTOS) com.fariin.app.data.AppConfig.bytes(com.fariin.app.data.AppConfig.K.autoDownloadPhotoMB)
+        else MAX_AUTO_BYTES
+
+    /** [allowedNow], and small enough to come by itself ([size] unknown counts as small, as iOS). */
+    fun allowedNow(c: Context, k: Kind, size: Long?): Boolean = (size == null || size <= 0 || size <= capBytes(k)) && allowedNow(c, k)
+
     fun onWifi(c: Context): Boolean = runCatching {
         val cm = c.getSystemService(ConnectivityManager::class.java)
         val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false

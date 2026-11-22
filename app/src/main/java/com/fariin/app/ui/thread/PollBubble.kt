@@ -99,7 +99,7 @@ private fun rememberPollVotes(m: Message, ctx: PollContext): Pair<Map<String, Li
     DisposableEffect(ctx.cid, m.id, ctx.channel) { onDispose { PollVotes.release(ctx.cid, m.id, ctx.channel) } }
     val v by flow.collectAsState()
     val mine = v.byUid[ctx.me] ?: emptyList()
-    val votes = if (ctx.channel) PollRules.channelVotes(m.pollCounts, m.pollVoters, m.pollTallyAt, mine, v.mineAt, ctx.me)
+    val votes = if (ctx.channel) PollRules.channelVotes(m.pollCounts, m.pollVoters, m.pollTallyAt, mine, v.mineAt, ctx.me, v.prevMine, v.prevAt)
         else v.byUid
     return votes to mine
 }

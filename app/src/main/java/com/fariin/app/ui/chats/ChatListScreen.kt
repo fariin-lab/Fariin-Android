@@ -288,7 +288,7 @@ fun ChatListScreen(
     }
     // The name search is not kept: a name saved on this phone (ContactNames) can change under it.
     val shown = if (query.isBlank()) filtered
-        else filtered.filter { it.displayName(me).contains(query.trim(), ignoreCase = true) }
+        else filtered.filter { com.fariin.app.data.ChatSearch.namePrefixMatch(query, it.displayName(me)) }
     // The search reaches past the list (iOS lookUpPeople, owner 2026-11-03 "not global"): who owns
     // the username typed, asked 0.4 s after the last key, answers kept per query for the session.
     // Somebody already in a chat above is not offered again.
@@ -342,7 +342,7 @@ fun ChatListScreen(
     val officialArchived = official.state.archived
     val officialShown = showArchive == officialArchived && official.latest != null &&
         folder == null && (filter == FILTER_ALL || (filter == FILTER_UNREAD && official.unread > 0)) &&
-        (query.isBlank() || com.fariin.app.data.OfficialChannel.NAME.contains(query.trim(), ignoreCase = true))
+        (query.isBlank() || com.fariin.app.data.ChatSearch.namePrefixMatch(query, com.fariin.app.data.OfficialChannel.NAME))
     val officialAt = official.latest?.sortAt ?: 0.0
     val officialPinned = officialShown && !showArchive && official.state.pinned
     val officialIndex = if (officialShown && !officialPinned) rest.indexOfFirst { it.displayUpdatedAt(me) < officialAt }.let { if (it < 0) rest.size else it } else rest.size
@@ -354,7 +354,7 @@ fun ChatListScreen(
     val activityPinned = activityShown && activityPin
     val activityMuted by com.fariin.app.data.ActivityFeed.muted.collectAsState()
     // "Activity" is found by the chat search like a chat title.
-    val activitySearchHit = query.isNotBlank() && activity?.let { it.at > 0 } == true && "Activity".contains(query.trim(), ignoreCase = true)
+    val activitySearchHit = query.isNotBlank() && activity?.let { it.at > 0 } == true && com.fariin.app.data.ChatSearch.namePrefixMatch(query, "Activity")
     val activityIndex = if (activityShown && !activityPinned) rest.indexOfFirst { it.displayUpdatedAt(me) < activity!!.at }.let { if (it < 0) rest.size else it } else rest.size
     val selectedConvs = remember(state.chats, state.archived, selected) {
         if (selected.isEmpty()) emptyList() else (state.chats + state.archived).filter { it.id in selected }
@@ -1069,7 +1069,8 @@ fun ChatListScreen(
                             }
                             // My own channel: deleted for everyone, Undo for a few seconds (as its page).
                             single != null && singleKind == DeleteKind.DELETE_CHANNEL -> {
-                                com.fariin.app.data.LeaveUndo.start(single.id, single.displayName(me)) { ChatListActions.deleteOwnChannel(single.id) }
+                                com.fariin.app.data.LeaveUndo.start(single.id, single.displayName(me),
+                                    "Couldn't delete \"${single.displayName(me)}\". Check your connection and try again.") { ChatListActions.deleteOwnChannel(single.id) }
                                 Snack.show("Channel deleted.", "Undo", durationMs = com.fariin.app.data.LeaveUndo.WINDOW_MS) {
                                     com.fariin.app.data.LeaveUndo.undo()
                                 }

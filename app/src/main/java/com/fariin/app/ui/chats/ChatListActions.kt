@@ -104,7 +104,10 @@ object ChatListActions {
     fun pinsFull(me: String, all: List<Conversation>, adding: Int): Boolean {
         // The Fariin chat counts when it is pinned and in the list (iOS ChatService pin cap).
         val official = com.fariin.app.data.OfficialChannel.view.value
-        val pinned = all.count { it.isPinned(me) } + if (official.state.pinned && official.latest != null) 1 else 0
+        // Only pins the list shows count (iOS ChatService pin cap): not archived, cleared or an
+        // incoming request, which would refuse a pin iOS allows.
+        val pinned = all.count { it.isPinned(me) && !it.isArchived(me) && !it.isCleared(me) && !com.fariin.app.data.ChatList.isIncomingRequest(it, me) } +
+            if (official.state.pinned && official.latest != null) 1 else 0
         if (pinned + adding <= PINNED_MAX) return false
         // Plus is named only to an account that can see it, and only while it is "locked" for it.
         val more = if (com.fariin.app.data.PlusStore.state("morePins") == com.fariin.app.data.PlusStore.State.LOCKED) " Fariin Plus lets you pin more." else ""

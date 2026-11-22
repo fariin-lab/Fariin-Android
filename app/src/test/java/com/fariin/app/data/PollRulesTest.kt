@@ -245,4 +245,11 @@ class PollRulesTest {
         assertEquals("2 options · 5 votes · fariin.com", PollRules.linkLine(2, 5))
         assertEquals(mapOf(0 to 2, 2 to 1), PollRules.readCounts(mapOf("0" to 2L, "1" to 0L, "2" to 1, "x" to 4)))
     }
+
+    @Test fun channelVoteChangeTakesOldVoteOff() {
+        // Count taken after my old vote (A at 100) but before my new one (B at 300): A comes off.
+        val v = PollRules.channelVotes(mapOf(0 to 2), 2, tallyAt = 200.0, mine = listOf(1), mineAt = 300.0, me = "me",
+            prevMine = listOf(0), prevAt = 100.0)
+        assertEquals(2, v.size)   // one other voter plus me, not three
+    }
 }

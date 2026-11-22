@@ -101,7 +101,7 @@ internal fun ChatFolderBar(chats: List<Conversation>, me: String, onEdit: (ChatF
         val avail = with(density) { maxWidth.toPx() } - with(density) { 8.dp.toPx() }
         val natural = folders.map { f ->
             val w = measurer.measure(f.name, androidx.compose.ui.text.TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)).size.width
-            val badge = (stats[f.id]?.unread ?: 0).let { if (it > 0) with(density) { 24.dp.toPx() } else 0f }
+            val badge = (stats[f.id]?.let { if (it.unread > 0) it.unread else it.readable } ?: 0).let { if (it > 0) with(density) { 24.dp.toPx() } else 0f }
             w + badge + with(density) { 28.dp.toPx() }
         }
         val fits = natural.sum() <= avail
@@ -149,13 +149,16 @@ internal fun ChatFolderBar(chats: List<Conversation>, me: String, onEdit: (ChatF
                                 Text(f.name, fontSize = 15.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
                                     color = if (on) c.label else c.secondary, maxLines = 1)
                                 // The badge fades in and out and its count rolls (iOS pops 9).
-                                val held = androidx.compose.runtime.remember { intArrayOf(s.unread) }
-                                if (s.unread > 0) held[0] = s.unread
-                                com.fariin.app.ui.components.Appear(s.unread > 0, resize = false) {
+                                // iOS 2026-11-21: only muted chats unread = their count in grey (badgeMuted).
+                                val shownN = if (s.unread > 0) s.unread else s.readable
+                                val grey = s.unread == 0 && s.readable > 0
+                                val held = androidx.compose.runtime.remember { intArrayOf(shownN) }
+                                if (shownN > 0) held[0] = shownN
+                                com.fariin.app.ui.components.Appear(shownN > 0, resize = false) {
                                     Row {
                                         Spacer(Modifier.width(6.dp))
                                         Box(Modifier.defaultMinSize(minWidth = 18.dp, minHeight = 18.dp).clip(CircleShape)
-                                            .background(c.accent).padding(horizontal = 5.dp), contentAlignment = Alignment.Center) {
+                                            .background(if (grey) c.secondary else c.accent).padding(horizontal = 5.dp), contentAlignment = Alignment.Center) {
                                             com.fariin.app.ui.components.RollingNumber(minOf(held[0], 100)) { n ->
                                                 Text(if (n > 99) "99+" else "$n", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.onAccent)
                                             }

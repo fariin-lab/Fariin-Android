@@ -209,10 +209,13 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         unreadAtOpen = unreadAtOpen,
         dividerAt = dividerAt.value,
         requestBar = requestBar,
+        knock = conv != null && !conv.isGroup && channel == null &&
+            com.fariin.app.data.Requests.stance(conv, me) == com.fariin.app.data.Requests.Stance.FIRST_MESSAGE,
         channel = channel,
         channelWaiting = channel == null && com.fariin.app.ui.channels.ChannelGuestPreviews.waiting(cid, me, channelDoc),
         pinnedIds = com.fariin.app.data.PinRules.pinnedIds(s.conv),
         pinned = pinnedMsgs,
+        clearedAtMs = conv?.clearedAt?.get(me) ?: 0.0,
         canPin = com.fariin.app.data.PinRules.canPin(s.conv, me, conv?.isGroup == true),   // channels too: their owner and admins pin (iOS adminCan pinMessages)
         disappearSeconds = (s.conv["disappearSeconds"] as? Number)?.toInt() ?: conv?.disappearSeconds ?: 0,
         groupDoc = if (conv?.isGroup == true && channel == null) s.conv else emptyMap(),
