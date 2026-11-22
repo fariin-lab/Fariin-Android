@@ -61,7 +61,10 @@ private fun ArticleCard(lp: Message.LinkPreview, isMe: Boolean) {
     val nav = com.fariin.app.ui.people.LocalPeopleNav.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val linkTap = LocalBubbleLinkTap.current
-    ArticleShape(lp.title, lp.desc, StickerGifRules.cardHost(lp.url), isMe,
+    // A profile link whose account was gone at send time says so (iOS profileUnavailable).
+    val gone = lp.title == "Unavailable" && lp.desc.isEmpty() &&
+        com.fariin.app.data.LinkPreviews.profileHandle(lp.url) != null
+    ArticleShape(lp.title, if (gone) "This account is no longer available" else lp.desc, StickerGifRules.cardHost(lp.url), isMe,
         onClick = {
             // The card opens exactly as its link does in the text (owner 2026-11-06: a channel's card
             // fariin.com/vee went to the website's "page not found" in the phone's browser): names,
