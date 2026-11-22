@@ -810,7 +810,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             person?.links?.let { ProfileLinkChips(it, Modifier.padding(horizontal = 16.dp).padding(bottom = 12.dp)) }
             if (uid != me) com.fariin.app.data.ContactNames.note(uid)?.let { NotesCard(it) }
             // Fariin Plus: Gift Fariin Plus, its own card (never my own page or a blocked person's).
-            if (uid != me && !blocked && com.fariin.app.data.PlusStore.giftsShown) SettingsSection {
+            if (uid != me && !blocked && cid.contains("_") && uid.isNotEmpty() && com.fariin.app.data.PlusStore.giftsShown) SettingsSection {
                 SettingsRow("Gift Fariin Plus", icon = androidx.compose.ui.res.painterResource(R.drawable.ic_gift),
                     titleColor = com.fariin.app.ui.settings.PlusBlue, trailing = Trailing.NONE, last = true) { giftOpen = true }
             }
@@ -863,7 +863,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     com.fariin.app.ui.components.GlassMenu(moreOpen, moreAnchor, buildList {
         if (shareProfile != null) add(com.fariin.app.ui.components.GlassMenuItem("Share Profile",
             androidx.compose.ui.res.painterResource(R.drawable.ic_link_share)) { shareProfile() })
-        if (uid != me && !blocked && com.fariin.app.data.PlusStore.giftsShown) add(com.fariin.app.ui.components.GlassMenuItem("Gift Fariin Plus",
+        if (uid != me && !blocked && cid.contains("_") && uid.isNotEmpty() && com.fariin.app.data.PlusStore.giftsShown) add(com.fariin.app.ui.components.GlassMenuItem("Gift Fariin Plus",
             androidx.compose.ui.res.painterResource(R.drawable.ic_gift)) { giftOpen = true })
         if (addToGroup != null) add(com.fariin.app.ui.components.GlassMenuItem("Add to a Group",
             androidx.compose.ui.res.painterResource(R.drawable.ic_add_member)) { addToGroup() })
