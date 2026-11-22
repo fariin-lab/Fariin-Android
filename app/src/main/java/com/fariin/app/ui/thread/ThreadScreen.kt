@@ -1021,6 +1021,7 @@ private fun ThreadContent(
     // later from the effect below, the header, pinned bar and composer swapped out a frame after the
     // chat showed, inside the info page's fade, and the list moved under them (owner 2026-11-08).
     val search = remember(ui.cid) { InChatSearchState().also { if (InChatSearchLink.requests.value == ui.cid) it.open() } }
+    search.clearedAtMs = ui.clearedAtMs
     val searchFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     fun goToMatch() {

@@ -2407,6 +2407,10 @@ class ThreadRepository(
         kotlinx.coroutines.withContext(Dispatchers.Default) { readCorpus(limit) }.also { ChatSearch.seen["$me/$cid"] = it }
     } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { emptyList() }
 
+    /** My Clear Chat mark for this chat, from the chat's own document (0 when never cleared). */
+    private fun clearedAtForMe(): Double =
+        Conversation.millis((_state.value.conv["clearedAt"] as? Map<*, *>)?.get(me))
+
     /** The corpus this account last read for this chat, this run of the app (iOS loading audit). */
     fun seenCorpus(): List<ChatSearch.Item>? = ChatSearch.seen["$me/$cid"]
 
@@ -2415,9 +2419,12 @@ class ThreadRepository(
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .limit(limit.toLong())
             .get().await()
+        // Clear Chat (iOS loadChat): what the chat no longer shows, its search does not find.
+        val clearedMs = maxOf(clearedAtForMe(), CryptoHub.listedConversation(cid)?.clearedAt?.get(me) ?: 0.0)
         return snap.documents.mapNotNull { d ->
             val m = Message.fromFirestore(d.id, d.data ?: emptyMap(), cid) { raw, author -> crypto.decrypt(raw, cid, author) }
             when {
+                clearedMs > 0 && m.createdAtMillis <= clearedMs -> null
                 HiddenMessages.isHidden(m.id) -> null
                 m.authorId != me && BlockList.hides(m.authorId, m.createdAtMillis) -> null
                 m.text == Message.NOT_ENCRYPTED -> null

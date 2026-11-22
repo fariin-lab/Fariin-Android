@@ -110,6 +110,8 @@ internal class InChatSearchState {
     var index by mutableIntStateOf(0)
     var asList by mutableStateOf(false)
     var corpus: List<ChatSearch.Item> = emptyList()
+    /** My Clear Chat mark (ms); the screen keeps it current. */
+    var clearedAtMs = 0.0
     private var lastQuery: String? = null
     var jumpSeq = 0
 
@@ -130,7 +132,8 @@ internal class InChatSearchState {
         if (q.length < ChatSearch.MIN_QUERY) { matches = emptyList(); lastQuery = null; return false }
         if (!force && q == lastQuery) return false
         lastQuery = q
-        val live = window.mapNotNull { m -> ChatSearch.searchText(m)?.let { ChatSearch.Item(m.id, it, m.authorId, m.createdAtMillis) } }
+        // Clear Chat: a message from before my clear is not found (iOS loadChat).
+        val live = window.filter { clearedAtMs <= 0 || it.createdAtMillis > clearedAtMs }.mapNotNull { m -> ChatSearch.searchText(m)?.let { ChatSearch.Item(m.id, it, m.authorId, m.createdAtMillis) } }
         val found = ChatSearch.run(q, corpus, live)
         val old = matches
         index = ChatSearch.keepIndex(old, index, found, sameMessage = !navigate)
