@@ -42,6 +42,8 @@ object AccountReport {
         fmt: (Long) -> String,
         /** My profile links, "title: url" under ACCOUNT (iOS DataExport). */
         links: List<com.fariin.app.data.ProfileLink> = emptyList(),
+        /** Glowers and Glowing from my user document; null while Glow is hidden (iOS DataExport). */
+        glow: Pair<Int, Int>? = null,
     ): String = buildString {
         append("Fariin, account information\n")
         append("Created ${fmt(now)}\n\n")
@@ -75,7 +77,12 @@ object AccountReport {
         if (blocked.isEmpty()) append("  None\n")
         for (b in blocked) append("  ${blockedLine(b)}\n")
         append("\nACTIVITY\n")
-        append("Chats: $chats\n\n")
+        append("Chats: $chats\n")
+        if (glow != null) {
+            append("Glowers: ${glow.first}\n")
+            append("Glowing: ${glow.second}\n")
+        }
+        append("\n")
         append("Messages are not in this file. One-to-one messages are end-to-end encrypted and only ")
         append("your phones can read them. To save a conversation, open the chat, tap the name at the top, ")
         append("and choose Export Chat.\n")
@@ -121,6 +128,8 @@ object AccountReport {
             System.currentTimeMillis(), uid, profile.name, profile.handle, profile.about, user.email, joined, profile.photoUrl != null,
             user.providerData.map { it.providerId }.filter { it != "firebase" }, Presence.privacyOf(me), devices, blocked,
             CryptoHub.listedAll().count { !it.isCleared(uid) }, fmt = { df.format(Date(it)) }, links = profile.links,
+            glow = if (com.fariin.app.data.AppFeatures.glow)
+                ((me["glowerCount"] as? Number)?.toInt() ?: 0) to ((me["glowingCount"] as? Number)?.toInt() ?: 0) else null,
         )
         // A file, as iOS DataExport (Fariin-Account-Information.txt): shared as text, picking a chat in the
         // sheet sent the whole account summary as a message. In the app's cache, shared read-only.
