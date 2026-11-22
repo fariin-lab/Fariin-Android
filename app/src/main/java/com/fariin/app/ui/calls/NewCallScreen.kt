@@ -197,7 +197,8 @@ fun NewCallScreen(me: String, chats: List<Conversation>, onBack: () -> Unit, onC
     ) { top ->
         LazyColumn(Modifier.fillMaxSize().navigationBarsPadding(), state = list,
             contentPadding = androidx.compose.foundation.layout.PaddingValues(top = top)) {
-            if (q.isBlank()) {
+            // The admin panel's Call Links switch (iOS CallFeatures.callLinks).
+            if (q.isBlank() && com.fariin.app.data.AppFeatures.callLinks) {
                 item(key = "link") {
                     // On a floating rounded card, as the chat list's Archived row.
                     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
@@ -228,7 +229,7 @@ fun NewCallScreen(me: String, chats: List<Conversation>, onBack: () -> Unit, onC
             if (shownPeople.isEmpty() && shownGroups.isEmpty()) {
                 item(key = "empty") {
                     if (q.isBlank()) com.fariin.app.ui.components.IllustratedEmpty(com.fariin.app.ui.components.LineArt.Phone,
-                        "No one to call yet", "People you chat with will appear here.")
+                        "No contacts", "Start a chat first, then you can call them.")
                     // Worded and placed as the other searches (chat list, Calls, Settings).
                     else androidx.compose.foundation.layout.Column(Modifier.fillMaxWidth().padding(top = 120.dp, start = 32.dp, end = 32.dp),
                         horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
