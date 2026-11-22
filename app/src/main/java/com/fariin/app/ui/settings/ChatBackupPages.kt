@@ -325,7 +325,7 @@ fun ChatBackupGate(me: String) {
                 when (val a = Drive.authorize(ctx)) {
                     is Drive.Auth.Token -> search(a.value)
                     is Drive.Auth.Ask -> google.launch(IntentSenderRequest.Builder(a.intent).build())
-                    Drive.Auth.Failed -> note = "Couldn't reach your Google Drive. Check your connection and try again."
+                    Drive.Auth.Failed -> { note = "Couldn't reach your Google Drive. Check your connection and try again." }
                 }
             } }) { Text("Continue", color = c.accent) } },
             dismissButton = { TextButton({ note = null; db.setMeta(me, "restore.checked", "skipped"); ChatBackup.markAnswered(me); step = "card" }) { Text("Not Now", color = c.accent) } },
