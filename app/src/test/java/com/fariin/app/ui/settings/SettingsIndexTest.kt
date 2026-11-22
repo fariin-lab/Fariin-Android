@@ -93,6 +93,11 @@ class SettingsIndexTest {
         assertTrue(SettingsIndex.entries.none { it.title == "Clear Media" })
     }
 
+    @Test fun disappearingIsARowNotAListedPage() {
+        assertTrue(SettingsIndex.matching("").none { it.title == "Disappearing Messages" })
+        assertEquals(PAGE_DISAPPEAR_DEFAULT, SettingsIndex.matching("disappearing").first().page)
+    }
+
     @Test fun idsAreUnique() {
         val ids = SettingsIndex.entries.map { it.id }
         assertEquals(ids.size, ids.toSet().size)

@@ -166,7 +166,8 @@ internal object SettingsIndex {
         page("Blocked Users", pr, "blocked block users blocklist unblock", PAGE_BLOCKED)
         row("Block User", pr + "Blocked Users", "block user person add blocked", PAGE_BLOCKED)
         row("Always Relay Calls", pr, "always relay calls ip address hide server", PAGE_PRIVACY)
-        page("Disappearing Messages", pr, "disappearing messages timer auto delete default", PAGE_DISAPPEAR_DEFAULT)
+        // A row on iOS (its timer opens over Privacy), so not listed with the pages; here it opens the timer page.
+        row("Disappearing Messages", pr, "disappearing messages timer auto delete default", PAGE_DISAPPEAR_DEFAULT)
         if (com.fariin.app.crypto.KeyBackup.ENABLED) page("Backup PIN", pr, "backup pin restore messages reinstall new phone key", PAGE_KEY_BACKUP)
         page("App Lock", pr, "app lock fingerprint face unlock passcode pin lock", PAGE_APP_LOCK)
         // iOS "Require Face ID": the page's first switch, by its Android name.
