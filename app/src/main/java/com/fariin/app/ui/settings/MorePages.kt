@@ -568,7 +568,7 @@ private fun ChatsSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
             while (!hasChats) { kotlinx.coroutines.delay(1000); hasChats = com.fariin.app.data.CryptoHub.listedAll().isNotEmpty() }
         }
         val canClear = !clearing && hasChats
-        SettingsSection(footer = "Deletes every message, photo, video and call from all your devices. It cannot be undone.") {
+        SettingsSection(footer = "Deletes every message, photo, video and call in your chats from all your devices. Channels you follow and the Fariin chat are kept. It cannot be undone.") {
             SettingsRow("Clear Chat History", trailing = Trailing.NONE,
                 titleColor = if (canClear) Fariin.colors.red else Fariin.colors.red.copy(alpha = 0.4f), last = true,
                 badge = NewBadgeSpots.CHATS_CLEAR_HISTORY) { if (canClear) confirmClear = true }
