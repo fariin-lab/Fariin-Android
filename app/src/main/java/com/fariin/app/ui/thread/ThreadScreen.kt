@@ -3927,7 +3927,7 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ThreadRow(
             // "X asked to turn off Restricted chat": answered here by the one it was
             // asked of, while it is still open (iOS restrictRequestTarget).
             m.isSystem && m.isRestrictRequest && m.authorId != ui.me -> Box(Modifier.fillMaxWidth().clickable(enabled = !selecting) { env.restrictTap() }) { NoticePill(youNotice(m, ui)) }
-            m.isSystem || m.isCall -> NoticePill(if (ch != null) com.fariin.app.channel.ChannelRules.words(noticeText(m)) else youNotice(m, ui))
+            m.isSystem || m.isCall -> NoticePill(if (ch != null) com.fariin.app.channel.ChannelRules.words(youNotice(m, ui)) else youNotice(m, ui))
             // Ticking posts uses the select rows below, as in any chat (iOS: Select in a channel too).
             ch != null && !selecting -> androidx.compose.runtime.CompositionLocalProvider(
                 com.fariin.app.ui.channels.LocalPostViews provides
