@@ -203,10 +203,9 @@ private fun ChatResetButton(cid: String, shared: Boolean) {
     com.fariin.app.ui.components.FloatingTextAction("Reset") {
         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
         resetChatBubble(ctx, cid)
-        if (canWall) {
-            if (shared) com.fariin.app.data.GroupWallpaper.publish(ctx, cid, ChatWallpaper.None) { groupWallpaperFailed(ctx, it) }
-            else ChatLookStore.setWallpaper(ctx, cid, ChatWallpaper.None)
-        }
+        if (shared) { if (canWall) com.fariin.app.data.GroupWallpaper.publish(ctx, cid, ChatWallpaper.None) { groupWallpaperFailed(ctx, it) } }
+        // As iOS resetChat: plain here even when the chat only followed the Settings wallpaper.
+        else if (ChatLookStore.wallpaper(ctx, cid) != ChatWallpaper.None) ChatLookStore.setWallpaper(ctx, cid, ChatWallpaper.None)
     }
 }
 
