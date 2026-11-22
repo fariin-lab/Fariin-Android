@@ -50,9 +50,10 @@ object LinkPreviews {
     @Volatile private var app: Context? = null
     fun init(context: Context) { app = context.applicationContext }
 
-    /** Settings > Chats > Link Previews. Default on, as iOS. */
-    fun enabled(): Boolean = AppConfig.bool(AppConfig.K.linkPreviews) &&   // the admin panel's switch first
-        (app?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.getBoolean(PREF_KEY, true) ?: true)
+    /** Settings > Chats > Link Previews. Default on, as iOS. The admin panel's switch is not here:
+     *  as iOS it stops only the web page read ([fetchPage]), not our own group, profile or video cards. */
+    fun enabled(): Boolean =
+        app?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.getBoolean(PREF_KEY, true) ?: true
 
     /** A composer draft: everything the card needs, still plaintext, still on this phone. */
     class Draft(
@@ -472,6 +473,8 @@ object LinkPreviews {
 
     /** Only as far as </head> (or 300 KB): every tag read here lives there. */
     private fun fetchPage(url: String): Draft? {
+        // The admin panel's switch (iOS fetch): off = no page read, the link goes plain.
+        if (!AppConfig.bool(AppConfig.K.linkPreviews)) return null
         val c = open(url, "text/html,application/xhtml+xml") ?: return null
         try {
             if (c.responseCode != 200 || !(c.contentType ?: "").contains("html")) return null
