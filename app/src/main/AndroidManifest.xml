@@ -28,6 +28,8 @@
          system's own consent dialog (group calls use LiveKit's capture service, same permission). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+    <!-- A voice note playing on with the screen off (media/VoiceSession.kt). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <!-- The proximity sensor turns the screen off at the ear during a voice call. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -441,6 +443,16 @@
             android:resizeableActivity="true"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:theme="@style/Theme.Fariin" />
+        <!-- Voice note controls on the lock screen, the shade and headsets. Not exported: only the
+             system (through the platform session) and the app itself control it. -->
+        <service
+            android:name=".media.VoiceMediaService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
         <service
             android:name=".location.LiveShareService"
             android:exported="false"

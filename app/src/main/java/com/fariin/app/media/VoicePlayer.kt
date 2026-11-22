@@ -144,6 +144,7 @@ object VoicePlayer {
         resumeAfterCall = false
         save()
         VoiceEar.stop()
+        VoiceSession.close()   // the lock screen lets go before its player does
         player?.release(); player = null
         ticker?.cancel()
         _state.value = _state.value.copy(id = null, playing = false, positionMs = 0, cid = null, pausedByUser = false)
@@ -167,12 +168,37 @@ object VoicePlayer {
         if (p.isPlaying) p.pause() else if (callActive()) return else { if (p.playbackState == Player.STATE_ENDED) p.seekTo(0); p.play() }
     }
 
+    /**
+     * Play or pause from the lock screen, the shade or a headset (iOS remote commands: resume() and
+     * pause(), which is by the user). A call still blocks play, and the person's choice wins over a
+     * call ending, as on the bubble.
+     */
+    internal fun remotePlay() {
+        val p = player ?: return
+        resumeAfterCall = false
+        if (p.isPlaying || callActive()) return
+        if (p.playbackState == Player.STATE_ENDED) p.seekTo(0)
+        p.play()
+        _state.value = _state.value.copy(pausedByUser = false)
+    }
+
+    internal fun remotePause() {
+        val p = player ?: return
+        resumeAfterCall = false
+        if (!p.isPlaying) return
+        p.pause()
+        _state.value = _state.value.copy(pausedByUser = true)
+    }
+
+    /** The run is over and nothing else started: the lock screen controls go now, not after the wait. */
+    private fun runOver() { if (_state.value.id == null) VoiceSession.close() }
+
     /** The run's next voice note (VoiceRun), fetched and played as a tap on it would; heard, so marked played. */
     private suspend fun playNext(context: Context, cid: String, after: String) {
         // The run is over (or the next note cannot be had): raise-to-ear lets go of the audio.
-        val n = VoiceRun.nextAfter(cid, after) ?: run { if (_state.value.id == null) VoiceEar.stop(); return }
-        val url = n.localPath ?: n.audioUrl ?: run { VoiceEar.stop(); return }
-        val f = VoiceRun.media?.file(url, n.enc) ?: run { if (_state.value.id == null) VoiceEar.stop(); return }
+        val n = VoiceRun.nextAfter(cid, after) ?: run { if (_state.value.id == null) VoiceEar.stop(); runOver(); return }
+        val url = n.localPath ?: n.audioUrl ?: run { VoiceEar.stop(); runOver(); return }
+        val f = VoiceRun.media?.file(url, n.enc) ?: run { if (_state.value.id == null) VoiceEar.stop(); runOver(); return }
         if (_state.value.id != null) return   // something else started meanwhile
         toggle(context, n.rowId, cid, f, n.authorId, n.id, n.createdAtMillis)
     }
@@ -180,14 +206,17 @@ object VoicePlayer {
     private fun start(context: Context, id: String, cid: String, file: File, author: String,
                       messageId: String?, createdAtMs: Double) {
         save()
-        player?.release()
+        // The old note's player goes once the lock screen session has moved to the new one.
+        val old = player
+        player = null
         this.cid = cid
         val p = ExoPlayer.Builder(context.applicationContext).build()
         p.setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
             .setContentType(C.AUDIO_CONTENT_TYPE_SPEECH).build(), true)
         // iOS: headphones out must not put a private note on the speaker; it pauses instead.
         p.setHandleAudioBecomingNoisy(true)
-        p.setMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
+        p.setMediaItem(MediaItem.Builder().setUri(Uri.fromFile(file))
+            .setMediaMetadata(VoiceSession.metadata(context, cid, author)).build())
         p.playbackParameters = PlaybackParameters(rate(cid))
         p.addListener(object : Player.Listener {
             var heard = false
@@ -212,7 +241,8 @@ object VoicePlayer {
                         paused = _state.value.paused - id)
                     ticker?.cancel()
                     // Released just after this callback returns, not from inside it.
-                    if (player === p) { player = null; main.launch { p.release() } }
+                    // The lock screen session keeps it a moment, for the run's next note (VoiceSession.retire).
+                    if (player === p) { player = null; main.launch { VoiceSession.retire(p) } }
                     // iOS followOn: the next note sent straight after this one plays by itself.
                     main.launch { playNext(context.applicationContext, cid, id) }
                 } else tick()
@@ -225,6 +255,8 @@ object VoicePlayer {
         _state.value.paused[id]?.let { p.seekTo(it) }
         p.play()
         player = p
+        VoiceSession.attach(context, p)
+        old?.release()
         VoiceEar.watch(context) { player }   // raise to ear, as iOS
         watchCalls()
         _state.value = _state.value.copy(id = id, playing = true, failed = _state.value.failed - id, cid = cid, author = author,

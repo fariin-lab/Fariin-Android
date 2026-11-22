@@ -175,6 +175,8 @@ dependencies {
     // Voice notes, videos and the full-screen video player (Media3, the Android media stack).
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
+    // Voice notes on the lock screen, in the notification shade and on headset buttons (media/VoiceSession.kt).
+    implementation(libs.media3.session)
     // Chat video send: 540p H.264 like iOS VideoTranscoder (media worker).
     implementation("androidx.media3:media3-transformer:1.8.0")
     // Fariin Plus subscriptions (Google Play Billing; shown only while the server opens purchases).
