@@ -61,6 +61,25 @@ class ForwardRulesTest {
         assertNull(ForwardRules.refusal(d, conv(d), me, listOf(msg("text")), nowMs = now))
     }
 
+    @Test fun locationOff() {
+        val d = doc("memberSend" to mapOf("location" to false))
+        val place = Message(id = "l", authorId = "x", createdAtMillis = 0.0, type = "text",
+            text = CardRules.locationText(2.04, 45.34, "Market"))
+        assertEquals("Location is off in Team.", ForwardRules.refusal(d, conv(d), me, listOf(place), nowMs = now))
+        assertNull(ForwardRules.refusal(doc(), conv(doc()), me, listOf(place), nowMs = now))
+    }
+
+    @Test fun linkOff() {
+        val d = doc("memberSend" to mapOf("links" to false))
+        val link = Message(id = "k", authorId = "x", createdAtMillis = 0.0, type = "text", text = "see https://fariin.com/help")
+        assertEquals("Links are off in Team.", ForwardRules.refusal(d, conv(d), me, listOf(link), nowMs = now))
+        val plain = Message(id = "t", authorId = "x", createdAtMillis = 0.0, type = "text", text = "see you soon")
+        assertNull(ForwardRules.refusal(d, conv(d), me, listOf(plain), nowMs = now))
+        // A photo whose caption has a link is still a photo, as iOS.
+        val photo = Message(id = "i", authorId = "x", createdAtMillis = 0.0, type = "image", text = "https://fariin.com")
+        assertNull(ForwardRules.refusal(d, conv(d), me, listOf(photo), nowMs = now))
+    }
+
     @Test fun noteInSlowGroup() {
         val d = doc("slowMode" to 30)
         assertEquals("Slow mode is on in Team. Send without a comment, or send the comment later.",

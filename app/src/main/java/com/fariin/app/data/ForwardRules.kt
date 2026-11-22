@@ -46,8 +46,19 @@ object ForwardRules {
     fun docOf(cid: String, me: String): Map<String, Any?>? =
         ThreadSeed.conv(cid) ?: runCatching { com.fariin.app.local.LocalCache.peekChats(me)?.firstOrNull { it.first == cid }?.second }.getOrNull()
 
-    /** iOS ForwardPicker.sendKind. A poll is a text message, so it is told by its marker. */
-    fun kindOf(m: Message): GroupAdmins.SendKind? = if (m.poll != null) GroupAdmins.SendKind.POLLS else when (m.type) {
+    /** iOS ForwardPicker.sendKind. A poll, a shared place and a link are all text messages,
+     *  so they are told by the words: the poll marker, the location marker, then any link. */
+    fun kindOf(m: Message): GroupAdmins.SendKind? = when {
+        m.poll != null -> GroupAdmins.SendKind.POLLS
+        isText(m) && CardRules.location(m.text) != null -> GroupAdmins.SendKind.LOCATION
+        isText(m) && GroupAdmins.hasLink(m.text) -> GroupAdmins.SendKind.LINKS
+        else -> kindOfType(m)
+    }
+
+    /** A plain text row: an older one may have no type at all. A photo's caption link stays a photo. */
+    private fun isText(m: Message) = m.type == null || m.type == "text"
+
+    private fun kindOfType(m: Message): GroupAdmins.SendKind? = when (m.type) {
         "sticker" -> GroupAdmins.SendKind.STICKERS
         "gif" -> GroupAdmins.SendKind.GIFS
         "video" -> GroupAdmins.SendKind.VIDEOS
