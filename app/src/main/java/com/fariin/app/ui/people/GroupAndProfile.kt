@@ -444,6 +444,10 @@ fun UsernameScreen(api: PeopleApi, current: String, onBack: () -> Unit) {
         SettingsSection { Row(verticalAlignment = Alignment.CenterVertically) {
             Text("@", fontSize = 17.sp, color = c.secondary, modifier = Modifier.padding(start = 16.dp))
             Box(Modifier.weight(1f)) { Field(draft, "Username", enabled = !blocked) { draft = Usernames.sanitize(it) } }
+            // iOS: how many letters are left, shown only once 9 or fewer remain; red at 0.
+            val remaining = (Usernames.MAX - draft.length).coerceAtLeast(0)
+            if (remaining <= 9) Text("$remaining", fontSize = 15.sp, color = if (remaining == 0) c.red else c.secondary,
+                modifier = Modifier.padding(end = 16.dp))
         } }
         // Hoarding still lets a given-up name be taken back (the server frees its slot first).
         val back = lock?.takeIf { it.reason == "hoarding" }?.takeBack.orEmpty()
