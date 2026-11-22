@@ -160,6 +160,13 @@ internal fun SubscriptionsPage(pop: () -> Unit, push: (String) -> Unit = {}) {
 @Composable
 private fun PlusPageBody(shown: List<PlusFeature>, plan: String, onPlan: (String) -> Unit, onOpen: (String) -> Unit) {
     PlusHeader()
+    // The billing line (bought, restored, refused) outlives the plans, which go once Plus is on.
+    val c = Fariin.colors
+    val billing = com.fariin.app.data.PlusBilling
+    billing.notice?.let { n ->
+        com.fariin.app.ui.components.GlassAlert(onDismissRequest = { billing.notice = null }, title = { Text("Fariin Plus") }, text = { Text(n) },
+            confirmButton = { androidx.compose.material3.TextButton({ billing.notice = null }) { Text("OK", color = c.accent) } }, containerColor = c.card)
+    }
     // A purchase or restore takes the plans away and brings Manage Subscription: they fold and open
     // with a fade instead of the page rearranging in one frame (iOS pops 81).
     com.fariin.app.ui.components.Appear(plusSelling()) { Column { PlusPlansSection(plan, onPlan) } }
@@ -519,10 +526,6 @@ private fun PlusPlansSection(plan: String, onPlan: (String) -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val billing = com.fariin.app.data.PlusBilling
     LaunchedEffect(PlusStore.purchasesOn) { if (PlusStore.purchasesOn && !billing.loaded) billing.loadPlans(ctx) }
-    billing.notice?.let { n ->
-        com.fariin.app.ui.components.GlassAlert(onDismissRequest = { billing.notice = null }, title = { Text("Fariin Plus") }, text = { Text(n) },
-            confirmButton = { androidx.compose.material3.TextButton({ billing.notice = null }) { Text("OK", color = c.accent) } }, containerColor = c.card)
-    }
     val plans = billing.plans
     val picked = plans.firstOrNull { it.basePlanId == plan } ?: plans.firstOrNull()
     SettingsSection(header = "Choose a plan") {
