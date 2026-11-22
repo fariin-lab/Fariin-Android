@@ -262,6 +262,19 @@ fun CallScreen(
                 .border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape)
                 .semantics { contentDescription = ui.peerName })
         }
+        // No answer (owner 2026-11-22, iOS 61435b6f8): the name and the reason sit under the centred
+        // photo, 22 under its edge; the bottom half starts at the screen's middle, the photo's centre.
+        val noAnswerPage = s.phase == CallPhase.ENDED && ui.noAnswer
+        if (noAnswerPage) Column(Modifier.fillMaxSize()) {
+            Spacer(Modifier.weight(1f))
+            Column(Modifier.weight(1f).fillMaxWidth().padding(top = 90.dp + 22.dp, start = 24.dp, end = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                FitOneLine(ui.peerName, 30f, Color.White, FontWeight.Bold)
+                Spacer(Modifier.height(4.dp))
+                Text(CallMachine.endedWords(s), color = Color.White.copy(alpha = 0.85f), fontSize = 18.sp, maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            }
+        }
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             // iOS statusText: hold is said only while active; Ringing and Reconnecting keep their words.
             val status = if (ui.held && s.phase == CallPhase.ACTIVE) "On hold" else CallMachine.label(s, now)
@@ -285,11 +298,11 @@ fun CallScreen(
             Spacer(Modifier.weight(1f))
             when (s.phase) {
                 CallPhase.INCOMING -> IncomingButtons(s.video, onAccept, onDecline)
-                CallPhase.ENDED -> if (ui.noAnswer) NoAnswerSheet(ui, s, onCallAgain, onVoiceMessage, onMessage, onSwitchKind, onCloseNoAnswer)
+                CallPhase.ENDED -> if (ui.noAnswer) NoAnswerButtons(s, onCallAgain, onVoiceMessage, onCloseNoAnswer)
                     else Spacer(Modifier.height(BarHeight))
                 else -> ControlBar(ui, chrome, onEnd, onMute, onRoute, onCamera, onShare, Modifier.alpha(shown))
             }
-            Spacer(Modifier.navigationBarsPadding().height(22.dp))
+            Spacer(Modifier.navigationBarsPadding().height(if (noAnswerPage) 34.dp else 22.dp))
         }
         // Controls away: the first tap anywhere only brings them back (hidden buttons take no taps).
         if (!chrome.visible) Box(Modifier.fillMaxSize().plainTap { chrome.touch() }.semantics { contentDescription = "Show call controls" })
@@ -683,66 +696,49 @@ private fun LabeledCircle(icon: ImageVector, label: String, color: Color, onClic
 }
 
 /**
- * iOS noAnswerBar, design "B · Sheet" (owner 2026-11-09, picked from four; the green-button card was
- * "the ugliest design"): a sheet at the bottom with who (photo, name), why ("No answer", "Couldn't
- * connect"...), an X, then plain rows: Call again / Try again (white, the main one), Record voice
- * message, Send a message, and the other kind of call. One surface; the rows are plain with a press
- * tint, nothing glass inside it.
+ * The No answer page's buttons (owner 2026-11-22, his reference screenshot; iOS 61435b6f8): one row
+ * of three equal columns. Cancel (white circle, black X) closes the page; Voice message (dark circle,
+ * mic) opens the chat with the recorder; Call again (green, the call's own kind) rings them again,
+ * "Try again" after a failed connect. Each is a 72 circle with its label 10 under it.
  */
 @Composable
-private fun NoAnswerSheet(
-    ui: CallUi, s: com.fariin.app.call.CallStatus,
-    onCallAgain: () -> Unit, onVoiceMessage: () -> Unit, onMessage: () -> Unit, onSwitchKind: () -> Unit, onClose: () -> Unit,
+private fun NoAnswerButtons(
+    s: com.fariin.app.call.CallStatus, onCallAgain: () -> Unit, onVoiceMessage: () -> Unit, onClose: () -> Unit,
 ) {
     val failed = s.endReason == com.fariin.app.call.EndReason.FAILED
-    Column(
-        Modifier.padding(horizontal = 8.dp).fillMaxWidth().clip(RoundedCornerShape(34.dp))
-            .background(Color(0xD91C1612)).border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(34.dp))
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Row(Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Avatar(ui.peerPhoto, 48.dp)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(ui.peerName, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                Text("${CallMachine.endedWords(s)} · ${if (s.video) "video call" else "voice call"}",
-                    color = Color.White.copy(alpha = 0.65f), fontSize = 13.sp, maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-            }
-            Spacer(Modifier.width(8.dp))
-            Box(Modifier.size(34.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.14f)).pressTint(CircleShape, onClose)
-                .semantics { contentDescription = "Close" }, contentAlignment = Alignment.Center) {
-                Icon(ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_xmark), null, tint = Color.White, modifier = Modifier.size(14.dp))
-            }
-        }
-        NoAnswerRow(if (s.video) com.fariin.app.R.drawable.ic_call_video else com.fariin.app.R.drawable.ic_call_voice,
-            if (failed) "Try again" else "Call again", primary = true, onClick = onCallAgain)
-        NoAnswerRow(com.fariin.app.R.drawable.ic_mic, "Record voice message", onClick = onVoiceMessage)
-        NoAnswerRow(com.fariin.app.R.drawable.ic_chat, "Send a message", onClick = onMessage)
-        NoAnswerRow(if (s.video) com.fariin.app.R.drawable.ic_call_voice else com.fariin.app.R.drawable.ic_call_video,
-            if (s.video) "Voice call instead" else "Video call instead", onClick = onSwitchKind)
+    Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalAlignment = Alignment.Top) {
+        NoAnswerButton(com.fariin.app.R.drawable.ic_sf_xmark, "Cancel", Color.White, Color.Black, onClose, Modifier.weight(1f))
+        NoAnswerButton(com.fariin.app.R.drawable.ic_mic, "Voice message", Color(0xFF1C1C1C), Color.White, onVoiceMessage, Modifier.weight(1f))
+        NoAnswerButton(if (s.video) com.fariin.app.R.drawable.ic_call_video else com.fariin.app.R.drawable.ic_call_voice,
+            if (failed) "Try again" else "Call again", Color(0xFF30A840), Color.White, onCallAgain, Modifier.weight(1f))
     }
 }
 
-/** One sheet row: the icon in a small rounded square, then the words. The main one is white. */
+/** One column: a 72 circle with a 26 icon, the label 10 under it. Pressed: a little dimmer and 0.98. */
 @Composable
-private fun NoAnswerRow(icon: Int, label: String, primary: Boolean = false, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(18.dp)
-    Row(
-        Modifier.fillMaxWidth().height(54.dp).clip(shape).background(if (primary) Color.White else Color.Transparent)
-            .pressTint(shape, onClick).semantics { contentDescription = label }.padding(horizontal = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
-            .background(if (primary) Color.Black else Color.White.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
-            Icon(ImageVector.cachedVector(icon), null, tint = Color.White, modifier = Modifier.size(17.dp))
+private fun NoAnswerButton(icon: Int, label: String, fill: Color, ink: Color, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val source = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    Column(modifier.clickable(interactionSource = source, indication = null, onClick = onClick)
+        .semantics(mergeDescendants = true) { contentDescription = label }
+        .graphicsLayer { val k = if (pressed) 0.98f else 1f; scaleX = k; scaleY = k; alpha = if (pressed) 0.8f else 1f },
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(72.dp).clip(CircleShape).background(fill), contentAlignment = Alignment.Center) {
+            Icon(ImageVector.cachedVector(icon), null, tint = ink, modifier = Modifier.size(26.dp))
         }
-        Spacer(Modifier.width(14.dp))
-        Text(label, color = if (primary) Color.Black else Color.White, fontSize = 16.sp,
-            fontWeight = if (primary) FontWeight.SemiBold else FontWeight.Medium)
+        Spacer(Modifier.height(10.dp))
+        Text(label, color = Color.White, fontSize = 15.sp, maxLines = 2,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
+}
+
+/** One line that shrinks (2 sp a step, down to 16) until it fits, as iOS minimumScaleFactor. */
+@Composable
+private fun FitOneLine(text: String, startSp: Float, color: Color, weight: FontWeight) {
+    var size by remember(text) { mutableStateOf(startSp) }
+    Text(text, color = color, fontSize = size.sp, fontWeight = weight, maxLines = 1, softWrap = false,
+        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        onTextLayout = { if (it.hasVisualOverflow && size > 16f) size -= 2f })
 }
 
 /** A soft white tint while pressed, cleared on lift (no ripple, no glass). */
