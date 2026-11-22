@@ -244,7 +244,7 @@ private fun EditorPage(cid: String, shots: List<ScreenshotRules.Shot>, is24h: Bo
                         fontSize = 15.sp, modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 50.dp))
                     rows.forEachIndexed { i, s ->
                         androidx.compose.runtime.key(s.id) {
-                            ShotRow(s, places[i], cid = cid, cover = edits.cover(s.id), dark = dark, mine = mine, is24h = is24h,
+                            ShotRow(s, places[i], cid = cid, cover = edits.cover(s.id), quote = ScreenshotRules.quoteText(s, edits), dark = dark, mine = mine, is24h = is24h,
                                 onRemove = {
                                     edits = edits.remove(s.id); undoFor = s.id
                                     if (active == s.id) active = null
@@ -378,7 +378,7 @@ private fun RoundButton(icon: Int, label: String, modifier: Modifier = Modifier,
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ShotRow(
-    s: ScreenshotRules.Shot, place: ScreenshotRules.Place, cid: String, cover: ScreenshotRules.Cover, dark: Boolean, mine: Color, is24h: Boolean,
+    s: ScreenshotRules.Shot, place: ScreenshotRules.Place, cid: String, cover: ScreenshotRules.Cover, quote: String?, dark: Boolean, mine: Color, is24h: Boolean,
     onRemove: () -> Unit, onLong: () -> Unit, onTextTap: (Int) -> Unit, onBubbleTap: () -> Unit,
     onBubbleSize: (Int) -> Unit, onDaySize: (Int) -> Unit, modifier: Modifier = Modifier,
 ) {
@@ -440,7 +440,7 @@ private fun ShotRow(
                             Box(Modifier.width(3.dp).height(36.dp).background(if (s.isMe) Color.White else senderColor(s.authorId)))
                             Column(Modifier.padding(horizontal = 8.dp, vertical = 2.dp)) {
                                 Text(s.replyName, color = text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                                Text(s.replyText.orEmpty(), color = text.copy(alpha = 0.8f), fontSize = 13.sp, maxLines = 1)
+                                Text(quote.orEmpty(), color = text.copy(alpha = 0.8f), fontSize = 13.sp, maxLines = 1)
                             }
                         }
                     }

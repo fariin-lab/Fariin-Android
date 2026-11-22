@@ -154,4 +154,21 @@ class ScreenshotRulesTest {
         assertTrue(e.isHidden("1"))
         assertTrue(e.toggleHidden("1").cover("1").isEmpty)
     }
+
+    @Test fun hiddenWordsNeverShowThroughAQuote() {
+        val a = msg("a", text = "my secret plan")
+        val b = msg("b", author = "me", text = "ok").copy(replyTo = Message.ReplyRef("a", "them", "my secret plan"))
+        val shots = ScreenshotRules.snapshot(listOf(a, b), setOf("a", "b"), "me", isGroup = false, receipts = Receipts(),
+            name = { "Ana" }, day = { "Today" })
+        val reply = shots[1]
+        assertEquals("a", reply.replyId)
+        assertEquals("my secret plan", ScreenshotRules.quoteText(reply, ScreenshotRules.Edits()))
+        val words = ScreenshotRules.Edits().tapWord("a", "my secret plan", 4)
+        val drawn = ScreenshotRules.quoteText(reply, words)!!
+        assertFalse(drawn.contains("secret"))
+        assertFalse(drawn.contains("plan"))
+        val whole = ScreenshotRules.quoteText(reply, ScreenshotRules.Edits().toggleHidden("a"))!!
+        assertFalse(whole.contains("secret"))
+        assertNull(ScreenshotRules.quoteText(shots[0], ScreenshotRules.Edits()))
+    }
 }

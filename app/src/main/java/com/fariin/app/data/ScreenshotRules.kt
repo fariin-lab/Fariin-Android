@@ -50,6 +50,8 @@ object ScreenshotRules {
         val replyText: String?,
         val edited: Boolean,
         val forwarded: Boolean,
+        /** The row id of the message it quotes (null = no reply), so hiding that row also hides the quote. */
+        val replyId: String? = null,
     )
 
     /**
@@ -131,6 +133,7 @@ object ScreenshotRules {
             replyName = m.replyTo?.let { name(it.authorId) },
             replyText = m.replyTo?.let { it.text.ifEmpty { "Message" } },
             edited = m.edited, forwarded = m.forwarded,
+            replyId = m.replyTo?.let { r -> messages.firstOrNull { it.id == r.id || it.clientId == r.id }?.rowId ?: r.id },
         )
     }
 
@@ -189,6 +192,16 @@ object ScreenshotRules {
             if (!text[i].isWhitespace()) out.setCharAt(i, '•')
         }
         return out.toString()
+    }
+
+    /**
+     * A reply's quote as the picture draws it: dots when anything in the quoted row is hidden, so
+     * the hidden words never show through the quote of a later message.
+     */
+    fun quoteText(s: Shot, edits: Edits): String? {
+        val t = s.replyText ?: return null
+        val quoted = s.replyId ?: return t
+        return if (edits.cover(quoted).isEmpty) t else coverText(t)
     }
 
     /** The editor's changes, kept apart from the copy. [removed] newest last, so Undo brings back the last one. */
