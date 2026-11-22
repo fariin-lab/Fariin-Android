@@ -48,18 +48,19 @@ object MessageRules {
 
     /** ThreadView.canDeleteForEveryone. [adminMayDelete]: I hold the group "Delete messages" right. */
     fun canDeleteForEveryone(m: Message, me: String, adminMayDelete: Boolean = false, authorIsOwner: Boolean = false,
-                             iAmOwner: Boolean = false): Boolean {
+                             iAmOwner: Boolean = false, channel: Boolean = false): Boolean {
         if (m.sendState != null || m.deleted || m.isCall) return false
-        // Past the window only a group or channel admin holding the delete right still may (iOS).
-        if (m.authorId == me) return adminMayDelete || ownDeleteOpen(m)
+        // Past the window only a group admin holding the delete right still may; a channel has
+        // no window for my own post (iOS ownDeleteForEveryoneOpen).
+        if (m.authorId == me) return adminMayDelete || channel || ownDeleteOpen(m)
         if (!adminMayDelete) return false
         return iAmOwner || !authorIsOwner
     }
 
     /** The same, with the chat's owner uid ("" = none): an admin never deletes the owner's message. */
-    fun canDeleteForEveryone(m: Message, me: String, adminMayDelete: Boolean, owner: String): Boolean =
+    fun canDeleteForEveryone(m: Message, me: String, adminMayDelete: Boolean, owner: String, channel: Boolean = false): Boolean =
         canDeleteForEveryone(m, me, adminMayDelete, authorIsOwner = owner.isNotEmpty() && m.authorId == owner,
-            iAmOwner = owner.isNotEmpty() && owner == me)
+            iAmOwner = owner.isNotEmpty() && owner == me, channel = channel)
 
     /** My own message is still inside the Delete for Everyone window. */
     fun ownDeleteOpen(m: Message, now: Double = System.currentTimeMillis().toDouble()): Boolean {

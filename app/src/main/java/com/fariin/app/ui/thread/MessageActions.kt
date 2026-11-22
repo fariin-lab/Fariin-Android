@@ -362,7 +362,8 @@ internal fun DeleteDialog(m: Message, ui: ThreadUi, actions: ThreadActions,
         AdminDeleteSheet(listOf(m), ui, actions, onDismiss)
         return
     }
-    val everyone = MessageRules.canDeleteForEveryone(m, ui.me, ui.adminMayDelete, ui.ownerId)
+    val everyone = MessageRules.canDeleteForEveryone(m, ui.me, ui.adminMayDelete, ui.ownerId,
+        channel = ui.channel != null || ui.groupDoc["channel"] == true)
     // A channel post (iOS GlassConfirmDoor): one question about the post, Delete and Cancel.
     // groupDoc is empty in a channel, so the channel itself is the test.
     if ((ui.channel != null || ui.groupDoc["channel"] == true) && everyone) {

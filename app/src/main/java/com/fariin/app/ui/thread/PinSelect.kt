@@ -391,11 +391,11 @@ private fun RowScope.SelectAction(title: String, icon: androidx.compose.ui.graph
 @Composable
 internal fun BulkDeleteDialog(picked: List<Message>, ui: ThreadUi, onDismiss: () -> Unit, onPlan: (SelectRules.Plan) -> Unit) {
     val c = Fariin.colors
-    val split = SelectRules.split(picked, ui.me, ui.adminMayDelete, ui.ownerId)
+    val split = SelectRules.split(picked, ui.me, ui.adminMayDelete, ui.ownerId, ui.channel != null)
     val hasMine = split.everyone > 0
     fun go(everyone: Boolean) {
         onDismiss()
-        onPlan(SelectRules.plan(picked, everyone, ui.me, ui.isGroup, ui.adminMayDelete, ui.ownerId))
+        onPlan(SelectRules.plan(picked, everyone, ui.me, ui.isGroup, ui.adminMayDelete, ui.ownerId, ui.channel != null))
     }
     val n = picked.size
     // A channel says "post" (iOS). When every pick may go for everyone, one question: Delete and

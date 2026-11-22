@@ -1547,7 +1547,7 @@ private fun ThreadContent(
                 }, onList = { search.asList = it })
             } else if (kind == 1) {
                 val canDelete = picked.isNotEmpty() && (!ui.isGroup ||
-                    picked.any { it.sendState != null || MessageRules.canDeleteForEveryone(it, ui.me, ui.adminMayDelete, ui.ownerId) })
+                    picked.any { it.sendState != null || MessageRules.canDeleteForEveryone(it, ui.me, ui.adminMayDelete, ui.ownerId, channel = ui.channel != null) })
                 SelectionBar(
                     deleteEnabled = canDelete,
                     forwardEnabled = !restrictedNow && com.fariin.app.data.SelectRules.forwardable(picked),
