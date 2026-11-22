@@ -124,7 +124,7 @@ private fun autoplay(): Boolean {
 
 /** A Coil request that animates GIF and WebP (Android 9+ decodes both; older phones GIF only). */
 @Composable
-private fun animatedRequest(model: Any?, play: Boolean, plays: Int = 0): ImageRequest {
+internal fun animatedRequest(model: Any?, play: Boolean, plays: Int = 0): ImageRequest {
     val ctx = LocalContext.current
     return remember(model, play, plays) {
         ImageRequest.Builder(ctx).data(model).apply {
@@ -320,6 +320,8 @@ private fun GifFullScreen(url: String?, onClose: () -> Unit) {
  */
 @Composable
 internal fun StickerPanel(me: String, onSticker: (StickerRef) -> Unit, onGif: (StickerGifRules.Gif) -> Unit,
+    /** A held GIF's "Add Caption": the chat opens its caption screen (iOS GifCaptionDoor). */
+    onGifCaption: ((StickerGifRules.Gif) -> Unit)? = null,
     /** The keyboard's height, so the field does not move when the panel and the keys swap (ThreadScreen PanelSlot). */
     height: androidx.compose.ui.unit.Dp = 320.dp) {
     val ctx = LocalContext.current
@@ -345,7 +347,7 @@ internal fun StickerPanel(me: String, onSticker: (StickerRef) -> Unit, onGif: (S
     Box(Modifier.fillMaxWidth().height(height).clip(panelShape)
         .background(MaterialTheme.colorScheme.surfaceContainerLow)
         .border(1.dp, Color.White.copy(alpha = if (c.dark) 0.12f else 0.7f), panelShape)) {
-        if (gifs) GifTab(me, onGif, hide = hide, onScrolledIn = { barsHidden = it })
+        if (gifs) GifTab(me, onGif, hide = hide, onScrolledIn = { barsHidden = it }, onCaption = onGifCaption)
         else StickerTab(me, onSticker, hide = hide, onScrolledIn = { barsHidden = it })
         // The bar's raw height: navigationBarsPadding reads 0 in here (the page above already took the
         // inset), which left GIFs | Stickers under a three-button bar (Oppo, 2026-11-18).
@@ -370,7 +372,8 @@ internal fun StickerPanel(me: String, onSticker: (StickerRef) -> Unit, onGif: (S
             }
         }
     }
-    if (searchOpen) GifSearchSheet(me, onDismiss = { searchOpen = false }) { g -> searchOpen = false; sendGif(g) }
+    if (searchOpen) GifSearchSheet(me, onDismiss = { searchOpen = false },
+        onCaption = onGifCaption?.let { cb -> { g: StickerGifRules.Gif -> searchOpen = false; cb(g) } }) { g -> searchOpen = false; sendGif(g) }
 }
 
 private const val TOP_BAND = 48
@@ -508,6 +511,8 @@ internal fun GifTab(
     onGif: (StickerGifRules.Gif) -> Unit,
     hide: () -> Float = { 0f },
     onScrolledIn: (Boolean) -> Unit = {},
+    /** A held GIF's "Add Caption" (iOS 2026-11-21); null = no such row. */
+    onCaption: ((StickerGifRules.Gif) -> Unit)? = null,
 ) {
     val barsUp by remember(hide) { androidx.compose.runtime.derivedStateOf { hide() < 0.5f } }
     val ctx = LocalContext.current
@@ -542,11 +547,11 @@ internal fun GifTab(
         // Another shelf (Recent, Favorites, Trending, a mood): its GIFs fade in (iOS pops 100).
         Box(Modifier.fillMaxSize().gridTopClip(hide).fadeOnChange(category)) {
         when (category) {
-            GifCategory.FAVORITES -> GifGrid(local, pad, me = me, onRecentTab = false, onGif = send, state = grid,
+            GifCategory.FAVORITES -> GifGrid(local, pad, me = me, onRecentTab = false, onGif = send, onCaption = onCaption, state = grid,
                 emptyTitle = "No favourites yet", emptyText = "Hold a GIF and choose Add to Favourites.")
-            GifCategory.RECENT -> GifGrid(local, pad, me = me, onRecentTab = true, onGif = send, state = grid,
+            GifCategory.RECENT -> GifGrid(local, pad, me = me, onRecentTab = true, onGif = send, onCaption = onCaption, state = grid,
                 emptyTitle = "No recent GIFs", emptyText = "GIFs you send will appear here.")
-            else -> GifGrid(fetched, pad, me = me, onGif = send, state = grid)
+            else -> GifGrid(fetched, pad, me = me, onGif = send, onCaption = onCaption, state = grid)
         }
         }
         // The mood row on top, centred, on the panel itself (iOS PanelGifGrid): 28 cells 8 apart, the
@@ -575,14 +580,14 @@ internal fun gridWebp(url: String): String {
 
 /**
  * GifPickerView's masonry: two columns, each GIF at its own aspect, 6 apart, corners 8. A long
- * press offers Add to / Remove from Favourites, and Remove from Recent on the Recent tab only.
+ * press offers Add Caption (when the host has the caption screen), Add to / Remove from Favourites, and Remove from Recent on the Recent tab only.
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, query: String = "", me: String,
                     onRecentTab: Boolean = false, emptyTitle: String? = null, emptyText: String? = null,
                     state: androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState? = null,
-                    onGif: (StickerGifRules.Gif) -> Unit) {
+                    onGif: (StickerGifRules.Gif) -> Unit, onCaption: ((StickerGifRules.Gif) -> Unit)? = null) {
     val c = Fariin.colors
     val ctx = LocalContext.current
     if (list != null && list.isEmpty()) {
@@ -640,6 +645,11 @@ private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, qu
                         .combinedClickable(onLongClick = { menu = true }) { onGif(g) })
                 }
                 com.fariin.app.ui.components.GlassDropdown(expanded = menu, onDismissRequest = { menu = false }) {
+                    // iOS order: Add Caption first (after Send, which a tap already is), then Favorites.
+                    if (onCaption != null) androidx.compose.material3.DropdownMenuItem(
+                        text = { Text("Add Caption") },
+                        leadingIcon = { Icon(ImageVector.cachedVector(R.drawable.ic_sf_text_below_photo), null) },
+                        onClick = { menu = false; onCaption(g) })
                     val favourite = remember(changes, g.url) { GifFavorites.contains(ctx, me, g.url) }
                     androidx.compose.material3.DropdownMenuItem(
                         text = { Text(if (favourite) "Remove from Favourites" else "Add to Favourites") },
@@ -668,7 +678,8 @@ private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, qu
  * slides over its lower GIFs, as the reference app's does. Nearly the whole screen tall.
  */
 @Composable
-internal fun GifSearchSheet(me: String, onDismiss: () -> Unit, onPick: (StickerGifRules.Gif) -> Unit) {
+internal fun GifSearchSheet(me: String, onDismiss: () -> Unit, onCaption: ((StickerGifRules.Gif) -> Unit)? = null,
+                            onPick: (StickerGifRules.Gif) -> Unit) {
     val ctx = LocalContext.current
     val c = Fariin.colors
     var query by remember { mutableStateOf("") }
@@ -739,7 +750,8 @@ internal fun GifSearchSheet(me: String, onDismiss: () -> Unit, onPick: (StickerG
                     }
                 }
                 Spacer(Modifier.height(6.dp))
-                Box(Modifier.weight(1f)) { GifGrid(results, PaddingValues(6.dp), query, me = me, onGif = { g -> close { onPick(g) } }) }
+                Box(Modifier.weight(1f)) { GifGrid(results, PaddingValues(6.dp), query, me = me, onGif = { g -> close { onPick(g) } },
+                    onCaption = onCaption?.let { cb -> { g: StickerGifRules.Gif -> close { cb(g) } } }) }
                 Text("Powered by GIPHY", fontSize = 11.sp, color = c.secondary,
                     modifier = Modifier.align(Alignment.CenterHorizontally).navigationBarsPadding().padding(vertical = 6.dp))
             }

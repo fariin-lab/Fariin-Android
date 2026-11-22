@@ -130,6 +130,8 @@ internal fun AttachSheet(
     cameraFirst: Boolean = false,
     /** The GIF tile (iOS attach bar): a GIPHY pick, sent like the sticker panel's. Null hides it. */
     onGif: ((com.fariin.app.data.StickerGifRules.Gif) -> Unit)? = null,
+    /** A held GIF's "Add Caption": the sheet closes and the chat opens its caption screen. */
+    onGifCaption: ((com.fariin.app.data.StickerGifRules.Gif) -> Unit)? = null,
 ) {
     val c = Fariin.colors
     val context = LocalContext.current
@@ -322,7 +324,8 @@ internal fun AttachSheet(
                     onSend = { u -> RecentFiles.record(context, u); onSendFile(u); motion.close() },
                     onSendPhotos = { l -> onSendFiles(l); motion.close() })
             } else if (page == SheetPage.GIFS && onGif != null) {
-                Box(Modifier.fillMaxSize().padding(bottom = 84.dp + navBottomDp)) { GifTab(onGif = { g -> onGif(g); motion.close() }) }
+                Box(Modifier.fillMaxSize().padding(bottom = 84.dp + navBottomDp)) { GifTab(onGif = { g -> onGif(g); motion.close() },
+                    onCaption = onGifCaption?.let { cb -> { g: com.fariin.app.data.StickerGifRules.Gif -> motion.close(); cb(g) } }) }
             } else if (page == SheetPage.ALBUMS) {
                 // The 10 dp sits INSIDE the scroll: as an outer padding it cut the scrolled rows flat
                 // 10 dp under the sheet's rounded top and left a band there (owner screenshot,

@@ -1781,6 +1781,8 @@ private fun ThreadContent(
                 var locationOpen by remember { mutableStateOf(false) }
                 var liveOpen by remember { mutableStateOf(false) }
                 var contactOpen by remember { mutableStateOf(false) }
+                // A held GIF's "Add Caption" (iOS GifCaptionDoor): the GIF the caption screen is open on.
+                var gifCaption by remember { mutableStateOf<com.fariin.app.data.StickerGifRules.Gif?>(null) }
                 // What a group's members may send (iOS heldBackText / attachMediaOffText / slow mode):
                 // said in a snackbar before the send, the rules refuse it anyway.
                 val resolver = androidx.compose.ui.platform.LocalContext.current.contentResolver
@@ -1875,9 +1877,10 @@ private fun ThreadContent(
                         if (stop != null) actions.onNotice(stop) else pollOpen = true
                     }) else null,
                     // Contact and location cards (CardSheets): sealed text markers, sent like a text.
+                    onGifCaption = { g -> gifCaption = g },
                     onGif = { gif ->
                         val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.GIFS)
-                        if (stop != null) actions.onNotice(stop) else { sendMotion.arm(SendMotion.Kind.MEDIA, ui.messages, sendAnim); val r = replyTo; replyTo = null; actions.onSendGif(gif, r) }
+                        if (stop != null) actions.onNotice(stop) else { sendMotion.arm(SendMotion.Kind.MEDIA, ui.messages, sendAnim); val r = replyTo; replyTo = null; actions.onSendGif(gif, r, "") }
                     },
                     onLocation = {
                         val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.LOCATION)
@@ -1885,6 +1888,19 @@ private fun ThreadContent(
                     })
                 // No Contact tile: iOS took it off the attach sheet ("No phone numbers anywhere", 46d10cb2).
                 // Received cards still draw and open; the picker below waits for a Share-from-profile entry.
+                // ONE GIF message with the words in its `text` (iOS openGifCaption): the same gates as a
+                // tapped GIF (edit, knock, slow mode, no GIFs), asked when Send is pressed.
+                gifCaption?.let { g ->
+                    GifCaptionScreen(g, onClose = { gifCaption = null }) { caption ->
+                        gifCaption = null
+                        val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.GIFS)
+                        if (stop != null) actions.onNotice(stop)
+                        else {
+                            com.fariin.app.data.GifRecents.note(hookCtx, ui.me, g)
+                            sendMotion.arm(SendMotion.Kind.MEDIA, ui.messages, sendAnim); val r = replyTo; replyTo = null; actions.onSendGif(g, r, caption)
+                        }
+                    }
+                }
                 if (pollOpen) PollComposer(onDismiss = { pollOpen = false }, upload = actions.onPollImage, isChannel = ui.channel != null) { marker -> onSend(marker) }
                 if (locationOpen) LocationPicker(onDismiss = { locationOpen = false },
                     onShareLive = if (ui.channel == null) ({ locationOpen = false; liveOpen = true }) else null) { lat, lon, label ->
@@ -1954,9 +1970,10 @@ private fun ThreadContent(
                         val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.STICKERS)
                         if (stop != null) actions.onNotice(stop) else { sendMotion.arm(SendMotion.Kind.MEDIA, ui.messages, sendAnim); val r = replyTo; replyTo = null; actions.onSendSticker(s, r) }
                     },
+                    onGifCaption = { g -> gifCaption = g },
                     onGif = steady1 { gif: com.fariin.app.data.StickerGifRules.Gif ->
                         val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.GIFS)
-                        if (stop != null) actions.onNotice(stop) else { sendMotion.arm(SendMotion.Kind.MEDIA, ui.messages, sendAnim); val r = replyTo; replyTo = null; actions.onSendGif(gif, r) }
+                        if (stop != null) actions.onNotice(stop) else { sendMotion.arm(SendMotion.Kind.MEDIA, ui.messages, sendAnim); val r = replyTo; replyTo = null; actions.onSendGif(gif, r, "") }
                     },
                     // iOS mentionPicker: groups only (MentionPicker.kt).
                     // Kept while the members are the same: a new one on every pass (the class holds lists)
@@ -3152,6 +3169,8 @@ private fun Composer(
     refill: Pair<Long, String>? = null, onRefilled: () -> Unit = {},
     me: String = "", onSticker: (com.fariin.app.data.StickerRef) -> Unit = {},
     onGif: (com.fariin.app.data.StickerGifRules.Gif) -> Unit = {},
+    /** A held GIF's "Add Caption" in the panel: the chat opens its caption screen. */
+    onGifCaption: ((com.fariin.app.data.StickerGifRules.Gif) -> Unit)? = null,
     mentions: MentionSource? = null,
     /** The field / record bar row's place on screen, where a send flies from (SendMotion.kt). */
     onRowPlaced: (androidx.compose.ui.geometry.Rect?) -> Unit = {},
@@ -3747,7 +3766,7 @@ private fun Composer(
         // the larger of the two. Switching, one shrinks as the other grows, so the field stays where
         // it is; only closing the panel outright (Back) slides the field down.
         PanelSlot(open = emojiOpen && !recording, toKeys = panelToKeys, onKeysUp = { panelToKeys = false }) { h ->
-            StickerPanel(me, onSticker = onSticker, onGif = onGif, height = h)
+            StickerPanel(me, onSticker = onSticker, onGif = onGif, onGifCaption = onGifCaption, height = h)
         }
     }
 }
