@@ -307,7 +307,7 @@ internal fun SharedMediaScreen(cid: String, state: SharedMediaState, onBack: () 
                         items(state.lists.voice, key = { it.id }) { m -> VoiceRow(cid, m) }
                     }
                     SharedMedia.Tab.LINKS -> Rows(top, state.loaded, state.lists.links.isEmpty(), SharedMedia.Tab.LINKS, ImageVector.cachedVector(com.fariin.app.R.drawable.ic_link_copy)) {
-                        items(state.lists.links, key = { it.first.id }) { (m, link) -> LinkRow(m, link) }
+                        items(state.lists.links, key = { it.first.id }) { (m, link) -> LinkRow(cid, m, link) }
                     }
                 }
             }
@@ -388,15 +388,32 @@ private fun VoiceRow(cid: String, m: Message) {
     HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 72.dp))
 }
 
-/** The host as the title, the message under it, the address in blue; a tap opens the browser. */
+/**
+ * The host as the title, the message under it, the address in blue; a tap opens the browser.
+ * A long press: Go to Message and Open Link (iOS linkRow).
+ */
 @Composable
-private fun LinkRow(m: Message, link: SharedMedia.Link) {
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private fun LinkRow(cid: String, m: Message, link: SharedMedia.Link) {
     val c = Fariin.colors
     val ctx = LocalContext.current
-    Column(Modifier.fillMaxWidth().clickable {
+    val nav = LocalPeopleNav.current
+    var menu by remember { mutableStateOf(false) }
+    val open = {
         try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link.url))) }
         catch (_: ActivityNotFoundException) { com.fariin.app.ui.components.Snack.show("No app on this phone opens this link.") }
-    }.padding(horizontal = 16.dp, vertical = 10.dp)) {
+    }
+    Column(Modifier.fillMaxWidth().combinedClickable(onClick = { open() }, onLongClick = { menu = true })
+        .padding(horizontal = 16.dp, vertical = 10.dp)) {
+        if (menu) GlassDropdown(true, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
+            border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
+            DropdownMenuItem(text = { Text("Go to Message", color = c.label) }, onClick = {
+                menu = false
+                com.fariin.app.data.QuoteStore.pendingJump.value = com.fariin.app.data.QuoteStore.Jump(cid, m.id)
+                nav.chat(cid)
+            })
+            DropdownMenuItem(text = { Text("Open Link", color = c.label) }, onClick = { menu = false; open() })
+        }
         Text(link.host, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = c.label, maxLines = 1)
         Text(m.text, style = MaterialTheme.typography.bodyMedium, color = c.secondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Text(link.url, style = MaterialTheme.typography.bodySmall, color = c.accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
