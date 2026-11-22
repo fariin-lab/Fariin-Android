@@ -700,8 +700,8 @@ internal fun PollComposer(onDismiss: () -> Unit, upload: (suspend (ByteArray) ->
                                             Icon(ImageVector.cachedVector(R.drawable.ic_sf_paperclip), "Add photo", tint = c.secondary, modifier = Modifier.size(22.dp))
                                         }
                                     }
-                                    // Remove only an option that has words, and never below two rows.
-                                    if (opts.size > 2 && o.text.isNotEmpty()) {
+                                    // Remove only an option that has words, while more than two have words (iOS).
+                                    if (o.text.isNotEmpty() && opts.count { it.text.isNotEmpty() } > 2) {
                                         IconButton(onClick = {
                                             setPic(o.id, null); opts.removeAll { it.id == o.id }; tidy()
                                         }, modifier = Modifier.size(36.dp)) {
