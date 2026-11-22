@@ -294,7 +294,10 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
         CallInfoScreen(r, me, onBack = { info = null }, onCall = { video -> dial(r.latest, video) })
         return
     }
-    val hasHistory = calls.isNotEmpty() || allLinks.isNotEmpty() || liveEntry != null
+    // The calls I have not deleted (iOS drops hidden ones from its list): with all of them gone the
+    // page is "No Calls Yet" with no Edit, not "No Missed Calls" under All.
+    val noCalls = remember(calls, hidden) { calls.all { it.id in hidden } }
+    val hasHistory = !noCalls || allLinks.isNotEmpty() || liveEntry != null
     val callUp = liveCall?.let { it.phase != CallPhase.IDLE && it.phase != CallPhase.ENDED } == true
     fun openInfo(run: CallRun) {
         // iOS (owner 2026-10-28): a person's (i) opens their profile, a group call's opens the
@@ -358,7 +361,7 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
                 // iOS CallListSkeleton while the history is read.
                 !loaded -> item(key = "skeleton") { Box(Modifier.animateItem(fadeInSpec = com.fariin.app.ui.components.Smooth.fadeSpec(), placementSpec = com.fariin.app.ui.components.Smooth.soft(), fadeOutSpec = com.fariin.app.ui.components.Smooth.fadeSpec())) { com.fariin.app.ui.components.CallListSkeleton() }}
                 // A failed read is never drawn as an empty history.
-                calls.isEmpty() && allLinks.isEmpty() && live.isEmpty() && liveEntry == null && error != null -> item(key = "error") {
+                noCalls && allLinks.isEmpty() && live.isEmpty() && liveEntry == null && error != null -> item(key = "error") {
                     com.fariin.app.ui.components.CenteredNotice("Couldn't load calls", error, "Retry", onRetry,
                         Modifier.fillMaxWidth().padding(top = 96.dp))
                 }
@@ -425,7 +428,7 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
                     // The empty states sit under the create row, so it is there before the first call.
                     when {
                         rows.isNotEmpty() || live.isNotEmpty() -> {}
-                        calls.isEmpty() && allLinks.isEmpty() && liveEntry == null && q.isEmpty() -> item(key = "empty") {
+                        noCalls && allLinks.isEmpty() && liveEntry == null && q.isEmpty() -> item(key = "empty") {
                             // One next step: the same New Call page as the bar's button.
                             com.fariin.app.ui.components.IllustratedEmpty(com.fariin.app.ui.components.LineArt.Phone,
                                 "No Calls Yet", "Your call history will appear here.", Modifier.fillMaxWidth().padding(top = 48.dp),
