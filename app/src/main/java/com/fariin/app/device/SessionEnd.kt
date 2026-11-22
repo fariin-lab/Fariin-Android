@@ -202,6 +202,8 @@ object SessionEnd {
             // iOS SessionWipe keeps only the chat list; the opened messages (decrypted text) always go.
             com.fariin.app.local.LocalCache.wipeThreads()
         }
+        // Each chat's newest stored line, in memory by chat id: never the next account's preview.
+        com.fariin.app.local.LocalDb.forgetSummaries()
         com.fariin.app.local.Drafts.clear()
         com.fariin.app.local.SendQueue.wipe()
         com.fariin.app.crypto.SafetyKeyLog.wipe()   // the next account starts its own key record (iOS)

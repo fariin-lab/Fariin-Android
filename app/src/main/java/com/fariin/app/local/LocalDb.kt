@@ -270,6 +270,9 @@ object LocalDb {
     /** The newest text this phone has for [cid] and its time, or null. Never touches the disk. */
     fun summary(cid: String): Pair<String, Long>? = summaries[cid]
 
+    /** Sign-out: the lines are keyed by chat only, so the next account must not read them. */
+    fun forgetSummaries() = summaries.clear()
+
     /** Reads every chat's summary into memory once (off the main thread, at start). */
     fun warmSummaries(uid: String) {
         io.launch {
