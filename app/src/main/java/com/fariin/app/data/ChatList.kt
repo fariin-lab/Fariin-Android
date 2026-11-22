@@ -37,11 +37,18 @@ object ChatList {
         return c.lastSender.isNotEmpty() && c.lastSender != me
     }
 
+    /** iOS rawStance == .incoming: a stranger spoke first and I have not answered, whatever my setting. */
+    private fun rawIncoming(c: Conversation, me: String): Boolean =
+        !c.isGroup && c.startedBy.isNotEmpty() && !c.accepted && c.lastSender.isNotEmpty() && c.lastSender != me
+
     /** [keep]: chats with a draft (or a live call) that stay listed with nothing said yet (iOS). */
     fun visible(all: List<Conversation>, me: String, keep: Set<String> = emptySet()): List<Conversation> =
         all.asSequence()
             .filter { !it.isCleared(me) && !it.isArchived(me) }
             .filter { !isIncomingRequest(it, me) }
+            // With requests off a stranger's chat lists here, but not one I blocked: nothing of
+            // theirs shows until I answer or unblock (iOS, owner 2026-10-18).
+            .filter { !(rawIncoming(it, me) && it.isBlockedByMe(me)) }
             // A 1:1 chat merely opened, with nothing ever said, stays out until something real
             // happens: a message either way, an unread, a pin, a draft or a call. Groups always list.
             .filter { it.isGroup || it.lastMessageCipher.isNotEmpty() || it.hasUnreadMark(me) || it.isPinned(me) || it.id in keep }
