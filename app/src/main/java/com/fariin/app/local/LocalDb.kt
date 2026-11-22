@@ -298,7 +298,11 @@ object LocalDb {
                 summaries[cid] = text to c.getLong(3)
                 v.put("body", org.json.JSONObject().put("text", text).put("type", c.getString(5) ?: "text")
                     .put("authorId", c.getString(4) ?: "").put("deleted", deleted).put("readAt", readAt ?: org.json.JSONObject.NULL).toString())
-            } else { v.putNull("last_id"); v.putNull("last_at"); summaries.remove(cid) }
+            } else {
+                // No message left: the old line's words go too (only my read mark stays).
+                v.putNull("last_id"); v.putNull("last_at"); summaries.remove(cid)
+                v.put("body", org.json.JSONObject().put("readAt", readAt ?: org.json.JSONObject.NULL).toString())
+            }
             if (db.update("chats", v, "cid = ?", arrayOf(cid)) == 0) { v.put("cid", cid); db.insert("chats", null, v) }
         }
     }
@@ -367,7 +371,16 @@ object LocalDb {
     /** Disappearing messages leave the file when they leave the screen. */
     fun purgeExpired(uid: String) {
         io.launch {
-            db(uid)?.let { runCatching { it.delete("messages", "expires_at IS NOT NULL AND expires_at <= ?", arrayOf(System.currentTimeMillis().toString())) } }
+            db(uid)?.let { d -> runCatching {
+                val now = arrayOf(System.currentTimeMillis().toString())
+                // The chats losing a message get their list row worked out again (iOS), so the
+                // gone message's words do not stay in the chats row or in memory.
+                val touched = d.rawQuery("SELECT DISTINCT cid FROM messages WHERE expires_at IS NOT NULL AND expires_at <= ?", now)
+                    .use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
+                if (touched.isEmpty()) return@runCatching
+                d.delete("messages", "expires_at IS NOT NULL AND expires_at <= ?", now)
+                for (cid in touched) refreshSummary(d, cid)
+            } }
         }
     }
 
