@@ -70,6 +70,16 @@ class StoryRulesTest {
         assertEquals(setOf("a") to "only", StoryRules.resolveAudience(me, convs, StoryAudienceChoice.CUSTOM, setOf("a", "b", "zz")))
     }
 
+    @Test fun trayHidesUnansweredRequestsBothWays() {
+        val now = 1_000_000_000L
+        fun s(id: String, who: String) = Story(id, who, now - 1000, now + 60_000, "u")
+        val theirs = dm("x", request = true)
+        val mine = dm("y").copy(startedBy = me, accepted = false, lastSender = me)
+        val st = StoryList.build(me, listOf(s("1", "x"), s("2", "y"), s("3", "a")), listOf(theirs, mine, dm("a")),
+            emptyMap(), watermarks = emptyMap(), myName = "Me", myPhoto = null, nowMs = now)
+        assertEquals(listOf("a"), st.others.map { it.key })
+    }
+
     @Test fun payloadHasTheIosFields() {
         val p = StoryRules.payload(me, false, "S1", "hi", StoryAudienceChoice.MY_CHATS, "all", setOf("a"), "EXP", "NOW", "blur")
         assertEquals("image", p["type"])
