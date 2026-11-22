@@ -180,85 +180,105 @@ object SessionEnd {
      * moment a DIFFERENT account signs in ([claimKept]), and right away on deletion or revocation.
      */
     private fun wipe(c: Context, keepFor: String? = null) {
-        com.fariin.app.data.ActivityFeed.clearPin(c)
-        NotifStore.clearAccount(c)
-        NotificationPoster.clearAll(c)
-        com.fariin.app.system.FariinWidget.clear(c)
-        com.fariin.app.data.LastSeenLine.clear(c)
-        com.fariin.app.local.PhotoOutbox.wipe(c)
+        for (s in wipeSteps) s.run(c, keepFor)
+    }
+
+    /** One named store [wipe] clears: [run] gets the phone and the account kept for a return (or null). */
+    internal class WipeStep(val name: String, val run: (Context, String?) -> Unit)
+
+    /**
+     * EVERY PER-ACCOUNT STORE ON THIS PHONE GOES HERE. A new store that holds anything of the signed-in
+     * account (messages, names, lists, choices, files) gets its own step, and its name goes into
+     * SessionEndWipeTest too, or the next account on this phone can see it. Order is the run order.
+     * The server steps (calls, presence, device record, push token) run before Auth in [signOutSteps].
+     */
+    internal val wipeSteps: List<WipeStep> = listOf(
+        WipeStep("activity pin") { c, _ -> com.fariin.app.data.ActivityFeed.clearPin(c) },
+        WipeStep("notification store") { c, _ -> NotifStore.clearAccount(c) },
+        // Posted notifications, the app badge and the chat shortcuts (NotificationPoster.clearAll).
+        WipeStep("notifications, badge, shortcuts") { c, _ -> NotificationPoster.clearAll(c) },
+        WipeStep("widget") { c, _ -> com.fariin.app.system.FariinWidget.clear(c) },
+        WipeStep("last seen lines") { c, _ -> com.fariin.app.data.LastSeenLine.clear(c) },
+        WipeStep("photo outbox") { c, _ -> com.fariin.app.local.PhotoOutbox.wipe(c) },
         // The origin index names files of this account's chats (MediaOrigin): it goes with them.
-        com.fariin.app.media.MediaOrigin.removeAll()
-        com.fariin.app.data.ProfilePhotoIndex.clear()
-        com.fariin.app.data.PlayedVoice.clear(c)   // which voice notes were heard belongs to the account (iOS)
-        Push.clearAccount(c)
+        WipeStep("media origin") { _, _ -> com.fariin.app.media.MediaOrigin.removeAll() },
+        WipeStep("profile photo index") { _, _ -> com.fariin.app.data.ProfilePhotoIndex.clear() },
+        WipeStep("played voice") { c, _ -> com.fariin.app.data.PlayedVoice.clear(c) },   // which voice notes were heard belongs to the account (iOS)
+        WipeStep("push account") { c, _ -> Push.clearAccount(c) },
         // The token outlives the account, so the Fariin chat's topics are left by hand.
-        com.fariin.app.push.OfficialPushTopics.sync(c, muted = false, signedIn = false)
+        WipeStep("official push topics") { c, _ -> com.fariin.app.push.OfficialPushTopics.sync(c, muted = false, signedIn = false) },
         // The phone's copies of this account's chats: opened messages, the list, drafts, unsent
         // texts, opened media and faces. None of it survives into the next account (iOS SessionWipe).
-        val prefs = c.getSharedPreferences(KEPT_PREFS, Context.MODE_PRIVATE)
-        if (keepFor.isNullOrEmpty()) { prefs.edit().remove(KEPT_KEY).apply(); com.fariin.app.local.LocalCache.wipe() }
-        else {
-            prefs.edit().putString(KEPT_KEY, keepFor).apply()   // per account on disk, so nobody else reads it
-            // iOS SessionWipe keeps only the chat list; the opened messages (decrypted text) always go.
-            com.fariin.app.local.LocalCache.wipeThreads()
-        }
+        WipeStep("local cache") { c, keepFor ->
+            val prefs = c.getSharedPreferences(KEPT_PREFS, Context.MODE_PRIVATE)
+            if (keepFor.isNullOrEmpty()) { prefs.edit().remove(KEPT_KEY).apply(); com.fariin.app.local.LocalCache.wipe() }
+            else {
+                prefs.edit().putString(KEPT_KEY, keepFor).apply()   // per account on disk, so nobody else reads it
+                // iOS SessionWipe keeps only the chat list; the opened messages (decrypted text) always go.
+                com.fariin.app.local.LocalCache.wipeThreads()
+            }
+        },
         // Each chat's newest stored line, in memory by chat id: never the next account's preview.
-        com.fariin.app.local.LocalDb.forgetSummaries()
-        com.fariin.app.data.HiddenLast.clear(c)   // the list line kept after a delete for me (opened text)
-        com.fariin.app.local.Drafts.clear()
-        com.fariin.app.media.VoiceDrafts.wipe(c)   // recorded voice notes not sent yet (iOS wipeAllDrafts)
-        com.fariin.app.local.SendQueue.wipe()
-        com.fariin.app.local.Cursors.reset()   // delivery marks sent, by chat id: the next account writes its own
-        com.fariin.app.crypto.SafetyKeyLog.wipe()   // the next account starts its own key record (iOS)
-        com.fariin.app.channel.ChannelService.wipePreviews()   // kept public group pages hold my member/requested state (iOS)
-        com.fariin.app.channel.ExploreCache.wipe(c)   // Explore's kept lists are per account (iOS SessionWipe)
-        com.fariin.app.call.CallLinks.reset()
-        com.fariin.app.data.StickerFavorites.wipe(c)   // the account keeps its backup
-        com.fariin.app.ui.auth.GateMemory.clear(c)   // the next account waits for its checks
-        com.fariin.app.ui.call.LiveGroupCalls.stopAll()   // the live group-call watchers belong to the account
-        com.fariin.app.data.StoryPrivacyStore.stop()   // a return to the same account listens again
-        com.fariin.app.auth.Passkeys.lastList = null   // the next account never sees this one's passkeys
-        if (keepFor.isNullOrEmpty()) com.fariin.app.media.ChatMedia.wipe(c)
-        removeTempCopies(c)
-        try { coil3.SingletonImageLoader.get(c).let { it.diskCache?.clear(); it.memoryCache?.clear() } } catch (_: Exception) {}
-        com.fariin.app.ui.thread.DecodedPictures.clear()   // decoded chat photos held in memory
-        com.fariin.app.data.ChatSearch.seen.clear()        // in-chat search corpora
-        com.fariin.app.data.SharedMediaSource.clear()      // All Media's opened messages
-        com.fariin.app.data.VerifiedPeople.clear(c)   // whose badges this account looked up (iOS VerificationIndex)
-        com.fariin.app.data.ContactNames.clear()       // names I gave people belong to the account
-        com.fariin.app.data.SearchRecents.wipe(c)      // what the account searched for
-        com.fariin.app.data.SendEffects.wipe(c)        // which send effects already played here
-        com.fariin.app.data.AvatarVideoIndex.clear(c)  // who has a moving profile picture, and the clips
-        com.fariin.app.data.SharedWallpapers.wipe(c)   // 1:1 shared wallpapers and this phone's opt-outs
-        com.fariin.app.data.ChatFoldersStore.clear(c)   // every account's chat folders kept on this phone
-        com.fariin.app.data.PlusBilling.clear()          // loaded plans and this run's purchase check
-        com.fariin.app.data.OfficialChannel.wipe(c)    // the official row kept for launch (personal notices too)
-        com.fariin.app.data.OfficialStories.reset(c)
-        com.fariin.app.data.ChannelStories.stop()
-        com.fariin.app.data.ThreadSeed.clear()
-        com.fariin.app.data.ClearCuts.reset()   // this account's Clear Messages cuts, by chat id
-        com.fariin.app.data.FormerGroups.clear()   // groups this account was removed from, by chat id
-        com.fariin.app.data.QuoteStore.reset()   // the quote cards this account was shown
-        com.fariin.app.data.ChatsNow.list = emptyList(); com.fariin.app.data.ChatsNow.all = emptyList()   // the live list restricted-chat checks read
-        com.fariin.app.data.BubbleStyles.wipeChats(c)   // per-chat styles and my all-chats pick (iOS)
-        com.fariin.app.data.StoryLimits.reset()   // the daily story count and badge are per account
-        com.fariin.app.data.ChatKey.lockedUntilMs = 0L   // a chat-key lockout is this account's
-        com.fariin.app.media.VoicePlayer.stop()
-        com.fariin.app.location.LiveShareService.stopAll(c)   // no live location outlives the account on this phone
-        java.io.File(c.filesDir, "story-outbox").deleteRecursively()  // unfinished story posts are this account's  // the next account must not inherit this one's feed
-        com.fariin.app.data.ProfilePhotoHistory.wipe(c)  // my past profile photos
-        com.fariin.app.data.Glow.Cache.clear(c)       // the Glowing grid's last answer, every account's
-        com.fariin.app.data.ChatLookStore.wipe(c)      // wallpapers, chat colours, wallpaper photos
+        WipeStep("message store summaries") { _, _ -> com.fariin.app.local.LocalDb.forgetSummaries() },
+        WipeStep("hidden last line") { c, _ -> com.fariin.app.data.HiddenLast.clear(c) },   // the list line kept after a delete for me (opened text)
+        WipeStep("drafts") { _, _ -> com.fariin.app.local.Drafts.clear() },
+        WipeStep("voice drafts") { c, _ -> com.fariin.app.media.VoiceDrafts.wipe(c) },   // recorded voice notes not sent yet (iOS wipeAllDrafts)
+        WipeStep("send queue") { _, _ -> com.fariin.app.local.SendQueue.wipe() },
+        WipeStep("delivery cursors") { _, _ -> com.fariin.app.local.Cursors.reset() },   // delivery marks sent, by chat id: the next account writes its own
+        WipeStep("safety key log") { _, _ -> com.fariin.app.crypto.SafetyKeyLog.wipe() },   // the next account starts its own key record (iOS)
+        WipeStep("group page previews") { _, _ -> com.fariin.app.channel.ChannelService.wipePreviews() },   // kept public group pages hold my member/requested state (iOS)
+        WipeStep("explore cache") { c, _ -> com.fariin.app.channel.ExploreCache.wipe(c) },   // Explore's kept lists are per account (iOS SessionWipe)
+        WipeStep("call links") { _, _ -> com.fariin.app.call.CallLinks.reset() },
+        WipeStep("sticker favorites") { c, _ -> com.fariin.app.data.StickerFavorites.wipe(c) },   // the account keeps its backup
+        WipeStep("gate memory") { c, _ -> com.fariin.app.ui.auth.GateMemory.clear(c) },   // the next account waits for its checks
+        WipeStep("live group calls") { _, _ -> com.fariin.app.ui.call.LiveGroupCalls.stopAll() },   // the live group-call watchers belong to the account
+        WipeStep("story privacy") { _, _ -> com.fariin.app.data.StoryPrivacyStore.stop() },   // a return to the same account listens again
+        WipeStep("passkeys") { _, _ -> com.fariin.app.auth.Passkeys.lastList = null },   // the next account never sees this one's passkeys
+        WipeStep("chat media") { c, keepFor -> if (keepFor.isNullOrEmpty()) com.fariin.app.media.ChatMedia.wipe(c) },
+        WipeStep("temp copies") { c, _ -> removeTempCopies(c) },
+        WipeStep("image cache") { c, _ ->
+            try { coil3.SingletonImageLoader.get(c).let { it.diskCache?.clear(); it.memoryCache?.clear() } } catch (_: Exception) {}
+        },
+        WipeStep("decoded pictures") { _, _ -> com.fariin.app.ui.thread.DecodedPictures.clear() },   // decoded chat photos held in memory
+        WipeStep("chat search") { _, _ -> com.fariin.app.data.ChatSearch.seen.clear() },        // in-chat search corpora
+        WipeStep("shared media") { _, _ -> com.fariin.app.data.SharedMediaSource.clear() },      // All Media's opened messages
+        WipeStep("verified people") { c, _ -> com.fariin.app.data.VerifiedPeople.clear(c) },   // whose badges this account looked up (iOS VerificationIndex)
+        WipeStep("contact names") { _, _ -> com.fariin.app.data.ContactNames.clear() },       // names I gave people belong to the account
+        WipeStep("search recents") { c, _ -> com.fariin.app.data.SearchRecents.wipe(c) },      // what the account searched for
+        WipeStep("send effects") { c, _ -> com.fariin.app.data.SendEffects.wipe(c) },        // which send effects already played here
+        WipeStep("avatar videos") { c, _ -> com.fariin.app.data.AvatarVideoIndex.clear(c) },  // who has a moving profile picture, and the clips
+        WipeStep("shared wallpapers") { c, _ -> com.fariin.app.data.SharedWallpapers.wipe(c) },   // 1:1 shared wallpapers and this phone's opt-outs
+        WipeStep("chat folders") { c, _ -> com.fariin.app.data.ChatFoldersStore.clear(c) },   // every account's chat folders kept on this phone
+        WipeStep("plus billing") { _, _ -> com.fariin.app.data.PlusBilling.clear() },          // loaded plans and this run's purchase check
+        WipeStep("official channel") { c, _ -> com.fariin.app.data.OfficialChannel.wipe(c) },    // the official row kept for launch (personal notices too)
+        WipeStep("official stories") { c, _ -> com.fariin.app.data.OfficialStories.reset(c) },
+        WipeStep("channel stories") { _, _ -> com.fariin.app.data.ChannelStories.stop() },
+        WipeStep("thread seed") { _, _ -> com.fariin.app.data.ThreadSeed.clear() },
+        WipeStep("clear cuts") { _, _ -> com.fariin.app.data.ClearCuts.reset() },   // this account's Clear Messages cuts, by chat id
+        WipeStep("former groups") { _, _ -> com.fariin.app.data.FormerGroups.clear() },   // groups this account was removed from, by chat id
+        WipeStep("quote store") { _, _ -> com.fariin.app.data.QuoteStore.reset() },   // the quote cards this account was shown
+        WipeStep("chats now") { _, _ ->   // the live list restricted-chat checks read
+            com.fariin.app.data.ChatsNow.list = emptyList(); com.fariin.app.data.ChatsNow.all = emptyList()
+        },
+        WipeStep("bubble styles") { c, _ -> com.fariin.app.data.BubbleStyles.wipeChats(c) },   // per-chat styles and my all-chats pick (iOS)
+        WipeStep("story limits") { _, _ -> com.fariin.app.data.StoryLimits.reset() },   // the daily story count and badge are per account
+        WipeStep("chat key lockout") { _, _ -> com.fariin.app.data.ChatKey.lockedUntilMs = 0L },   // a chat-key lockout is this account's
+        WipeStep("voice player") { _, _ -> com.fariin.app.media.VoicePlayer.stop() },
+        WipeStep("live location") { c, _ -> com.fariin.app.location.LiveShareService.stopAll(c) },   // no live location outlives the account on this phone
+        WipeStep("story outbox") { c, _ -> java.io.File(c.filesDir, "story-outbox").deleteRecursively() },  // unfinished story posts are this account's
+        WipeStep("profile photo history") { c, _ -> com.fariin.app.data.ProfilePhotoHistory.wipe(c) },  // my past profile photos
+        WipeStep("glow cache") { c, _ -> com.fariin.app.data.Glow.Cache.clear(c) },       // the Glowing grid's last answer, every account's
+        WipeStep("chat looks") { c, _ -> com.fariin.app.data.ChatLookStore.wipe(c) },      // wallpapers, chat colours, wallpaper photos
         // Per-account choices iOS SessionWipe.wipeAccountPrefs clears (2026-11-10 parity): whose
         // stories I hid, the new-chat timer default, the missed-calls mark, Save to Photos.
-        com.fariin.app.data.StoryMutes.wipe(c)
-        com.fariin.app.data.Disappearing.defaultSeconds = 0
-        com.fariin.app.data.CallsSeen.wipe(c)
-        com.fariin.app.media.AutoSaveMedia.wipe(c)
+        WipeStep("story mutes") { c, _ -> com.fariin.app.data.StoryMutes.wipe(c) },
+        WipeStep("disappearing default") { _, _ -> com.fariin.app.data.Disappearing.defaultSeconds = 0 },
+        WipeStep("calls seen") { c, _ -> com.fariin.app.data.CallsSeen.wipe(c) },
+        WipeStep("auto save media") { c, _ -> com.fariin.app.media.AutoSaveMedia.wipe(c) },
         // The kept chat list is sealed with this key: it stays while there is a kept list, or the
         // list could never be read again. A different account's sign-in wipes the list (claimKept).
-        if (keepFor.isNullOrEmpty()) com.fariin.app.local.AtRest.forgetKey()
-    }
+        WipeStep("at rest key") { _, keepFor -> if (keepFor.isNullOrEmpty()) com.fariin.app.local.AtRest.forgetKey() },
+    )
 
     /**
      * Plain copies made to open, share, edit or export (iOS SessionWipe.removeTempCopies): an opened
