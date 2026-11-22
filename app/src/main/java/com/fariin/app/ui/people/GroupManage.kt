@@ -1063,6 +1063,8 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
     val Noun = if (ch) "Channel" else "Group"
     // Verified (owner 2026-11-19, as the reference app): the link and the type are fixed.
     val locked = doc["verified"] == true && isPublicNow
+    // iOS canEdit: an ended or Fariin-locked group, or someone without the change-info right, changes nothing here.
+    val canEdit = !com.fariin.app.data.GroupMod.blocksSending(doc) && Team.from(doc).may(me, Right.CHANGE_INFO)
     val showPublic = wantsPublic ?: isPublicNow
     val typed = name ?: current
     val changed = typed != current
@@ -1110,21 +1112,21 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
                 color = if (showPublic && changed && ok) c.accent else c.secondary,
                 // Tappable while Public waits for a good link, so the tap can say what is missing.
                 modifier = Modifier.padding(end = 4.dp).height(44.dp).floating(CircleShape)
-                    .clickable(enabled = showPublic && (changed || typed.isEmpty())) { if (changed && ok) save(typed) else explainSave() }
+                    .clickable(enabled = canEdit && showPublic && (changed || typed.isEmpty())) { if (changed && ok) save(typed) else explainSave() }
                     .padding(horizontal = 18.dp, vertical = 11.dp))
         }, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary).imePadding()) { top ->
         Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).navigationBarsPadding()) {
             SettingsSection(header = "$Noun Type", footer = if (showPublic) (if (ch) "Anyone can find this channel in search and follow it." else "Anyone can find this group in search and join it without an invite.")
-                else if (ch) "People can follow only with an invite link." else "People can join only with an invite link, or when an admin adds them.") {
+                else if (ch) "People can follow only with an invite link, or when an admin adds them." else "People can join only with an invite link, or when an admin adds them.") {
                 TypeLine("Public $Noun", showPublic) {
-                    if (locked) return@TypeLine
+                    if (locked || !canEdit) return@TypeLine
                     wantsPublic = true
                     if (typed.isEmpty()) {
                         name = com.fariin.app.channel.ChannelRules.suggestLink(doc["title"] as? String ?: "", noun)
                         scope.launch { delay(350); runCatching { linkFocus.requestFocus() } }
                     }
                 }
-                TypeLine("Private $Noun", !showPublic, last = true) { if (locked) return@TypeLine; if (isPublicNow) confirmPrivate = true else wantsPublic = false }
+                TypeLine("Private $Noun", !showPublic, last = true) { if (locked || !canEdit) return@TypeLine; if (isPublicNow) confirmPrivate = true else wantsPublic = false }
             }
             // A channel's Protect Content lives here, under its type (iOS channel type page).
             if (ch) {
@@ -1133,7 +1135,7 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
                 var protectProblem by remember { mutableStateOf<String?>(null) }
                 SettingsSection(header = "Saving and Copying",
                     footer = protectProblem ?: com.fariin.app.channel.ChannelRules.protectFooter(protect)) {
-                    com.fariin.app.ui.settings.SwitchRow("Protect Content", protect, last = true,
+                    com.fariin.app.ui.settings.SwitchRow("Protect Content", protect, enabled = canEdit, last = true,
                         badge = NewBadgeSpots.GROUP_SETTINGS_PROTECT_CONTENT) { v ->
                         protect = v; protectProblem = null
                         scope.launch {
@@ -1157,7 +1159,7 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
                         Text("fariin.com/", fontSize = 17.sp, color = c.label)
                         Box(Modifier.weight(1f)) {
                             if (typed.isEmpty()) Text("link", fontSize = 17.sp, color = c.secondary)
-                            BasicTextField(typed, { name = it.trim() }, enabled = !locked, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
+                            BasicTextField(typed, { name = it.trim() }, enabled = !locked && canEdit, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
                                 cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth().focusRequester(linkFocus))
                         }
                     }
