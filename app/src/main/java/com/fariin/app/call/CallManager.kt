@@ -209,6 +209,11 @@ object CallManager {
 
     // ================================================================== outgoing
 
+    /** The name I saved for them wins on every call screen, both ways (iOS CallService.displayName).
+     *  Only shown here: the call doc keeps the names people chose. */
+    private fun shownName(uid: String, fallback: String): String =
+        uid.takeIf { it.isNotEmpty() }?.let { com.fariin.app.data.ContactNames.name(it) }?.takeIf { it.isNotBlank() } ?: fallback
+
     /**
      * iOS startCall, after the mic (and camera) permission is settled by the call screen.
      * The doc is written only once the offer is sealed for the callee's current key.
@@ -220,7 +225,7 @@ object CallManager {
         resetCallVars()
         step("dial")
         peer = uid
-        _ui.value = CallUi(peerUid = uid, peerName = name, peerPhoto = photo, cameraOn = video, speaker = video)
+        _ui.value = CallUi(peerUid = uid, peerName = shownName(uid, name), peerPhoto = photo, cameraOn = video, speaker = video)
         com.fariin.app.media.VoicePlayer.pauseForCall()   // iOS: the call takes the audio, the note pauses
         move(CallEvent.Dial(video))
         CallService.start(app, CallService.Mode.CALL, video)
@@ -348,7 +353,7 @@ object CallManager {
             resetCallVars()
             callId = d.id
             peer = d.caller
-            _ui.value = CallUi(peerUid = d.caller, peerName = d.callerName ?: "Caller", peerPhoto = d.callerPhoto,
+            _ui.value = CallUi(peerUid = d.caller, peerName = shownName(d.caller, d.callerName ?: "Caller"), peerPhoto = d.callerPhoto,
                 cameraOn = d.video, speaker = d.video, remoteCameraOn = d.cams[d.caller] ?: d.video)
             move(CallEvent.Ring(d.video))
             com.fariin.app.media.VoicePlayer.pauseForCall()   // the ring pauses a playing note (iOS interruption)
