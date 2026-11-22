@@ -3899,7 +3899,7 @@ private fun Modifier.doubleTapToReact(enabled: Boolean, key: Any, onDouble: () -
  *  Initial pass, so a photo or video that takes taps itself still opens the menu on a long press
  *  (iOS), and the press is then eaten so its release does not also open the viewer. */
 @Composable
-private fun Modifier.combinedClickableLong(onLong: () -> Unit): Modifier {
+internal fun Modifier.combinedClickableLong(onLong: () -> Unit): Modifier {
     // The gesture loop starts once; it must call the newest action, which holds the newest copy of
     // the message. With the first one captured, a post edited since its row was first drawn opened
     // its menu with the old words (and Edit started from them, and Edit History was missing).
