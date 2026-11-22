@@ -98,6 +98,11 @@ class SettingsIndexTest {
         assertEquals(PAGE_DISAPPEAR_DEFAULT, SettingsIndex.matching("disappearing").first().page)
     }
 
+    @Test fun bubbleStylesKeepTheIosWords() {
+        val e = SettingsIndex.entries.firstOrNull { it.title == "Bubble Styles" } ?: return   // hidden while BubbleStyles.SHOWN is off
+        for (w in listOf("kawaii", "cotton candy", "careers", "sport")) assertTrue(w, e.keywords.contains(w))
+    }
+
     @Test fun idsAreUnique() {
         val ids = SettingsIndex.entries.map { it.id }
         assertEquals(ids.size, ids.toSet().size)
