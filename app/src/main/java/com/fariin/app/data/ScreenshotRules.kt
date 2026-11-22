@@ -214,11 +214,40 @@ object ScreenshotRules {
     /** Where a row starts a new day (its pill) and where a group sender's name shows. */
     data class Place(val showDay: Boolean, val showName: Boolean)
 
-    fun placements(rows: List<Shot>): List<Place> = rows.mapIndexed { i, s ->
+    /** [pageStarts]: rows that open a later picture; each picture starts with its day pill and the name (iOS pageView). */
+    fun placements(rows: List<Shot>, pageStarts: Set<Int> = emptySet()): List<Place> = rows.mapIndexed { i, s ->
         val prev = rows.getOrNull(i - 1)
-        val newDay = prev == null || prev.day != s.day
+        val newDay = prev == null || prev.day != s.day || i in pageStarts
         val runStart = newDay || prev!!.kind == Kind.SYSTEM || prev.authorId != s.authorId
         Place(showDay = newDay, showName = s.senderName != null && runStart)
+    }
+
+    /** Room above the first row of a picture, and the footer block under the last (iOS ScreenshotExporter: 12, 10 + 22 + 12). */
+    const val PAGE_TOP_DP = 12
+    const val FOOTER_DP = 44
+
+    /**
+     * iOS ScreenshotExporter.plan: the rows split into pictures no taller than the screen, always
+     * between two messages. [heights] are the rows without their day pill, [ownDay] whether a row
+     * shows its pill anyway, [dayPx] the pill's height (every picture starts with one), [budget] the
+     * screen's height less the room above and the footer. A row taller than a whole picture gets one
+     * of its own. Returns row indices, one list per picture.
+     */
+    fun plan(heights: List<Int>, ownDay: List<Boolean>, dayPx: Int, budget: Int): List<List<Int>> {
+        if (heights.isEmpty()) return emptyList()
+        val pages = mutableListOf(mutableListOf<Int>())
+        var used = 0
+        for (i in heights.indices) {
+            var h = heights[i] + if (ownDay.getOrElse(i) { false } || pages.last().isEmpty()) dayPx else 0
+            if (used + h > budget && pages.last().isNotEmpty()) {
+                pages.add(mutableListOf())
+                h = heights[i] + dayPx
+                used = 0
+            }
+            pages.last().add(i)
+            used += h
+        }
+        return pages
     }
 
     /** Hidden words are never drawn: dots stand in their place, so nothing can be read back from the picture. */
@@ -227,6 +256,7 @@ object ScreenshotRules {
         return "•".repeat(n)
     }
 
-    /** The header line under the title (iOS countLine, one picture on Android). */
-    fun countLine(messages: Int): String = if (messages == 1) "1 message" else "$messages messages"
+    /** The header line under the title (iOS countLine): "2 pictures · 9 messages". */
+    fun countLine(messages: Int, pictures: Int): String =
+        (if (pictures == 1) "1 picture" else "$pictures pictures") + " · " + (if (messages == 1) "1 message" else "$messages messages")
 }

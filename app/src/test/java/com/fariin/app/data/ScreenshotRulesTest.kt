@@ -67,8 +67,28 @@ class ScreenshotRulesTest {
         assertFalse(c.contains("secret"))
         assertEquals(11, c.length)
         assertEquals(3, ScreenshotRules.coverText("a").length)
-        assertEquals("1 message", ScreenshotRules.countLine(1))
-        assertEquals("4 messages", ScreenshotRules.countLine(4))
+        assertEquals("1 picture · 1 message", ScreenshotRules.countLine(1, 1))
+        assertEquals("2 pictures · 4 messages", ScreenshotRules.countLine(4, 2))
+    }
+
+    @Test fun planSplitsBetweenMessagesUnderTheScreenHeight() {
+        // Budget 100, pill 10: [10+40, 40] fills 90, the next 30 opens a picture with its own pill.
+        val p = ScreenshotRules.plan(listOf(40, 40, 30, 20), listOf(true, false, false, false), dayPx = 10, budget = 100)
+        assertEquals(listOf(listOf(0, 1), listOf(2, 3)), p)
+        // All fit: one picture.
+        assertEquals(listOf(listOf(0, 1, 2)), ScreenshotRules.plan(listOf(10, 10, 10), listOf(true, false, false), 10, 100))
+        // A row taller than a picture stands alone, never cut.
+        assertEquals(listOf(listOf(0), listOf(1), listOf(2)), ScreenshotRules.plan(listOf(20, 300, 20), listOf(true, false, false), 10, 100))
+        assertTrue(ScreenshotRules.plan(emptyList(), emptyList(), 10, 100).isEmpty())
+    }
+
+    @Test fun laterPicturesStartWithDayAndName() {
+        val list = listOf(msg("1", at = 1.0), msg("2", at = 2.0), msg("3", at = 3.0))
+        val shots = ScreenshotRules.snapshot(list, setOf("1", "2", "3"), "me", isGroup = true, receipts = Receipts(),
+            name = { it }, day = { "Today" })
+        val p = ScreenshotRules.placements(shots, pageStarts = setOf(2))
+        assertEquals(listOf(true, false, true), p.map { it.showDay })
+        assertEquals(listOf(true, false, true), p.map { it.showName })
     }
 
     @Test fun mediaRowsCarryTheirPictureNotTheLabelAsWords() {
@@ -133,6 +153,5 @@ class ScreenshotRulesTest {
         e = e.tapWord("1", t, 0).toggleHidden("1")
         assertTrue(e.isHidden("1"))
         assertTrue(e.toggleHidden("1").cover("1").isEmpty)
-        assertEquals("4 messages", ScreenshotRules.countLine(4))
     }
 }

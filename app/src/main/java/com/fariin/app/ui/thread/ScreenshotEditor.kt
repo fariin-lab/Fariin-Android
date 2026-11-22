@@ -59,6 +59,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -186,7 +188,19 @@ private fun EditorPage(cid: String, shots: List<ScreenshotRules.Shot>, is24h: Bo
     var theme by remember { mutableStateOf(ShotTheme(null, "This chat")) }
     var rendering by remember { mutableStateOf(false) }
     val rows = edits.rows(shots)
-    val places = ScreenshotRules.placements(rows)
+    // Long chats are split into pictures no taller than the screen (iOS plan), measured as drawn.
+    val density = LocalDensity.current
+    val bubbleH = remember { androidx.compose.runtime.mutableStateMapOf<String, Int>() }
+    var dayPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val screenPx = with(density) { LocalConfiguration.current.screenHeightDp.dp.roundToPx() }
+    val topPx = with(density) { ScreenshotRules.PAGE_TOP_DP.dp.roundToPx() }
+    val footPx = with(density) { ScreenshotRules.FOOTER_DP.dp.roundToPx() }
+    val pages = ScreenshotRules.plan(rows.map { bubbleH[it.id] ?: 0 }, ScreenshotRules.placements(rows).map { it.showDay },
+        dayPx.takeIf { it > 0 } ?: with(density) { 37.dp.roundToPx() }, screenPx - topPx - footPx)
+    val places = ScreenshotRules.placements(rows, pages.drop(1).map { it.first() }.toSet())
+    // Where the rows and the footer sit in the recorded column, for cutting the pictures out of it.
+    val rowAt = remember { HashMap<String, androidx.compose.ui.layout.LayoutCoordinates>() }
+    val colAt = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(2) }
     val layer = rememberGraphicsLayer()
     val themes = remember { listOf(ShotTheme(null, "This chat")) + com.fariin.app.data.ChatWallpapers.all.map { ShotTheme(it.id, it.name) } }
     val wallpaper = theme.id?.let { ChatWallpaper.Gradient(it) } ?: com.fariin.app.data.ChatLookStore.wallpaper(ctx, cid)
@@ -204,22 +218,23 @@ private fun EditorPage(cid: String, shots: List<ScreenshotRules.Shot>, is24h: Bo
                 RoundButton(R.drawable.ic_sf_xmark, "Close", Modifier.align(Alignment.CenterStart), onClick = close)
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Share your chat", color = c.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-                    Text(ScreenshotRules.countLine(rows.size), color = c.secondary, fontSize = 13.sp)
+                    Text(ScreenshotRules.countLine(rows.size, maxOf(1, pages.size)), color = c.secondary, fontSize = 13.sp)
                 }
                 RoundButton(if (dark) R.drawable.ic_sf_sun else R.drawable.ic_sf_moon_fill, if (dark) "Day" else "Night",
                     Modifier.align(Alignment.CenterEnd)) { dark = !dark }
             }
-            // The card. Its inner column is recorded as it draws, so Share saves exactly what is shown,
-            // full length (not only the part scrolled into view).
+            // The card. Its inner column is recorded as it draws (the rows and the footer, not the
+            // wallpaper), so Share cuts exactly what is shown into pictures, each on its own wallpaper.
             val scroll = rememberScrollState()
             LaunchedEffect(rows.size) { scroll.scrollTo(scroll.maxValue) }
             Box(Modifier.padding(start = 16.dp, end = 16.dp, top = 22.dp).fillMaxWidth().height(cardH)
                 .clip(RoundedCornerShape(32.dp)).background(plain)) {
                 Column(Modifier.fillMaxWidth().verticalScroll(scroll)
-                    .drawWithContent { layer.record { this@drawWithContent.drawContent() }; drawLayer(layer) }
                     .heightIn(min = cardH)
                     .drawBehind { drawWallpaper(wallpaper, dark, plain, pattern, null) }
-                    .padding(top = 12.dp), verticalArrangement = Arrangement.Bottom) {
+                    .onGloballyPositioned { colAt[0] = it }
+                    .drawWithContent { layer.record { this@drawWithContent.drawContent() }; drawLayer(layer) }
+                    .padding(top = ScreenshotRules.PAGE_TOP_DP.dp), verticalArrangement = Arrangement.Bottom) {
                     if (rows.isEmpty()) Text("No messages left", color = if (dark) Color.White else Color.Black,
                         fontSize = 15.sp, modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 50.dp))
                     rows.forEachIndexed { i, s ->
@@ -240,13 +255,15 @@ private fun EditorPage(cid: String, shots: List<ScreenshotRules.Shot>, is24h: Bo
                                         else -> edits
                                     }
                                 },
-                                onBubbleTap = { if (edits.isHidden(s.id)) edits = edits.toggleHidden(s.id) })
+                                onBubbleTap = { if (edits.isHidden(s.id)) edits = edits.toggleHidden(s.id) },
+                                onBubbleSize = { bubbleH[s.id] = it }, onDaySize = { dayPx = it },
+                                modifier = Modifier.onGloballyPositioned { rowAt[s.id] = it })
                         }
                     }
                     // The footer every picture carries.
                     Text("Fariin", color = if (dark) Color.White.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.7f),
                         fontSize = 16.sp, fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(start = 20.dp, top = 10.dp, bottom = 12.dp).height(22.dp))
+                        modifier = Modifier.onGloballyPositioned { colAt[1] = it }.padding(start = 20.dp, top = 10.dp, bottom = 12.dp).height(22.dp))
                 }
             }
             // Swatches: this chat's own look first, then the built-in themes. Only the background changes.
@@ -269,7 +286,21 @@ private fun EditorPage(cid: String, shots: List<ScreenshotRules.Shot>, is24h: Bo
                 .clickable(enabled = rows.isNotEmpty() && !rendering) {
                     rendering = true
                     scope.launch {
-                        val ok = runCatching { sharePicture(ctx, layer.toImageBitmap().asAndroidBitmap()) }.getOrDefault(false)
+                        val ok = runCatching {
+                            val col = colAt[0]!!
+                            val foot = colAt[1]!!
+                            fun y(l: androidx.compose.ui.layout.LayoutCoordinates) = col.localPositionOf(l, androidx.compose.ui.geometry.Offset.Zero).y.toInt()
+                            val cuts = pages.map { page ->
+                                val first = rowAt[rows[page.first()].id]!!
+                                val last = rowAt[rows[page.last()].id]!!
+                                y(first) to (y(last) + last.size.height)
+                            }
+                            val footer = y(foot) to (y(foot) + foot.size.height)
+                            val full = layer.toImageBitmap().asAndroidBitmap()
+                            val back: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit = { drawWallpaper(wallpaper, dark, plain, pattern, null) }
+                            val pictures = withContext(Dispatchers.Default) { cutPictures(full, cuts, footer, topPx, density, back) }
+                            sharePictures(ctx, pictures)
+                        }.getOrDefault(false)
                         rendering = false
                         if (!ok) com.fariin.app.ui.components.Snack.show("Couldn't make the picture")
                     }
@@ -344,6 +375,7 @@ private fun RoundButton(icon: Int, label: String, modifier: Modifier = Modifier,
 private fun ShotRow(
     s: ScreenshotRules.Shot, place: ScreenshotRules.Place, cid: String, cover: ScreenshotRules.Cover, dark: Boolean, mine: Color, is24h: Boolean,
     onRemove: () -> Unit, onLong: () -> Unit, onTextTap: (Int) -> Unit, onBubbleTap: () -> Unit,
+    onBubbleSize: (Int) -> Unit, onDaySize: (Int) -> Unit, modifier: Modifier = Modifier,
 ) {
     val hidden = cover.whole
     val picture = rememberShotPicture(s.pic, cid)
@@ -366,12 +398,12 @@ private fun ShotRow(
     val ink = if (dark) Color.White else Color.Black
     val chip = if (dark) Color.Black.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.75f)
     val chipInk = if (dark) Color.White.copy(alpha = 0.85f) else Color.Black.copy(alpha = 0.6f)
-    Column(Modifier.fillMaxWidth()) {
-        if (place.showDay) Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+    Column(modifier.fillMaxWidth()) {
+        if (place.showDay) Box(Modifier.onSizeChanged { onDaySize(it.height) }.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
             Text(s.day, color = chipInk, fontSize = 13.sp, fontWeight = FontWeight.Medium,
                 modifier = Modifier.clip(CircleShape).background(chip).padding(horizontal = 10.dp, vertical = 3.dp))
         }
-        Box(Modifier.fillMaxWidth()
+        Box(Modifier.onSizeChanged { onBubbleSize(it.height) }.fillMaxWidth()
             .pointerInput(s.id) {
                 detectHorizontalDragGestures(
                     onDragEnd = {
@@ -519,20 +551,55 @@ private fun ShotTick(t: Tick, tint: Color) {
 
 // Sender names use the chat's own colours (ThreadScreen senderColor), so the picture matches.
 
-/** Saves the picture in cache/open (served by our FileProvider) and opens the system share sheet. */
-private suspend fun sharePicture(ctx: android.content.Context, picture: android.graphics.Bitmap): Boolean {
-    val uri = withContext(Dispatchers.IO) {
-        val bmp = picture.copy(android.graphics.Bitmap.Config.ARGB_8888, false) ?: return@withContext null
+/**
+ * Cuts the recorded rows into pictures (iOS pageView): each one its own wallpaper ([back]), the room
+ * above, its rows ([cuts]: top and bottom in the recording), then the footer copied under them.
+ */
+private fun cutPictures(
+    recorded: android.graphics.Bitmap, cuts: List<Pair<Int, Int>>, footer: Pair<Int, Int>, topPx: Int,
+    density: androidx.compose.ui.unit.Density, back: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit,
+): List<android.graphics.Bitmap> {
+    // A plain copy: a hardware bitmap cannot be drawn onto a plain canvas.
+    val full = recorded.copy(android.graphics.Bitmap.Config.ARGB_8888, false) ?: return emptyList()
+    val w = full.width
+    val footH = (footer.second - footer.first).coerceAtLeast(0)
+    return cuts.map { (top, bottom) ->
+        val t = top.coerceIn(0, full.height)
+        val b = bottom.coerceIn(t, full.height)
+        val h = topPx + (b - t) + footH
+        val out = android.graphics.Bitmap.createBitmap(w, h.coerceAtLeast(1), android.graphics.Bitmap.Config.ARGB_8888)
+        runCatching {
+            androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(density, androidx.compose.ui.unit.LayoutDirection.Ltr,
+                androidx.compose.ui.graphics.Canvas(out.asImageBitmap()), androidx.compose.ui.geometry.Size(w.toFloat(), h.toFloat())) { back() }
+        }
+        val cv = android.graphics.Canvas(out)
+        cv.drawBitmap(full, android.graphics.Rect(0, t, w, b), android.graphics.Rect(0, topPx, w, topPx + b - t), null)
+        if (footH > 0) cv.drawBitmap(full, android.graphics.Rect(0, footer.first, w, footer.second),
+            android.graphics.Rect(0, h - footH, w, h), null)
+        out
+    }.also { full.recycle() }
+}
+
+/** Saves the pictures in cache/open (served by our FileProvider) and opens the system share sheet with all of them. */
+private suspend fun sharePictures(ctx: android.content.Context, pictures: List<android.graphics.Bitmap>): Boolean {
+    if (pictures.isEmpty()) return false
+    val uris = withContext(Dispatchers.IO) {
         val dir = java.io.File(ctx.cacheDir, "open").also { it.mkdirs() }
-        // Only the newest picture is kept; an older one shared earlier goes.
+        // Only the newest pictures are kept; ones shared earlier go.
         dir.listFiles()?.filter { it.name.startsWith(ScreenshotRules.FILE_PREFIX) }?.forEach { it.delete() }
-        val out = java.io.File(dir, ScreenshotRules.FILE_PREFIX + System.currentTimeMillis() + ".png")
-        out.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
-        bmp.recycle()
-        androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", out)
-    } ?: return false
-    val send = Intent(Intent.ACTION_SEND).setType("image/png").putExtra(Intent.EXTRA_STREAM, uri)
-        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).apply { clipData = android.content.ClipData.newRawUri(null, uri) }
+        val stamp = System.currentTimeMillis()
+        pictures.mapIndexed { i, bmp ->
+            val out = java.io.File(dir, ScreenshotRules.FILE_PREFIX + stamp + "_" + (i + 1) + ".png")
+            out.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            bmp.recycle()
+            androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", out)
+        }
+    }
+    val clip = android.content.ClipData.newRawUri(null, uris.first()).apply { uris.drop(1).forEach { addItem(android.content.ClipData.Item(it)) } }
+    val send = if (uris.size == 1) Intent(Intent.ACTION_SEND).setType("image/png").putExtra(Intent.EXTRA_STREAM, uris.first())
+        else Intent(Intent.ACTION_SEND_MULTIPLE).setType("image/png").putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+    send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    send.clipData = clip
     ctx.startActivity(Intent.createChooser(send, null))
     return true
 }
