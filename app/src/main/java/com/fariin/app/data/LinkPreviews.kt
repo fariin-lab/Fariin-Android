@@ -107,9 +107,12 @@ object LinkPreviews {
     /** First https link in a text (iOS firstURL: the data detector's links, https only). */
     fun firstUrl(text: String): String? {
         // A link typed without a scheme ("fariin.com/vee") previews as https (iOS 9332362b).
-        var u = URL_RE.find(text)?.value
-            ?: return TextLinks.find(text).firstOrNull { it.kind == TextLinks.Kind.WEB }?.target
-                ?.takeIf { it.startsWith("https://") && hostOf(it)?.contains('.') == true }
+        // The first link in the text wins, typed with a scheme or not (iOS: the detector's first https).
+        val m = URL_RE.find(text)
+        TextLinks.find(text).firstOrNull {
+            it.kind == TextLinks.Kind.WEB && it.target.startsWith("https://") && (m == null || it.start < m.range.first)
+        }?.target?.takeIf { hostOf(it)?.contains('.') == true }?.let { return it }
+        var u = m?.value ?: return null
         // Sentence punctuation after a link is not part of it; a closing bracket only when unopened.
         while (u.isNotEmpty()) {
             val last = u.last()

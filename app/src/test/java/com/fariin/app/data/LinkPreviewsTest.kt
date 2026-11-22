@@ -62,6 +62,7 @@ class LinkPreviewsTest {
         assertEquals("https://www.example.com", LinkPreviews.firstUrl("www.example.com no scheme"))
         assertNull(LinkPreviews.firstUrl("no link here"))
         assertEquals("https://b.com", LinkPreviews.firstUrl("http://a.com then https://b.com"))
+        assertEquals("https://fariin.com/vee", LinkPreviews.firstUrl("fariin.com/vee then https://b.com"))
     }
 
     @Test fun youtubeIds() {
