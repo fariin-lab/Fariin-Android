@@ -262,7 +262,7 @@ internal fun GroupPages(cid: String, me: String, stack: MutableList<GroupPage>, 
     val push: (GroupPage) -> Unit = { stack.add(it) }
     BackHandler(onBack = pop)
     when (top) {
-        GroupPage.Admins -> GroupAdminsPage(cid, me, pop, push)
+        GroupPage.Admins -> GroupAdminsPage(cid, me, pop, push, onOpenPerson)
         GroupPage.Choose -> ChooseMemberPage(cid, me, pop) { uid -> pop(); push(GroupPage.AddAdmin(uid)) }
         is GroupPage.AddAdmin -> AddAdminPage(cid, me, top.uid, pop)
         is GroupPage.Rights -> AdminRightsPage(cid, me, top.uid, pop)
@@ -313,11 +313,14 @@ private fun Problem(text: String?, onDone: () -> Unit) {
 // ---- Administrators (iOS GroupAdminsView) -----------------------------------------------------
 
 @Composable
-private fun GroupAdminsPage(cid: String, me: String, onBack: () -> Unit, push: (GroupPage) -> Unit) {
+private fun GroupAdminsPage(cid: String, me: String, onBack: () -> Unit, push: (GroupPage) -> Unit, onOpenPerson: (String) -> Unit) {
     val c = Fariin.colors
     val doc = liveGroupDoc(cid)
+    var card by remember { mutableStateOf<String?>(null) }
     if (doc.isEmpty()) { Loading(); return }
     val team = Team.from(doc)
+    // iOS: a tap opens the member card (Message, Edit Rights, Dismiss Admin, Ban), as the Members list.
+    card?.let { u -> MemberCard(cid, me, u, doc, onClose = { card = null }, onProfile = onOpenPerson, open = push) }
     val barScroll = rememberScrollState()
     BarPage("Administrators", onBack, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
         Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).navigationBarsPadding()) {
@@ -328,7 +331,7 @@ private fun GroupAdminsPage(cid: String, me: String, onBack: () -> Unit, push: (
                 }
                 team.sortedAdmins(me).forEach { uid ->
                     PersonLine(team.photos[uid]?.ifEmpty { null }, if (uid == me) "You" else team.names[uid] ?: "Admin",
-                        onClick = { push(GroupPage.Rights(uid)) },
+                        onClick = { card = uid },
                         detail = GroupAdmins.promotedBy(uid, team.owner, team.adminBy, me, team.names)) {
                         Text(if (team.isOwner(uid)) "Owner" else "Admin", fontSize = 14.sp, color = c.secondary)
                     }
