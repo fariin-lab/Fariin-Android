@@ -345,7 +345,8 @@ object CallManager {
             if (signaling.screenRefused(me, d.id)) return@launch
             // My own block list too, so a failed server read never lets someone I blocked ring (iOS).
             if (com.fariin.app.data.BlockList.contains(d.caller)) return@launch
-            if (status.live) {
+            // A group call is a live call too (iOS inGroupCall): it never rings over one.
+            if (status.live || GroupCall.ui.value.cid != null) {
                 // Already in a call (also one started during the read above): busy, as iOS
                 // endRingIfUnclaimed with busy.
                 signaling.calleeEndRing(d.id, CallWire.endFields(EndReason.BUSY), deviceClaim)
