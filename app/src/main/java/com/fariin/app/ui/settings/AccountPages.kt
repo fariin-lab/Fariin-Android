@@ -35,6 +35,10 @@ object AccountReport {
         else -> "An account you blocked"
     }
 
+    /** Joined: my account document's `createdAt` (iOS UserProfile.joinedAt), else the sign-in record's date. */
+    fun joinedMs(me: Map<String, Any?>, authCreatedMs: Long?): Long? =
+        (me["createdAt"] as? Timestamp)?.toDate()?.time ?: authCreatedMs
+
     /** Pure: the file's text. */
     fun build(
         now: Long, uid: String, name: String, handle: String, about: String, email: String?, joinedMs: Long?, hasPhoto: Boolean,
@@ -122,7 +126,7 @@ object AccountReport {
             }.awaitAll()
         }
         val profile = MyProfile.fromFirestore(uid, me)
-        val joined = (me["joinedAt"] as? Timestamp)?.toDate()?.time ?: user.metadata?.creationTimestamp
+        val joined = joinedMs(me, user.metadata?.creationTimestamp)
         val df = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
         val text = build(
             System.currentTimeMillis(), uid, profile.name, profile.handle, profile.about, user.email, joined, profile.photoUrl != null,

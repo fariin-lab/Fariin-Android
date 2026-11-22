@@ -109,6 +109,13 @@ class SettingsPagesTest {
         assertTrue(t.contains("Messages are not in this file"))
     }
 
+    @Test fun accountReportJoinedIsTheAccountDocCreatedAt() {
+        val made = com.google.firebase.Timestamp(1_700_000_000L, 0)
+        assertEquals(1_700_000_000_000L, AccountReport.joinedMs(mapOf("createdAt" to made), 5L))
+        assertEquals(5L, AccountReport.joinedMs(mapOf("joinedAt" to made), 5L))
+        assertEquals(null, AccountReport.joinedMs(emptyMap(), null))
+    }
+
     @Test fun noEmDashesInPageWords() {
         val words = listOf(PrivacyRules.footer("lastSeen"), PrivacyRules.footer("groups"), PrivacyRules.footer("calls")) +
             AccountDeletion.reasons.map { it.second } + SettingsRules.lessData.map { it.second } + AppLock.delays.map { it.second }
