@@ -29,7 +29,7 @@ object AutoSaveMedia {
     fun wipe(c: Context) {
         val p = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val e = p.edit()
-        p.all.keys.filter { it == KEY || it == DONE || it.startsWith("$KEY.chat.") }.forEach { e.remove(it) }
+        p.all.keys.filter { it == KEY || it == DONE || it == SINCE || it.startsWith("$KEY.chat.") }.forEach { e.remove(it) }
         e.apply()
     }
 
@@ -45,13 +45,46 @@ object AutoSaveMedia {
             else -> isOn(c)
         }
     fun setChat(c: Context, cid: String, on: Boolean) {
-        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(chatKey(cid), if (on) "always" else "never").apply()
+        val p = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val was = p.getString(chatKey(cid), null)
+        val e = p.edit().putString(chatKey(cid), if (on) "always" else "never")
+        // iOS setChoice: switching to Always starts saving now; Never has no start of its own.
+        if (on) { if (was != "always") e.putLong(chatSinceKey(cid), System.currentTimeMillis()) }
+        else e.remove(chatSinceKey(cid))
+        e.apply()
     }
 
-    /** [id] is "cid/messageId". The id is claimed before the copy and given back if it fails. */
-    fun save(c: Context, id: String, file: File, isVideo: Boolean) {
+    // iOS AutoSaveToPhotos: only media sent after the switch went on, and in the last 7 days, is
+    // saved. Turning it on (or opening an old chat) never pours the history into the gallery.
+    private const val SINCE = "$KEY.since"
+    private const val WINDOW_MS = 7 * 86_400_000L
+    private const val LEGACY_GRACE_MS = 15 * 60_000L
+    private fun chatSinceKey(cid: String) = "$KEY.chat.$cid.since"
+
+    /** The Settings switch was turned on: saving starts now (iOS noteTurnedOn). */
+    fun noteTurnedOn(c: Context) {
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putLong(SINCE, System.currentTimeMillis()).apply()
+    }
+
+    /** From when this chat saves. A switch that was on before this build starts from the first look. */
+    private fun sinceMs(c: Context, cid: String): Long {
+        val p = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val key = if (p.getString(chatKey(cid), null) == "always") chatSinceKey(cid) else SINCE
+        var t = p.getLong(key, 0L)
+        if (t <= 0L) { t = System.currentTimeMillis() - LEGACY_GRACE_MS; p.edit().putLong(key, t).apply() }
+        return t
+    }
+
+    /**
+     * [id] is "cid/messageId". The id is claimed before the copy and given back if it fails.
+     * [sentAtMs]: when the message was sent; older than the start or the 7 day window is not saved.
+     */
+    fun save(c: Context, id: String, file: File, isVideo: Boolean, sentAtMs: Double? = null) {
         val app = c.applicationContext
-        if (!savesMedia(app, id.substringBefore('/')) || GallerySaver.needsPermission(app) || !claim(app, id)) return
+        val cid = id.substringBefore('/')
+        if (!savesMedia(app, cid) || GallerySaver.needsPermission(app)) return
+        if (sentAtMs != null && sentAtMs < maxOf(sinceMs(app, cid), System.currentTimeMillis() - WINDOW_MS)) return
+        if (!claim(app, id)) return
         scope.launch {
             if (!GallerySaver.save(app, file, isVideo)) release(app, id)
         }

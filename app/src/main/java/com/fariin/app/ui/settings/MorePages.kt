@@ -500,8 +500,12 @@ private fun ChatsSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
         if (com.fariin.app.backup.ChatTransfer.ENABLED) SettingsSection(footer = "Move your chats to a new phone, Android or iPhone.") {
             SettingsRow("Transfer Chats", last = true) { push(PAGE_TRANSFER) }
         }
-        SettingsSection(footer = "Automatically save received photos to your gallery.") {
-            SwitchRow("Save to Photos", savePhotos, last = true, badge = NewBadgeSpots.CHATS_SAVE_TO_PHOTOS) { savePhotos = it; p.edit().putBoolean(com.fariin.app.media.AutoSaveMedia.KEY, it).apply() }
+        // iOS: saves received photos and videos, from the moment it is turned on (never the history).
+        SettingsSection(footer = "Automatically save received photos and videos to your gallery.") {
+            SwitchRow("Save to Photos", savePhotos, last = true, badge = NewBadgeSpots.CHATS_SAVE_TO_PHOTOS) {
+                savePhotos = it; p.edit().putBoolean(com.fariin.app.media.AutoSaveMedia.KEY, it).apply()
+                if (it) com.fariin.app.media.AutoSaveMedia.noteTurnedOn(ctx)
+            }
         }
         SettingsSection(footer = "Show a preview card for links you type or paste. Your phone contacts the site to build it, before the message is sent.") {
             SwitchRow("Link Previews", links, last = true, badge = NewBadgeSpots.CHATS_LINK_PREVIEWS) { links = it; p.edit().putBoolean("linkPreviewsEnabled", it).apply() }
