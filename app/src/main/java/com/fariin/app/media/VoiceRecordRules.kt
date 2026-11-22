@@ -48,6 +48,14 @@ object VoiceRecordRules {
         else -> Release.SEND
     }
 
+    /**
+     * A live call (1:1 or group) owns the microphone: the hold and the review bar's red mic are
+     * refused with [CALL_BLOCKED] (iOS beginHoldRecording / resumeRecording).
+     */
+    fun blockedByCall(callLive: Boolean, groupJoined: Boolean): Boolean = callLive || groupJoined
+
+    const val CALL_BLOCKED = "Can't record voice messages during a call."
+
     /** Send from the locked bar: under a second there is nothing to send (iOS sendRecording). */
     fun canSendLocked(elapsed: Double): Boolean = elapsed >= MediaRules.VOICE_MIN_SECONDS
 

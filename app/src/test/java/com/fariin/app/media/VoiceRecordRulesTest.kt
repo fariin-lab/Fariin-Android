@@ -39,6 +39,13 @@ class VoiceRecordRulesTest {
         assertEquals(1f, VoiceRecordRules.lockProgress(-200f, 86f), 0f)
     }
 
+    @Test fun aCallRefusesTheMic() {
+        assertTrue(VoiceRecordRules.blockedByCall(callLive = true, groupJoined = false))
+        assertTrue(VoiceRecordRules.blockedByCall(callLive = false, groupJoined = true))
+        assertFalse(VoiceRecordRules.blockedByCall(callLive = false, groupJoined = false))
+        assertEquals("Can't record voice messages during a call.", VoiceRecordRules.CALL_BLOCKED)
+    }
+
     @Test fun lockedSendNeedsASecond() {
         assertFalse(VoiceRecordRules.canSendLocked(0.6))
         assertTrue(VoiceRecordRules.canSendLocked(1.0))

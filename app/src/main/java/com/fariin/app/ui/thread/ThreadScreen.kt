@@ -3348,8 +3348,15 @@ private fun Composer(
         resetVoice()
         recorder.finish { r -> if (r != null) sendOut(r.once(once)) else holdHint() }
     }
+    // A live call owns the microphone (iOS recordingBlockedByCall).
+    fun callBlocks(): Boolean {
+        val blocked = com.fariin.app.media.VoiceRecordRules.blockedByCall(com.fariin.app.call.CallManager.ui.value.status.live, com.fariin.app.call.GroupCall.ui.value.joined)
+        if (blocked) com.fariin.app.ui.components.Snack.show(com.fariin.app.media.VoiceRecordRules.CALL_BLOCKED)
+        return blocked
+    }
     fun pauseOrResume() {
         if (reviewing) {
+            if (callBlocks()) return
             // The red mic: carry on recording, a new stretch joined on at send.
             preview.release(); review = null; reviewing = false
             recorder.resume()
@@ -3660,6 +3667,7 @@ private fun Composer(
                                 val down = awaitFirstDown()
                                 val downAt = down.uptimeMillis
                                 var upAt = downAt
+                                if (callBlocks()) return@awaitEachGesture
                                 // A member an admin restricted from voice cannot start one (iOS): the
                                 // rules refuse the send, so the whole recording was for nothing.
                                 voiceOffNow.value?.let { onVoiceOffNow.value(it); return@awaitEachGesture }
