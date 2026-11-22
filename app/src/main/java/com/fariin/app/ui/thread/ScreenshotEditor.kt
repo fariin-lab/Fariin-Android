@@ -203,7 +203,11 @@ private fun EditorPage(cid: String, shots: List<ScreenshotRules.Shot>, is24h: Bo
     val colAt = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(2) }
     val layer = rememberGraphicsLayer()
     val themes = remember { listOf(ShotTheme(null, "This chat")) + com.fariin.app.data.ChatWallpapers.all.map { ShotTheme(it.id, it.name) } }
-    val wallpaper = theme.id?.let { ChatWallpaper.Gradient(it) } ?: com.fariin.app.data.ChatLookStore.wallpaper(ctx, cid)
+    val chatWall = com.fariin.app.data.ChatLookStore.wallpaper(ctx, cid)
+    // "This chat" with a photo wallpaper: that photo behind the bubbles (the copy already on this phone).
+    val chatPhoto = com.fariin.app.ui.components.rememberWallpaperPhoto(ctx, (chatWall as? ChatWallpaper.Photo)?.id)
+    val wallpaper = theme.id?.let { ChatWallpaper.Gradient(it) } ?: chatWall
+    val photo = if (theme.id == null) chatPhoto else null
     val pattern = remember { com.fariin.app.ui.components.WallpaperArt.pattern(ctx) }
     val mine = com.fariin.app.data.ChatLookStore.color(ctx, cid)
         ?.let { Color(0xFF000000 or com.fariin.app.data.ChatLookRules.flatHex(it)) } ?: c.blue
@@ -231,7 +235,7 @@ private fun EditorPage(cid: String, shots: List<ScreenshotRules.Shot>, is24h: Bo
                 .clip(RoundedCornerShape(32.dp)).background(plain)) {
                 Column(Modifier.fillMaxWidth().verticalScroll(scroll)
                     .heightIn(min = cardH)
-                    .drawBehind { drawWallpaper(wallpaper, dark, plain, pattern, null) }
+                    .drawBehind { drawWallpaper(wallpaper, dark, plain, pattern, photo) }
                     .onGloballyPositioned { colAt[0] = it }
                     .drawWithContent { layer.record { this@drawWithContent.drawContent() }; drawLayer(layer) }
                     .padding(top = ScreenshotRules.PAGE_TOP_DP.dp), verticalArrangement = Arrangement.Bottom) {
@@ -270,11 +274,11 @@ private fun EditorPage(cid: String, shots: List<ScreenshotRules.Shot>, is24h: Bo
             Row(Modifier.fillMaxWidth().padding(top = 20.dp).horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 for (t in themes) {
-                    val w = t.id?.let { ChatWallpaper.Gradient(it) } ?: com.fariin.app.data.ChatLookStore.wallpaper(ctx, cid)
+                    val w = t.id?.let { ChatWallpaper.Gradient(it) } ?: chatWall
                     val picked = t == theme
                     Box(Modifier.size(40.dp).then(if (picked) Modifier.border(2.dp, c.blue, CircleShape) else Modifier)
                         .padding(if (picked) 4.dp else 2.dp).clip(CircleShape)
-                        .drawBehind { drawWallpaper(w, dark, plain, pattern, null) }
+                        .drawBehind { drawWallpaper(w, dark, plain, pattern, if (t.id == null) chatPhoto else null) }
                         .border(0.5.dp, c.label.copy(alpha = 0.08f), CircleShape)
                         .clickable(onClickLabel = t.name) { theme = t })
                 }
@@ -297,7 +301,7 @@ private fun EditorPage(cid: String, shots: List<ScreenshotRules.Shot>, is24h: Bo
                             }
                             val footer = y(foot) to (y(foot) + foot.size.height)
                             val full = layer.toImageBitmap().asAndroidBitmap()
-                            val back: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit = { drawWallpaper(wallpaper, dark, plain, pattern, null) }
+                            val back: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit = { drawWallpaper(wallpaper, dark, plain, pattern, photo) }
                             val pictures = withContext(Dispatchers.Default) { cutPictures(full, cuts, footer, topPx, density, back) }
                             sharePictures(ctx, pictures)
                         }.getOrDefault(false)

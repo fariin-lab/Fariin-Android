@@ -511,7 +511,7 @@ object WallpaperArt {
  * the opening frame stalled cheap phones). From memory at once when it was shown before.
  */
 @androidx.compose.runtime.Composable
-private fun rememberWallpaperPhoto(ctx: android.content.Context, id: String?): androidx.compose.ui.graphics.ImageBitmap? {
+internal fun rememberWallpaperPhoto(ctx: android.content.Context, id: String?): androidx.compose.ui.graphics.ImageBitmap? {
     if (id == null) return null
     val app = ctx.applicationContext
     // The copy that just covers the screen (WallpaperFit), not the library's 2560 one; a LOW phone
