@@ -14,12 +14,8 @@ object ForwardRules {
                 share: Boolean = false, nowMs: Double = System.currentTimeMillis().toDouble()): String? {
         if (!conv.isGroup || conv.isChannel) return null
         val name = conv.displayName(me)
-        // The chat row itself already knows an ended or Fariin-locked group, doc or not.
-        if (conv.ended || conv.fariinLocked(nowMs)) return "You can't send messages in $name."
+        if (cannotPost(d, conv, me, nowMs)) return "You can't send messages in $name."
         if (d == null) return null
-        if (GroupMod.blocksSending(d, nowMs) || GroupAdmins.announcementBlock(d, me) != null || MemberRestrict.isMuted(d, me, nowMs)) {
-            return "You can't send messages in $name."
-        }
         // Each forward is its own message and the server removes a second one inside the wait.
         if (GroupAdmins.slows(d, me)) {
             if (messages.size > 1) return "Slow mode is on in $name. Forward one message at a time."
@@ -33,6 +29,21 @@ object ForwardRules {
             return "${kind.label} ${if (kind == GroupAdmins.SendKind.LOCATION) "is" else "are"} off in $name."
         }
         return null
+    }
+
+    /**
+     * A group that keeps me from sending at all right now: ended, locked by Fariin, held by the
+     * platform, admins only, or me muted in it. iOS canPostHere leaves these out of the picker
+     * (owner 2026-10-31), so they are not offered; [refusal] still says why for one that turned
+     * so while the sheet was open. A 1:1 or a channel is never left out here.
+     */
+    fun cannotPost(d: Map<String, Any?>?, conv: Conversation, me: String,
+                   nowMs: Double = System.currentTimeMillis().toDouble()): Boolean {
+        if (!conv.isGroup || conv.isChannel) return false
+        // The chat row itself already knows an ended or Fariin-locked group, doc or not.
+        if (conv.ended || conv.fariinLocked(nowMs)) return true
+        if (d == null) return false
+        return GroupMod.blocksSending(d, nowMs) || GroupAdmins.announcementBlock(d, me) != null || MemberRestrict.isMuted(d, me, nowMs)
     }
 
     /**

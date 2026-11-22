@@ -88,8 +88,13 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
     val chats = remember {
         // A quote goes to a group or a channel I post in, never to one person (owner 2026-11-10:
         // Share/Forward is for people; iOS ForwardPicker people filter).
+        // A group that keeps me from sending right now is left out, as iOS canPostHere does. The
+        // saved chat list is read once here, not once per chat.
+        val saved = runCatching { com.fariin.app.local.LocalCache.peekChats(me)?.toMap() }.getOrNull().orEmpty()
         CryptoHub.listedAll().filter { forwardable(it, me) && (!pickOne || it.isGroup || it.isChannel) }
-            .sortedByDescending { it.updatedAtMillis }
+            .filter { !com.fariin.app.data.ForwardRules.cannotPost(com.fariin.app.data.ThreadSeed.conv(it.id) ?: saved[it.id], it, me) }
+            // The chat list's own order (iOS displayUpdatedAt): a blocked person's hidden line does not lift the row.
+            .sortedByDescending { it.displayUpdatedAt(me) }
     }
     val shown = chats.filter { query.isBlank() || it.displayName(me).contains(query.trim(), ignoreCase = true) }
     // Rounded as iOS ForwardPicker: the grey sheet, the search as a floating pill, the chats in one
