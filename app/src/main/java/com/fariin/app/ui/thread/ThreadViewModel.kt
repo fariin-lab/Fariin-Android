@@ -211,9 +211,12 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     val ui = ThreadUi(
         otherPlusBubble = s.otherPlusBubble, myPlusBubble = s.myPlusBubble,
         title = channel?.info?.title?.ifEmpty { null } ?: guest?.preview?.title ?: conv?.displayName(me) ?: "",
-        subtitle = if (conv?.fariinLocked() == true) "" else channel?.let { com.fariin.app.channel.ChannelRules.followersLine(it.info.shownCount) }
+        subtitle = (if (conv?.fariinLocked() == true) "" else channel?.let { com.fariin.app.channel.ChannelRules.followersLine(it.info.shownCount) }
             ?: guest?.let { com.fariin.app.data.GroupRules.memberCount(it.preview.memberCount) }
-            ?: typingLine ?: if (conv?.isGroup == true) com.fariin.app.data.GroupRules.memberCount(conv.users.size) else presenceLine ?: "",
+            ?: typingLine ?: if (conv?.isGroup == true) com.fariin.app.data.GroupRules.memberCount(conv.users.size) else presenceLine ?: "")
+            // iOS: the warning word goes in front of the members line, never in front of "typing...".
+            .let { line -> if (groupLabel.isEmpty() || (line == typingLine && guest == null)) line
+                else listOf(if (groupLabel == "scam") "Scam warning" else "Fake group warning", line).filter { it.isNotEmpty() }.joinToString(" \u00b7 ") },
         groupLabel = groupLabel, groupVerified = groupVerified, groupVerifiedGold = groupVerifiedGold,
         photoUrl = channel?.info?.avatarUrl ?: guest?.preview?.photoUrl ?: conv?.displayPhoto(me),
         isGroup = conv?.isGroup == true || guest != null,
