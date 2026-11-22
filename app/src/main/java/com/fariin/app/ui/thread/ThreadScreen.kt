@@ -407,6 +407,8 @@ private fun ThreadContent(
     val selecting = selected.isNotEmpty()
     var bulkDelete by remember { mutableStateOf(false) }
     var bulkForward by remember { mutableStateOf<List<Message>?>(null) }
+    // iOS adminDeleteRequestFor: a group admin's pick holding other members' messages opens the admin sheet.
+    var adminBulk by remember { mutableStateOf<List<Message>?>(null) }
     BackHandler(enabled = selecting) { selected.clear() }
     val rowEnv = remember { RowEnv() }
     fun toggle(m: Message) { if (m.rowId in selected) selected.remove(m.rowId) else selected.add(m.rowId) }
@@ -626,6 +628,7 @@ private fun ThreadContent(
     if (bulkDelete) BulkDeleteDialog(picked, ui, onDismiss = { bulkDelete = false }) { plan ->
         actions.onDeleteMany(plan); selected.clear()
     }
+    adminBulk?.let { p -> AdminDeleteSheet(p, ui, actions, onDismiss = { adminBulk = null }, onProceed = { selected.clear() }) }
     val ch = ui.channel
     Isolated { postMenuFor?.let { m ->
         if (ch != null) com.fariin.app.ui.channels.ChannelPostMenu(ch, m, onDismiss = { postMenuFor = null; postPreview = null }, preview = postPreview,
@@ -1578,7 +1581,11 @@ private fun ThreadContent(
                     forwardEnabled = !restrictedNow && com.fariin.app.data.SelectRules.forwardable(picked),
                     copyEnabled = !restrictedNow && picked.any(MessageRules::canCopy),
                     busy = false,
-                    onDelete = { bulkDelete = true },
+                    onDelete = {
+                        // The picks as they are now: the sheet keeps them while it is open.
+                        val p = picked
+                        if (ui.isGroup && AdminDelete.opens(ui.groupDoc, ui.me, p)) adminBulk = p else bulkDelete = true
+                    },
                     onForward = { bulkForward = picked.sortedBy { it.createdAtMillis } },
                     onCopy = {
                         clipboard.setText(androidx.compose.ui.text.AnnotatedString(com.fariin.app.data.SelectRules.copyText(picked)))
