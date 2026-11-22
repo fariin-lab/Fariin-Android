@@ -43,16 +43,19 @@ object GroupMembers {
 
     /**
      * The Members page (iOS GroupMembersSheet.members): the search over names and, with or without
-     * a leading "@", the @usernames already read; by name, or owner, admins, then the rest.
+     * a leading "@", the @usernames already read, and each member's tag ([roles]: uid to its shown
+     * words); by name, or owner, admins, then the rest.
      */
-    fun search(g: Group, me: String, query: String, handles: Map<String, String> = emptyMap(), adminsFirst: Boolean = false): List<String> {
+    fun search(g: Group, me: String, query: String, handles: Map<String, String> = emptyMap(), adminsFirst: Boolean = false,
+               roles: Map<String, String> = emptyMap()): List<String> {
         val q = query.trim().lowercase()
         val handleQ = q.removePrefix("@")
         val admins = g.admins.toSet()
         val rows = g.users.mapNotNull { uid ->
             val n = shownName(g, uid, me)
             val hit = q.isEmpty() || n.lowercase().contains(q) ||
-                (handleQ.isNotEmpty() && handles[uid]?.lowercase()?.contains(handleQ) == true)
+                (handleQ.isNotEmpty() && handles[uid]?.lowercase()?.contains(handleQ) == true) ||
+                roles[uid]?.lowercase()?.contains(q) == true
             if (!hit) null else Triple(uid, n, if (g.isOwner(uid)) 0 else if (uid in admins) 1 else 2)
         }
         val byName = compareBy<Triple<String, String, Int>, String>(String.CASE_INSENSITIVE_ORDER) { it.second }

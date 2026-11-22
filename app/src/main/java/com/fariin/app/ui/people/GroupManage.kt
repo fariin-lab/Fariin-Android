@@ -730,7 +730,8 @@ private fun GroupMembersPage(cid: String, me: String, onBack: () -> Unit, push: 
     val canAdd = !closed && me in team.users && !com.fariin.app.data.GroupMod.blocksSending(doc) &&
         com.fariin.app.data.GroupWelcome.canAdd(me, doc)
     val canInvite = !closed && team.may(me, Right.INVITE_USERS)
-    val list = com.fariin.app.data.GroupMembers.search(g, me, query, handles, adminsFirst)
+    val list = com.fariin.app.data.GroupMembers.search(g, me, query, handles, adminsFirst,
+        com.fariin.app.data.GroupRole.all(doc).mapValues { it.value.display })
     val sections = com.fariin.app.data.GroupMembers.sections(list, { com.fariin.app.data.GroupMembers.shownName(g, it, me) }, adminsFirst)
     // A member who left (or became untouchable) while picked drops out of the pick.
     val stillPicked = picked.filter { team.canRemove(me, it) }.toSet()
