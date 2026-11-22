@@ -122,7 +122,9 @@ object AppLock {
                 // closed with CLEAR_TOP): checked on every start, so no tap gets past the lock.
                 if (!pending && unlocked) return
                 pending = false
-                if (live.any { it is LockActivity && !it.isFinishing }) return
+                // A lock page in THIS task already covers it. One in another task (the share
+                // sheet's) does not: this task gets its own.
+                if (live.any { it is LockActivity && !it.isFinishing && it.taskId == a.taskId }) return
                 val now = SystemClock.elapsedRealtime()
                 if (shouldLock(enabled(), unlocked, backgroundAt, now, delaySeconds())) {
                     unlocked = false

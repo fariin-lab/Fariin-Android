@@ -71,6 +71,12 @@ class LockActivity : ComponentActivity() {
         if (savedInstanceState == null) ask()
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Unlocked from a lock page in another task (the share sheet's): this one goes too.
+        if (AppLock.unlocked) { finish(); overridePendingTransition(0, 0) }
+    }
+
     private fun done() {
         AppLock.onUnlocked()
         finish()
