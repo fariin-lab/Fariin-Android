@@ -48,7 +48,9 @@ fun VoiceNoteBar(here: String?, me: String, modifier: Modifier = Modifier, onOpe
     // It fades and opens with its height (the list's or chat's space following), and closes the same
     // way, still showing the note while it leaves (iOS pops 117).
     // Not for a note the person paused on its bubble before leaving: they were done with it (iOS barVisible).
-    val showing = live.cid != null && live.id != null && live.cid != here && !(live.pausedByUser && !live.playing)
+    // Never over a locked app (the lock page is in front; this keeps the name off it while it comes up).
+    val locked = com.fariin.app.security.AppLock.enabled() && !com.fariin.app.security.AppLock.unlocked
+    val showing = live.cid != null && live.id != null && live.cid != here && !(live.pausedByUser && !live.playing) && !locked
     val held = androidx.compose.runtime.remember { arrayOf(live) }
     if (showing) held[0] = live
     com.fariin.app.ui.components.Appear(showing, modifier) { VoiceNoteBarBody(held[0], me, Modifier, onOpen) }
@@ -65,6 +67,8 @@ private fun VoiceNoteBarBody(s: VoicePlayer.State, me: String, modifier: Modifie
         s.author == me -> if (title.isEmpty()) "You" else "You · $title"
         else -> title.ifEmpty { "Voice message" }
     }
+    // A song (iOS PlayerAccessory with isMusic): its picture, title and artist, Next inside a playlist, no speed.
+    val music = s.music
     val rate = VoicePlayer.rate(cid)
     Box(modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).height(44.dp).clip(RoundedCornerShape(22.dp))
         .background(c.card).clickable { onOpen(cid) }
@@ -82,12 +86,26 @@ private fun VoiceNoteBarBody(s: VoicePlayer.State, me: String, modifier: Modifie
                     tint = c.accent, modifier = Modifier.size(22.dp))
             }
             Spacer(Modifier.width(6.dp))
-            Column(Modifier.weight(1f)) {
-                Text(name, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("Voice message", fontSize = 11.sp, color = c.secondary, maxLines = 1)
+            if (music != null) {
+                val art = rememberArt(music.art)
+                Box(Modifier.size(30.dp).clip(RoundedCornerShape(6.dp)).background(c.accent.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+                    if (art != null) androidx.compose.foundation.Image(art, null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        modifier = Modifier.matchParentSize())
+                    else Icon(ImageVector.cachedVector(R.drawable.ic_sf_music_note), null, tint = c.accent, modifier = Modifier.size(16.dp))
+                }
+                Spacer(Modifier.width(8.dp))
             }
-            Text(com.fariin.app.media.MediaRules.rateLabel(rate), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.secondary,
+            Column(Modifier.weight(1f)) {
+                Text(music?.title ?: name, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(if (music != null) music.artist.ifEmpty { "Song" } else "Voice message", fontSize = 11.sp, color = c.secondary,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (music == null) Text(com.fariin.app.media.MediaRules.rateLabel(rate), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.secondary,
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { VoicePlayer.cycleRate(cid) }.semantics { contentDescription = "Playback speed"; stateDescription = com.fariin.app.media.MediaRules.rateLabel(rate) }.padding(horizontal = 8.dp, vertical = 6.dp))
+            if (music?.hasNext == true) Box(Modifier.size(36.dp).clip(RoundedCornerShape(18.dp)).clickable { VoicePlayer.nextTrack() }
+                .semantics { contentDescription = "Next song" }, contentAlignment = Alignment.Center) {
+                Icon(ImageVector.cachedVector(R.drawable.ic_sf_forward_end_fill), null, tint = c.accent, modifier = Modifier.size(20.dp))
+            }
             Box(Modifier.size(36.dp).clip(RoundedCornerShape(18.dp)).clickable { VoicePlayer.stop() }, contentAlignment = Alignment.Center) {
                 Icon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Close", tint = c.secondary, modifier = Modifier.size(18.dp))
             }

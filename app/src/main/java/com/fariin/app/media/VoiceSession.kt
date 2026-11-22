@@ -30,8 +30,8 @@ import kotlinx.coroutines.launch
  * The open voice note on the lock screen, in the notification shade and on headset buttons (iOS
  * MPNowPlayingInfoCenter + MPRemoteCommandCenter in VoiceNotePlayer). One session over [VoicePlayer]'s
  * own ExoPlayer: each new note hands its player over, so the notification does not blink between
- * notes of a run. As iOS: play, pause and scrubbing only, no next or previous, no artwork, and it
- * goes away when the note is closed or the run of notes ends.
+ * notes of a run. A voice note: play, pause and scrubbing only, no artwork, as iOS. A song: its
+ * title, artist and picture, and next and previous inside a playlist. It goes away when the note is closed or the run of notes ends.
  *
  * Play and pause from outside go through [VoicePlayer.remotePlay] / [VoicePlayer.remotePause], so a
  * call still blocks play and a call ending does not override the person's choice.
