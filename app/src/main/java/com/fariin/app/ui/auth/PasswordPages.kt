@@ -328,7 +328,7 @@ fun PasskeysPage(auth: AuthRepository, onBack: () -> Unit, demoRows: List<Passke
                         Text(listOfNotNull(r.createdMs?.let { "created " + f.format(Date(it.toLong())) }, r.lastUsedMs?.let { "used " + f.format(Date(it.toLong())) })
                             .joinToString(" · "), fontSize = 15.sp, color = c.secondary)
                     }
-                    IconButton(onClick = { toDelete = r }) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_trash), "Delete", tint = c.red) }
+                    IconButton(onClick = { toDelete = r }, enabled = !adding) { Icon(ImageVector.cachedVector(R.drawable.ic_sf_trash), "Delete", tint = c.red) }
                 }
             }
             Text("Add Passkey", fontSize = 17.sp, color = c.accent, modifier = Modifier.clickable { add() }.padding(vertical = 8.dp))
@@ -339,7 +339,16 @@ fun PasskeysPage(auth: AuthRepository, onBack: () -> Unit, demoRows: List<Passke
     toDelete?.let { r ->
         GlassAlert(onDismissRequest = { toDelete = null }, title = { Text("Delete passkey?") },
             text = { Text("You will no longer be able to sign in to Fariin with this passkey.") },
-            confirmButton = { TextButton(onClick = { toDelete = null; scope.launch { try { Passkeys.delete(r.id); load() } catch (e: Exception) { error = AuthRepository.codeMessageFor(e) } } }) { Text("Delete", color = c.red) } },
+            confirmButton = { TextButton(onClick = {
+                toDelete = null
+                // iOS remove(): one job at a time, so a delete cannot cross an add still open.
+                if (adding || r.id.isEmpty()) return@TextButton
+                adding = true; error = null
+                scope.launch {
+                    try { Passkeys.delete(r.id); load() } catch (e: Exception) { error = AuthRepository.codeMessageFor(e) }
+                    finally { adding = false }
+                }
+            }) { Text("Delete", color = c.red) } },
             dismissButton = { TextButton(onClick = { toDelete = null }) { Text("Cancel") } })
     }
 }
