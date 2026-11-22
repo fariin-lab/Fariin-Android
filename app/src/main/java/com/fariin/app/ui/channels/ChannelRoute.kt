@@ -242,8 +242,8 @@ fun rememberChannelThread(cid: String, me: String, doc: Map<String, Any?>, messa
     val follows = entries.containsKey(cid)
     val role = ChannelRules.role(info, me, follows)
     LaunchedEffect(follows) { if (follows) joining = false }
-    // Read marks go forward as posts land (users/{me}/channels/{cid}.read).
-    LaunchedEffect(role, info.postCount) { if (role == ChannelRules.Role.FOLLOWER) ChannelService.markRead(cid, info.postCount) }
+    // Read marks (users/{me}/channels/{cid}.read) go forward from the thread, only at the newest
+    // post (ThreadViewModel), as iOS.
     // Views: only the posts that come on screen count (ThreadScreen -> ChannelViewQueue).
     @Suppress("UNUSED_VARIABLE") val tick = rx.size + pending.size + served.size + bias.size
     // An uploaded emoji taken off the admin list leaves the long-press bar and "More".

@@ -31,6 +31,8 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import com.fariin.app.local.Drafts
 
@@ -470,6 +472,22 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
                 val newest = st.messages.lastOrNull { it.authorId != me }?.rowId ?: ""
                 if (newest != handled) { handled = newest; vm.repo.markReadThrottled() }
             } } finally { vm.repo.flushRead() }
+        }
+    }
+    // A channel I follow: its read mark moves up only while the newest post is in view and the app is
+    // in front (iOS resetUnread at the bottom). Opening at the first unread post no longer reads them all.
+    val followerPosts = channel?.takeIf { it.role == com.fariin.app.channel.ChannelRules.Role.FOLLOWER }?.info?.postCount
+    val followerPostsNow = androidx.compose.runtime.rememberUpdatedState(followerPosts)
+    LaunchedEffect(cid) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            combine(androidx.compose.runtime.snapshotFlow { followerPostsNow.value }, atBottom, vm.repo.state) { n, bottom, st ->
+                if (n != null && bottom && st.loaded) n else null
+            }.distinctUntilChanged().collectLatest { n ->
+                n ?: return@collectLatest
+                // The list reports where it landed a moment after the open: wait for it.
+                delay(400)
+                com.fariin.app.channel.ChannelService.markRead(cid, n)
+            }
         }
     }
     val uploadCancel = remember(vm, me) { UploadCancel(me, vm.repo::cancelMediaSend, vm.repo::cancelAlbumItem) }
