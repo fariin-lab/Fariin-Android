@@ -647,6 +647,13 @@ private fun ThreadContent(
     // At the bottom = the newest row in view (the list is reversed). Read receipts follow it.
     val atBottom by remember { derivedStateOf { listState.firstVisibleItemIndex <= 1 } }
     LaunchedEffect(atBottom) { actions.onAtBottom(atBottom) }
+    // iOS jumpPagingInFlight: older pages fetched to reach a jump's target (a quote, a pin, a search
+    // match, a saved place) do not show the top spinner; the person is not looking at the top.
+    var jumpPaging by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    suspend fun pageTo(find: suspend (String) -> Boolean, id: String): Boolean {
+        jumpPaging++
+        try { return find(id) } finally { jumpPaging-- }
+    }
     // A failed message tapped (iOS decision D14): "Message not sent" with Resend and Delete.
     var failedFor by remember { mutableStateOf<Message?>(null) }
     failedFor?.let { fm ->
@@ -857,7 +864,7 @@ private fun ThreadContent(
         }
         if (!ui.loaded || ui.messages.isEmpty()) return@LaunchedEffect
         if (uiNow.value.messages.none { it.rowId == saved.rowId }) {
-            if (!actions.onEnsureLoaded(saved.messageId) || userDragged) {
+            if (!pageTo(actions.onEnsureLoaded, saved.messageId) || userDragged) {
                 restoredPlace = true
                 if (!userDragged) ChatReadingPositions.clear(ui.cid)
                 return@LaunchedEffect
@@ -934,7 +941,7 @@ private fun ThreadContent(
     // view and light it; then the bar moves on to the next pin.
     fun jumpTo(id: String, advance: Boolean) {
         scope.launch {
-            val found = actions.onEnsureLoaded(id)
+            val found = pageTo(actions.onEnsureLoaded, id)
             val list = uiNow.value.messages
             val i = list.indexOfFirst { it.id == id }
             if (!found || i < 0) {
@@ -959,7 +966,7 @@ private fun ThreadContent(
         val seq = ++quoteSeq[0]
         scope.launch {
             val here = uiNow.value.messages.any { it.id == id }
-            val found = here || (!actions.onHiddenByBlock(id) && actions.onEnsureLoaded(id))
+            val found = here || (!actions.onHiddenByBlock(id) && pageTo(actions.onEnsureLoaded, id))
             if (seq != quoteSeq[0]) return@launch
             val list = uiNow.value.messages
             val i = list.indexOfFirst { it.id == id }
@@ -978,7 +985,7 @@ private fun ThreadContent(
         val j = com.fariin.app.data.QuoteStore.pendingJump.value?.takeIf { it.cid == ui.cid } ?: return@LaunchedEffect
         if (!ui.loaded) return@LaunchedEffect
         com.fariin.app.data.QuoteStore.pendingJump.value = null
-        val found = actions.onEnsureLoaded(j.mid)
+        val found = pageTo(actions.onEnsureLoaded, j.mid)
         val list = uiNow.value.messages
         val i = list.indexOfFirst { it.id == j.mid }
         if (!found || i < 0) { actions.onNotice("Couldn't reach this post."); return@LaunchedEffect }
@@ -993,7 +1000,7 @@ private fun ThreadContent(
     LaunchedEffect(ui.cid, ui.loaded, ui.channel != null, repliesAsk) {
         val (c, mid) = repliesAsk?.takeIf { it.first == ui.cid && ui.channel != null && ui.loaded } ?: return@LaunchedEffect
         com.fariin.app.ui.channels.PostQuotesSheet.pendingReplies.value = null
-        if (!actions.onEnsureLoaded(mid) || c != ui.cid) return@LaunchedEffect
+        if (!pageTo(actions.onEnsureLoaded, mid) || c != ui.cid) return@LaunchedEffect
         val post = uiNow.value.messages.firstOrNull { it.id == mid } ?: return@LaunchedEffect
         // A quote (push or Activity row) opens on Quotes; everything else on Replies.
         com.fariin.app.ui.channels.PostQuotesSheet.startTab = com.fariin.app.ui.channels.PostQuotesSheet.pendingTab
@@ -1014,7 +1021,7 @@ private fun ThreadContent(
         // A newer step supersedes this one, so fast taps land one scroll on the last target (iOS).
         val seq = ++search.jumpSeq
         scope.launch {
-            val found = actions.onReachMatch(id)
+            val found = pageTo(actions.onReachMatch, id)
             if (seq != search.jumpSeq || !search.active) return@launch
             val list = uiNow.value.messages
             val i = list.indexOfFirst { it.id == id }
@@ -1317,7 +1324,9 @@ private fun ThreadContent(
                         is24h = is24h, mayReply = mayReply, env = rowEnv,
                     )
                 }
-                if (ui.loadingOlder) item(key = "older") {
+                // iOS: not for a jump's paging, nor at the newest (a short first page topping itself
+                // up is quiet; the spinner is for someone reading up).
+                if (ui.loadingOlder && jumpPaging == 0 && !atBottom) item(key = "older") {
                     Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = c.secondary, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
                     }
