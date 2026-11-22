@@ -73,7 +73,9 @@ fun PublicGroupSheet(cid: String, onClose: () -> Unit, onOpenChat: (String) -> U
                         fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(top = 4.dp))
                     if (p.description.isNotEmpty()) Text(p.description, fontSize = 15.sp, color = c.label, textAlign = TextAlign.Center,
                         maxLines = 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 10.dp))
-                    problem?.let { Text(it, fontSize = 14.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 16.dp)) }
+                    // A refusal (banned, closed) first: it is why Join is grey.
+                    val refusedText = GroupGuestPreviews.refused[cid]
+                    (refusedText ?: problem)?.let { Text(it, fontSize = 14.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 16.dp)) }
                     val sent = requested || p.requested
                     if (sent) Text("An admin will review your request.", fontSize = 14.sp, color = c.secondary, modifier = Modifier.padding(top = 16.dp))
                     Spacer(Modifier.height(24.dp))
@@ -84,7 +86,7 @@ fun PublicGroupSheet(cid: String, onClose: () -> Unit, onOpenChat: (String) -> U
                         p.needsApproval -> "Request to Join"
                         else -> "Join Group"
                     }
-                    val enabled = !joining && !sent
+                    val enabled = !joining && !sent && (refusedText == null || p.isMember)
                     Box(Modifier.fillMaxWidth().height(50.dp).clip(CircleShape).background(if (enabled || joining) c.accent else c.accent.copy(alpha = 0.4f))
                         .clickable(enabled = enabled && !joining) {
                             if (p.isMember) { onClose(); onOpenChat(cid); return@clickable }
@@ -92,7 +94,8 @@ fun PublicGroupSheet(cid: String, onClose: () -> Unit, onOpenChat: (String) -> U
                             scope.launch {
                                 runCatching { PublicGroups.join(cid) }
                                     .onSuccess { status -> if (status == "requested") requested = true else { onClose(); onOpenChat(cid) } }
-                                    .onFailure { problem = it.message }
+                                    // Banned sticks: Join stays grey with the server's words.
+                                    .onFailure { if (!GroupGuestPreviews.keepIfBanned(cid, it.message)) problem = it.message }
                                 joining = false
                             }
                         }, contentAlignment = Alignment.Center) {

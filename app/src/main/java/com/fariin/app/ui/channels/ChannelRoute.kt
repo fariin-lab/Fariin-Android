@@ -166,6 +166,11 @@ object ChannelGuestPreviews {
         warmScope.launch {
             val r = ChannelService.preview(cid)
             if (r is ChannelService.PreviewResult.Failed) { asked.remove(cid); return@launch }
+            // Refused (banned, closed): its words are kept, so the guest's Join bar is grey.
+            if (r is ChannelService.PreviewResult.Refused) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { com.fariin.app.ui.people.GroupGuestPreviews.noteRefused(cid, r.text) }
+                return@launch
+            }
             if (r !is ChannelService.PreviewResult.Found || r.preview.isMember) return@launch
             // The same notes the chat page's own ask makes, on the main thread.
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
@@ -227,6 +232,9 @@ fun rememberChannelThread(cid: String, me: String, doc: Map<String, Any?>, messa
         } else if (r is ChannelService.PreviewResult.Found && !r.preview.isMember) {
             // A public group, not a channel: the guest's header and Join bar (GroupGuest.kt).
             com.fariin.app.ui.people.GroupGuestPreviews.cache[cid] = r.preview
+        } else if (r is ChannelService.PreviewResult.Refused) {
+            // Banned or closed: the guest's Join bar goes grey with the server's words.
+            com.fariin.app.ui.people.GroupGuestPreviews.noteRefused(cid, r.text)
         }
         } finally { ChannelGuestPreviews.answered[cid] = true }
     }

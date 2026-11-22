@@ -40,6 +40,21 @@ import kotlinx.coroutines.launch
 object GroupGuestPreviews {
     /** Non-channel previews from publicGroupPreview, filled by the chat page's first ask. */
     val cache = mutableStateMapOf<String, ChannelPreview>()
+    /** The server's words when it says no (banned, closed): Join stays grey with them. */
+    val refused = mutableStateMapOf<String, String>()
+
+    /** A refusal keeps its words, and the last saved preview so the page still shows the group. */
+    fun noteRefused(cid: String, text: String) {
+        refused[cid] = text
+        if (cache[cid] == null) ChannelService.savedPreview(cid)?.takeIf { !it.isChannel }?.let { cache[cid] = it.copy(isMember = false) }
+    }
+
+    /** True for a join error that sticks (the server's "banned" words), kept like a refusal. */
+    fun keepIfBanned(cid: String, words: String?): Boolean {
+        if (words == null || !words.contains("banned", ignoreCase = true)) return false
+        refused[cid] = words
+        return true
+    }
 }
 
 data class GroupGuestUi(
@@ -47,6 +62,8 @@ data class GroupGuestUi(
     val joining: Boolean,
     val requested: Boolean,
     val problem: String?,
+    /** Banned or closed: Join is grey and these words say why. */
+    val refused: String?,
     val onJoin: () -> Unit,
 )
 
@@ -71,8 +88,8 @@ fun rememberGroupGuest(cid: String, me: String, doc: Map<String, Any?>, isChanne
     // A plain public group read from outside: its texts are not sealed.
     LaunchedEffect(p) { if (p != null) com.fariin.app.data.CryptoHub.notePlainGroup(cid) }
     if (isChannel || inDoc || listed || p == null || p.isChannel || (p.isMember && !left)) return null
-    return GroupGuestUi(p, joining, requested || p.requested, problem) {
-        if (joining) return@GroupGuestUi
+    return GroupGuestUi(p, joining, requested || p.requested, problem, GroupGuestPreviews.refused[cid]) {
+        if (joining || GroupGuestPreviews.refused[cid] != null) return@GroupGuestUi
         // Still inside the leave's Undo: nothing went to the server, so Join simply takes it back.
         if (com.fariin.app.data.LeaveUndo.isPending(cid)) { com.fariin.app.data.LeaveUndo.undo(); onJoined(); return@GroupGuestUi }
         joining = true; problem = null
@@ -80,7 +97,8 @@ fun rememberGroupGuest(cid: String, me: String, doc: Map<String, Any?>, isChanne
             try {
                 if (PublicGroups.join(cid) == "requested") requested = true else onJoined()
             } catch (e: Exception) {
-                problem = e.message ?: "Couldn't join. Try again."
+                // Banned sticks: Join goes grey with the server's words, not a retry.
+                if (!GroupGuestPreviews.keepIfBanned(cid, e.message)) problem = e.message ?: "Couldn't join. Try again."
             } finally { joining = false }
         }
     }
@@ -92,20 +110,22 @@ fun GroupGuestJoinBar(g: GroupGuestUi) {
     val c = Fariin.colors
     Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
-        val line = g.problem ?: if (g.requested) "An admin will review your request." else null
+        // A refusal (banned, closed) first: it is why Join is grey.
+        val line = g.refused ?: g.problem ?: if (g.requested) "An admin will review your request." else null
         line?.let { Text(it, fontSize = 14.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(bottom = 8.dp)) }
         val title = when {
             g.requested -> "Request Sent"
             g.preview.needsApproval -> "Request to Join"
             else -> "Join Group"
         }
-        val enabled = !g.requested && !g.joining
+        val grey = g.requested || g.refused != null
+        val enabled = !grey && !g.joining
         val shape = RoundedCornerShape(25.dp)
         Box(Modifier.fillMaxWidth().height(50.dp).clip(shape)
-            .background(if (g.requested) c.card else c.label)
+            .background(if (grey) c.card else c.label)
             .clickable(enabled = enabled, onClick = g.onJoin), contentAlignment = Alignment.Center) {
             com.fariin.app.ui.components.BusyContent(g.joining, c.bg) {
-                Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = if (g.requested) c.secondary else c.bg)
+                Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = if (grey) c.secondary else c.bg)
             }
         }
     }
