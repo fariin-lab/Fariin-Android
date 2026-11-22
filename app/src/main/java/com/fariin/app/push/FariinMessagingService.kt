@@ -74,8 +74,14 @@ class FariinMessagingService : FirebaseMessagingService() {
         // the app closed the system draws it from the notification part; with the app open it comes
         // here and is drawn the same way. A tap opens the Stories tab.
         if (message.data["kind"] == "story") {
+            // The name this phone shows for the poster (a saved contact name wins), as iOS titles it.
+            // Only with Message Preview on (`sn` sent); off, the title stays "Fariin".
+            val me = com.fariin.app.Fb.auth.currentUser?.uid.orEmpty()
+            val author = message.data["aid"].orEmpty()
+            val saved = if (me.isEmpty() || author.isEmpty() || message.data["sn"].isNullOrEmpty()) null else
+                (NotifStore.chat(applicationContext, "${me}_$author") ?: NotifStore.chat(applicationContext, "${author}_$me"))?.name?.takeIf { it.isNotEmpty() }
             if (Push.pushOn(applicationContext)) NotificationPoster.postStory(applicationContext,
-                message.notification?.title ?: message.data["t"] ?: "Fariin", message.notification?.body ?: message.data["b"] ?: "New story.", message.data["aid"].orEmpty())
+                saved ?: message.notification?.title ?: message.data["t"] ?: "Fariin", message.notification?.body ?: message.data["b"] ?: "New story.", author)
             return
         }
         // A reply alert (owner 2026-11-06): its own notification, whose tap opens that post's Replies.
