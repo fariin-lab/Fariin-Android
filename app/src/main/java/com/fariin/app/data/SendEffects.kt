@@ -43,10 +43,11 @@ object SendEffects {
     }
 
     /**
-     * Marks [mids] played, then asks the server which to play; returns the newest mid it names (or
-     * null). Every failure is silent.
+     * Marks [mids] played, then asks the server which to play; returns the newest mid it names with
+     * the effect the server read for it (or null). The answer's `play` is a map {mid: effect id}.
+     * Every failure is silent.
      */
-    suspend fun ask(c: Context, cid: String, mids: List<String>): String? {
+    suspend fun ask(c: Context, cid: String, mids: List<String>): Pair<String, String>? {
         if (mids.isEmpty()) return null
         val q = load(c)
         for (m in mids) { val k = "$cid/$m"; if (k !in q) q.addLast(k) }
@@ -55,8 +56,9 @@ object SendEffects {
             FirebaseFunctions.getInstance(PlusStore.REGION).getHttpsCallable("plusEffects")
                 .call(mapOf("cid" to cid, "mids" to mids)).await().getData() as? Map<*, *>
         } catch (_: Exception) { null } ?: return null
-        val play = (d["play"] as? List<*>).orEmpty().filterIsInstance<String>().toSet()
-        return mids.lastOrNull { it in play }
+        val play = (d["play"] as? Map<*, *>).orEmpty()
+        val mid = mids.lastOrNull { (play[it] as? String) in IDS } ?: return null
+        return mid to (play[mid] as String)
     }
 
     fun wipe(c: Context) {

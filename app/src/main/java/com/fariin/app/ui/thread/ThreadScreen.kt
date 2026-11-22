@@ -1457,8 +1457,9 @@ private fun ThreadContent(
                     if (listState.firstVisibleItemIndex > 1) return@LaunchedEffect
                     val cand = com.fariin.app.data.SendEffects.candidates(fxCtx, ui.cid, ui.me, ui.messages.takeLast(20))
                     if (cand.isEmpty()) return@LaunchedEffect
-                    val mid = com.fariin.app.data.SendEffects.ask(fxCtx, ui.cid, cand.map { it.id }) ?: return@LaunchedEffect
-                    val fx = cand.firstOrNull { it.id == mid }?.fx ?: return@LaunchedEffect
+                    val (_, fx) = com.fariin.app.data.SendEffects.ask(fxCtx, ui.cid, cand.map { it.id }) ?: return@LaunchedEffect
+                    // The effect the server read, not the one on my copy; and only if I am still here.
+                    if (!com.fariin.app.data.PlusStore.inFront) return@LaunchedEffect
                     if (!com.fariin.app.data.SendEffects.animationsOff(fxCtx)) fxPlaying = fx to System.nanoTime()
                 }
             }
