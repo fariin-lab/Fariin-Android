@@ -42,6 +42,18 @@ object MessageTones {
         e.apply()
     }
 
+    /** Any chat with its own sound (Reset All has something to undo). */
+    fun hasAnyCustom(ctx: Context): Boolean =
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).all.keys.any { it.startsWith("sound_") }
+
+    /** Every chat back to Note (iOS SoundStore.clearAllCustom): Reset All and sign-out. */
+    fun clearAll(ctx: Context) {
+        val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val e = p.edit()
+        for (k in p.all.keys) if (k.startsWith("sound_")) e.remove(k)
+        e.apply()
+    }
+
     fun uri(ctx: Context, t: Tone): Uri? = t.raw?.let { Uri.parse("android.resource://${ctx.packageName}/$it") }
 
     /** The channel a message in [cid] posts on: its tone's own, or the Messages channel for Note. */

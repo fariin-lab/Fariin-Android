@@ -182,5 +182,11 @@ object Push {
 
     /** Sign-out wipes the local switch and the explainer stays answered (iOS SessionWipe keeps
      *  the first-run flags, clears the account's settings). */
-    fun clearAccount(c: Context) { prefs(c).edit().remove(PUSH_ON).apply() }
+    fun clearAccount(c: Context) {
+        // The other notification switches are this account's too (iOS SessionWipe: notif.preview and
+        // the in-app three). Left behind, the next account saw the old one's choices.
+        prefs(c).edit().remove(PUSH_ON).remove("notif.preview").remove("notif.inAppSound")
+            .remove("notif.inAppVibrate").remove("notif.inAppPreview").apply()
+        MessageTones.clearAll(c)
+    }
 }
