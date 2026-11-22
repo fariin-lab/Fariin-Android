@@ -427,8 +427,12 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         // The sheet's Send (owner 2026-11-07, the reference's forward): the forwards oldest first,
         // then the note as its own message in each chat. One chat picked opens it at once, so the
         // forward is seen arriving; the work runs off this screen so leaving it does not stop it.
-        onForwardWithNote = { msgs, targets, note ->
+        onForwardWithNote = onForwardWithNote@{ msgs, targets, note ->
+            // The last door (iOS sendAll): Restricted chat may have come on while the sheet was open.
+            if (com.fariin.app.data.ChatRestrictions.isOn(cid)) return@onForwardWithNote
             val land = targets.singleOrNull()?.takeIf { it != cid }
+            // Back into this same chat: it lands in front of me, so no toast (iOS sendAll).
+            val backHere = targets.singleOrNull() == cid
             val ordered = msgs.sortedBy { it.createdAtMillis }
             // One chat picked: the forwards are already in it, sending, when it opens (owner 2026-11-14,
             // the big messengers' forward: you and the message land together, not the message later).
@@ -467,7 +471,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
                 val said = when {
                     // Deleted by their author before they went (Forwarder.Gone): said as such, not "try again".
                     gone > 0 && gone == ordered.size -> if (gone == 1) "This message was deleted." else "These messages were deleted."
-                    failedChats == 0 -> if (land != null) null else if (targets.size > 1) "Forwarded to ${targets.size} chats" else "Forwarded"
+                    failedChats == 0 -> if (land != null || backHere) null else if (targets.size > 1) "Sent to ${targets.size} chats" else "Forwarded"
                     failedChats == msgs.size * targets.size -> "Couldn't forward. Try again."
                     else -> "Some messages couldn't be forwarded."
                 }
