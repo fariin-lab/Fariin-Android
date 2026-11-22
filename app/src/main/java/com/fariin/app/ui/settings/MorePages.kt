@@ -171,6 +171,16 @@ private fun ChoicePage(title: String, prefsName: String, key: String, def: Strin
 
 // ---------------------------------------------------------------- Devices
 
+/** A sign-out refusal said in iOS DeviceSignOutError's words, shown as it is. */
+private class DeviceSignOutProblem(message: String) : Exception(message)
+
+/** iOS DeviceSignOutError.tooNew: why a new sign-in cannot sign others out, with the hours left when known. */
+private fun tooNewLine(hours: Int?): String {
+    val base = "For your security, a device logged in less than 24 hours ago can't log out other devices. Use a device you have been logged in on longer"
+    if (hours == null || hours <= 0) return "$base, or try again later."
+    return "$base, or try again in ${if (hours == 1) "1 hour" else "$hours hours"}."
+}
+
 private data class DeviceRow(val id: String, val model: String, val os: String, val app: String, val lastSeen: Long, val created: Long?, val location: String, val fcm: String?, val voip: String?)
 
 @Composable
@@ -218,16 +228,29 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
             batch.set(user.collection("push").document("tokens"), pushRemovals, SetOptions.merge())
         }
         batch.delete(user.collection("devices").document(d.id))
-        batch.commit().await()
-        // Its saved-account one-tap key too (iOS DeviceRegistry.signOut), so that phone asks for the
-        // password next time.
-        com.fariin.app.data.DeviceSessionKeys.revoke(listOf(d.id))
+        // Its one-tap key goes FIRST, as iOS DeviceRegistry.signOut: three tries, and if the server
+        // never confirms, nothing is removed. Else the row is gone but that phone signs straight back in.
+        var revoked = false
+        for (attempt in 0 until 3) {
+            if (revoked) break
+            if (attempt > 0) kotlinx.coroutines.delay(attempt * 1000L)
+            revoked = com.fariin.app.data.DeviceSessionKeys.revoke(listOf(d.id))
+        }
+        if (!revoked) throw DeviceSignOutProblem("That device could not be logged out right now. Check your connection and try again.")
+        try { batch.commit().await() }
+        catch (e: com.google.firebase.firestore.FirebaseFirestoreException) {
+            // The rules refuse a sign-in under 24 hours old (iOS tooNew(nil)).
+            if (e.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) throw DeviceSignOutProblem(tooNewLine(null))
+            throw e
+        }
     }
     fun run(work: suspend () -> Unit) {
         error = null
         scope.launch {
-            if (hoursLeft > 0) { error = "You can sign out other devices in about $hoursLeft h."; return@launch }
-            try { work() } catch (e: Exception) { error = "Couldn't sign out that device. ${e.localizedMessage ?: ""}".trim() }
+            if (hoursLeft > 0) { error = tooNewLine(hoursLeft); return@launch }
+            try { work() }
+            catch (e: DeviceSignOutProblem) { error = e.message }
+            catch (e: Exception) { error = "Couldn't sign out that device. ${e.localizedMessage ?: ""}".trim() }
         }
     }
     val now = System.currentTimeMillis()

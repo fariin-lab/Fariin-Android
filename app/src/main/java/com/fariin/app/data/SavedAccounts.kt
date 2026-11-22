@@ -154,11 +154,10 @@ object DeviceSessionKeys {
     /**
      * Signed in: end other phones' one-tap keys (iOS DeviceSessionKeys.revoke / revokeAllOthers), so a
      * phone signed out from the Devices page asks for the password next time instead of signing
-     * straight back in. Best effort.
+     * straight back in. True when the server confirmed it (iOS revoke(deviceIds:)).
      */
-    suspend fun revoke(deviceIds: List<String>) {
-        try { fn.getHttpsCallable("revokeDeviceSessions").call(mapOf("deviceIds" to deviceIds)).await() } catch (_: Exception) {}
-    }
+    suspend fun revoke(deviceIds: List<String>): Boolean =
+        try { fn.getHttpsCallable("revokeDeviceSessions").call(mapOf("deviceIds" to deviceIds)).await(); true } catch (_: Exception) { false }
 
     suspend fun revokeAllOthers(c: Context) {
         try { fn.getHttpsCallable("revokeDeviceSessions").call(mapOf("allExcept" to DeviceRegistry.thisDeviceId(c))).await() } catch (_: Exception) {}
