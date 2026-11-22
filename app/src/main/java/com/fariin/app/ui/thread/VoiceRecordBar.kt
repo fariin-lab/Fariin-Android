@@ -115,7 +115,7 @@ internal fun LockedVoiceBar(
             }
             Spacer(Modifier.width(4.dp))
             // The review strip's wave fades in when the recording pauses for review (iOS pops 115).
-            Waveform(bars, preview.progress, c.label, Modifier.weight(1f).height(22.dp).enterFade(true), onSeek)
+            Waveform(bars, preview.progress, c.label, Modifier.weight(1f).height(22.dp).enterFade(true), onSeek = onSeek)
             Spacer(Modifier.width(8.dp))
             val shown = if (preview.playing || preview.positionMs > 0) preview.positionMs / 1000.0 else total
             Text(MediaRules.durationLabel(floor(shown)), style = TextStyle(fontSize = 15.sp, color = c.secondary,

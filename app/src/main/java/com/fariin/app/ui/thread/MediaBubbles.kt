@@ -11,6 +11,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -527,7 +528,7 @@ internal fun Waveform(bars: List<Int>, progress: Float, tint: Color, modifier: M
         detectTapGestures { o -> seek((o.x / size.width).coerceIn(0f, 1f)) }
     }.then(if (!drag) Modifier else Modifier.pointerInput(Unit) {
         // iOS: a sideways drag on the wave scrubs the note. Taken before the reply swipe sees it.
-        androidx.compose.foundation.gestures.detectHorizontalDragGestures { ch, _ ->
+        detectHorizontalDragGestures { ch, _ ->
             ch.consume()
             if (size.width > 0) seek((ch.position.x / size.width).coerceIn(0f, 1f))
         }
