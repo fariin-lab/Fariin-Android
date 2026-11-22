@@ -385,7 +385,14 @@ fun ChatListScreen(
     // its latest time; pinnable (kept on this phone). Not in the Archive or a filtered list.
     val activity by com.fariin.app.data.ActivityFeed.summary.collectAsState()
     val activityPin by com.fariin.app.data.ActivityFeed.pinned.collectAsState()
-    val activityShown = !showArchive && filter == FILTER_ALL && folder == null && activity?.let { it.at > 0 } == true
+    // On All; on Unread (and in an Only Show Unread folder) only while unread; not on Groups,
+    // Channels or another folder (iOS activityRow).
+    val activityShown = !showArchive && activity?.let { a -> a.at > 0 && when {
+        folder != null -> folder.unreadOnly && a.unread > 0
+        filter == FILTER_ALL -> true
+        filter == FILTER_UNREAD -> a.unread > 0
+        else -> false
+    } } == true
     val activityPinned = activityShown && activityPin
     val activityMuted by com.fariin.app.data.ActivityFeed.muted.collectAsState()
     // "Activity" is found by the chat search like a chat title.
