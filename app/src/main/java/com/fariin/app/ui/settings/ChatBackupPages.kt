@@ -296,7 +296,16 @@ fun ChatBackupGate(me: String) {
 
     suspend fun search(t: String) {
         token = t
-        found = runCatching { ChatBackup.find(ctx, me, t) }.getOrNull()
+        // As iOS atSignIn: only an answer from Drive settles the question. A network or Drive error
+        // keeps it open (the history pull still waits), so a new phone is not left without its offer.
+        val r = runCatching { ChatBackup.find(ctx, me, t) }
+        r.exceptionOrNull()?.let { e ->
+            note = (e as? com.fariin.app.backup.BackupArchive.NewerVersion)?.message
+                ?: "Couldn't reach your Google Drive. Check your connection and try again."
+            return
+        }
+        found = r.getOrNull()
+        note = null
         if (found == null) { db.setMeta(me, "restore.checked", "none"); ChatBackup.markAnswered(me); step = "card" } else step = "restore"
     }
     val google = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
@@ -306,15 +315,18 @@ fun ChatBackupGate(me: String) {
     when (step) {
         "look" -> GlassAlert(onDismissRequest = {},
             title = { Text("Look for a backup?") },
-            text = { Text("If you backed up your chats to Google Drive before, Fariin can bring them back.") },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("If you backed up your chats to Google Drive before, Fariin can bring them back.")
+                note?.let { Text(it, color = c.red) }
+            } },
             confirmButton = { TextButton({ scope.launch {
                 when (val a = Drive.authorize(ctx)) {
                     is Drive.Auth.Token -> search(a.value)
                     is Drive.Auth.Ask -> google.launch(IntentSenderRequest.Builder(a.intent).build())
-                    Drive.Auth.Failed -> { db.setMeta(me, "restore.checked", "failed"); step = "card" }
+                    Drive.Auth.Failed -> note = "Couldn't reach your Google Drive. Check your connection and try again."
                 }
             } }) { Text("Continue", color = c.accent) } },
-            dismissButton = { TextButton({ db.setMeta(me, "restore.checked", "skipped"); ChatBackup.markAnswered(me); step = "card" }) { Text("Not Now", color = c.accent) } },
+            dismissButton = { TextButton({ note = null; db.setMeta(me, "restore.checked", "skipped"); ChatBackup.markAnswered(me); step = "card" }) { Text("Not Now", color = c.accent) } },
             containerColor = c.card)
         "restore" -> found?.let { f ->
             GlassAlert(onDismissRequest = {},
