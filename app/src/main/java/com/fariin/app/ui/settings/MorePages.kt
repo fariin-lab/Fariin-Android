@@ -657,7 +657,7 @@ private fun ManageStoragePage(pop: () -> Unit) {
             SettingsRow("Clear Cache", trailing = Trailing.NONE, titleColor = if (empty) Fariin.colors.secondary else Fariin.colors.red, last = true) { if (!empty) confirm = true }
         }
     }
-    if (confirm) YesNo("Clear cache?", "Photos, videos and voice messages you opened are removed from this phone. They download again when you open them. Your chats stay.", "Clear", onYes = {
+    if (confirm) YesNo("Clear cache?", "Photos, videos and voice messages you opened are removed from this phone. They download again when you open them, unless they are no longer on the server. Your chats stay.", "Clear", onYes = {
         confirm = false
         scope.launch {
             withContext(Dispatchers.IO) { com.fariin.app.media.StorageSweep.clear(ctx) }
