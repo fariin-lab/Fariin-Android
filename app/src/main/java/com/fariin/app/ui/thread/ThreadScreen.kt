@@ -1391,7 +1391,7 @@ private fun ThreadContent(
                 }
             }
             // iOS: hidden while a voice note is being recorded. It fades and grows in and out (iOS pops 16, 39).
-            androidx.compose.animation.AnimatedVisibility(!atBottom && !search.active && !voiceRecording,
+            androidx.compose.animation.AnimatedVisibility(!atBottom && !search.active && !voiceRecording && !ui.modHidden,
                 Modifier.align(Alignment.BottomEnd).zIndex(1f).padding(end = COMPOSER_SIDE, bottom = with(density) { bottomBarPx.toDp() } + 10.dp),
                 enter = com.fariin.app.ui.components.Smooth.fadeIn() + (if (com.fariin.app.ui.components.Smooth.on) androidx.compose.animation.scaleIn(com.fariin.app.ui.components.Smooth.soft(), initialScale = 0.8f) else androidx.compose.animation.EnterTransition.None),
                 exit = com.fariin.app.ui.components.Smooth.fadeOut() + (if (com.fariin.app.ui.components.Smooth.on) androidx.compose.animation.scaleOut(com.fariin.app.ui.components.Smooth.fadeSpec(), targetScale = 0.8f) else androidx.compose.animation.ExitTransition.None)) {

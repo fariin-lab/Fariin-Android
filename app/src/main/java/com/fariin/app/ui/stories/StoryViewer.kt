@@ -1539,7 +1539,8 @@ private fun StoryPage(
                     }
                     // iOS sound switch: a video with sound gets a speaker left of "more"; one tap
                     // mutes every story until it is tapped again.
-                    if (story.isVideo && StorySound.withSound[story.id] == true) {
+                    // Muted: the switch shows on every clip, so a short one can be unmuted too.
+                    if (story.isVideo && (StorySound.withSound[story.id] == true || StorySound.muted)) {
                         val off = StorySound.muted
                         Box(Modifier.size(44.dp).clickable { StorySound.muted = !off }
                             .semantics { contentDescription = if (off) "Turn sound on" else "Mute" },

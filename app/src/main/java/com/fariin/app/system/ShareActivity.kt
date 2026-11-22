@@ -113,7 +113,8 @@ class ShareActivity : ComponentActivity() {
             target?.let { id ->
                 listing.join()
                 val conv = CryptoHub.listedConversation(id)
-                if (conv == null || !forwardable(conv, me)) {
+                // A chat not in memory yet (cold start) is not refused; the send itself decides.
+                if (conv != null && !forwardable(conv, me)) {
                     Toast.makeText(this@ShareActivity, "You can't send to this chat.", Toast.LENGTH_SHORT).show()
                     target = null
                 }
