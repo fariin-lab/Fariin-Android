@@ -7,6 +7,7 @@ import com.fariin.app.ui.components.GlassDropdown
 import com.fariin.app.ui.thread.bubbles.artBubble
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.fariin.app.ui.components.cachedVector
@@ -3877,7 +3878,12 @@ private fun Modifier.combinedClickableLong(onLong: () -> Unit): Modifier {
     // its menu with the old words (and Edit started from them, and Edit History was missing).
     val latest = androidx.compose.runtime.rememberUpdatedState(onLong)
     val view = androidx.compose.ui.platform.LocalView.current
-    return this.pointerInput(Unit) {
+    // A screen reader reads the row as one item (sender, words, time, tick: iOS reads the whole row
+    // as one sentence) and its double tap and hold opens the same menu. Buttons inside (play, a
+    // photo, reactions) stay their own items. Touch is unchanged.
+    return this.semantics(mergeDescendants = true) {
+        onLongClick { latest.value(); true }
+    }.pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             val slop = viewConfiguration.touchSlop
