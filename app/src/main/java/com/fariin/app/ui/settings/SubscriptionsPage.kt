@@ -173,6 +173,21 @@ private fun PlusPageBody(shown: List<PlusFeature>, plan: String, onPlan: (String
         }
     }
     PlusAboutSection()
+    // iOS restoreSection: only while selling, at the end of the list.
+    if (plusSelling()) PlusRestoreRow()
+}
+
+/** Restore Purchases: sends each Play subscription on this phone to the server again (iOS restore). */
+@Composable
+private fun PlusRestoreRow() {
+    val c = Fariin.colors
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val billing = com.fariin.app.data.PlusBilling
+    Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+        Text("Restore Purchases", fontSize = 17.sp, color = if (billing.busy) c.secondary else c.accent,
+            modifier = Modifier.clip(CircleShape).clickable(enabled = !billing.busy) { billing.restore(ctx) }
+                .padding(horizontal = 16.dp, vertical = 10.dp))
+    }
 }
 
 /** The page's top: the star, the name, where this account stands, and a line for someone without Plus. */

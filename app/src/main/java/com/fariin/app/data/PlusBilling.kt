@@ -144,6 +144,43 @@ object PlusBilling {
 
     private fun restoreQuietly() { appCtx?.let { checkedThisRun = false; checkOwned(it) } }
 
+    /**
+     * Restore Purchases on the Plus page (iOS PlusPurchases.restore): each Fariin Plus subscription
+     * Play still lists goes to the server, then one line says how it went. Never unlocked here.
+     */
+    fun restore(c: Context) {
+        if (busy || !PlusStore.purchasesOn) return
+        busy = true
+        scope.launch {
+            var found = false
+            var confirmed = false
+            var refusal: String? = null
+            try {
+                val bc = ready(c)
+                val list = bc?.queryPurchasesAsync(QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.SUBS).build())
+                    ?.purchasesList.orEmpty()
+                    .filter { PRODUCT in it.products && it.purchaseState == Purchase.PurchaseState.PURCHASED }
+                for (p in list) {
+                    found = true
+                    try {
+                        fns.getHttpsCallable("plusPlayVerify").call(mapOf("purchaseToken" to p.purchaseToken)).await()
+                        confirmed = true
+                    } catch (e: FirebaseFunctionsException) {
+                        if (PlusStore.detailsCode(e) == "OTHER_ACCOUNT") refusal = e.message
+                    } catch (_: Exception) {}
+                }
+                if (bc == null) found = true
+            } catch (_: Exception) { found = true }
+            busy = false
+            notice = when {
+                confirmed -> { PlusStore.refresh(); "Your Fariin Plus subscription is restored." }
+                refusal != null -> refusal
+                found -> "Fariin could not confirm your subscription right now. Try again in a moment."
+                else -> "No Fariin Plus subscription was found for this Google account."
+            }
+        }
+    }
+
     private fun handle(p: Purchase, fromBuy: Boolean) {
         if (p.purchaseState == Purchase.PurchaseState.PENDING) {
             busy = false
