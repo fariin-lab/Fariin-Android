@@ -795,12 +795,12 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                     }
                 }
                 // Mute opens the times menu, as groups and channels do (iOS muteMenuItems, owner
-                // 2026-11-10); Unmute is one tap.
+                // 2026-11-10). Muted, the menu says when it ends and offers Unmute (iOS).
                 if (uid != me) Box(share.glassMenuAnchor(personMuteAnchor)) {
                     ActionTile(if (muted) "Unmute" else "Mute",
                         if (muted) ImageVector.cachedVector(com.fariin.app.R.drawable.ic_bell)
                         else ImageVector.cachedVector(com.fariin.app.R.drawable.ic_bell_off), Modifier.fillMaxWidth()) {
-                        if (muted) setMute(0.0) else personMuteMenu = true
+                        personMuteMenu = true
                     }
                 }
                 if (fromChat && uid != me) ActionTile("Search", ImageVector.cachedVector(R.drawable.ic_search_ios), share) {
@@ -883,11 +883,17 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         if (clearMine != null) add(com.fariin.app.ui.components.GlassMenuItem("Clear Messages",
             androidx.compose.ui.res.painterResource(R.drawable.ic_sf_trash), danger = true, divider = true) { clearMine() })
     }, backdrop = if (menuGlass) menuBackdrop else null, onDismiss = { moreOpen = false })
-    // "Mute this chat for…" (iOS muteMenuItems): 1 hour, 8 hours, 1 day, 1 week, Always.
+    // iOS muteMenuItems: unmuted, "Mute this chat for…" 1 hour, 8 hours, 1 day, 1 week, Always;
+    // muted, "Muted until <time>" and Unmute only.
+    val muteNow = System.currentTimeMillis()
     com.fariin.app.ui.components.GlassMenu(personMuteMenu, personMuteAnchor,
-        com.fariin.app.data.GroupInfoCircles.MUTE_CHOICES.map { (label, hours) ->
+        if (muted) listOf(com.fariin.app.ui.components.GlassMenuItem("Unmute", null) { setMute(0.0) })
+        else com.fariin.app.data.GroupInfoCircles.MUTE_CHOICES.map { (label, hours) ->
             com.fariin.app.ui.components.GlassMenuItem(label, null) { setMute(com.fariin.app.data.GroupInfoCircles.muteUntil(hours)) }
-        }, backdrop = if (menuGlass) menuBackdrop else null, caption = "Mute this chat for…", onDismiss = { personMuteMenu = false })
+        }, backdrop = if (menuGlass) menuBackdrop else null,
+        caption = if (muted) com.fariin.app.data.GroupInfoCircles.mutedLabel(muteUntil, muteNow,
+            android.text.format.DateFormat.is24HourFormat(shareCtx)) else "Mute this chat for…",
+        onDismiss = { personMuteMenu = false })
     // Over everything on the page: the round photo, out of the avatar and back into it.
     com.fariin.app.ui.photo.ProfilePhotoViewer(photo, shownPhoto,
         style = com.fariin.app.ui.photo.ProfilePhotoStyle(landsSquare = true),   // the whole photo, not a circle (owner 2026-11-13)
