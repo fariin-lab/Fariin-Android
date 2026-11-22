@@ -2685,8 +2685,9 @@ private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
                     blocked -> "Not available"
                     original?.deleted == true -> "This message was deleted"
                     original?.viewOnce == true -> "Photo"
-                    original != null -> replyLine(original, com.fariin.app.data.CardRules.previewWord(r.text) ?: r.text.ifEmpty { original.bodyText })
-                    else -> com.fariin.app.data.CardRules.previewWord(r.text) ?: r.text
+                    original != null -> replyLine(original, replyMediaLabel(original)
+                        ?: com.fariin.app.data.CardRules.previewWord(r.text) ?: r.text.ifEmpty { original.bodyText })
+                    else -> (com.fariin.app.data.CardRules.previewWord(r.text) ?: r.text).ifEmpty { "Message" }
                 }, fontSize = 12.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }

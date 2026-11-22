@@ -687,10 +687,29 @@ internal fun replyIcon(r: Message): Int? = when {
     else -> null
 }
 
-/** A reply's line: a voice note carries its length, "Voice message (0:04)". */
-internal fun replyLine(r: Message, plain: String): String =
-    if ((r.type == "audio" || r.audioUrl != null) && r.text.isEmpty() && (r.duration ?: 0.0) > 0)
-        "Voice message (" + com.fariin.app.media.MediaRules.durationLabel(r.duration!!) + ")" else plain
+/** A reply's line: a voice note carries its length, "Voice message (0:04)". An album with no
+ *  caption is "Photos", and an empty line is "Message" (iOS replyLabel). */
+internal fun replyLine(r: Message, plain: String): String = when {
+    (r.type == "audio" || r.audioUrl != null) && r.text.isEmpty() && (r.duration ?: 0.0) > 0 ->
+        "Voice message (" + com.fariin.app.media.MediaRules.durationLabel(r.duration!!) + ")"
+    r.type == "album" && r.text.isEmpty() && (plain.isEmpty() || plain == "Album") -> "Photos"
+    plain.isEmpty() -> "Message"
+    else -> plain
+}
+
+/** iOS replyLabel for a photo, GIF, video or album original: its caption wins, else what it is. */
+internal fun replyMediaLabel(o: Message): String? {
+    val media = o.type == "image" || o.type == "gif" || o.type == "video" || o.type == "album" ||
+        o.imageUrl != null || o.videoUrl != null
+    if (!media || o.deleted) return null
+    if (o.text.isNotEmpty()) return o.text
+    return when {
+        o.type == "album" -> "Photos"
+        o.type == "gif" -> "GIF"
+        o.type == "video" || o.videoUrl != null -> "Video"
+        else -> "Photo"
+    }
+}
 
 /** The jump-to-bottom arrow with the count of new messages below the reader (iOS jump button). */
 @Composable
