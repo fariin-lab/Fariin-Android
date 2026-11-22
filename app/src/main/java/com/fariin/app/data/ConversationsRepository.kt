@@ -134,3 +134,40 @@ object AnsweredRequests {
         }
     }
 }
+
+/**
+ * iOS needWholeList("requests"): nothing a person owns may become unreachable. The live list holds
+ * the newest [ConversationsRepository.PAGE_SIZE] chats only, so the Message Requests page reads
+ * the older ones itself, one page per read, until the server has nothing older (capped as iOS at
+ * 20 pages in all). One-shot reads: the main list's listener is not touched.
+ */
+object OlderChats {
+    private const val MAX_PAGES = 19   // the live page + 19 = iOS maxWindow (20 pages)
+
+    /** My chats older than the live window, oldest-first pages appended; empty when the window holds them all. */
+    suspend fun beyondWindow(me: String, window: List<Conversation>): List<Conversation> {
+        val mine = window.filter { me in it.users }
+        if (mine.size < ConversationsRepository.PAGE_SIZE) return emptyList()
+        var after = mine.minOfOrNull { it.updatedAtMillis } ?: return emptyList()
+        val out = ArrayList<Conversation>()
+        val db = com.fariin.app.Fb.db
+        repeat(MAX_PAGES) {
+            // One ms past the mark: a doc in the same ms as the window's oldest is read again, never skipped.
+            val ms = after.toLong() + 1
+            val at = com.google.firebase.Timestamp(Math.floorDiv(ms, 1000L), (Math.floorMod(ms, 1000L) * 1_000_000).toInt())
+            val snap = db.collection("conversations")
+                .whereArrayContains("users", me)
+                .orderBy("updatedAt", Query.Direction.DESCENDING)
+                .startAfter(at)
+                .limit(ConversationsRepository.PAGE_SIZE)
+                .get().await()
+            val page = snap.documents.map {
+                Conversation.fromFirestore(it.id, it.getData(DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) ?: emptyMap())
+            }
+            out += page
+            if (page.size < ConversationsRepository.PAGE_SIZE) return out
+            after = page.minOf { it.updatedAtMillis }
+        }
+        return out
+    }
+}

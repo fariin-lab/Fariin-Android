@@ -383,7 +383,20 @@ fun MessageRequestsScreen(api: PeopleApi, requests: List<Conversation>, onBack: 
     if (failed) com.fariin.app.ui.components.GlassAlert(onDismissRequest = { failed = false }, title = { Text("Couldn't do that") },
         text = { Text("Check your connection and try again.") },
         confirmButton = { TextButton({ failed = false }) { Text("OK", color = c.accent) } }, containerColor = c.card)
-    val list = requests.filter { it.id !in gone }
+    // Requests older than the live list's window (iOS needWholeList("requests")): read once when the
+    // page opens, the live ones win where both have a chat.
+    var older by remember { mutableStateOf<List<Conversation>>(emptyList()) }
+    LaunchedEffect(me) {
+        if (me.isEmpty() || me == com.fariin.app.ui.debug.DemoChats.ME) return@LaunchedEffect
+        older = runCatching { com.fariin.app.data.OlderChats.beyondWindow(me, com.fariin.app.data.ChatsNow.all) }.getOrDefault(emptyList())
+            .filter { com.fariin.app.data.ChatList.isIncomingRequest(it, me) && !it.isCleared(me) &&
+                !com.fariin.app.data.BlockList.contains(it.otherUid(me)) }
+            .distinctBy { it.id }
+    }
+    val list = remember(requests, older, gone) {
+        val live = requests.map { it.id }.toSet()
+        (requests + older.filter { it.id !in live }).filter { it.id !in gone }
+    }
     // The white page with the shared frosted top (as Archive and the other pages); the bar was a grey band.
     com.fariin.app.ui.components.GlassBarPage(false, Modifier.background(c.bg), page = c.bg, frosted = true,
         bar = { PageBar("Message Requests", onBack = onBack) }) { top -> Column(Modifier.fillMaxSize()) {
