@@ -156,6 +156,9 @@ class CallActivity : ComponentActivity() {
     private var cameraAfterAsk = false
     private val askCamera = registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok && cameraAfterAsk) { if (groupMode) GroupCall.toggleCamera() else CallManager.toggleCamera() }
+        // iOS: a camera refused for good is an alert with a way to Settings, not a dead button.
+        else if (!ok && cameraAfterAsk && com.fariin.app.ui.components.PermissionDenied.isBlocked(this, Manifest.permission.CAMERA))
+            permAlert = PermAlert(camera = true, voiceInstead = null, inCall = true)
         cameraAfterAsk = false
     }
     /**
@@ -289,6 +292,7 @@ class CallActivity : ComponentActivity() {
                         onMinimize = { minimizeGroup() }, pip = inPip,
                         onHand = { GroupCall.setHand(it) }, onReact = { GroupCall.react(it) },
                         onRoute = { GroupCall.setRoute(it) }, onFlip = { GroupCall.flipCamera() })
+                    permAlert?.let { PermissionAlert(it) }
                 } else {
                     val ui by CallManager.ui.collectAsState()
                     LaunchedEffect(ui.status.phase, asking) {
@@ -374,7 +378,10 @@ class CallActivity : ComponentActivity() {
     /** The group call's mute: turning the mic on asks for it if a muted join never had it. */
     private fun micToggle() {
         if (!GroupCall.ui.value.micOn && !granted(Manifest.permission.RECORD_AUDIO)) {
-            withMic(false, { GroupCall.toggleMic() }, {})
+            withMic(false, { GroupCall.toggleMic() }, {
+                if (com.fariin.app.ui.components.PermissionDenied.isBlocked(this, Manifest.permission.RECORD_AUDIO))
+                    permAlert = PermAlert(camera = false, voiceInstead = null, inCall = true)
+            })
         } else GroupCall.toggleMic()
     }
 
@@ -572,7 +579,7 @@ class CallActivity : ComponentActivity() {
     }
 
     /** The "access is off" alert before a dial (iOS presentPermissionAlert). */
-    private class PermAlert(val camera: Boolean, val voiceInstead: (() -> Unit)?)
+    private class PermAlert(val camera: Boolean, val voiceInstead: (() -> Unit)?, val inCall: Boolean = false)
     private var permAlert by mutableStateOf<PermAlert?>(null)
 
     @androidx.compose.runtime.Composable
@@ -581,8 +588,12 @@ class CallActivity : ComponentActivity() {
         com.fariin.app.ui.components.GlassAlert(
             onDismissRequest = close,
             title = if (a.camera) "Camera Access Is Off" else "Microphone Access Is Off",
-            message = if (a.camera) "Allow Fariin to use the camera in Settings to make video calls."
-                else "Allow Fariin to use the microphone in Settings to make calls.",
+            message = when {
+                a.inCall && a.camera -> "Allow Fariin to use the camera in Settings so others can see you."
+                a.inCall -> "Allow Fariin to use the microphone in Settings so others can hear you."
+                a.camera -> "Allow Fariin to use the camera in Settings to make video calls."
+                else -> "Allow Fariin to use the microphone in Settings to make calls."
+            },
             dismissOnAction = false,
             actions = listOfNotNull(
                 com.fariin.app.ui.components.GlassAlertAction("Settings", com.fariin.app.ui.components.GlassAlertStyle.Bold) {
