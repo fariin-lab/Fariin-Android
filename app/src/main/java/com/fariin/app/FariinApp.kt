@@ -39,6 +39,8 @@ class FariinApp : Application() {
         Thread({
             runCatching { com.fariin.app.ui.settings.AppIcons.heal(this) }
             runCatching { com.fariin.app.data.AppearancePrefs.applySplash(this) }
+            // The photo editor's copies older than a day (no EXIF, but a plain copy of a sent photo).
+            runCatching { com.fariin.app.ui.thread.sweepOldEdits(this) }
         }, "startup-io").apply { isDaemon = true }.start()
         // The caches below give memory back when the app leaves the screen or the phone runs low,
         // and are sized from this phone's per-app memory class.

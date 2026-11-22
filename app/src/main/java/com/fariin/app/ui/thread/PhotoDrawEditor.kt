@@ -416,8 +416,9 @@ internal fun deleteEditedCopy(ctx: android.content.Context, uri: Uri) {
     }
 }
 
-/** Edited copies are read once by the send or the attach sheet; a day later they are only clutter. */
-private fun sweepOldEdits(ctx: android.content.Context) {
+/** Edited copies are read once by the send or the attach sheet; a day later they are only clutter.
+ *  Also run at app start, so the copies go even when the editor is not opened again. */
+internal fun sweepOldEdits(ctx: android.content.Context) {
     val cutoff = System.currentTimeMillis() - 24 * 60 * 60 * 1000L
     editDir(ctx).listFiles()?.forEach { if (it.lastModified() < cutoff) it.delete() }
 }
