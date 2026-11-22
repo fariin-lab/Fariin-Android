@@ -936,12 +936,14 @@ class ThreadRepository(
         // iOS ThreadView.send: one bubble holds 2,500 (owner 2026-10-29); longer text goes out as
         // several messages, in order, each one waiting for the one before. The reply, the
         // @-mentions and the link card ride the first (a mention pings once, not once per bubble).
-        // The bold does not survive the split (iOS): the runs were made for the whole text.
+        // Each part keeps its own bold and links (iOS 2026-11-19: before, every part went out plain).
         val parts = MessageLength.splitForBubbles(t)
         if (parts.size > 1) {
+            val partFmt = TextFormat.forParts(fmt, t, parts)
             var before: kotlinx.coroutines.Job? = null
             parts.forEachIndexed { i, p ->
-                before = sendOne(p, if (i == 0) reply else null, if (i == 0) mentions else emptyList(), before, card = i == 0)
+                before = sendOne(p, if (i == 0) reply else null, if (i == 0) mentions else emptyList(), before, card = i == 0,
+                    fmt = partFmt[i])
             }
             return
         }

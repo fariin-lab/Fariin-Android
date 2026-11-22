@@ -247,6 +247,33 @@ object TextFormat {
         return normalizeLinks(links.map { Link(it.start - lead, it.end - lead, it.url) }, raw.trim().length)
     }
 
+    /**
+     * A long text sent as several bubbles (iOS ThreadView.send, 2026-11-19): each part keeps the bold
+     * and links that fall inside it, measured from the part's own start. [fmt] is for [whole]; the
+     * [parts] are found in [whole] in order. A part not found, or with nothing on it, gets null.
+     */
+    fun forParts(fmt: String?, whole: String, parts: List<String>): List<String?> {
+        val bold = parse(fmt, whole.length)
+        val links = parseLinks(fmt, whole.length)
+        if (bold.isEmpty() && links.isEmpty()) return parts.map { null }
+        var cursor = 0
+        return parts.map { p ->
+            val lo = whole.indexOf(p, cursor)
+            if (lo < 0) return@map null
+            val hi = lo + p.length
+            cursor = hi
+            val pb = bold.mapNotNull { s ->
+                val a = maxOf(lo, s.start); val b = minOf(hi, s.end)
+                if (b > a) Span(a - lo, b - lo) else null
+            }
+            val pl = links.mapNotNull { k ->
+                val a = maxOf(lo, k.start); val b = minOf(hi, k.end)
+                if (b > a) Link(a - lo, b - lo, k.url) else null
+            }
+            serialize(pb, p.length, pl)
+        }
+    }
+
     /** As inclusive ranges, for the bubble's text drawing. */
     fun ranges(spans: List<Span>): List<IntRange> = spans.map { it.start until it.end }
 }
