@@ -92,6 +92,7 @@ object ConnectionStatus {
 
     private fun route(up: Boolean) {
         hasRoute = up
+        if (up) Glow.retryIfFailed()
         _state.value = next(_state.value, up, null)
         if (up) armSettle() else { settle?.cancel(); settle = null }
     }

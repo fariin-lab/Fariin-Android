@@ -177,6 +177,20 @@ object Glow {
         if (newUid.isEmpty()) return
         prefs = c.applicationContext.getSharedPreferences("glow", Context.MODE_PRIVATE)
         _seenUpTo.value = prefs?.getLong(seenKey(newUid), 0L) ?: 0L
+        attach(newUid)
+    }
+
+    /** A listener that errored is finished for good; attach both again for the same uid (iOS retryIfFailed). */
+    fun retryIfFailed() {
+        if (uid.isEmpty() || !_state.value.hasFailed) return
+        glowersReg?.remove(); glowersReg = null
+        glowingReg?.remove(); glowingReg = null
+        glowersFailed = false; glowingFailed = false
+        attach(uid)
+        publish()
+    }
+
+    private fun attach(newUid: String) {
         // Two listeners, not one or-query: the rules can only prove a list pinned on one field.
         // The sets are read on the listen thread (a big glow list is many docs); the state is still
         // only ever written on the main thread, in the order the answers came.

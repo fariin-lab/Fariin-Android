@@ -93,8 +93,8 @@ fun GlowActionTile(door: GlowDoor, modifier: Modifier = Modifier) {
     val label = if (s.known && glowing) "Remove Glowing" else "Glow Story"
     Box(modifier.semantics { contentDescription = label }) {
         // iOS draws "ic_glow" at 0.42 of the 60 circle.
-        GlassActionCircle("Glow", Modifier.fillMaxWidth(), dimmed = !s.known, enabled = s.known,
-            onClick = { if (glowing) menu = true else door.intro = true }) { col ->
+        GlassActionCircle("Glow", Modifier.fillMaxWidth(), dimmed = !s.known, enabled = s.known || s.hasFailed,
+            onClick = { if (s.hasFailed) Glow.retryIfFailed() else if (glowing) menu = true else door.intro = true }) { col ->
             GlowMark(60.dp * 0.42f, filled = s.known && glowing, tint = col)
         }
         RemoveGlowingMenu(menu, onDismiss = { menu = false }) { menu = false; door.remove() }
@@ -114,8 +114,8 @@ fun GlowOverflow(door: GlowDoor, more: @Composable (close: () -> Unit) -> Unit =
         GlassDropdown(open, onDismissRequest = { open = false }, shape = FariinMenu.shape, border = FariinMenu.border, containerColor = c.card) {
             if (glowing) DropdownMenuItem(text = { Text("Remove Glowing", color = c.red) },
                 onClick = { open = false; door.remove() }, leadingIcon = { GlowMark(20.dp, filled = true, tint = c.red) })
-            else DropdownMenuItem(text = { Text("Glow Story", color = if (s.known) c.label else c.secondary) }, enabled = s.known,
-                onClick = { open = false; door.intro = true }, leadingIcon = { GlowMark(20.dp, tint = if (s.known) c.label else c.secondary) })
+            else DropdownMenuItem(text = { Text("Glow Story", color = if (s.known) c.label else c.secondary) }, enabled = s.known || s.hasFailed,
+                onClick = { open = false; if (s.hasFailed) Glow.retryIfFailed() else door.intro = true }, leadingIcon = { GlowMark(20.dp, tint = if (s.known) c.label else c.secondary) })
             more { open = false }
         }
     }
