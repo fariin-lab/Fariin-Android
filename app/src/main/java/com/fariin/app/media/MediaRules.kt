@@ -309,6 +309,14 @@ object MediaRules {
     fun wideMediaBox(pixelW: Double?, pixelH: Double?, width: Float): Pair<Float, Float> {
         val aspect = if (pixelW != null && pixelH != null && pixelW > 0 && pixelH > 0)
             (pixelW / pixelH).toFloat().coerceIn(0.8f, 2.5f) else 1f
-        return width.roundToInt().toFloat() to (width / aspect).roundToInt().toFloat()
+        // Capped for a wide screen (iOS 2026-11-17): at most 600 across and 560 down, same shape.
+        // A phone held upright is under both; a phone on its side or a tablet no longer gets a
+        // portrait post taller than the screen.
+        var w = min(width, WIDE_MEDIA_MAX_W)
+        var h = w / aspect
+        if (h > WIDE_MEDIA_MAX_H) { h = WIDE_MEDIA_MAX_H; w = h * aspect }
+        return w.roundToInt().toFloat() to h.roundToInt().toFloat()
     }
+    const val WIDE_MEDIA_MAX_W = 600f
+    const val WIDE_MEDIA_MAX_H = 560f
 }

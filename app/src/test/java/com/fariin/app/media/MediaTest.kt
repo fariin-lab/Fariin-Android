@@ -146,6 +146,17 @@ class MediaTest {
         assertEquals(325f to 325f, MediaRules.wideMediaBox(40.0, 40.0, 325f))
     }
 
+    @Test fun wideMediaBoxIsCappedOnAWideScreen() {
+        // A phone on its side (782 post width): a portrait clip stops at 560 down, its own shape.
+        assertEquals(448f to 560f, MediaRules.wideMediaBox(720.0, 1280.0, 782f))
+        // A landscape one stops at 600 across.
+        assertEquals(600f to 338f, MediaRules.wideMediaBox(1920.0, 1080.0, 782f))
+        // A square one: 600 would be too tall, so 560 x 560.
+        assertEquals(560f to 560f, MediaRules.wideMediaBox(1000.0, 1000.0, 782f))
+        // An upright phone is under both caps and unchanged.
+        assertEquals(325f to 406f, MediaRules.wideMediaBox(720.0, 1280.0, 325f))
+    }
+
     @Test fun labelsAndWaveform() {
         assertEquals("0:53", MediaRules.durationLabel(52.6))
         assertEquals("1:05", MediaRules.durationLabel(65.0))
