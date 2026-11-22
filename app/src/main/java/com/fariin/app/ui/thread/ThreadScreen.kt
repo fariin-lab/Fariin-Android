@@ -1319,8 +1319,10 @@ private fun ThreadContent(
             // each pass, so a row never holds the screen's state and is skipped when its own is unchanged.
             rowEnv.jumpTo = { id -> jumpTo(id, advance = false) }
             rowEnv.toggle = { m -> toggle(m) }
-            // A story-reaction emoji opens no menu (iOS customMenuActions returns none for it).
-            rowEnv.openMenu = { m, src, preview -> if (!com.fariin.app.data.MessageRules.isStoryReaction(m)) { menuSource = src; menuPreview = preview; menuFor = m } }
+            // A story-reaction emoji opens no menu (iOS customMenuActions returns none for it), and a
+            // public group's guest gets no menu at all (iOS, owner 2026-10-21: react, reply, pin and
+            // delete are the members').
+            rowEnv.openMenu = { m, src, preview -> if (!com.fariin.app.data.MessageRules.isStoryReaction(m) && uiNow.value.groupGuest == null) { menuSource = src; menuPreview = preview; menuFor = m } }
             rowEnv.openPostMenu = { m, preview -> postPreview = preview; postMenuFor = m }
             rowEnv.reply = { m -> replySwiped = true; replyTo = m; editing = null }
             rowEnv.swipeMenu = { m -> swipeMenu(m) }
