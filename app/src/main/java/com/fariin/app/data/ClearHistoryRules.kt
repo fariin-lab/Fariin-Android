@@ -9,15 +9,17 @@ object ClearHistoryRules {
     enum class Step {
         /** My own `clearedAt` mark on the chat (server time), as Delete on one chat. */
         CLEAR_MARK,
-        /** A channel I only follow: iOS unfollows it. A follower has no mark of its own to write. */
-        UNFOLLOW,
+        /** A channel I only follow: left as it is. A follower has no clear mark of its own, and
+         *  unfollowing every channel without a word is the wrong outcome (decision 2026-11-22; iOS
+         *  asked to stop unfollowing too). */
+        SKIP,
         /** The Fariin chat: its own history clear. */
         CLEAR_OFFICIAL,
     }
 
     fun step(me: String, c: Conversation): Step = when {
         c.id == OfficialChannel.CID -> Step.CLEAR_OFFICIAL
-        c.isFollower(me) -> Step.UNFOLLOW
+        c.isFollower(me) -> Step.SKIP
         else -> Step.CLEAR_MARK
     }
 }

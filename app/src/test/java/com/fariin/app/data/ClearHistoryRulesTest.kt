@@ -18,9 +18,9 @@ class ClearHistoryRulesTest {
         assertEquals(Step.CLEAR_MARK, ClearHistoryRules.step(me, mine))
     }
 
-    @Test fun followedChannelIsUnfollowed() {
+    @Test fun followedChannelIsLeftAlone() {
         val followed = Conversation(id = "c2", users = listOf("owner"), isChannel = true, followerRead = 3)
-        assertEquals(Step.UNFOLLOW, ClearHistoryRules.step(me, followed))
+        assertEquals(Step.SKIP, ClearHistoryRules.step(me, followed))
     }
 
     @Test fun fariinChatClearsItsOwnHistory() {

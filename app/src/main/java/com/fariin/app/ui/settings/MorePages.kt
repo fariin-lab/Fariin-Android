@@ -582,7 +582,7 @@ private fun ChatsSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
                 val ok = com.fariin.app.data.CryptoHub.listedAll().map { c ->
                     when (com.fariin.app.data.ClearHistoryRules.step(me, c)) {
                         com.fariin.app.data.ClearHistoryRules.Step.CLEAR_MARK -> com.fariin.app.ui.chats.ChatListActions.deleteForMe(me, c)
-                        com.fariin.app.data.ClearHistoryRules.Step.UNFOLLOW -> com.fariin.app.ui.chats.ChatListActions.deleteByKind(me, c)
+                        com.fariin.app.data.ClearHistoryRules.Step.SKIP -> true
                         com.fariin.app.data.ClearHistoryRules.Step.CLEAR_OFFICIAL -> { com.fariin.app.data.OfficialChannel.clearHistory(); true }
                     }
                 }.all { it }
