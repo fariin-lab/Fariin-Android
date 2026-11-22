@@ -472,7 +472,7 @@ internal fun VoiceBody(m: Message, cid: String, isMe: Boolean, width: Dp, meta: 
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Waveform(m.waveform, progress, tint, Modifier.weight(1f).height(20.dp)) { f ->
+                    Waveform(m.waveform, progress, tint, Modifier.weight(1f).height(20.dp), drag = true) { f ->
                         // iOS: works before the first play too; the spot is kept and play starts there.
                         if (mine) VoicePlayer.seek(m.rowId, f) else if (durMs > 0) VoicePlayer.stash(m.rowId, (f * durMs).toLong())
                     }
@@ -519,12 +519,19 @@ internal fun VoiceBody(m: Message, cid: String, isMe: Boolean, width: Dp, meta: 
 }
 
 @Composable
-internal fun Waveform(bars: List<Int>, progress: Float, tint: Color, modifier: Modifier, onSeek: (Float) -> Unit) {
+internal fun Waveform(bars: List<Int>, progress: Float, tint: Color, modifier: Modifier, drag: Boolean = false, onSeek: (Float) -> Unit) {
     val list = bars.ifEmpty { List(40) { 12 } }
     var w by remember { mutableStateOf(1f) }
+    val seek by androidx.compose.runtime.rememberUpdatedState(onSeek)
     Canvas(modifier.pointerInput(Unit) {
-        detectTapGestures { o -> onSeek((o.x / size.width).coerceIn(0f, 1f)) }
-    }) {
+        detectTapGestures { o -> seek((o.x / size.width).coerceIn(0f, 1f)) }
+    }.then(if (!drag) Modifier else Modifier.pointerInput(Unit) {
+        // iOS: a sideways drag on the wave scrubs the note. Taken before the reply swipe sees it.
+        androidx.compose.foundation.gestures.detectHorizontalDragGestures { ch, _ ->
+            ch.consume()
+            if (size.width > 0) seek((ch.position.x / size.width).coerceIn(0f, 1f))
+        }
+    })) {
         w = size.width
         val drawn = MediaRules.drawBars(list, size.width, 4.dp.toPx())
         val count = drawn.size.coerceAtLeast(1)
