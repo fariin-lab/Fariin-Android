@@ -161,10 +161,12 @@ fun CallLinkDetailsScreen(roomId: String, onBack: () -> Unit) {
     val state = remember(link.roomId) { LinkState(link.roomId, link.key, link.name, null, null, link.admin) }
     LaunchedEffect(link.roomId) {
         val d = CallLinks.readDoc(link.roomId)
+        // iOS isVideo / approval(for:): a link with no `video` field is video (made before the
+        // setting); unread, both stay unknown and the page shows the link as video.
         if (d != null) {
-            state.approval = d["restrictions"] == "adminApproval"
-            state.video = d["video"] == true
-        } else state.video = false
+            (d["restrictions"] as? String)?.let { state.approval = it == "adminApproval" }
+            state.video = d["video"] as? Boolean ?: true
+        }
     }
     CallLinkPage(onBack) { top ->
         androidx.compose.foundation.layout.Spacer(Modifier.height(top))
