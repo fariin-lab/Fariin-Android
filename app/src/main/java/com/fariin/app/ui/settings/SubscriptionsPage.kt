@@ -346,6 +346,7 @@ fun PlusGateSheet(feature: String, onDismiss: () -> Unit) {
     if (f == null) { PlusPageSheet(onDismiss); return }
     val c = Fariin.colors
     var toPage by remember { mutableStateOf(false) }
+    val hasPlus = PlusStore.isPlus
     val motion = rememberSheetMotion { if (toPage) page = true else onDismiss() }
     val density = LocalDensity.current
     val windowH = LocalWindowInfo.current.containerSize.height
@@ -367,9 +368,14 @@ fun PlusGateSheet(feature: String, onDismiss: () -> Unit) {
                     modifier = Modifier.padding(horizontal = 24.dp).padding(top = 10.dp))
                 Spacer(Modifier.weight(1f))
                 Box(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp).fillMaxWidth().height(50.dp).clip(CircleShape)
-                    .background(PlusBlue).clickable { toPage = true; motion.close() }, contentAlignment = Alignment.Center) {
-                    Text(if (f.id in plusVisualFeatures) "Unlock with Fariin Plus" else "Learn About Fariin Plus",
-                        fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                    // iOS PlusGateButton: someone who has Plus by now gets "Got It", which only closes.
+                    .background(PlusBlue).clickable { toPage = !hasPlus; motion.close() }, contentAlignment = Alignment.Center) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(if (hasPlus) "Got It" else if (f.id in plusVisualFeatures) "Unlock with Fariin Plus" else "Learn About Fariin Plus",
+                            fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1)
+                        // Things you see carry the star after their words (iOS star).
+                        if (!hasPlus && f.id in plusVisualFeatures) PlusBadgeImage(17.dp, tint = Color.White)
+                    }
                 }
             }
             com.fariin.app.ui.components.FloatingIcon(ImageVector.cachedVector(R.drawable.ic_sf_xmark), "Close",
