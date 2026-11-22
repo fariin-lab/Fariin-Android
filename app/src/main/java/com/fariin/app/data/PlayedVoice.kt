@@ -14,8 +14,12 @@ import org.json.JSONObject
 object PlayedVoice {
     private const val PREFS = "fariin_played_voice"
     private const val KEY = "upTo"
+    private const val IDS = "ids"
     private val _upTo = MutableStateFlow<Map<String, Double>>(emptyMap())
     val upTo: StateFlow<Map<String, Double>> = _upTo.asStateFlow()
+    /** The notes played on this phone, by message id (iOS playedVoiceIds, the last 600 kept). */
+    private val _ids = MutableStateFlow<List<String>>(emptyList())
+    val ids: StateFlow<List<String>> = _ids.asStateFlow()
     @Volatile private var loaded = false
 
     fun init(c: Context) {
@@ -27,14 +31,25 @@ object PlayedVoice {
                 val o = JSONObject(raw ?: "{}")
                 o.keys().asSequence().associateWith { o.getDouble(it) }
             }.getOrDefault(emptyMap())
+            val rawIds = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(IDS, null)
+            _ids.value = runCatching {
+                val a = org.json.JSONArray(rawIds ?: "[]")
+                List(a.length()) { a.getString(it) }
+            }.getOrDefault(emptyList())
             loaded = true
         }
     }
 
-    /** A note in [cid] sent at [createdAtMs] was played. */
-    fun markPlayed(c: Context, cid: String, createdAtMs: Double) {
+    /** A note in [cid] sent at [createdAtMs] was played; [messageId] is kept for the bubble's dot. */
+    fun markPlayed(c: Context, cid: String, createdAtMs: Double, messageId: String? = null) {
         init(c)
         tellServer(cid, createdAtMs)
+        if (messageId != null && messageId !in _ids.value) {
+            val list = (_ids.value + messageId).takeLast(600)
+            _ids.value = list
+            c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putString(IDS, org.json.JSONArray(list).toString()).apply()
+        }
         if (createdAtMs <= (_upTo.value[cid] ?: 0.0)) return
         val next = _upTo.value + (cid to createdAtMs)
         _upTo.value = next
@@ -70,6 +85,22 @@ object PlayedVoice {
     /** iOS Conversation.voicePlayedByOther: anyone but me played up to [createdAtMs] (a group: anybody). */
     fun playedByOther(conv: Conversation?, me: String, createdAtMs: Double): Boolean =
         conv != null && conv.lastPlayedVoice.any { (k, v) -> k != me && v >= createdAtMs }
+
+    /**
+     * The bubble's "not heard yet" dot (iOS isUnplayed): this note was never played here. Anything at or
+     * before the newest played note of the chat counts as heard, so old history stays quiet.
+     */
+    fun isUnplayed(cid: String, messageId: String, createdAtMs: Double, upTo: Map<String, Double>, ids: List<String>): Boolean =
+        messageId !in ids && createdAtMs > (upTo[cid] ?: 0.0)
+
+    /** Sign-out: the played marks go with the account (iOS PlayedVoice.clear). */
+    fun clear(c: Context) {
+        _upTo.value = emptyMap()
+        _ids.value = emptyList()
+        pending.clear()
+        c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+        loaded = true
+    }
 
     /** Chat list: the newest message is someone else's voice note not played yet. */
     fun lastVoiceUnplayed(conv: Conversation, me: String, upTo: Map<String, Double>): Boolean {
