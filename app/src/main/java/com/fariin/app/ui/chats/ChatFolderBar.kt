@@ -94,6 +94,9 @@ internal fun ChatFolderBar(chats: List<Conversation>, me: String, onEdit: (ChatF
     val measurer = androidx.compose.ui.text.rememberTextMeasurer()
     val bounds = remember { androidx.compose.runtime.mutableStateMapOf<String, Pair<Float, Float>>() }
     val scroll = androidx.compose.foundation.rememberScrollState()
+    val heldCard = remember { arrayOf(card) }
+    if (card != null) heldCard[0] = card
+    androidx.compose.foundation.layout.Column(Modifier.fillMaxWidth()) {
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
         val avail = with(density) { maxWidth.toPx() } - with(density) { 8.dp.toPx() }
         val natural = folders.map { f ->
@@ -120,12 +123,9 @@ internal fun ChatFolderBar(chats: List<Conversation>, me: String, onEdit: (ChatF
                 if (id != ChatFoldersStore.selectedId) { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); ChatFoldersStore.select(id) }
             }
         }
-        // One panel: a capsule for the tabs alone (21 = half the 42 row), 20 corners with the card
-        // under them after a hairline. The card fades and grows in and out, the panel with it, never
-        // in one frame (closing it, or a tab other than All Chats).
-        val panel = androidx.compose.foundation.shape.RoundedCornerShape(if (card == null) 21.dp else 20.dp)
-        val heldCard = remember { arrayOf(card) }
-        if (card != null) heldCard[0] = card
+        // The tabs are their own capsule; the chat list card sits under it on its own surface
+        // (iOS 1a45a2f9c, 2026-11-21: no shared panel, no glass on glass).
+        val panel = CircleShape
         androidx.compose.foundation.layout.Column(Modifier.fillMaxWidth().floating(panel).clip(panel)) {
         Box(Modifier.fillMaxWidth().height(42.dp)
             .pointerInput(fits) {
@@ -190,15 +190,20 @@ internal fun ChatFolderBar(chats: List<Conversation>, me: String, onEdit: (ChatF
                 }
             }
         }
-        com.fariin.app.ui.components.Appear(card != null) {
-            heldCard[0]?.let { shown ->
-                androidx.compose.foundation.layout.Column {
-                    Box(Modifier.fillMaxWidth().height(0.5.dp).background(c.separator))
-                    ChatCardContent(shown, me)
-                }
-            }
         }
+    }
+    // The card: radius 20, 16 in from each side, 8 below, fading in and out over 0.32 s (iOS); its
+    // room opens and closes with it so the list under it slides, never jumps. All Chats only.
+    val cardMotion = androidx.compose.animation.core.tween<Float>(320)
+    androidx.compose.animation.AnimatedVisibility(card != null,
+        enter = androidx.compose.animation.fadeIn(cardMotion) + androidx.compose.animation.expandVertically(androidx.compose.animation.core.tween(320)),
+        exit = androidx.compose.animation.fadeOut(cardMotion) + androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(320))) {
+        heldCard[0]?.let { shown ->
+            val cardShape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)
+            ChatCardContent(shown, me, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+                .floating(cardShape).clip(cardShape))
         }
+    }
     }
 }
 
