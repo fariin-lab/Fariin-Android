@@ -339,6 +339,7 @@ fun OfficialChatScreen(onBack: () -> Unit, onInfo: (() -> Unit)? = null) {
                     onForward = { forwardTexts = listOf(a.plainText) },
                     onSelect = { picked.add(a.id) },
                     onDelete = { pendingDelete = listOf(a.id) },
+                    onImage = { a.mediaUrl?.let { zoomed = it } },
                     mine = view.state.reactions[a.id], onReact = { OfficialChannel.react(a.id, it) },
                     // Not on a picture, as iOS (a picture opens on one tap there).
                     onDoubleTap = if (a.mediaUrl == null) ({ OfficialChannel.react(a.id,
@@ -398,11 +399,16 @@ private fun kindIcon(k: AnnouncementKind): ImageVector = when (k) {
 private fun AnnouncementCard(a: Announcement, time: String, buttons: List<AnnouncementButton>, onTap: (AnnouncementButton) -> Unit,
                              ticked: Boolean?, onToggle: () -> Unit,
                              onCopy: () -> Unit, onForward: () -> Unit, onSelect: () -> Unit, onDelete: () -> Unit,
+                             onImage: () -> Unit,
                              mine: String?, onReact: (String?) -> Unit, onDoubleTap: (() -> Unit)?, current: Boolean) {
     val c = Fariin.colors
     val accent = if (a.kind == AnnouncementKind.SECURITY) c.red else c.blue
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var menu by remember { mutableStateOf(false) }
+    val press: () -> Unit = {
+        if (ticked != null) onToggle()
+        else { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); menu = true }
+    }
     // Long press: the reaction bar, then Copy, Forward, Select and Delete (for me), as a chat message (iOS menuActions).
     // While selecting (ticked not null) a tap or long press ticks the card and its buttons rest.
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -418,19 +424,20 @@ private fun AnnouncementCard(a: Announcement, time: String, buttons: List<Announ
         // The search's current match is ringed, so the step lands somewhere the eye can find.
         .then(if (current) Modifier.border(2.dp, c.blue, RoundedCornerShape(20.dp)) else Modifier)
         .combinedClickable(onClick = { if (ticked != null) onToggle() },
-            onDoubleClick = if (ticked == null && onDoubleTap != null) onDoubleTap else null, onLongClick = {
-            if (ticked != null) onToggle()
-            else { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); menu = true } })) {
+            onDoubleClick = if (ticked == null && onDoubleTap != null) onDoubleTap else null, onLongClick = press)) {
         if (a.mediaUrl != null) {
-            AsyncImage(a.mediaUrl, contentDescription = null, contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp))
+            // One tap opens the picture full screen (iOS onImageTap); a long press is the card's menu.
+            AsyncImage(a.mediaUrl, contentDescription = "Photo", contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp)
+                    .combinedClickable(onClick = { if (ticked != null) onToggle() else onImage() }, onLongClick = press))
         }
         Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(kindIcon(a.kind), contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
                 Text(a.kind.label, style = MaterialTheme.typography.labelLarge, color = accent, modifier = Modifier.weight(1f))
-                Text(time, style = MaterialTheme.typography.labelMedium, color = c.secondary)
+                // An edited note says so before its time (iOS footer).
+                Text(if (a.editedAt != null) "edited $time" else time, style = MaterialTheme.typography.labelMedium, color = c.secondary)
             }
             if (a.title.isNotEmpty()) {
                 Spacer(Modifier.size(6.dp))
