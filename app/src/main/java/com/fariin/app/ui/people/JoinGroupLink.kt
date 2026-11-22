@@ -179,8 +179,12 @@ fun JoinGroupSheet(code: String, onClose: () -> Unit, onOpenChat: (String) -> Un
                     val status = d?.get("status") as? String ?: ""
                     val cid = d?.get("cid") as? String ?: ""
                     when {
-                        status == "requested" -> { requestSent = true; GroupLinkPreviews.note(code, requested = true) }
-                        cid.isNotEmpty() -> { GroupLinkPreviews.note(code, member = true); onClose(); if (d?.get("channel") == true || p.isChannel) onOpenChannel(cid) else onOpenChat(cid) }
+                        status == "requested" -> {
+                            requestSent = true; GroupLinkPreviews.note(code, requested = true)
+                            // iOS: closes by itself once "Request Sent" has been read.
+                            scope.launch { kotlinx.coroutines.delay(1_200); onClose() }
+                        }
+                        cid.isNotEmpty() -> { GroupLinkPreviews.note(code, member = true); com.fariin.app.data.GroupLinkCards.noteJoined(code, cid); onClose(); if (d?.get("channel") == true || p.isChannel) onOpenChannel(cid) else onOpenChat(cid) }
                         else -> joinError = "Couldn't join. The link may have expired; ask for a new one."
                     }
                 }
@@ -216,9 +220,11 @@ fun JoinGroupSheet(code: String, onClose: () -> Unit, onOpenChat: (String) -> Un
                                 }
                             }
                             Spacer(Modifier.width((minOf(3, p.faces.size) * 20 + 14).dp))
-                            val names = p.mutuals.take(2).joinToString(", ") { it.name }
-                            val rest = p.mutualCount - minOf(2, p.mutuals.size)
-                            Text(if (rest > 0) "$names and $rest more you know are members" else "$names ${if (p.mutualCount == 1) "is a member" else "are members"}",
+                            // iOS mutualsLine: the first name, then how many others.
+                            val first = p.mutuals.first().name
+                            val others = maxOf(0, maxOf(p.mutualCount, p.mutuals.size) - 1)
+                            Text(if (others == 0) "$first already joined this group"
+                                else "$first and $others ${if (others == 1) "other" else "others"} already joined this group",
                                 fontSize = 14.sp, color = c.secondary, modifier = Modifier.weight(1f, fill = false))
                         }
                     }
