@@ -2529,6 +2529,7 @@ class ThreadRepository(
             .get().await()
         // Clear Chat (iOS loadChat): what the chat no longer shows, its search does not find.
         val clearedMs = maxOf(clearedAtForMe(), CryptoHub.listedConversation(cid)?.clearedAt?.get(me) ?: 0.0)
+        val now = System.currentTimeMillis().toDouble()
         return snap.documents.mapNotNull { d ->
             val m = Message.fromFirestore(d.id, d.data ?: emptyMap(), cid) { raw, author -> crypto.decrypt(raw, cid, author) }
             when {
@@ -2536,7 +2537,9 @@ class ThreadRepository(
                 HiddenMessages.isHidden(m.id) -> null
                 m.authorId != me && BlockList.hides(m.authorId, m.createdAtMillis) -> null
                 m.text == Message.NOT_ENCRYPTED -> null
-                else -> ChatSearch.searchText(m)?.let { ChatSearch.Item(m.id, it, m.authorId, m.createdAtMillis) }
+                // Ran out on the timer, the server has not deleted it yet: search never finds it.
+                Disappearing.isExpired(m, now) -> null
+                else -> ChatSearch.searchText(m)?.let { ChatSearch.Item(m.id, it, m.authorId, m.createdAtMillis, expiresAtMillis = m.expiresAtMillis) }
             }
         }
     }
