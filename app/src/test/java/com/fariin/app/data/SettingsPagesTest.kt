@@ -124,6 +124,11 @@ class SettingsPagesTest {
         assertEquals(1, AccountReport.chatCount(listOf(one, cleared, group), "me", groupsOn = false))
     }
 
+    @Test fun accountReportDeviceDefaultsAsIos() {
+        assertEquals(AccountReport.Device("Phone", "", "", 99, false), AccountReport.device(null, null, null, null, false, 99))
+        assertEquals(AccountReport.Device("Pixel 8", "Android 16", "1.0", 5, true), AccountReport.device("Pixel 8", "Android 16", "1.0", 5, true, 99))
+    }
+
     @Test fun noEmDashesInPageWords() {
         val words = listOf(PrivacyRules.footer("lastSeen"), PrivacyRules.footer("groups"), PrivacyRules.footer("calls")) +
             AccountDeletion.reasons.map { it.second } + SettingsRules.lessData.map { it.second } + AppLock.delays.map { it.second }

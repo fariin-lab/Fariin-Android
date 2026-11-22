@@ -43,6 +43,13 @@ object AccountReport {
     fun chatCount(convs: List<com.fariin.app.data.Conversation>, uid: String, groupsOn: Boolean): Int =
         convs.count { !it.isCleared(uid) && (groupsOn || !it.isGroup) }
 
+    /**
+     * One device record, as iOS DeviceSession: no model reads "Phone", and a last-active time the
+     * server has not written yet reads as now (that device is writing it this second).
+     */
+    fun device(model: String?, os: String?, app: String?, lastSeenMs: Long?, thisDevice: Boolean, now: Long) =
+        Device(model ?: "Phone", os ?: "", app ?: "", lastSeenMs ?: now, thisDevice)
+
     /** Pure: the file's text. */
     fun build(
         now: Long, uid: String, name: String, handle: String, about: String, email: String?, joinedMs: Long?, hasPhoto: Boolean,
@@ -115,8 +122,8 @@ object AccountReport {
         val thisId = DeviceRegistry.thisDeviceId(context)
         val devices = kotlinx.coroutines.withTimeoutOrNull(8_000) { try {
             db.collection("users").document(uid).collection("devices").get().await().documents.map { d ->
-                Device(d.getString("model") ?: "", d.getString("os") ?: "", d.getString("appVersion") ?: "",
-                    (d.get("lastSeenAt") as? Timestamp)?.toDate()?.time ?: 0L, d.id == thisId)
+                device(d.getString("model"), d.getString("os"), d.getString("appVersion"),
+                    (d.get("lastSeenAt") as? Timestamp)?.toDate()?.time, d.id == thisId, System.currentTimeMillis())
             }
         } catch (_: Exception) { null } }
         // All lookups at once, each capped; one that runs out prints "An account you blocked".
