@@ -136,8 +136,10 @@ object GroupManage {
     suspend fun removeMember(cid: String, uid: String, name: String): Unit = memberStep {
         val ref = conv(cid)
         val d = ref.get().await().data ?: emptyMap()
-        val mod = (d["mod"] as? Map<*, *>)?.get("state") as? String ?: "ok"
-        val canNotice = GroupAdmins.announcementBlock(d, me) == null && mod == "ok"
+        // iOS canSend(now) && !groupMod.blocksSending(): a suspension that is over lets the line through.
+        val now = System.currentTimeMillis().toDouble()
+        val canNotice = GroupAdmins.announcementBlock(d, me) == null && !MemberRestrict.isMuted(d, me, now) &&
+            !GroupMod.blocksSending(d, now)
         val update = hashMapOf<String, Any>(
             "users" to FieldValue.arrayRemove(uid),
             "admins" to FieldValue.arrayRemove(uid),
