@@ -77,6 +77,12 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var query by remember { mutableStateOf("") }
     val chosen = remember { mutableStateListOf<String>() }
+    // A group that would not take this from me says why at the tap (iOS ForwardPicker.refusal).
+    var refused by remember { mutableStateOf<String?>(null) }
+    refused?.let { why ->
+        com.fariin.app.ui.components.GlassAlert(onDismissRequest = { refused = null }, title = "Can't send here", message = why,
+            actions = listOf(com.fariin.app.ui.components.GlassAlertAction("OK") {}))
+    }
     val chats = remember {
         // A quote goes to a group or a channel I post in, never to one person (owner 2026-11-10:
         // Share/Forward is for people; iOS ForwardPicker people filter).
@@ -119,6 +125,8 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
                     val on = conv.id in chosen
                     Row(
                         Modifier.fillMaxWidth().clickable {
+                            if (!on) com.fariin.app.data.ForwardRules.refusal(com.fariin.app.data.ForwardRules.docOf(conv.id, me), conv, me, preview)
+                                ?.let { refused = it; return@clickable }
                             if (pickOne) { onSend(listOf(conv.id)); onDismiss(); return@clickable }
                             if (on) chosen.remove(conv.id) else if (chosen.size < MediaRules.FORWARD_CHATS_AT_ONCE) chosen += conv.id
                         }.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -138,7 +146,9 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
             }
             if (pickOne) Spacer(Modifier.height(16.dp))
             else if (onSendNote != null) ForwardComposer(preview, chats.filter { it.id in chosen }, me) { note ->
-                onSendNote(chosen.toList(), note); onDismiss()
+                val picked = chats.filter { it.id in chosen }.map { it to com.fariin.app.data.ForwardRules.docOf(it.id, me) }
+                val why = com.fariin.app.data.ForwardRules.noteRefusal(picked, me, note)
+                if (why != null) refused = why else { onSendNote(chosen.toList(), note); onDismiss() }
             }
             else Box(
                 Modifier.fillMaxWidth().padding(16.dp).height(50.dp)
