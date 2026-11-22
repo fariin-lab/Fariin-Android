@@ -129,7 +129,7 @@ fun GroupGuestJoinBar(g: GroupGuestUi) {
     Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
         // A refusal (banned, closed) first: it is why Join is grey.
-        val line = g.refused ?: g.problem ?: if (g.requested) "An admin will review your request." else null
+        val line = g.refused ?: g.problem ?: if (g.requested) "Your request is waiting for an admin." else null
         line?.let { Text(it, fontSize = 14.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(bottom = 8.dp)) }
         val title = when {
             g.requested -> "Request Sent"

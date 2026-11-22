@@ -77,7 +77,7 @@ fun PublicGroupSheet(cid: String, onClose: () -> Unit, onOpenChat: (String) -> U
                     val refusedText = GroupGuestPreviews.refused[cid]
                     (refusedText ?: problem)?.let { Text(it, fontSize = 14.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 16.dp)) }
                     val sent = requested || p.requested
-                    if (sent) Text("An admin will review your request.", fontSize = 14.sp, color = c.secondary, modifier = Modifier.padding(top = 16.dp))
+                    if (sent) Text("Your request is waiting for an admin.", fontSize = 14.sp, color = c.secondary, modifier = Modifier.padding(top = 16.dp))
                     Spacer(Modifier.height(24.dp))
                     val title = when {
                         p.isMember -> "Open Group"
