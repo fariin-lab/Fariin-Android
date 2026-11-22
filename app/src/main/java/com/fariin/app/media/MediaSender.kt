@@ -259,6 +259,59 @@ class MediaSender(
         clientId?.let { UploadProgress.done(it) }
     }
 
+    // ------------------------------------------------------------------ playlist
+
+    /**
+     * SEVERAL SONGS PICKED TOGETHER ARE ONE MESSAGE (iOS sendPlaylist, 2026-11-21): a file message
+     * whose own file is the first song, every song in `album` as a `kind: "audio"` item, the name
+     * sealed as `listName` on the first item ("" = none), the caption sealed in `text`, the cover as
+     * the sealed preview tile. The message is written first, the songs go up one after another, and
+     * one update attaches them all (MusicRules builds the maps key for key). Returns the message id.
+     */
+    suspend fun playlist(songs: List<FilePrep>, title: String, caption: String, cover: ByteArray?,
+                         clientId: String?, clientTs: Double, reply: Message.ReplyRef? = null): String {
+        require(songs.size >= 2) { "A playlist needs two songs or more." }
+        val members = members()
+        val sealed = songs.map { sealBytes(it.bytes, members) }
+        val list = songs.mapIndexed { i, s -> com.fariin.app.data.MusicRules.SealedSong(sealed[i].second.asMap(), s.name, null, s.bytes.size) }
+        val name = title.trim()
+        val listNameSealed = if (name.isEmpty()) "" else seal(name, members)
+        val words = caption.trim()
+        val captionSealed = if (words.isEmpty()) "" else seal(words, members)
+        val msgRef = convRef.collection("messages").document()
+        // The cover rides as the sealed preview tile, as a single song's does. Best effort.
+        var thumbUrl: String? = null
+        var thumbMeta: EncMeta? = null
+        cover?.let { jpg ->
+            runCatching {
+                val (tc, tm) = sealBytes(jpg, members)
+                thumbUrl = upload(tc, MediaRules.fileThumbPath(cid, msgRef.id))
+                thumbMeta = tm
+                media?.store(thumbUrl!!, jpg)
+            }
+        }
+        val batch = db.batch()
+        setMsg(batch, msgRef, members, com.fariin.app.data.MusicRules.playlistMessage(me, list, captionSealed, listNameSealed,
+            clientTs, clientId, thumbUrl, thumbMeta?.asMap(), FieldValue.serverTimestamp()), reply)
+        batch.update(convRef, MediaMessages.convUpdate(me, com.fariin.app.data.MusicRules.playlistPreview(list.size), others(members),
+            FieldValue.serverTimestamp(), FieldValue.increment(1)))
+        MediaSend.noteAnnounced(clientId, msgRef.id)
+        batch.commit().await()
+        // One after another, so ten songs never hold ten uploads open at once.
+        val urls = ArrayList<String>()
+        val n = songs.size
+        sealed.forEachIndexed { i, (cipher, _) ->
+            val each: ((Float) -> Unit)? = clientId?.let { id -> { f -> UploadProgress.set(id, (i + f) / n) } }
+            val url = uploadRetrying(cipher, com.fariin.app.data.MusicRules.songPath(cid, msgRef.id, i), each)
+            media?.store(url, songs[i].bytes)
+            urls += url
+        }
+        msgRef.update(com.fariin.app.data.MusicRules.playlistAttach(list, urls, listNameSealed, FieldValue.delete())).await()
+        com.fariin.app.media.ChatSounds.sent()
+        clientId?.let { UploadProgress.done(it) }
+        return msgRef.id
+    }
+
     // ------------------------------------------------------------------ album
 
     /** sendMixedAlbum (sendAlbum when all photos): every tile sealed and up, then ONE message. */

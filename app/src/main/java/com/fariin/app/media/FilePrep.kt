@@ -40,7 +40,24 @@ class FilePrep(val name: String, val bytes: ByteArray, val previewJpeg: ByteArra
             if (size > MAX_BYTES) return Result.TooLarge
             val bytes = runCatching { cr.openInputStream(uri)?.use { it.readBytes() } }.getOrNull() ?: return Result.Unreadable
             if (bytes.size > MAX_BYTES) return Result.TooLarge
-            return Result.Ok(FilePrep(MediaRules.safeFileName(name), bytes, pdfPreview(name, bytes, scratch)))
+            return Result.Ok(FilePrep(MediaRules.safeFileName(name), bytes, pdfPreview(name, bytes, scratch) ?: songArt(name, bytes, scratch)))
+        }
+
+        /**
+         * A song's own picture as its preview tile, 300 px JPEG (iOS sendFile audioArt =
+         * MusicFiles.artworkJPEG); null for anything that is not a song or has no picture.
+         */
+        fun songArt(name: String, bytes: ByteArray, scratch: File): ByteArray? {
+            if (!MediaRules.isSong(name)) return null
+            val tmp = File(scratch, "song-${System.nanoTime()}." + name.substringAfterLast('.', "mp3"))
+            return try {
+                tmp.writeBytes(bytes)
+                MusicTags.read(tmp).art
+            } catch (_: Exception) {
+                null
+            } finally {
+                tmp.delete()
+            }
         }
 
         fun pdfPreview(name: String, bytes: ByteArray, scratch: File): ByteArray? {

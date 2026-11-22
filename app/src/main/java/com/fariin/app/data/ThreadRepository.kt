@@ -1324,6 +1324,11 @@ class ThreadRepository(
     fun sendDocuments(context: Context, uris: List<Uri>, reply: Message?, onRefused: (String) -> Unit) {
         val m = media ?: return
         if (uris.isEmpty()) return
+        // Several songs picked together are ONE playlist message (iOS sendPlaylist, 2026-11-21).
+        if (uris.size >= 2 && uris.all { MediaRules.isSong(displayName(context, it)) }) {
+            sendPlaylist(context, uris, "", "", reply, onRefused)
+            return
+        }
         scope.launch(Dispatchers.IO) {
             val base = System.currentTimeMillis().toDouble()
             val queued = ArrayList<Pair<String, suspend () -> Unit>>()
@@ -1361,6 +1366,62 @@ class ThreadRepository(
             if (skipped.isNotEmpty()) onRefused(skipped.joinToString(" "))
             // One after another: each send's message is written before the next one starts.
             for ((clientId, work) in queued) runMediaSend(clientId, work).join()
+        }
+    }
+
+    private fun displayName(context: Context, uri: Uri): String? = runCatching {
+        context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(0) else null
+        }
+    }.getOrNull()
+
+    /**
+     * A playlist (iOS sendPlaylist): up to ten songs in pick order, named [title] ("" = none), with
+     * [caption]. The cover is the first song's own picture (iOS sheet's default cover). My bubble
+     * plays the songs from this phone's copies while they go up.
+     */
+    fun sendPlaylist(context: Context, uris: List<Uri>, title: String, caption: String, reply: Message?, onRefused: (String) -> Unit) {
+        val m = media ?: return
+        scope.launch(Dispatchers.IO) {
+            val songs = ArrayList<FilePrep>()
+            val okUris = ArrayList<Uri>()
+            var skipped = 0
+            for (uri in uris.take(MusicRules.MAX_TRACKS)) {
+                when (val r = FilePrep.fromUri(context, uri, m.localDir())) {
+                    is FilePrep.Companion.Result.Ok -> { songs += r.prep; okUris += uri }
+                    else -> skipped++
+                }
+            }
+            val over = uris.size - MusicRules.MAX_TRACKS
+            listOfNotNull(
+                skipped.takeIf { it > 0 }?.let { n -> if (n == 1) "1 song couldn't be read or is too large, so it was skipped." else "$n songs couldn't be read or are too large, so they were skipped." },
+                over.takeIf { it > 0 }?.let { "A playlist holds up to ${MusicRules.MAX_TRACKS} songs; the first ${MusicRules.MAX_TRACKS} were sent." },
+            ).takeIf { it.isNotEmpty() }?.let { onRefused(it.joinToString(" ")) }
+            if (songs.size < 2) {
+                // One song left is a song message, as one song picked is.
+                okUris.firstOrNull()?.let { sendDocument(context, it, reply, onRefused) }
+                return@launch
+            }
+            val tap = System.currentTimeMillis().toDouble()
+            val clientId = UUID.randomUUID().toString().uppercase()
+            val ref = reply?.let { ReplyQuoteRules.ref(it) }
+            val locals = songs.mapIndexed { i, s -> File(m.localDir(), "file-$clientId-t$i").also { it.writeBytes(s.bytes) } }
+            pending[clientId] = Message(
+                id = clientId, authorId = me, text = caption.trim(), type = "file", createdAtMillis = tap, hasServerTime = false,
+                clientTs = tap, clientId = clientId, sendState = Message.SendState.SENDING, replyTo = ref,
+                fileName = songs[0].name, fileSize = songs[0].bytes.size.toLong(),
+                tracks = songs.mapIndexed { i, s -> MusicRules.Track(locals[i].absolutePath, null, s.name, s.bytes.size.toLong()) },
+                listName = title.trim(),
+            )
+            rebuild()
+            val cover = songs[0].previewJpeg
+            val names = songs.map { it.name }
+            val work: suspend () -> Unit = {
+                // Read back from this phone's copies when the send starts, as a list of documents is.
+                sender.playlist(names.mapIndexed { i, n -> FilePrep(n, locals[i].readBytes(), null) }, title, caption, cover, clientId, tap, reply = ref)
+            }
+            retryMedia[clientId] = work
+            runMediaSend(clientId, work)
         }
     }
 
