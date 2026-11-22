@@ -76,6 +76,8 @@ object SharedWallpapers {
         val enc = v?.encode() ?: ""
         if (synchronized(synced) { synced.put(cid, enc) } == enc) return
         val p = prefs(c)
+        // A shared photo replaced or removed: its opened copy does not stay on the phone (as iOS).
+        value(c, cid)?.takeIf { it.isPhoto && it.w != v?.w }?.let { runCatching { ChatLookStore.libraryFile(c, photoId(cid, it.w)).delete() } }
         if (p.getString(key(cid), null).orEmpty() != enc) {
             if (v == null) p.edit().remove(key(cid)).apply() else p.edit().putString(key(cid), enc).apply()
             ChatLookStore.changed()
