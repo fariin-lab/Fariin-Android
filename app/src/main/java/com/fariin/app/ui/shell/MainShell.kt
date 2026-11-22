@@ -154,6 +154,14 @@ fun MainShell(
     var tab by tabState
     val officialView by com.fariin.app.data.OfficialChannel.view.collectAsState()
     val unread = unreadChatsBadge(chats.chats, me, com.fariin.app.data.OfficialChannel.listEntry(officialView, me))
+    // The app icon number (iOS NotificationCleaner.syncBadgeFromList): total unread messages, set
+    // again on every list change. Not before the list has loaded, and not from an error page.
+    val badgeTotal = remember(chats.all, chats.loading, chats.error, officialView, me) {
+        if (chats.loading || chats.error != null || me == DemoChats.ME) null
+        else com.fariin.app.data.AppBadgeRules.total(chats.all, me,
+            com.fariin.app.data.OfficialChannel.listEntry(officialView, me), groupsOn = com.fariin.app.data.AppFeatures.groups)
+    }
+    LaunchedEffect(me, badgeTotal) { badgeTotal?.let { com.fariin.app.push.AppBadge.sync(context.applicationContext, me, it) } }
     // The call history, read here so the Calls tab's missed badge counts from any tab (iOS
     // MainShell callsRepo). Each chat's calls are re-read only when that chat moves.
     val callsRepo = remember { com.fariin.app.data.CallsRepository() }
