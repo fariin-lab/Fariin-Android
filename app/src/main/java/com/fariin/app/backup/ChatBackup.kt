@@ -24,7 +24,11 @@ import kotlinx.coroutines.sync.withLock
 object ChatBackup {
     /** ON in test builds (the owner's Pixel and testers), OFF in store releases until the owner's test passes. */
     private const val MEDIA_SET = "md"
-    @Volatile var ENABLED: Boolean = false   // set at start from R.bool.fariin_test_build (FariinApp)
+    @Volatile private var enabledBuild: Boolean = false
+    /** Build gate (set at start from R.bool.fariin_test_build) and the panel switch "chatBackup". */
+    var ENABLED: Boolean
+        get() = enabledBuild && com.fariin.app.data.AppFeatures.offOnly("chatBackup", true)
+        set(v) { enabledBuild = v }
     private val lock = Mutex()
 
     private fun prefs(ctx: Context) = ctx.applicationContext.getSharedPreferences("fariin_backup", Context.MODE_PRIVATE)

@@ -19,7 +19,11 @@ import kotlinx.coroutines.tasks.await
  */
 object ChatTransfer {
     /** ON in test builds (the owner's Pixel and testers), OFF in store releases until the owner's test passes. */
-    @Volatile var ENABLED: Boolean = false   // set at start from R.bool.fariin_test_build (FariinApp)
+    @Volatile private var enabledBuild: Boolean = false
+    /** Build gate (set at start from R.bool.fariin_test_build) and the panel switch "chatTransfer". */
+    var ENABLED: Boolean
+        get() = enabledBuild && com.fariin.app.data.AppFeatures.offOnly("chatTransfer", true)
+        set(v) { enabledBuild = v }
 
     class Code(val tid: String, val key: ByteArray, val files: Int)
 
