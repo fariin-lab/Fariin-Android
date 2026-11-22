@@ -63,10 +63,24 @@ internal fun BlockedUsersPage(pop: () -> Unit) {
     var search by remember { mutableStateOf("") }
     var picking by remember { mutableStateOf(false) }
     var blockError by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(snap.entries.keys) {
+    // iOS allBlocked: a block still kept the old way, on the shared 1:1 chat (not moved yet), is
+    // listed too, so it can be undone here. Its time is the later of the chat's and the list's.
+    val me = com.fariin.app.Fb.auth.currentUser?.uid ?: ""
+    // Unblocked from this page: the chat's old copy goes too, but the chat list may not have caught up.
+    var gone by remember { mutableStateOf(emptySet<String>()) }
+    val blockedAt = remember(snap, me, gone) {
+        val out = HashMap(snap.entries)
+        if (me.isNotEmpty()) for (cv in CryptoHub.listedAll()) {
+            if (cv.isGroup || cv.blockedBy[me] != true) continue
+            val u = cv.otherUid(me).takeIf { it.isNotEmpty() && it != me && it !in gone } ?: continue
+            out[u] = maxOf(out[u] ?: 0.0, cv.blockedAt[me] ?: 0.0)
+        }
+        out
+    }
+    LaunchedEffect(blockedAt.keys) {
         val db = com.fariin.app.Fb.db
         val out = HashMap(people)
-        for (u in snap.entries.keys) if (u !in out) {
+        for (u in blockedAt.keys) if (u !in out) {
             val d = try { db.collection("users").document(u).get().await().data } catch (_: Exception) { null }
             out[u] = BlockPerson(u, d?.get("name") as? String ?: "", d?.get("handle") as? String ?: "",
                 (d?.get("photoUrl") as? String)?.ifEmpty { null })
@@ -79,7 +93,7 @@ internal fun BlockedUsersPage(pop: () -> Unit) {
         return
     }
     val q = search.trim().lowercase()
-    val all = snap.entries.entries.sortedByDescending { it.value }.map { it.key }
+    val all = blockedAt.entries.sortedByDescending { it.value }.map { it.key }
     val rows = if (q.isEmpty()) all else all.filter { u ->
         val p = people[u]
         p != null && (p.name.lowercase().contains(q) || p.handle.lowercase().contains(q))
@@ -121,6 +135,7 @@ internal fun BlockedUsersPage(pop: () -> Unit) {
             listOf(com.fariin.app.ui.people.PersonAction("Unblock") {
                 val ok = FirestorePeople(com.fariin.app.Fb.auth.currentUser!!.uid, CryptoHub.get(ctx)).setBlocked(u, false)
                 if (!ok) toast(ctx, "${name.ifEmpty { "They" }} could not be unblocked. Try again.")
+                else gone = gone + u
                 ok
             }), onDismiss = { confirm = null })
     }
