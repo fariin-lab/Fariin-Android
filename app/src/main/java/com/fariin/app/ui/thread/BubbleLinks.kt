@@ -307,7 +307,8 @@ object ExternalLinks {
     private fun safe(v: String) = v.isNotEmpty() && '/' !in v && v != "." && v != ".." &&
         !(v.startsWith("__") && v.endsWith("__")) && v.length <= 128
 
-    fun take(url: String?): Boolean {
+    /** [c]: needed only for kulan://wchat, to read the chats this phone's widget lists. */
+    fun take(url: String?, c: Context? = null): Boolean {
         var u = url?.trim() ?: return false
         // kulan://<kind>/<value> (iOS custom scheme): the same as the website's link of that kind.
         if (u.startsWith("kulan://", ignoreCase = true)) {
@@ -317,8 +318,13 @@ object ExternalLinks {
             if (!safe(value)) return false
             when (kind) {
                 "u", "g", "a", "s" -> u = "https://fariin.com/$kind/$value"
-                // A chat named by the widget (iOS widgetChat): opens it as a notification would.
-                "wchat" -> { com.fariin.app.push.PushRouter.pendingOpen.value = value; return true }
+                // A chat named by the widget (iOS widgetChat): opens it as a notification would. Any web
+                // page can send this link: decoded, checked as an id, and only a chat the widget lists.
+                "wchat" -> {
+                    val listed = c?.let { com.fariin.app.system.FariinWidget.listedChats(it) }.orEmpty()
+                    val cid = com.fariin.app.security.EntryRules.wchatCid(value, listed) ?: return true
+                    com.fariin.app.push.PushRouter.pendingOpen.value = cid; return true
+                }
                 else -> return false
             }
         }

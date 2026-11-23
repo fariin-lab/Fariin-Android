@@ -183,6 +183,10 @@ object FariinWidget {
         runCatching { HomeWidget().updateAll(app) }
     }
 
+    /** The chats the widget lists now (none while App Lock hides them). */
+    fun listedChats(c: Context): Set<String> =
+        runCatching { load(c.applicationContext).rows.mapTo(HashSet()) { it.cid } }.getOrDefault(emptySet())
+
     internal fun load(app: Context): HomeWidgetRules.Snapshot {
         current?.let { return it }
         runCatching { File(app.noBackupFilesDir, OLD_FILE).delete() }
