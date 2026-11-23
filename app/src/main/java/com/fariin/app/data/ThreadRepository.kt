@@ -2077,8 +2077,8 @@ class ThreadRepository(
                 // H-28: a clip whose message went out before the kill with its upload unfinished (the
                 // server says so): that half message is taken down and the clip sent again as one new
                 // message. Before, the stuck sweep deleted it after 30 minutes and the clip was lost.
-                val half = video && found != null && found.getBoolean("uploading") == true &&
-                    runCatching { found.reference.get(Source.SERVER).await().getBoolean("uploading") == true }.getOrDefault(false)
+                val half = video && found != null && found.get("uploading") == true &&
+                    runCatching { found.reference.get(Source.SERVER).await().get("uploading") == true }.getOrDefault(false)
                 if (half) { takenDown.add(found!!.id); cancelAnnounced(found.id) }
                 val landed = found != null && !half
                 if (!landed && voice) {
