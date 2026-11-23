@@ -318,7 +318,8 @@ private fun Header(s: HomeWidgetRules.Snapshot, compact: Boolean, open: Action, 
             Spacer(GlanceModifier.width(8.dp))
             Text("Fariin", style = TextStyle(color = label, fontSize = 16.sp, fontWeight = FontWeight.Bold), maxLines = 1)
         }
-        if (s.signedIn) {
+        // App Lock on: no New Chat either, only the app's own front door (which asks for the unlock).
+        if (s.signedIn && !s.locked) {
             Box(GlanceModifier.size(if (compact) 32.dp else 36.dp).background(ImageProvider(R.drawable.widget_button)).clickable(newChat),
                 contentAlignment = Alignment.Center) {
                 Image(ImageProvider(R.drawable.widget_ic_new_chat), contentDescription = "New Chat", modifier = GlanceModifier.size(18.dp))
