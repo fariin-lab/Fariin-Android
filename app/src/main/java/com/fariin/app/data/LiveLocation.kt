@@ -39,13 +39,27 @@ object LiveLocation {
 
     /** 1:1: the spot sealed as a string. Group: a plain map {lat, lon, acc?} (the rules want a map there). */
     private suspend fun pos(c: com.fariin.app.crypto.FariinCrypto, cid: String, lat: Double, lon: Double, acc: Float?): Any =
-        if (Wire.isGroupCid(cid)) buildMap { put("lat", lat); put("lon", lon); if (acc != null) put("acc", acc.toDouble()) }
+        if (Wire.isGroupCid(cid)) plainPos(lat, lon, acc)
         else c.encryptForConversation(cid, posJson(lat, lon, acc))
 
-    private fun open(c: com.fariin.app.crypto.FariinCrypto, cid: String, raw: Any?): Triple<Double, Double, Float?>? = runCatching {
+    private fun plainPos(lat: Double, lon: Double, acc: Float?): Map<String, Any> =
+        buildMap { put("lat", lat); put("lon", lon); if (acc != null) put("acc", acc.toDouble()) }
+
+    /** F-47: a group that still promises encryption (not e2ee == false, or the groupE2EE switch on)
+     *  gets the spot sealed for its members (encg1). Null = send the plain map. */
+    private suspend fun sealedGroupPos(c: com.fariin.app.crypto.FariinCrypto, cid: String, lat: Double, lon: Double, acc: Float?): String? {
+        if (!Wire.isGroupCid(cid) || c.isPlainGroup(cid)) return null
+        val users = runCatching { (com.fariin.app.Fb.db.collection("conversations").document(cid).get().await()
+            .get("users") as? List<*>)?.filterIsInstance<String>() }.getOrNull()
+        if (users.isNullOrEmpty()) return null
+        return runCatching { c.encryptForGroup(posJson(lat, lon, acc), users) }.getOrNull()
+    }
+
+    private fun open(c: com.fariin.app.crypto.FariinCrypto, cid: String, raw: Any?, author: String? = null): Triple<Double, Double, Float?>? = runCatching {
         when (raw) {
             is Map<*, *> -> Triple((raw["lat"] as Number).toDouble(), (raw["lon"] as Number).toDouble(), (raw["acc"] as? Number)?.toFloat())
-            is String -> JSONObject(if (raw.trimStart().startsWith("{")) raw else c.decrypt(raw, cid)).let {
+            is String -> JSONObject(if (raw.trimStart().startsWith("{")) raw
+                else if (author != null && raw.startsWith(Wire.ENCG1)) c.decrypt(raw, cid, author) else c.decrypt(raw, cid)).let {
                 Triple(it.getDouble("lat"), it.getDouble("lon"), if (it.has("acc")) it.getDouble("acc").toFloat() else null)
             }
             else -> null
@@ -58,10 +72,17 @@ object LiveLocation {
     /** Start (or carry on) my share in [cid]: always the whole doc, the same msgId and until (rules b and c). */
     suspend fun put(ctx: Context, me: String, cid: String, untilMs: Long, lat: Double, lon: Double, acc: Float?) {
         val c = CryptoHub.get(ctx)
-        col(cid).document(me).set(mapOf(
+        fun doc(pos: Any) = mapOf(
             "msgId" to idFor(untilMs), "until" to Timestamp(java.util.Date(untilMs)), "ended" to false,
-            "updatedAt" to FieldValue.serverTimestamp(), "pos" to pos(c, cid, lat, lon, acc),
-        )).await()
+            "updatedAt" to FieldValue.serverTimestamp(), "pos" to pos,
+        )
+        val sealed = sealedGroupPos(c, cid, lat, lon, acc)
+        if (sealed != null) {
+            // Until the live rules take a sealed spot in a group, a refusal falls back to the plain map.
+            val ok = runCatching { col(cid).document(me).set(doc(sealed)).await() }.isSuccess
+            if (ok) return
+        }
+        col(cid).document(me).set(doc(pos(c, cid, lat, lon, acc))).await()
     }
 
     /** Stop my share in [cid]: ended, with no spot left (rule a). */
@@ -77,11 +98,12 @@ object LiveLocation {
         val c = CryptoHub.get(ctx)
         return col(cid).addSnapshotListener { snap, _ ->
             val spots = snap?.documents.orEmpty().mapNotNull { d ->
-                val until = d.getTimestamp("until")?.toDate()?.time ?: return@mapNotNull null
-                val ended = d.getBoolean("ended") == true
-                val pos = open(c, cid, d.get("pos"))
-                Spot(d.id, d.getString("msgId") ?: "", pos?.first ?: Double.NaN, pos?.second ?: Double.NaN,
-                    pos?.third, until, ended, d.getTimestamp("updatedAt")?.toDate()?.time ?: 0L)
+                // Other people's docs: plain gets, never typed getters (a wrong type must not throw here).
+                val until = (d.get("until") as? Timestamp)?.toDate()?.time ?: return@mapNotNull null
+                val ended = d.get("ended") == true
+                val pos = open(c, cid, d.get("pos"), author = d.id)
+                Spot(d.id, d.get("msgId") as? String ?: "", pos?.first ?: Double.NaN, pos?.second ?: Double.NaN,
+                    pos?.third, until, ended, (d.get("updatedAt") as? Timestamp)?.toDate()?.time ?: 0L)
             }
             onChange(spots)
         }
