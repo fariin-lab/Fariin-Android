@@ -5,8 +5,9 @@ import java.io.File
 
 /**
  * Settings > Storage and Data > Manage storage (iOS ManageStoragePage): what the app keeps on this
- * phone, the Keep Media age limit and Clear Cache. Never touches `outgoing` (sends still waiting
- * for the server) or anything changed in the last hour (iOS: a file in use is left alone).
+ * phone, the Keep Media age limit and Clear Cache. Clear Cache never touches `outgoing` (sends still
+ * waiting for the server) or anything changed in the last hour (iOS: a file in use is left alone);
+ * the start-up sweep drops only `outgoing` copies no outbox names any more.
  */
 object StorageSweep {
     /** Days to keep opened media, 0 = forever (iOS keepMediaDays). Prefs file `fariin_media`. */
@@ -29,7 +30,9 @@ object StorageSweep {
         val all = size(c.cacheDir) + (c.externalCacheDir?.let { size(it) } ?: 0L)
         val outgoing = size(File(c.cacheDir, OUTGOING))
         val inCache = if (imgDir != null && imgDir.startsWith(c.cacheDir)) images else 0L
-        return Sizes(media, images, maxOf(0L, all - media - inCache - outgoing))
+        // Copies of sends (outside the cache since K-45) count as temporary files too (H-106).
+        val sending = size(File(c.noBackupFilesDir, OUTGOING))
+        return Sizes(media, images, maxOf(0L, all - media - inCache - outgoing) + outgoing + sending)
     }
 
     /**
@@ -38,10 +41,28 @@ object StorageSweep {
      * may have deleted a delivered file, so this phone's copy can be the last one.
      */
     fun sweep(c: Context, nowMs: Long = System.currentTimeMillis()) {
+        runCatching { sweepOutgoing(c, nowMs) }
         val days = c.getSharedPreferences(AutoDownload.PREFS, Context.MODE_PRIVATE).getInt(KEEP_KEY, 0)
         if (days <= 0) return
         val cutoff = nowMs - days * 24L * HOUR_MS
         File(c.cacheDir, MEDIA).listFiles()?.forEach { if (it.isFile && it.lastModified() < cutoff && isPicture(it)) it.delete() }
+    }
+
+    /**
+     * H-106: a send's copies left in `outgoing` (both the old cache one and the new one) once no
+     * outbox of any account names them and they are a day old. Read from the stores' raw JSON, so
+     * a saved account that is not signed in right now keeps its waiting sends.
+     */
+    private fun sweepOutgoing(c: Context, nowMs: Long) {
+        val raws = listOf("photo_outbox", "file_outbox").flatMap { name ->
+            c.getSharedPreferences(name, Context.MODE_PRIVATE).all.values.map { it as? String }
+        }
+        val held = com.fariin.app.data.OutgoingSweepRules.heldText(raws)
+        for (dir in listOf(File(c.cacheDir, OUTGOING), File(c.noBackupFilesDir, OUTGOING))) {
+            dir.listFiles()?.forEach { f ->
+                if (f.isFile && com.fariin.app.data.OutgoingSweepRules.deletable(f.name, f.lastModified(), nowMs, held)) f.delete()
+            }
+        }
     }
 
     /** A picture (JPEG, PNG, GIF, WebP, HEIC, AVIF), by its first bytes: the folder names files by a hash. */
