@@ -339,11 +339,6 @@ class MainActivity : ComponentActivity() {
             kotlinx.coroutines.delay(20_000)
             if (com.fariin.app.crypto.KeyBackup.shouldNudge(ctx, me)) nudge = true
         }
-        if (backupPage) {
-            androidx.activity.compose.BackHandler { backupPage = false }
-            com.fariin.app.ui.settings.KeyBackupPage { backupPage = false }
-            return
-        }
         var explain by remember { mutableStateOf(Push.needsExplainer(ctx)) }
         // Android 14+: a call can only take over the screen (lock screen, app closed) when the person
         // has allowed "full screen notifications" for Fariin; outside the Play Store it starts off,
@@ -617,6 +612,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
             com.fariin.app.ui.components.PageMotionBackGuard()
+            }
+            // The Backup PIN page over the chats, not instead of them: drawn in place of the nav host
+            // it tore down the open chat and the whole back stack (K-128).
+            if (backupPage) Box(Modifier.fillMaxSize().background(com.fariin.app.ui.theme.Fariin.colors.bg)) {
+                androidx.activity.compose.BackHandler { backupPage = false }
+                com.fariin.app.ui.settings.KeyBackupPage { backupPage = false }
             }
             }
             }
