@@ -775,6 +775,7 @@ object GroupCall {
                 _ui.value = _ui.value.copy(connecting = false, joined = true, micOn = micOn, cameraOn = video && !pass.voiceOnly,
                     micLocked = pass.micBlocked, cameraLocked = pass.voiceOnly, linkUrl = linkKey?.url(video = !pass.voiceOnly))
                 passRole = CallRole.of(pass.role)
+                watchPhone(app)
                 joinedAtMs = System.currentTimeMillis()
                 _ui.value = _ui.value.copy(joinedAt = joinedAtMs)
                 startSpeakerTicks(r)
@@ -1257,14 +1258,67 @@ object GroupCall {
         if (_ui.value.micLocked && !_ui.value.micOn) { say("An admin muted you. Raise your hand to ask to speak."); return }
         val on = !_ui.value.micOn
         _ui.value = _ui.value.copy(micOn = on)
-        scope.launch { room?.localParticipant?.setMicrophoneEnabled(on) }
+        // K-60: the service takes the mic type now (granted during the call), or Android cuts it in background.
+        if (on) restartService()
+        scope.launch { room?.localParticipant?.setMicrophoneEnabled(on && !onPhone) }
     }
 
     fun toggleCamera() {
         if (_ui.value.cameraLocked) return
         val on = !_ui.value.cameraOn
         _ui.value = _ui.value.copy(cameraOn = on)
-        scope.launch { room?.localParticipant?.setCameraEnabled(on); refresh() }
+        // K-60: the camera type is added (or dropped) on the call's service, as CallManager does.
+        restartService()
+        scope.launch { room?.localParticipant?.setCameraEnabled(on && !onPhone); refresh() }
+    }
+
+    /** The call's foreground service again with today's mic and camera, and its notification redrawn. */
+    private fun restartService() {
+        val app = appContext ?: return
+        if (_ui.value.joined && !CallManager.ui.value.status.live) CallService.start(app, CallService.Mode.CALL, _ui.value.cameraOn)
+    }
+
+    // ---- H-35: a phone call puts the group call on hold (iOS audio interruption) ----
+    private var onPhone = false
+    private var phoneUnwatch: (() -> Unit)? = null
+
+    /** Watches for a phone call in the phone app: the mode listener on Android 12+, the call state below. */
+    @Suppress("DEPRECATION")
+    private fun watchPhone(app: Context) {
+        phoneUnwatch?.invoke(); phoneUnwatch = null; onPhone = false
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 31) {
+                val am = app.getSystemService(android.media.AudioManager::class.java) ?: return
+                val l = android.media.AudioManager.OnModeChangedListener { m -> phoneCall(m == android.media.AudioManager.MODE_IN_CALL) }
+                am.addOnModeChangedListener(app.mainExecutor, l)
+                phoneUnwatch = { runCatching { am.removeOnModeChangedListener(l) } }
+            } else {
+                val tm = app.getSystemService(android.telephony.TelephonyManager::class.java) ?: return
+                val l = object : android.telephony.PhoneStateListener() {
+                    @Deprecated("Deprecated in Java")
+                    override fun onCallStateChanged(state: Int, phoneNumber: String?) {
+                        phoneCall(state == android.telephony.TelephonyManager.CALL_STATE_OFFHOOK)
+                    }
+                }
+                tm.listen(l, android.telephony.PhoneStateListener.LISTEN_CALL_STATE)
+                phoneUnwatch = { runCatching { tm.listen(l, android.telephony.PhoneStateListener.LISTEN_NONE) } }
+            }
+        } catch (e: Exception) { Log.w(TAG, "phone watch", e) }
+    }
+
+    /** On a phone call my mic and camera stop sending; after it they come back as the buttons say. */
+    private fun phoneCall(on: Boolean) {
+        val r = room ?: return
+        if (on == onPhone || !_ui.value.joined) return
+        onPhone = on
+        scope.launch {
+            if (room !== r) return@launch
+            val g = _ui.value
+            runCatching { r.localParticipant.setMicrophoneEnabled(!onPhone && g.micOn && !g.micLocked) }
+            runCatching { r.localParticipant.setCameraEnabled(!onPhone && g.cameraOn && !g.cameraLocked) }
+            refresh()
+        }
+        say(if (on) "On hold for a phone call" else "Back in the call")
     }
 
     fun room(): Room? = room
@@ -1381,7 +1435,9 @@ object GroupCall {
         routeHandler?.unregisterAudioDeviceChangeListener(routeListener); routeHandler = null
         room?.let { try { it.disconnect(); it.release() } catch (_: Exception) {} }
         room = null
-        appContext?.let { CallService.stop(it) }
+        phoneUnwatch?.invoke(); phoneUnwatch = null; onPhone = false
+        // K-54: a 1:1 call that is live keeps its service (a lobby closed during it must not stop it).
+        appContext?.let { if (!CallManager.ui.value.status.live) CallService.stop(it) }
         endingForAll = false
         _ui.value = GroupCallUi()
     }
