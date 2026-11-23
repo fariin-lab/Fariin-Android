@@ -283,6 +283,8 @@ internal object SecurityCheckup {
             SecurityCheckupRules.Device(d.id, d.getString("model") ?: "Phone", d.getString("location") ?: "", created)
         }
         val reviewed = reviewedAt(ctx)
+        // L-98: learn the phone clock's error now, so "Yes, these are mine" stamps server time.
+        runCatching { com.fariin.app.data.ServerClock.nowMsSynced() }
         val fresh = SecurityCheckupRules.unreviewed(list.filter { it.id != thisId }, reviewed, reviewedIds(ctx))
         if (fresh.isNotEmpty()) return Status.Missing to fresh
         return Status.Done(SecurityCheckupRules.devicesLine(list.size, reviewed?.let { ago(it) })) to emptyList()
@@ -298,7 +300,8 @@ internal object SecurityCheckup {
         val me = uid() ?: return
         val ids = reviewedIds(ctx) + unreviewed.map { it.id }
         prefs(ctx).edit().putStringSet("security.devicesReviewedIds.$me", ids)
-            .putLong("security.devicesReviewedAt.$me", System.currentTimeMillis()).apply()
+            // L-98: server time, so a phone clock running fast never counts later sign-ins as reviewed.
+            .putLong("security.devicesReviewedAt.$me", com.fariin.app.data.ServerClock.nowMs().toLong()).apply()
         unreviewed = emptyList()
         devices = Status.Done("Reviewed just now")
         rerun = running
