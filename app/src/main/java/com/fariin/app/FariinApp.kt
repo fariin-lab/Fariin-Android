@@ -222,6 +222,9 @@ class FariinApp : Application() {
         // Update campaigns: the last answer shows at once, then the server is asked (iOS AppUpdateGate).
         StartClock.mark("applock")
         if (!local) com.fariin.app.system.AppUpdateGate.start(this)
+        // K-43: nobody signed in, so MainActivity never registers: a token an offline Log Out retired
+        // is still deleted here (Push.register does only that with no user).
+        if (com.fariin.app.Fb.auth.currentUser == null) com.fariin.app.push.Push.register(this)
         // The home screen widget follows App Lock and Message Preview as they are switched.
         android.os.Handler(mainLooper).postDelayed({ com.fariin.app.system.FariinWidget.init(this) }, 1_500)
         StartClock.mark("app.end")
