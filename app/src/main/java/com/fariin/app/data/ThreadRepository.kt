@@ -425,6 +425,11 @@ class ThreadRepository(
         msgFailed = false
         firstMsgAnswer = true
         if (_state.value.error != null) _state.update { it.copy(error = null) }
+        // F-2: older pages were read under the old start: they go, and paging starts again from the new one.
+        stopOlder()
+        synchronized(docsLock) { olderDocs.clear(); dbOlder.clear() }
+        olderFromCache = false
+        _state.update { it.copy(canLoadOlder = true, loadingOlder = false) }
         listenMessages()
     }
 
