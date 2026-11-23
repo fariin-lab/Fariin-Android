@@ -160,16 +160,20 @@ class ChatMedia(
         val cipher = try {
             when {
                 // Cloudflare R2 (iOS 9bbac4e65): signed by mediaSign, the same ring and size cap.
-                R2Media.isR2(url) -> R2Media.get(url, MediaRules.MAX_DOWNLOAD) { done, total -> MediaDownloads.progress(url, done, total) }
+                R2Media.isR2(url) -> fetchR2(url)
                 ref != null -> fetchWithProgress(ref, url)
                 else -> fetchByUrl(url)
             }
+        } catch (e: OutOfMemoryError) {
+            // A clip too big for this phone's memory: stays on its retry button, never a crash.
+            android.util.Log.w("ChatMedia", "download too big for memory")
+            return null
         } catch (e: Exception) {
             // Why a picture stays on its retry button (the kind of failure only, never the address).
             android.util.Log.w("ChatMedia", "download failed: ${e.javaClass.simpleName} ${(e as? com.google.firebase.storage.StorageException)?.errorCode ?: ""}")
             return null
         } ?: return null
-        val plain = open(cipher, enc) ?: run {
+        val plain = (try { open(cipher, enc) } catch (_: OutOfMemoryError) { null }) ?: run {
             android.util.Log.w("ChatMedia", "downloaded ${cipher.size} bytes but could not open them (enc=${enc != null})")
             return null
         }
@@ -198,6 +202,15 @@ class ChatMedia(
             MediaDownloads.ended(url)
             part.delete()
         }
+    }
+
+    /** Cloudflare R2: streamed into a .part file (never all in memory while it comes), its X stops it. */
+    private suspend fun fetchR2(url: String): ByteArray? {
+        val part = File(dirMade(), "dl-" + sha(url) + ".part")
+        try {
+            if (!R2Media.getToFile(url, part, MediaRules.MAX_DOWNLOAD) { done, total -> MediaDownloads.progress(url, done, total) }) return null
+            return part.readBytes()
+        } finally { part.delete() }
     }
 
     /** A download address the Storage SDK cannot map to a bucket object (the local emulator's

@@ -29,43 +29,71 @@ object R2Media {
 
     private fun fn() = FirebaseFunctions.getInstance("me-central1").getHttpsCallable("mediaSign")
 
-    private suspend fun sign(op: String, key: String, size: Long? = null, contentType: String? = null): Pair<String, String?>? = runCatching {
+    /** sign()'s answer for a "put" whose object is already there (an earlier try of ours landed). */
+    private val EXISTS: Pair<String, String?> = "" to null
+
+    private suspend fun sign(op: String, key: String, size: Long? = null, contentType: String? = null): Pair<String, String?>? = try {
         val data = hashMapOf<String, Any>("op" to op, "key" to key)
         size?.let { data["size"] = it }; contentType?.let { data["contentType"] = it }
-        val r = fn().call(data).await().getData() as? Map<*, *> ?: return null
-        val url = r["url"] as? String ?: return null
-        url to ((r["headers"] as? Map<*, *>)?.get("Content-Type") as? String)
-    }.getOrNull()
+        val r = fn().call(data).await().getData() as? Map<*, *>
+        val url = r?.get("url") as? String
+        if (url == null) null else url to ((r["headers"] as? Map<*, *>)?.get("Content-Type") as? String)
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: com.google.firebase.functions.FirebaseFunctionsException) {
+        // Create-only: ALREADY_EXISTS means our own earlier upload of this key landed (iOS R2Media).
+        if (e.code == com.google.firebase.functions.FirebaseFunctionsException.Code.ALREADY_EXISTS) EXISTS else null
+    } catch (_: Exception) {
+        null
+    }
 
-    /** The object's bytes (capped), or null. [progress] gets (done, total). */
-    suspend fun get(url: String, max: Long, progress: (Long, Long?) -> Unit = { _, _ -> }): ByteArray? {
-        val (signed, _) = sign("get", keyOf(url)) ?: return null
+    /**
+     * The object streamed into [part] (capped at [max]), true when it is all there. [progress] gets
+     * (done, total). Registered with MediaDownloads under [url], so the ring's X stops it at once.
+     */
+    suspend fun getToFile(url: String, part: java.io.File, max: Long, progress: (Long, Long?) -> Unit = { _, _ -> }): Boolean {
+        val signed = sign("get", keyOf(url))?.takeIf { it !== EXISTS }?.first ?: return false
         return withContext(Dispatchers.IO) {
             val c = URL(signed).openConnection() as HttpURLConnection
             c.connectTimeout = 15_000; c.readTimeout = 60_000
+            val stop = java.util.concurrent.atomic.AtomicBoolean(false)
+            MediaDownloads.started(url) { stop.set(true); runCatching { c.disconnect() } }
+            var ok = false
             try {
-                if (c.responseCode != 200) return@withContext null
+                if (c.responseCode != 200) return@withContext false
                 val total = c.contentLengthLong.takeIf { it > 0 }
-                if (total != null && total > max) return@withContext null
-                val out = java.io.ByteArrayOutputStream()
+                if (total != null && total > max) return@withContext false
+                var done = 0L
                 c.inputStream.use { input ->
-                    val buf = ByteArray(64 * 1024)
-                    while (true) {
-                        val n = input.read(buf); if (n < 0) break
-                        out.write(buf, 0, n)
-                        if (out.size() > max) return@withContext null
-                        progress(out.size().toLong(), total)
+                    part.outputStream().use { out ->
+                        val buf = ByteArray(64 * 1024)
+                        while (!stop.get()) {
+                            val n = input.read(buf); if (n < 0) break
+                            out.write(buf, 0, n); done += n
+                            if (done > max) return@withContext false
+                            progress(done, total)
+                        }
                     }
                 }
-                out.toByteArray()
-            } finally { c.disconnect() }
+                ok = !stop.get()
+                ok
+            } catch (e: java.io.IOException) {
+                if (stop.get()) false else throw e
+            } finally {
+                MediaDownloads.ended(url)
+                c.disconnect()
+                if (!ok) part.delete()
+            }
         }
     }
 
     /** Uploads [bytes] to chat/{cid}/{file}; returns the "r2:" link, or null. Create-only. */
     suspend fun put(key: String, bytes: ByteArray, contentType: String = "application/octet-stream",
                     onProgress: ((Float) -> Unit)? = null): String? {
-        val (signed, ct) = sign("put", key, bytes.size.toLong(), contentType) ?: return null
+        val s = sign("put", key, bytes.size.toLong(), contentType) ?: return null
+        // Already there: our own earlier try of this create-only key landed (iOS R2Media).
+        if (s === EXISTS) return link(key)
+        val (signed, ct) = s
         return withContext(Dispatchers.IO) {
             val c = URL(signed).openConnection() as HttpURLConnection
             c.requestMethod = "PUT"; c.doOutput = true
