@@ -2104,13 +2104,16 @@ class ThreadRepository(
      * Firestore's own queue already has a message with it.
      */
     fun resumeOutbox() {
-        for (e in com.fariin.app.local.FileOutbox.all(me)) if (e.cid == cid && !pending.containsKey(e.clientId)) resumeFile(e)
+        val here = OutboxResumeRules.mayFailHere(onScreen())
+        for (e in com.fariin.app.local.FileOutbox.all(me)) if (e.cid == cid && !pending.containsKey(e.clientId)) resumeFile(e, here)
         for (e in com.fariin.app.local.PhotoOutbox.all(me)) {
             if (e.cid != cid || pending.containsKey(e.clientId)) continue
             val f = File(e.path)
             if (!f.exists() || f.length() == 0L) {
                 // K-45: the saved file is gone (cleared storage, a move): a failed bubble and a short
-                // notice, never a spinner and never a silent loss.
+                // notice, never a spinner and never a silent loss. A quiet copy (the start-up drain)
+                // has no screen: the entry stays for the chat to show when it opens.
+                if (!here) continue
                 com.fariin.app.local.PhotoOutbox.remove(me, e.clientId)
                 val kind = when (e.kind) { "voice" -> "audio"; "video" -> "video"; else -> "image" }
                 pending[e.clientId] = Message(id = e.clientId, authorId = me, text = e.caption, type = kind,
@@ -2124,8 +2127,8 @@ class ThreadRepository(
             }
             val video = e.kind == "video"
             val voice = e.kind == "voice"
-            if (e.kind == "album") { resumeAlbum(e); continue }
-            if (video && e.poster?.let { File(it).exists() } != true) { com.fariin.app.local.PhotoOutbox.remove(me, e.clientId); continue }
+            if (e.kind == "album") { resumeAlbum(e, here); continue }
+            if (video && e.poster?.let { File(it).exists() } != true) { if (here) com.fariin.app.local.PhotoOutbox.remove(me, e.clientId); continue }
             // The reply it was sent under, kept across the restart.
             val ref = if (e.replyId != null && e.replyAuthor != null) Message.ReplyRef(e.replyId, e.replyAuthor, e.replyText ?: "") else null
             if (voice && ref != null) voiceReplies[e.clientId] = ref
@@ -2171,6 +2174,9 @@ class ThreadRepository(
         }
     }
 
+    /** This copy is the chat on screen (not the start-up drain's quiet one). */
+    private fun onScreen(): Boolean = open[cid] === this
+
     private fun photoQueued(clientId: String) = com.fariin.app.local.PhotoOutbox.all(me).any { it.clientId == clientId }
 
     // ------------------------------------------------------------------ files, songs, playlists across a kill (FileOutbox)
@@ -2208,10 +2214,12 @@ class ThreadRepository(
      * up (a playlist's missing songs, MusicRules.songsToUpload) and the same message is completed.
      * One that can no longer be read stays a failed bubble with Delete.
      */
-    private fun resumeFile(e: com.fariin.app.local.FileOutbox.Entry) {
+    private fun resumeFile(e: com.fariin.app.local.FileOutbox.Entry, here: Boolean) {
         val ref = if (e.replyId != null && e.replyAuthor != null) Message.ReplyRef(e.replyId, e.replyAuthor, e.replyText ?: "") else null
         val playlist = e.kind == "playlist"
         val ok = com.fariin.app.local.FileOutbox.readable(e) { File(it).length() }
+        // Unreadable in a quiet copy: nothing to show it on, the chat shows it red when it opens.
+        if (!ok && !here) return
         pending[e.clientId] = Message(
             id = e.clientId, authorId = me, text = e.caption, type = "file", createdAtMillis = e.ts, hasServerTime = false,
             clientTs = e.ts, clientId = e.clientId, sendState = if (ok) Message.SendState.SENDING else Message.SendState.FAILED, replyTo = ref,
@@ -2302,12 +2310,14 @@ class ThreadRepository(
     }
 
     /** An album from [com.fariin.app.local.PhotoOutbox]: its tiles drawn again and sent under the same clientId. */
-    private fun resumeAlbum(e: com.fariin.app.local.PhotoOutbox.Entry) {
+    private fun resumeAlbum(e: com.fariin.app.local.PhotoOutbox.Entry, here: Boolean) {
         val ok = e.items.size >= 2 && e.items.all { t -> File(t.path).length() > 0 && (t.clip == null || File(t.clip).length() > 0) }
-        if (!ok) { com.fariin.app.local.PhotoOutbox.remove(me, e.clientId); return }
+        if (!ok) { if (here) com.fariin.app.local.PhotoOutbox.remove(me, e.clientId); return }
         val ref = if (e.replyId != null && e.replyAuthor != null) Message.ReplyRef(e.replyId, e.replyAuthor, e.replyText ?: "") else null
         // H-58: this album's last replay took the app down (out of memory): it is not replayed again.
+        // A quiet copy leaves it (entry and mark) for the chat to show red when it opens.
         if (AlbumReplayMark.crashedBefore(e.clientId)) {
+            if (!here) return
             com.fariin.app.local.PhotoOutbox.remove(me, e.clientId)
             AlbumReplayMark.clear(e.clientId)
             failedMedia.add(e.clientId)
@@ -2333,6 +2343,7 @@ class ThreadRepository(
             } catch (_: Exception) { false }
             if (!landed) {
                 AlbumReplayMark.set(e.clientId)
+                var keepMark = false
                 try {
                     val parts = e.items.map { t ->
                         val pic = PhotoPrep(File(t.path).readBytes(), t.width, t.height, t.blurhash, t.thumb)
@@ -2346,12 +2357,14 @@ class ThreadRepository(
                     work()
                 } catch (oom: OutOfMemoryError) {
                     // H-58: too big for this phone: never replayed again, it ends failed (Delete).
+                    // In a quiet copy the entry and the mark stay: the chat shows it red when it opens.
+                    if (!OutboxResumeRules.mayFailHere(onScreen())) { keepMark = true; throw IllegalStateException("album replay out of memory") }
                     com.fariin.app.local.PhotoOutbox.remove(me, e.clientId)
                     retryMedia.remove(e.clientId)
                     failedMedia.add(e.clientId)
                     throw IllegalStateException("album replay out of memory")
                 } finally {
-                    AlbumReplayMark.clear(e.clientId)
+                    if (keepMark) AlbumReplayMark.set(e.clientId) else AlbumReplayMark.clear(e.clientId)
                 }
             }
             com.fariin.app.local.PhotoOutbox.remove(me, e.clientId)
@@ -3453,6 +3466,15 @@ internal object AlbumReplayMark {
     fun set(clientId: String) { prefs()?.edit()?.putBoolean(clientId, true)?.commit() }
     fun clear(clientId: String) { prefs()?.edit()?.remove(clientId)?.apply() }
     fun crashedBefore(clientId: String): Boolean = prefs()?.getBoolean(clientId, false) == true
+}
+
+/**
+ * K-45 / H-58: an outbox entry ends over a local failure (its file gone, an album too big for the
+ * phone) only in the chat on screen, which shows it red with Delete. A quiet copy (the start-up
+ * drain) has no screen, so there the entry stays until the chat opens.
+ */
+internal object OutboxResumeRules {
+    fun mayFailHere(onScreen: Boolean): Boolean = onScreen
 }
 
 /** The keys notice's place and words per chat, so a chat opens with it already drawn (see the seed above). */
