@@ -436,7 +436,7 @@ class MainActivity : ComponentActivity() {
             val cid = pending ?: return@LaunchedEffect
             PushRouter.pendingOpen.value = null
             // The official chat is its own page, not a thread (iOS opens it for its pushes).
-            nav.navigate(com.fariin.app.push.PushTapRoute.route(cid)) { launchSingleTop = true }
+            nav.navigateChat(com.fariin.app.push.PushTapRoute.route(cid))
         }
         // The launcher's long-press New Chat / New Story (system/SystemRouter).
         val launcherAsk by com.fariin.app.system.SystemRouter.pending.collectAsState()
@@ -465,7 +465,7 @@ class MainActivity : ComponentActivity() {
             // The saved rows start loading now, off the main thread, while the page is set up.
             com.fariin.app.data.ThreadRowsPrefetch.prefetch(me, conv.id)
             // Two columns: the chat on the right replaces the open one (no stack of chats behind it).
-            nav.navigate("thread/${conv.id}") { launchSingleTop = true; if (SplitLayout.wide) popUpTo("main") { inclusive = false } } } }
+            nav.navigateChat("thread/${conv.id}") { if (SplitLayout.wide) popUpTo("main") { inclusive = false } } } }
         val peopleNavObj = remember(nav, people) { com.fariin.app.ui.people.peopleNav(nav, people) }
         val channelNavObj = remember(nav) { com.fariin.app.ui.channels.channelNav(nav) }
         CompositionLocalProvider(LocalOpenChat provides openChatFn,
@@ -993,6 +993,19 @@ internal class AfterFirstFrame(delayMs: Long, start: () -> Unit) {
 }
 
 internal const val THREAD_ROUTE = "thread/{cid}"
+
+/**
+ * Single top only when the page on top is not a different chat: launchSingleTop on "thread/{cid}"
+ * kept chat A's page on screen with B's id, so B counted as open and gave no banner (K-2).
+ * Opening chat B over chat A is a plain navigate, as ChannelRoute does, and Back returns to A.
+ */
+internal fun androidx.navigation.NavController.navigateChat(route: String,
+                                                            more: androidx.navigation.NavOptionsBuilder.() -> Unit = {}) {
+    val top = currentBackStackEntry
+    val otherChat = route.startsWith("thread/") && top?.destination?.route == THREAD_ROUTE &&
+        route != "thread/${top.arguments?.getString("cid")}"
+    navigate(route) { more(); launchSingleTop = !otherChat }
+}
 
 /**
  * The chats [KeptChatLayer] holds: the newest chat in the back stack, and a chat closed with Back
