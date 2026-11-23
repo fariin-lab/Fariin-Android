@@ -63,6 +63,7 @@ object PlayedVoice {
     // chat every 2 s (the last mark in that window goes out at its end); not for the official chat.
     private val pending = java.util.concurrent.ConcurrentHashMap<String, Double>()
     private val coolUntil = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private val sentMax = java.util.concurrent.ConcurrentHashMap<String, Double>()
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
 
     private fun tellServer(cid: String, createdAtMs: Double) {
@@ -78,6 +79,11 @@ object PlayedVoice {
     private fun flush(cid: String) {
         val ms = pending.remove(cid) ?: return
         val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
+        // K-79: never backwards. An older note played after a newer one's mark went out writes nothing
+        // (the highest sent this launch, or the chat's own value, wins).
+        val have = maxOf(sentMax[cid] ?: 0.0, CryptoHub.listedConversation(cid)?.lastPlayedVoice?.get(me) ?: 0.0)
+        if (ms <= have) return
+        sentMax[cid] = ms
         com.fariin.app.Fb.db.collection("conversations").document(cid)
             .set(mapOf("lastPlayedVoice" to mapOf(me to ms)), com.google.firebase.firestore.SetOptions.merge())
     }
@@ -98,6 +104,7 @@ object PlayedVoice {
         _upTo.value = emptyMap()
         _ids.value = emptyList()
         pending.clear()
+        sentMax.clear()
         c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
         loaded = true
     }
