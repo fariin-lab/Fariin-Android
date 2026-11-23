@@ -347,6 +347,12 @@ object GroupCall {
     private var joinedAtMs = 0L
     /** Who else was in the room at the last refresh (iOS lastRemoteUids). */
     private var lastRemote: Set<String> = emptySet()
+    /**
+     * iOS joinGeneration: every join tap and every leave moves it on. A join step that comes back
+     * from an await under an older number was left (or replaced) meanwhile and must stop there:
+     * no mic, no camera, no start write that rings the group.
+     */
+    private var joinGen = 0L
 
     /**
      * [requireLive] true is the Join bar (never starts a call); false is the call button, which
@@ -362,14 +368,17 @@ object GroupCall {
         loadGroupFaces(cid)
         val app = context.applicationContext
         appContext = app
+        val gen = ++joinGen
         scope.launch {
             val pass = try {
                 val r = FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION)
                     .getHttpsCallable("groupCallToken").call(GroupCallWire.tokenRequest(cid)).await()
                 GroupCallWire.parsePass(r.data)
             } catch (e: Exception) {
-                fail(GroupCallWire.joinNotice(e.message)); return@launch
+                if (joinGen == gen && _ui.value.cid == cid) fail(GroupCallWire.joinNotice(e.message))
+                return@launch
             }
+            if (joinGen != gen || _ui.value.cid != cid) return@launch
             if (pass == null) { fail("Call failed"); return@launch }
             connectRoom(app, cid, title, video, requireLive, pass)
         }
@@ -681,6 +690,15 @@ object GroupCall {
     }
 
     private suspend fun connectRoom(app: Context, cid: String, title: String, video: Boolean, requireLive: Boolean, pass: GroupPass) {
+        // Callers checked this join is still wanted just before; from here each await is checked again.
+        val gen = joinGen
+        var made: Room? = null
+        fun gone(): Boolean {
+            if (joinGen == gen && room != null && room === made && _ui.value.cid == cid) return false
+            // Left while this step was out: the half-open room goes quietly (leave() may have done it).
+            made?.let { m -> if (room !== m) runCatching { m.disconnect(); m.release() } }
+            return true
+        }
         run {
             try {
                 // Adaptive stream: a tile that is off screen gets nothing and each tile gets the layer
@@ -709,6 +727,7 @@ object GroupCall {
                         videoEncoding = io.livekit.android.room.track.VideoEncoding(1_500_000, fps))
                 }
                 room = r
+                made = r
                 watchRoutes(r)
                 events = scope.launch {
                     r.events.collect { e ->
@@ -744,10 +763,13 @@ object GroupCall {
                     }
                 }
                 r.connect(pass.url, pass.token)
+                if (gone()) return@run
                 CallService.start(app, CallService.Mode.CALL, video && !pass.voiceOnly)
                 val micOn = micWish && !pass.micBlocked
                 r.localParticipant.setMicrophoneEnabled(micOn)
+                if (gone()) return@run
                 if (video && !pass.voiceOnly) r.localParticipant.setCameraEnabled(true)
+                if (gone()) return@run
                 // Muted by an admin in this call before I left: I come back muted (iOS noteJoinPass).
                 sawMicBlocked = pass.micBlocked
                 _ui.value = _ui.value.copy(connecting = false, joined = true, micOn = micOn, cameraOn = video && !pass.voiceOnly,
@@ -775,9 +797,11 @@ object GroupCall {
                 refresh()
                 if (!starting) CallTonePlayer.play(CallTone.GROUP_JOINED)   // iOS: the sound when I get in
                 if (_ui.value.linkRoom != null) return@run
+                if (gone()) return@run
                 if (starting) start(cid, title, video, r) else noteJoined(cid)
             } catch (e: Exception) {
                 Log.w(TAG, "join failed", e)
+                if (gone()) return@run
                 if (adhocJoining && GroupCallWire.isAdhoc(cid) && _ui.value.cid == cid) failAdhocJoin(cid, com.fariin.app.data.AdhocJoinStep.CONNECT_FAILED)
                 else fail("Call failed")
             }
@@ -1328,6 +1352,7 @@ object GroupCall {
     }
 
     fun leave() {
+        joinGen++
         val cid = _ui.value.cid
         val r = room
         val link = _ui.value.linkRoom
