@@ -2930,6 +2930,15 @@ private fun StoryReaction(ui: ThreadUi, m: Message, glyph: String, isMe: Boolean
         Text(caption, fontSize = 12.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 2.dp))
         Spacer(Modifier.height(5.dp))
+        // A story gone, or one that sent no picture (one-time, protected): no card and no picture,
+        // "Story unavailable" over the emoji, as iOS does (J-50).
+        if (live == null) {
+            Text("Story unavailable", fontSize = 12.sp, color = c.secondary.copy(alpha = 0.6f), maxLines = 1,
+                modifier = Modifier.padding(horizontal = 2.dp))
+            Text(glyph, fontSize = glyphSize, lineHeight = glyphSize, maxLines = 1, softWrap = false)
+            Meta(m, tick, isMe, is24h, plain = true)
+            return@Column
+        }
         Box(Modifier.width(94.dp + overhang).height(168.dp)) {
             val card: @Composable () -> Unit = {
                 coil3.compose.AsyncImage(r.storyThumb, contentDescription = "Story",
