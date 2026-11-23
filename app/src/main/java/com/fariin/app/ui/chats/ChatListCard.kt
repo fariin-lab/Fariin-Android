@@ -105,9 +105,13 @@ internal fun ChatCardContent(card: ChatCard, me: String, modifier: Modifier = Mo
                 }
             }
             null -> card.link?.let { l ->
-                // https in the in-app browser; fariin:// as the app's own route, whatever takes it.
+                // https in the in-app browser; fariin:// is the same route under kulan:// (iOS
+                // ChatListCards.open), handed to the app's own link handlers. Nothing else opens (F-43).
                 if (l.startsWith("https://", ignoreCase = true)) com.fariin.app.ui.thread.openWebLink(ctx, Uri.parse(l))
-                else runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(l)).setPackage(ctx.packageName)) }
+                else if (l.startsWith("fariin://", ignoreCase = true)) {
+                    val k = "kulan://" + l.substring(9)
+                    if (!com.fariin.app.call.CallLinkRouter.take(k)) com.fariin.app.ui.thread.ExternalLinks.take(k, ctx)
+                }
             }
         }
         Unit
