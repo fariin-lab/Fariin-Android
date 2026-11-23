@@ -116,8 +116,12 @@ object ChatListActions {
     /** iOS ChatService.clearMyMessages: every message I sent in [cid], deleted, 450 a batch. */
     suspend fun clearMyMessages(me: String, cid: String): Boolean = runCatching {
         val db = com.fariin.app.Fb.db
-        val docs = db.collection("conversations").document(cid).collection("messages")
-            .whereEqualTo("authorId", me).get().await().documents
+        val mine = db.collection("conversations").document(cid).collection("messages").whereEqualTo("authorId", me)
+        // F-2: a group that hides older history is read from my history start (index: authorId +
+        // createdAt). Until that index is live the plain read is kept, so the clear still works.
+        val from = if (com.fariin.app.crypto.Wire.isGroupCid(cid)) com.fariin.app.data.CryptoHub.listedConversation(cid)?.historyStart(me) else null
+        val docs = (if (from == null) null else runCatching { com.fariin.app.data.GroupManage.startAt(mine, from).get().await() }.getOrNull())
+            ?.documents ?: mine.get().await().documents
         docs.chunked(450).forEach { part -> db.batch().also { b -> part.forEach { b.delete(it.reference) } }.commit().await() }
     }.isSuccess
 
