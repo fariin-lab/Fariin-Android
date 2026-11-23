@@ -77,6 +77,18 @@ class LocalStoresTest {
         assertEquals(a, b)
     }
 
+    @Test fun savedGroupKeepsItsHistoryStart() {
+        // F-2: a chat list read from the phone still knows where my history in the group starts.
+        val hide = Timestamp(1_700_000_000L, 0)
+        val joined = Timestamp(1_700_000_500L, 250_000_000)
+        val doc = mapOf<String, Any?>("users" to listOf("me", "ann"), "type" to "group", "title" to "G",
+            "hideHistoryAt" to hide, "memberSince" to mapOf("me" to joined, "ann" to hide))
+        val (id, d) = LocalJson.decodeChats(LocalJson.encodeChats(listOf("grp1" to doc)))[0]
+        val c = Conversation.fromFirestore(id, d)
+        assertEquals(Conversation.fromFirestore(id, doc), c)
+        assertEquals(1_700_000_500_250.0, c.historyStart("me")!!, 0.5)
+    }
+
     @Test fun sendQueueCodecAndRefusals() {
         val e = SendQueue.Entry("C1", "alice_bobby", "hi there", 12.0, "m0", "bobby", "quoted")
         val f = SendQueue.Entry("C2", "g1", "plain", 13.0)
