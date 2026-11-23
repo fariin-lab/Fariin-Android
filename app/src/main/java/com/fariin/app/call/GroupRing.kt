@@ -230,7 +230,7 @@ object GroupRing {
         val name = d["callerName"]?.takeIf { it.isNotEmpty() } ?: "Someone"
         val title = d["title"]?.takeIf { it.isNotEmpty() } ?: CallLinkDefaults.NAME
         scope.launch {
-            val photo = try { db.collection("users").document(caller).get().await().getString("photoUrl") } catch (_: Exception) { null }
+            val photo = try { db.collection("users").document(caller).get().await().get("photoUrl") as? String } catch (_: Exception) { null }
             if (_invite.value != null || GroupCall.ui.value.cid != null) return@launch
             ring(GroupInvite(roomId, title, d["video"] != "0" && d["video"] != "false", caller, started ?: System.currentTimeMillis(),
                 listOf(RingFace(caller, name, photo?.ifEmpty { null })), linkKey = key.text, nudge = nudge))
@@ -260,7 +260,7 @@ object GroupRing {
             // A link's ring: my invite answered, declined, timed out or gone (the call ended) stops it.
             db.collection("callLinks").document(i.cid).collection("invites").document(me).addSnapshotListener { s, _ ->
                 if (_invite.value?.cid != i.cid || s == null) return@addSnapshotListener
-                if (s.getString("state") != "ringing") stop()
+                if (s.get("state") as? String != "ringing") stop()
             }
         } else db.collection("groupCalls").document(i.cid).addSnapshotListener { s, _ ->
             if (_invite.value?.cid != i.cid || s == null) return@addSnapshotListener

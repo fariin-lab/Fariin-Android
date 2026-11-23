@@ -190,7 +190,7 @@ object CallWire {
     }
 
     /** A "missed" never overwrites an "answered" row (iOS recordCall). */
-    fun recordSkipped(outcome: String, existingOutcome: String?) = outcome == "missed" && existingOutcome == "answered"
+    fun recordSkipped(outcome: String, existingOutcome: Any?) = outcome == "missed" && (existingOutcome as? String) == "answered"
 
     fun marker(outcome: String, video: Boolean): String =
         if (outcome == "missed") (if (video) "📹 Missed video call" else "📞 Missed call")

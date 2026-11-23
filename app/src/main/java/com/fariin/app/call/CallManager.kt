@@ -1335,7 +1335,7 @@ object CallManager {
         if (id == callId) return
         val ref = com.fariin.app.Fb.db.collection("calls").document(id)
         ref.get().addOnSuccessListener { d ->
-            if (d.exists() && d.getString("status") != "ended" && id != callId) ref.update(CallWire.endFields(EndReason.FAILED))
+            if (d.exists() && d.get("status") as? String != "ended" && id != callId) ref.update(CallWire.endFields(EndReason.FAILED))
         }
     }
 
@@ -1396,7 +1396,7 @@ object CallManager {
 
     private suspend fun myProfile(): Pair<String?, String?> = try {
         val d = withTimeoutOrNull(2000) { com.fariin.app.Fb.db.collection("users").document(me).get().await() }
-        d?.getString("name") to d?.getString("photoUrl")
+        d?.get("name") as? String to d?.get("photoUrl") as? String
     } catch (_: Exception) { null to null }
 
     /** Privacy > Always Relay Calls, the setting iOS keeps under `calls.alwaysRelay`. */

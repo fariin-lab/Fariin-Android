@@ -1885,13 +1885,14 @@ private fun NotHereYet(g: GroupCallUi, meId: String?) {
         val reg = db.collection("callLinks").document(room).collection("invites").addSnapshotListener { snap, _ ->
             snap ?: return@addSnapshotListener
             invites = snap.documents.mapNotNull { d ->
-                val uid = d.getString("uid")?.ifEmpty { null } ?: d.id
-                com.fariin.app.call.LinkInvite(uid, d.getTimestamp("at")?.toDate()?.time, d.getString("sid")?.ifEmpty { null }, d.getString("state") ?: "ringing")
+                val uid = (d.get("uid") as? String)?.ifEmpty { null } ?: d.id
+                com.fariin.app.call.LinkInvite(uid, (d.get("at") as? com.google.firebase.Timestamp)?.toDate()?.time,
+                    (d.get("sid") as? String)?.ifEmpty { null }, d.get("state") as? String ?: "ringing")
             }.sortedBy { it.atMs ?: 0L }
             for (i in invites) if (i.uid !in people) {
                 people[i.uid] = "User" to null
                 db.collection("users").document(i.uid).get().addOnSuccessListener { u ->
-                    people[i.uid] = (u.getString("name")?.ifEmpty { null } ?: "User") to u.getString("photoUrl")?.ifEmpty { null }
+                    people[i.uid] = ((u.get("name") as? String)?.ifEmpty { null } ?: "User") to (u.get("photoUrl") as? String)?.ifEmpty { null }
                 }
             }
         }

@@ -638,7 +638,7 @@ object GroupCall {
                 return@addSnapshotListener
             }
             sawMine = true
-            when (s.getString("status")) {
+            when (s.get("status") as? String) {
                 "approved" -> admit(dropKnock = false)
                 "denied" -> end("Request denied")
             }
@@ -1151,8 +1151,10 @@ object GroupCall {
             .addSnapshotListener { s, _ ->
                 if (_ui.value.cid != tag || s == null) return@addSnapshotListener
                 val now = android.os.SystemClock.elapsedRealtime()
-                val docs = s.documents.sortedBy { it.getTimestamp("at")?.toDate()?.time ?: 0L }
-                    .map { LinkRequest(it.id, it.getString("name") ?: "Member", it.getString("photoUrl")) to it.getTimestamp("at")?.toDate()?.time }
+                // Each knock is written by the one knocking: safe casts only.
+                fun at(d: com.google.firebase.firestore.DocumentSnapshot) = (d.get("at") as? com.google.firebase.Timestamp)?.toDate()?.time
+                val docs = s.documents.sortedBy { at(it) ?: 0L }
+                    .map { LinkRequest(it.id, it.get("name") as? String ?: "Member", it.get("photoUrl") as? String) to at(it) }
                 val seen = HashMap<String, Pair<Long?, Long>>()
                 for ((r, at) in docs) {
                     val old = requestSeen[r.uid]

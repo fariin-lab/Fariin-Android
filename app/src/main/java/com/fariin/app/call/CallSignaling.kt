@@ -29,7 +29,7 @@ class CallSignaling(private val db: FirebaseFirestore = com.fariin.app.Fb.db) {
 
     /** Accepted 1:1 chat = established contact (iOS resolvePeerTrust). Any failure = stranger. */
     suspend fun isEstablishedContact(cid: String): Boolean = try {
-        db.collection("conversations").document(cid).get().await().getBoolean("accepted") == true
+        db.collection("conversations").document(cid).get().await().get("accepted") == true
     } catch (_: Exception) { false }
 
     /**
@@ -76,10 +76,13 @@ class CallSignaling(private val db: FirebaseFirestore = com.fariin.app.Fb.db) {
             .addSnapshotListener(MetadataChanges.INCLUDE) { snap, _ ->
                 if (snap == null || snap.metadata.isFromCache) return@addSnapshotListener
                 val created = HashMap<String, Long>()
+                // The caller writes this doc: safe casts, and one bad doc is skipped.
                 val docs = snap.documents.mapNotNull { d ->
-                    val data = d.data ?: return@mapNotNull null
-                    d.getTimestamp("createdAt")?.let { created[d.id] = it.toDate().time }
-                    CallWire.parse(d.id, data)
+                    runCatching {
+                        val data = d.data ?: return@mapNotNull null
+                        (d.get("createdAt") as? com.google.firebase.Timestamp)?.let { created[d.id] = it.toDate().time }
+                        CallWire.parse(d.id, data)
+                    }.getOrNull()
                 }
                 onDocs(docs, created)
             }
@@ -145,9 +148,15 @@ class CallSignaling(private val db: FirebaseFirestore = com.fariin.app.Fb.db) {
 
     /** ChatService.recordCall, step for step. */
     suspend fun recordCall(me: String, cid: String, id: String, callerUid: String, outcome: String, video: Boolean, durationSec: Int) {
+        try { recordCallInner(me, cid, id, callerUid, outcome, video, durationSec) }
+        catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) {}   // the other side writes this row: a bad field must not crash the hang-up
+    }
+
+    private suspend fun recordCallInner(me: String, cid: String, id: String, callerUid: String, outcome: String, video: Boolean, durationSec: Int) {
         val ref = row(cid, id)
         val existing = try { ref.get().await() } catch (_: Exception) { null }
-        if (CallWire.recordSkipped(outcome, existing?.getString("callOutcome"))) return
+        if (CallWire.recordSkipped(outcome, existing?.get("callOutcome"))) return
         val isNew = existing?.exists() != true
         val fields = CallWire.recordFields(me, callerUid, outcome, video, durationSec, isNew, ts)
         try { ref.set(fields, SetOptions.merge()).await() } catch (_: Exception) {
