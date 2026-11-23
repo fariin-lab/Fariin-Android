@@ -974,8 +974,11 @@ fun StoryViewer(
                         } else storyScope.launch {
                             val ok = runCatching {
                                 val cid = listOf(me, s.authorUid).sorted().joinToString("_")
+                                // A one-time or screenshot-protected story's picture never rides into the chat,
+                                // where it would show again with no screenshot block (J-50).
+                                val thumb = if (s.oneTime || s.captureProtected) null else s.previewUrl
                                 ThreadRepository(cid, me, CryptoHub.crypto, storyScope).sendStoryReply(
-                                    text, Message.ReplyRef(s.id, s.authorUid, "", isStatus = true, storyThumb = s.previewUrl, isReaction = reaction),
+                                    text, Message.ReplyRef(s.id, s.authorUid, "", isStatus = true, storyThumb = thumb, isReaction = reaction),
                                 )
                             }.isSuccess
                             if (!ok) toast = "Couldn't send. Check your connection and try again."
