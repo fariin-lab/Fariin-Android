@@ -45,11 +45,14 @@ object QrRules {
         return value.takeIf { safeSegment(it) }
     }
 
-    /** fariin.com's own pages: a bare fariin.com/<word> that is one of these is the website, not a name. */
-    private val SITE_PAGES = setOf("help", "privacy", "terms", "safety", "about", "contact", "download", "app", "blog",
-        "press", "careers", "legal", "support", "faq", "security", "cookies", "status", "admin", "login", "signup",
-        "call", "video", "voice", "s", "u", "join", "invite", "g", "c", "well-known", ".well-known", "index.html",
-        "news", "reset", "console", "index", "hc", "link")
+    /**
+     * fariin.com's own pages: a bare fariin.com/<word> that is one of these is the website, not a name.
+     * Exactly iOS KulanApp.sitePages (F-51): a longer list here made fariin.com/<name> a dead link on
+     * Android for names iPhone opens. The one list for the scanner, chat links and link cards.
+     */
+    val SITE_PAGES: Set<String> = setOf("download", "privacy", "terms", "support", "help", "about", "faq",
+        "news", "safety", "security", "reset", "admin", "console", "index", "g", "u", "s", "hc",
+        "call", "voice", "video", "link")
 
     /**
      * A bare fariin.com/<name> (one path part, not a site page): a public group's, channel's or person's

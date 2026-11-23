@@ -33,4 +33,13 @@ class QrRulesTest {
         assertEquals(n % 2, (r.last - r.first + 1) % 2)
         assertEquals(r.first, n - 1 - r.last)
     }
+
+    @Test fun bareNameUsesTheIosSitePages() {
+        // F-51: only iOS KulanApp.sitePages are the website; any other name shape is a name.
+        assertNull(QrRules.bareNameFrom("https://fariin.com/news"))
+        assertNull(QrRules.bareNameFrom("https://fariin.com/Help"))
+        assertEquals("contact", QrRules.bareNameFrom("https://fariin.com/contact"))
+        assertEquals("blog", QrRules.bareNameFrom("https://www.fariin.com/blog"))
+        assertNull(QrRules.bareNameFrom("https://fariin.com/well-known"))
+    }
 }

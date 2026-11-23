@@ -301,8 +301,7 @@ object ExternalLinks {
     private val site = Regex("^https?://(www\\.)?fariin\\.com(/|$)", RegexOption.IGNORE_CASE)
 
     /** iOS DeepLink.sitePages: the website's own pages, never read as a name. */
-    private val sitePages = setOf("download", "privacy", "terms", "support", "help", "about", "faq", "news", "safety",
-        "security", "reset", "admin", "console", "index", "g", "u", "s", "hc", "call", "voice", "video", "link")
+    private val sitePages = com.fariin.app.data.QrRules.SITE_PAGES
 
     /** iOS safeSegment: no slash, no dot names, no __x__, at most 128. */
     private fun safe(v: String) = v.isNotEmpty() && '/' !in v && v != "." && v != ".." &&
