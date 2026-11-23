@@ -120,6 +120,8 @@ class ThreadRepository(
     // pages answer on main: every change and every walk of these two maps holds [docsLock].
     private val liveDocs = LinkedHashMap<String, DocumentSnapshot>()
     private val olderDocs = LinkedHashMap<String, DocumentSnapshot>()
+    /** My own writes still waiting for the server's time, in a group with hidden history ([listenMine]). */
+    private val mineDocs = LinkedHashMap<String, DocumentSnapshot>()
     private val docsLock = Any()
     /** Busy groups: listener answers redraw at most once per interval (150 ms, 250 ms on a LOW phone). */
     private val msgGate = PublishGate(BusyChatRules.publishIntervalMs(com.fariin.app.perf.DeviceClass.peek()))
@@ -186,6 +188,7 @@ class ThreadRepository(
     /** The media sends (iOS ChatService media paths), see media/MediaSender. */
     private val sender: MediaSender by lazy { MediaSender(cid, me, crypto, media, db) }
     @Volatile private var msgReg: ListenerRegistration? = null
+    @Volatile private var mineReg: ListenerRegistration? = null
     @Volatile private var convReg: ListenerRegistration? = null
     private var presenceReg: ListenerRegistration? = null
     private var otherReg: ListenerRegistration? = null
@@ -267,7 +270,7 @@ class ThreadRepository(
     fun recover() {
         if (_state.value.former) return
         if (msgFailed) {
-            msgReg?.remove(); msgReg = null
+            msgReg?.remove(); msgReg = null; mineReg?.remove(); mineReg = null
             convReg?.remove(); convReg = null
             msgFailed = false
             startListeners()
@@ -282,7 +285,7 @@ class ThreadRepository(
     /** "Try Again" on a failed first load: the message listeners are made again, once. */
     fun reload() {
         if (_state.value.former || !msgFailed) return
-        msgReg?.remove(); msgReg = null
+        msgReg?.remove(); msgReg = null; mineReg?.remove(); mineReg = null
         convReg?.remove(); convReg = null
         msgFailed = false
         _state.update { it.copy(error = null, loaded = it.messages.isNotEmpty()) }
@@ -366,8 +369,35 @@ class ThreadRepository(
     private fun historyFrom(): Double? =
         if (Wire.isGroupCid(cid)) GroupManage.historyStart(_state.value.conv, me) else null
 
+    /**
+     * Hidden history: the live query's `createdAt >= start` never matches my own write while its
+     * server time is pending (a group line from GroupManage, People, ChatRestrictions...), so offline
+     * it came late or not at all. This phone's cache only (no server reads): my newest writes, the
+     * pending ones drawn until the live query has them.
+     */
+    private fun listenMine() {
+        mineReg?.remove(); mineReg = null
+        synchronized(docsLock) { mineDocs.clear() }
+        if (listenFrom == null) return
+        val opts = com.google.firebase.firestore.SnapshotListenOptions.Builder()
+            .setSource(com.google.firebase.firestore.ListenSource.CACHE)
+            .setMetadataChanges(com.google.firebase.firestore.MetadataChanges.INCLUDE).setExecutor(listenExec).build()
+        mineReg = convRef.collection("messages").whereEqualTo("authorId", me)
+            .orderBy("createdAt", Query.Direction.DESCENDING).limit(10)
+            .addSnapshotListener(opts) { snap, _ ->
+                if (snap == null) return@addSnapshotListener
+                val now = snap.documents.filter { it.metadata.hasPendingWrites() }
+                val changed = synchronized(docsLock) {
+                    if (mineDocs.isEmpty() && now.isEmpty()) false
+                    else { mineDocs.clear(); now.forEach { mineDocs[it.id] = it }; docsSeq++; true }
+                }
+                if (changed) askRedraw(true)
+            }
+    }
+
     /** The newest page's listener (made again when my history start moves). */
     private fun listenMessages() {
+        listenMine()
         msgReg = messagesQuery(listenFrom)
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .limit(PAGE_SIZE)
@@ -552,7 +582,7 @@ class ThreadRepository(
     private fun becomeFormer(data: Map<String, Any?>) {
         val stripped = FormerGroups.strip(data, me)
         FormerGroups.note(cid, stripped, CryptoHub.listedConversation(cid)?.updatedAtMillis ?: 0.0)
-        msgReg?.remove(); msgReg = null
+        msgReg?.remove(); msgReg = null; mineReg?.remove(); mineReg = null
         convReg?.remove(); convReg = null
         stopOlder()
         _state.update { it.copy(conv = stripped, former = true) }
@@ -586,7 +616,7 @@ class ThreadRepository(
         presenceReg?.remove(); presenceReg = null
         otherReg?.remove(); otherReg = null
         myReg?.remove(); myReg = null
-        msgReg?.remove(); msgReg = null
+        msgReg?.remove(); msgReg = null; mineReg?.remove(); mineReg = null
         convReg?.remove(); convReg = null
         stopOlder()
         burnJob?.cancel(); burnJob = null
@@ -806,9 +836,11 @@ class ThreadRepository(
         // The maps as they are now: the listener thread may change them while this runs.
         val liveDocs: Map<String, DocumentSnapshot>
         val olderDocs: Map<String, DocumentSnapshot>
+        val mineDocs: List<DocumentSnapshot>
         synchronized(docsLock) {
             liveDocs = LinkedHashMap(this.liveDocs)
             olderDocs = LinkedHashMap(this.olderDocs)
+            mineDocs = this.mineDocs.values.filter { it.id !in liveDocs && it.id !in olderDocs }
             builtSeq = docsSeq
         }
         val all = LinkedHashMap<String, Message>()
@@ -833,7 +865,7 @@ class ThreadRepository(
         val joinedAt = if (Wire.isGroupCid(cid))
             Conversation.millis((_state.value.conv["memberSince"] as? Map<*, *>)?.get(me)) else 0.0
         // A synced channel draws its store (ChannelSync); everything else the window and older pages.
-        for (d in chSync?.docsOrNull() ?: (olderDocs.values + liveDocs.values)) {
+        for (d in chSync?.docsOrNull() ?: (olderDocs.values + liveDocs.values + mineDocs)) {
             if (d.id in takenDown) continue
             var m = parse(d)
             if (m.uploading && m.authorId == me && m.sendState == null) m.clientId?.let { k ->
