@@ -1016,9 +1016,13 @@ fun StoryViewer(
                         val on = com.fariin.app.data.StoryNotify.toggle(me, uid)
                         notifyBar = Triple(on, name, (notifyBar?.third ?: 0) + 1)
                     },
-                    onLike = { s, liked ->
-                        if (liked) toast = "Reacted"
-                        storyScope.launch { service.setLiked(s, liked) }
+                    onLike = { s, liked, done ->
+                        // "Reacted" only once the write went through; a refused like turns the heart back (J-54).
+                        storyScope.launch {
+                            val ok = service.setLiked(s, liked)
+                            if (ok && liked) toast = "Reacted"
+                            done(ok)
+                        }
                     },
                 )
             }
@@ -1248,7 +1252,7 @@ private fun StoryPage(
     onDelete: (Story) -> Unit,
     onReplyFocus: (Boolean) -> Unit,
     onReply: (Story, String, Boolean) -> Unit,
-    onLike: (Story, Boolean) -> Unit,
+    onLike: (Story, Boolean, (Boolean) -> Unit) -> Unit,
     canReply: (Story) -> Boolean,
     receipts: Boolean,
     onShown: (Story) -> Unit,
@@ -1695,10 +1699,12 @@ private fun StoryPage(
             // views, reposts and likes for everyone, and Share.
             else if (com.fariin.app.data.ChannelStories.isFollowerStory(story, me)) ChannelStoryFooter(story, service, receipts,
                 onRepost = if (canRepost(story)) ({ onRepost(story) }) else null,
-                onLike = { onLike(story, it) }, onShare = { onMenuAction(story, "share") })
-            else ReplyBar(story, service, canReply = canReply(story), showLike = receipts, onFocus = onReplyFocus,
+                onLike = { v, done -> onLike(story, v, done) }, onShare = { onMenuAction(story, "share") })
+            else ReplyBar(story, service, canReply = canReply(story),
+                // The rules refuse a heart on a story with replies off (reactionAllowed): no heart there.
+                showLike = receipts && story.allowsReplies, onFocus = onReplyFocus,
                 onRepost = if (canRepost(story)) ({ onRepost(story) }) else null,
-                onSend = { t, reaction -> onReply(story, t, reaction) }, onLike = { onLike(story, it) })
+                onSend = { t, reaction -> onReply(story, t, reaction) }, onLike = { v, done -> onLike(story, v, done) })
         }
     }
 }
@@ -1880,7 +1886,7 @@ private fun OwnerBar(story: Story, summary: StoryViewSummary?, onViews: () -> Un
 @Composable
 private fun ReplyBar(
     story: Story, service: StoryService, canReply: Boolean, showLike: Boolean,
-    onFocus: (Boolean) -> Unit, onSend: (String, Boolean) -> Unit, onLike: (Boolean) -> Unit,
+    onFocus: (Boolean) -> Unit, onSend: (String, Boolean) -> Unit, onLike: (Boolean, (Boolean) -> Unit) -> Unit,
     onRepost: (() -> Unit)? = null,
 ) {
     var text by remember(story.id) { mutableStateOf("") }
@@ -1970,7 +1976,7 @@ private fun ReplyBar(
                 // iOS likeButton: the bare heart on the black, in a 44 target, no plate.
                 if (showLike)
                 Box(Modifier.size(44.dp).clip(CircleShape)
-                    .clickable { liked = !liked; onLike(liked) }, contentAlignment = Alignment.Center) {
+                    .clickable { val want = !liked; liked = want; onLike(want) { ok -> if (!ok && liked == want) liked = !want } }, contentAlignment = Alignment.Center) {
                     Icon(if (liked) ImageVector.cachedVector(R.drawable.ic_sf_heart_fill) else ImageVector.cachedVector(R.drawable.ic_sf_heart), contentDescription = if (liked) "Unlike" else "Like",
                         tint = if (liked) Color(0xFFFF3B30) else Color.White, modifier = Modifier.size(28.dp))
                 }
@@ -2172,7 +2178,7 @@ private fun OfficialStoryButton(story: Story, onLink: (String) -> Unit) {
  */
 @Composable
 private fun ChannelStoryFooter(story: Story, service: StoryService, receipts: Boolean, onRepost: (() -> Unit)?,
-                               onLike: (Boolean) -> Unit, onShare: () -> Unit) {
+                               onLike: (Boolean, (Boolean) -> Unit) -> Unit, onShare: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var views by remember(story.id) { mutableIntStateOf(0) }
     var likes by remember(story.id) { mutableIntStateOf(0) }
@@ -2205,7 +2211,11 @@ private fun ChannelStoryFooter(story: Story, service: StoryService, receipts: Bo
             when {
                 !receipts -> toast("Turn on Read Receipts for stories to like them.")
                 !story.allowsReplies && !liked -> toast("Likes are turned off for this story.")
-                else -> { liked = !liked; delta += if (liked) 1 else -1; onLike(liked) }
+                else -> {
+                    val want = !liked; val step = if (want) 1 else -1
+                    liked = want; delta += step
+                    onLike(want) { ok -> if (!ok && liked == want) { liked = !want; delta -= step } }
+                }
             }
         }, verticalAlignment = Alignment.CenterVertically) {
             Icon(if (liked) ImageVector.cachedVector(R.drawable.ic_sf_heart_fill) else ImageVector.cachedVector(R.drawable.ic_sf_heart), if (liked) "Unlike" else "Like",
