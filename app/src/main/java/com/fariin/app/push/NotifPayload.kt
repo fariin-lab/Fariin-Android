@@ -33,6 +33,8 @@ data class PushData(
     val isChannel: Boolean = false,
     /** A message request from somebody I have not answered (server `req: "1"`, K-100): no Reply. */
     val isRequest: Boolean = false,
+    /** Sent without sound (server `silent: "1"` or `snd: "none"`, F-11 / F-48): posted quietly. */
+    val silent: Boolean = false,
 ) {
     companion object {
         fun parse(data: Map<String, String>, notifTitle: String? = null, notifBody: String? = null): PushData {
@@ -55,6 +57,7 @@ data class PushData(
                 body = notifBody?.takeIf { it.isNotEmpty() } ?: s("b") ?: "New message",
                 isChannel = data["channel"] == "1",
                 isRequest = data["req"] == "1",
+                silent = data["silent"] == "1" || data["snd"] == "none",
             )
         }
     }
@@ -112,6 +115,8 @@ data class NotifSpec(
     val noticeTag: String? = null,
     /** An unanswered message request (K-100): no Reply and no bubble on it. */
     val isRequest: Boolean = false,
+    /** Posted with no sound or buzz (F-11: a silent post). */
+    val silent: Boolean = false,
 )
 
 sealed class NotifDecision {
@@ -202,7 +207,7 @@ object NotifBuilder {
                 title = p.title, line = p.body, body = p.body, plain = true,
                 senderUid = sender ?: "", senderName = p.title, isGroup = p.isGroup, groupName = null,
                 senderPhoto = null, groupPhoto = null, mid = p.mid, expiresAtMs = p.expiresAtMs,
-                noticeTag = key?.let { noticeTag(p.kind, it) }, isRequest = p.isRequest,
+                noticeTag = key?.let { noticeTag(p.kind, it) }, isRequest = p.isRequest, silent = p.silent,
             ))
         }
 
@@ -243,7 +248,7 @@ object NotifBuilder {
             groupName = if (p.isGroup) groupName else null,
             senderPhoto = senderPhoto, groupPhoto = if (p.isGroup) chat?.photo else null,
             mid = p.mid, expiresAtMs = p.expiresAtMs, isChannel = p.isChannel,
-            noticeTag = noticeTag(p.kind, key), isRequest = p.isRequest,
+            noticeTag = noticeTag(p.kind, key), isRequest = p.isRequest, silent = p.silent,
         ))
     }
 }

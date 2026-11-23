@@ -125,6 +125,7 @@ object NotificationPoster {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(if (spec.channel == NotifChannel.CALLS) NotificationCompat.CATEGORY_CALL
                 else if (spec.channel == NotifChannel.MISSED) "missed_call" else NotificationCompat.CATEGORY_MESSAGE)
+        if (spec.silent) b.setSilent(true)
         // One group per account; its summary carries the app icon number (AppBadge).
         if (spec.channel == NotifChannel.MESSAGES && me.isNotEmpty()) b.setGroup(AppBadge.group(me))
         // A disappearing message: the notification goes when its newest line's timer runs out
