@@ -130,7 +130,7 @@ object AppUpdateGate {
     }
 
     fun openStore(c: Context, d: Decision) {
-        val url = d.storeUrl.ifEmpty { "https://play.google.com/store/apps/details?id=${c.packageName}" }
+        val url = UpdateLink.forAndroid(d.storeUrl, c.packageName)
         runCatching { c.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
 
@@ -174,4 +174,17 @@ fun AppUpdateLayer() {
         title = { Text(u.title) }, text = { if (u.message.isNotEmpty()) Text(u.message) },
         confirmButton = { TextButton(onClick = { AppUpdateGate.openStore(ctx, u) }) { Text("Update Now") } },
         dismissButton = { TextButton(onClick = { AppUpdateGate.notNow(ctx) }) { Text("Not Now") } })
+}
+
+/**
+ * K-67: the link Update opens on Android. A campaign without its own link came with the iPhone App
+ * Store page (the server's shared fallback): an Apple link, or none, opens Play instead.
+ */
+object UpdateLink {
+    fun forAndroid(serverUrl: String, packageName: String): String {
+        val u = serverUrl.trim()
+        val host = runCatching { java.net.URI(u).host?.lowercase() }.getOrNull() ?: ""
+        val apple = host == "apps.apple.com" || host == "itunes.apple.com" || host.endsWith(".apple.com") || u.startsWith("itms")
+        return if (u.isEmpty() || apple) "https://play.google.com/store/apps/details?id=$packageName" else u
+    }
 }
