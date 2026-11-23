@@ -18,6 +18,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 
 /**
  * The recent chats as long-lived conversation shortcuts (Android's way of knowing "who you talk
@@ -38,6 +39,9 @@ object ChatShortcuts {
     private const val LOCKED = "#applock"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /** K-97: the publish still loading faces, cancelled by [clear]; [generation] counts clears. */
+    @Volatile private var job: kotlinx.coroutines.Job? = null
+    @Volatile private var generation = 0
     @Volatile private var lastSignature: String? = null
     /** The last list asked for, so App Lock turned off can publish it again at once. */
     @Volatile private var lastInput: Triple<String, List<Conversation>, List<Conversation>>? = null
@@ -99,11 +103,13 @@ object ChatShortcuts {
         val sig = "$me#" + signature(list) + "#" + drop.sorted().joinToString(",")
         if (sig == lastSignature) return
         lastSignature = sig
-        scope.launch {
+        val gen = generation
+        job?.cancel()
+        job = scope.launch {
             val faces = list.map { e -> async { e.photo?.let { runCatching { FariinMessagingService.loadAvatar(app, it) }.getOrNull() } } }.awaitAll()
             val shortcuts = list.mapIndexed { i, e -> build(app, e.cid, e.title, e.isGroup, e.personUid, faces[i], rank = i) }
             // Signed out while the faces loaded: clear() already ran, publish nothing.
-            if (com.fariin.app.Fb.auth.currentUser?.uid != me) return@launch
+            if (!isActive || gen != generation || com.fariin.app.Fb.auth.currentUser?.uid != me) return@launch
             try {
                 // A deleted, blocked or left chat leaves notification settings and the share sheet too.
                 val known = ShortcutManagerCompat.getShortcuts(app,
@@ -160,6 +166,8 @@ object ChatShortcuts {
     /** Sign-out: no chat of the old account stays on the launcher or in the share sheet. */
     fun clear(c: Context) {
         lastSignature = null
+        generation++
+        job?.cancel(); job = null
         try {
             ShortcutManagerCompat.removeAllDynamicShortcuts(c)
             ShortcutManagerCompat.removeLongLivedShortcuts(c, ShortcutManagerCompat.getShortcuts(c,
