@@ -90,7 +90,28 @@ object NotifStore {
         f.parentFile?.mkdirs()
         val tmp = File(f.parentFile, f.name + ".tmp")
         try { tmp.writeBytes(data); tmp.renameTo(f) } catch (_: Exception) { tmp.delete() }
+        // K-127: the folder is kept to the newest-used faces (AvatarTrim), checked every few saves.
+        if (++savesSinceTrim >= TRIM_EVERY) { savesSinceTrim = 0; trimAvatars(c) }
     }
+
+    @Volatile private var savesSinceTrim = TRIM_EVERY
+    private const val TRIM_EVERY = 20
+
+    /** Drops the faces used longest ago past the cap (K-127). */
+    fun trimAvatars(c: Context) {
+        val dir = File(c.applicationContext.filesDir, AVATARS)
+        val files = dir.listFiles()?.filter { it.isFile } ?: return
+        val items = files.map { com.fariin.app.data.AvatarTrim.Item(it.name, it.length(), it.lastModified()) }
+        val gone = com.fariin.app.data.AvatarTrim.toDelete(items).toHashSet()
+        for (f in files) if (f.name in gone || f.name.endsWith(".tmp")) f.delete()
+    }
+
+    /** What the face folder takes on disk, for Manage Storage (K-127). */
+    fun avatarBytes(c: Context): Long =
+        File(c.applicationContext.filesDir, AVATARS).listFiles()?.sumOf { it.length() } ?: 0L
+
+    /** Clear Cache (K-127): the saved faces go; the app fetches them again when needed. */
+    fun clearAvatars(c: Context) { File(c.applicationContext.filesDir, AVATARS).deleteRecursively() }
 
     /** Off the caller's thread, profile photos only (`fariin-photo://`), as iOS saveAvatarSoon. */
     fun saveAvatarSoon(c: Context, url: String, data: ByteArray) {
@@ -101,7 +122,11 @@ object NotifStore {
 
     fun cachedAvatar(c: Context, url: String): ByteArray? {
         val f = avatarFile(c, url)
-        return try { if (f.exists()) f.readBytes().takeIf { it.isNotEmpty() } else null } catch (_: Exception) { null }
+        return try {
+            if (!f.exists()) null
+            // Marked used, so the trim keeps the faces still in use.
+            else f.readBytes().takeIf { it.isNotEmpty() }?.also { runCatching { f.setLastModified(System.currentTimeMillis()) } }
+        } catch (_: Exception) { null }
     }
 
     /** Sign-out and account deletion: the uid, the chat details and the saved faces. */
