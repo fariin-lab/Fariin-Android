@@ -385,7 +385,7 @@ object GroupRing {
     private fun startRingtone(c: Context) {
         RingVibration.start(c)
         try {
-            val r = RingtoneManager.getRingtone(c, RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)) ?: return
+            val r = RingtoneManager.getRingtone(c, RingtoneChoice.uri(c)) ?: return
             if (android.os.Build.VERSION.SDK_INT >= 28) r.isLooping = true else loopRingtone(r)
             ringtone = r
             r.play()

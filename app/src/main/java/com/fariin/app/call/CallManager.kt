@@ -1442,7 +1442,7 @@ object CallManager {
 
     private fun startRingtone() {
         try {
-            val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            val uri = RingtoneChoice.uri(app)   // L-51: Settings > Call Ringtone
             val r = RingtoneManager.getRingtone(app, uri) ?: return
             ringtone = r
             if (android.os.Build.VERSION.SDK_INT >= 28) r.isLooping = true else loopRingtone(r)
