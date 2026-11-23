@@ -7,7 +7,7 @@ import org.junit.Test
 class OutgoingSweepRulesTest {
     private val day = OutgoingSweepRules.SAFE_AGE_MS
     private val held = OutgoingSweepRules.heldText(listOf(
-        "[{\"path\":\"\/data\/user\/0\/x\/no_backup\/outgoing\/send-abc.jpg\",\"items\":[]}]", null))
+        "[{\"path\":\"\\/data\\/user\\/0\\/x\\/no_backup\\/outgoing\\/send-abc.jpg\",\"items\":[]}]", null))
 
     @Test fun youngFileStays() {
         assertFalse(OutgoingSweepRules.deletable("send-zzz.jpg", 1_000, 1_000 + day - 1, held))
