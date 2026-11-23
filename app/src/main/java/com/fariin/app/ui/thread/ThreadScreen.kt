@@ -3034,7 +3034,9 @@ private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
                 }, fontSize = 12.sp, color = sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        if (r.isStatus && !r.storyThumb.isNullOrEmpty()) {
+        // The story's picture only while it is live (J-50): a gone story keeps no picture.
+        val storyFeed by com.fariin.app.data.LiveStories.state.collectAsState()
+        if (r.isStatus && !r.storyThumb.isNullOrEmpty() && com.fariin.app.data.LiveStories.find(storyFeed, r.id, r.authorId) != null) {
             coil3.compose.AsyncImage(r.storyThumb, contentDescription = null,
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                 modifier = Modifier.padding(end = 4.dp, top = 3.dp, bottom = 3.dp).width(24.dp).height(32.dp).clip(RoundedCornerShape(4.dp)))
