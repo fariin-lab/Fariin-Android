@@ -26,6 +26,8 @@ object InboxSync {
     private const val PAGE = 200L
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     @Volatile private var job: Job? = null
+    /** When each chat was last read, and its updatedAt then (memory only). */
+    private val pulled = java.util.concurrent.ConcurrentHashMap<String, SyncHoldRules.Pulled>()
 
     fun kick(ctx: Context, me: String) {
         if (job?.isActive == true) return
@@ -36,6 +38,10 @@ object InboxSync {
                 if (c.isChannel || c.isGroup || !c.users.contains(me)) continue
                 val mark = LocalDb.syncedUpTo(me, c.id) ?: continue
                 if (c.updatedAtMillis.toLong() <= mark) continue
+                // J-90: a chat is not read again within a minute, nor for 10 minutes while it has not moved.
+                val now = System.currentTimeMillis()
+                if (!SyncHoldRules.mayPull(pulled[c.id], c.updatedAtMillis, now)) continue
+                pulled[c.id] = SyncHoldRules.Pulled(now, c.updatedAtMillis)
                 runCatching { follow(ctx, me, c.id, mark, crypto) }
             }
         }
@@ -68,7 +74,7 @@ object InboxSync {
             // a group lock), or whose file is not on this phone yet. Every other row is filed; the
             // mark stops one millisecond below the OLDEST hold, and the missing files are asked for.
             val created = snap.documents.associate { it.id to (it.getTimestamp("createdAt")?.toDate()?.time ?: Long.MAX_VALUE) }
-            val unopened = page.filter { it.id !in notForMe && (it.text == "…" || it.text == com.fariin.app.crypto.Wire.LOCKED) && !it.deleted }
+            val unopened = page.filter { it.id !in notForMe && SyncHoldRules.keysPending(it.text, cid) && !it.deleted }
             if (!LocalDb.saveNow(me, cid, page.filter { it !in unopened })) return
             // Ask for the missing files first, then hold only on what is still not here.
             page.filter { it !in unopened && MediaHold.missing(ctx, it) }.forEach { MediaHold.fetch(ctx, cid, crypto, it) }

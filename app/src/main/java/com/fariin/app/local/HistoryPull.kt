@@ -89,7 +89,8 @@ object HistoryPull {
             val notForMe = snap.documents.filter { d -> val raw = d.getString("text") ?: ""
                 joinedAt > 0 && (d.getTimestamp("createdAt")?.toDate()?.time ?: Long.MAX_VALUE) < joinedAt + 5000 &&
                 raw.startsWith(com.fariin.app.crypto.Wire.ENCG1) && crypto.groupEnvelopeSkipsMe(raw, cid) }.mapTo(HashSet()) { it.id }
-            if (page.any { it.id !in notForMe && (it.text == "…" || it.text == com.fariin.app.crypto.Wire.LOCKED) && !it.deleted }) return   // keys not in yet: try again later
+            // J-90: in a 1:1 the lock is final (a key this phone never had): it is filed, never held.
+            if (page.any { it.id !in notForMe && SyncHoldRules.keysPending(it.text, cid) && !it.deleted }) return   // keys not in yet: try again later
             if (!LocalDb.saveNow(me, cid, page)) return
             page.filter { MediaHold.missing(ctx, it) }.forEach { MediaHold.fetch(ctx, cid, crypto, it) }
             val created = snap.documents.associate { it.id to (it.getTimestamp("createdAt")?.toDate()?.time ?: Long.MAX_VALUE) }
