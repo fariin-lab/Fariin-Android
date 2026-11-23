@@ -363,7 +363,8 @@ data class Message(
                     val clear = open(v, author)
                     return if (clear == Wire.NOT_READY || clear == Wire.LOCKED) "" else clear
                 }
-                val url = openLp("url")
+                // F-27: http(s) only, and only for a site the text itself links to.
+                val url = LinkCardRules.safeUrl(openLp("url"), text) ?: ""
                 if (url.isEmpty()) null else LinkPreview(url, openLp("title"), openLp("desc"),
                     (lp["imageUrl"] as? String)?.ifEmpty { null }, EncMeta.fromMap(lp["imageEnc"] as? Map<*, *>))
             }
