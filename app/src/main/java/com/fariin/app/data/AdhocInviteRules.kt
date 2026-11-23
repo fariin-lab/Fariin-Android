@@ -3,8 +3,8 @@ package com.fariin.app.data
 /**
  * "<name> is inviting you to a voice call" (server ringAdhocRecipients): someone put me on a
  * multi-person call that has no group chat behind it (groupCalls/adhoc_...). The data is only
- * `{ type: "adhoccall", roomId }`; the words come in the notification part (title = the call's
- * title, body = the invite line).
+ * `{ type: "adhoccall", roomId }`; the words come in data `t` / `b` (data-only, androidDataPush) or
+ * the notification part (title = the call's title, body = the invite line).
  */
 data class AdhocCallPush(val roomId: String) {
     /** The keys a tap carries back to MainActivity, the same ones the push has. */
@@ -44,8 +44,13 @@ enum class AdhocShow {
     NOTHING,
     /** In front while in another call: nothing shown, the server hears "busy" (iOS reportBusy). */
     BUSY,
-    /** The app is behind: our notification, a tap or Join opens the invitation. */
+    /** The app is behind while I am in a call: our notification, a tap or Join opens the invitation. */
     NOTIFICATION,
+    /**
+     * The app is behind or closed (data-only push, androidDataPush): our own full-screen ring, as a
+     * group's call rings (the server no longer sends a plain notice for it).
+     */
+    RING,
     /** In front with the App Lock page up: in the list only, no drop-down. */
     QUIET_NOTIFICATION,
     /** In front: the full-screen invitation at once, no banner on top (iOS willPresent shows none). */
@@ -84,7 +89,7 @@ object AdhocInviteRules {
         if (p == null || me.isEmpty() || !pushOn) return AdhocShow.NOTHING
         if (myCallId == p.roomId) return AdhocShow.NOTHING
         if (inFront && (myCallId != null || otherCallLive)) return AdhocShow.BUSY
-        if (!inFront) return AdhocShow.NOTIFICATION
+        if (!inFront) return if (myCallId != null || otherCallLive) AdhocShow.NOTIFICATION else AdhocShow.RING
         if (locked) return AdhocShow.QUIET_NOTIFICATION
         return AdhocShow.INVITE
     }

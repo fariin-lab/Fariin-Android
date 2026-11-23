@@ -82,13 +82,14 @@ class FariinMessagingService : FirebaseMessagingService() {
             return
         }
         // Added to a multi-person call with no group chat (server ringAdhocRecipients). In front: the
-        // invitation at once, no banner (iOS willPresent); behind: our notification with Join.
+        // invitation at once, no banner (iOS willPresent); behind or closed (data-only, words in t / b):
+        // our own full-screen ring; behind while in a call: our notification with Join.
         if (message.data["type"] == com.fariin.app.data.AdhocInviteRules.TYPE) {
-            val p = com.fariin.app.data.AdhocInviteRules.parse(message.data) ?: return
-            val title = message.notification?.title?.takeIf { it.isNotEmpty() } ?: com.fariin.app.data.AdhocInviteRules.FALLBACK_TITLE
-            val body = message.notification?.body?.takeIf { it.isNotEmpty() } ?: com.fariin.app.data.AdhocInviteRules.FALLBACK_BODY
+            val r = owned(applicationContext, message) ?: return
+            val p = com.fariin.app.data.AdhocInviteRules.parse(message.data)
+            if (r.post != com.fariin.app.data.DataPushPost.ADHOC_RING || p == null) return
             val c = applicationContext
-            android.os.Handler(android.os.Looper.getMainLooper()).post { showAdhocInvite(c, p, title, body) }
+            android.os.Handler(android.os.Looper.getMainLooper()).post { showAdhocInvite(c, p, r.title, r.body, r.silent) }
             return
         }
         if (message.data["type"] == "groupcall") {
@@ -158,6 +159,10 @@ class FariinMessagingService : FirebaseMessagingService() {
         private const val HANDLE_TIMEOUT_MS = 15_000L
         private const val NUDGE_TIMEOUT_MS = 5_000L
 
+        /** DataPushRules.route for this push: null when it is not one of the call or group types. */
+        private fun owned(c: Context, m: RemoteMessage): com.fariin.app.data.DataPushRoute? =
+            com.fariin.app.data.DataPushRules.route(m.data, m.notification?.title, m.notification?.body, Push.pushOn(c))
+
         /** The group nudge (GroupNudgeRules.route): skipped when I am in that call, it ended, or the group is muted. */
         private suspend fun showGroupNudge(c: Context, n: com.fariin.app.data.GroupNudge, title: String?, body: String?) {
             val me = com.fariin.app.Fb.auth.currentUser?.uid.orEmpty()
@@ -193,7 +198,7 @@ class FariinMessagingService : FirebaseMessagingService() {
         }
 
         /** The multi-person call invite (AdhocInviteRules.route), on the main thread. */
-        private fun showAdhocInvite(c: Context, p: com.fariin.app.data.AdhocCallPush, title: String, body: String) {
+        private fun showAdhocInvite(c: Context, p: com.fariin.app.data.AdhocCallPush, title: String, body: String, silent: Boolean) {
             val me = com.fariin.app.Fb.auth.currentUser?.uid.orEmpty()
             val show = com.fariin.app.data.AdhocInviteRules.route(p, me, Push.pushOn(c),
                 myCallId = com.fariin.app.call.GroupCall.ui.value.cid,
@@ -202,7 +207,11 @@ class FariinMessagingService : FirebaseMessagingService() {
             when (show) {
                 com.fariin.app.data.AdhocShow.NOTHING -> {}
                 com.fariin.app.data.AdhocShow.BUSY -> com.fariin.app.call.GroupRing.answer("busy", p.roomId, null, roomKind = "adhoc")
-                com.fariin.app.data.AdhocShow.NOTIFICATION -> NotificationPoster.postAdhocInvite(c, title, body, p, quiet = false)
+                com.fariin.app.data.AdhocShow.NOTIFICATION -> NotificationPoster.postAdhocInvite(c, title, body, p, quiet = silent)
+                // Closed or behind: our own ring; the plain notification only when the call cannot be read.
+                com.fariin.app.data.AdhocShow.RING -> com.fariin.app.call.GroupRing.onAdhocInvite(c, p.roomId, ring = true) {
+                    NotificationPoster.postAdhocInvite(c, title, body, p, quiet = silent)
+                }
                 com.fariin.app.data.AdhocShow.QUIET_NOTIFICATION -> {
                     NotificationPoster.postAdhocInvite(c, title, body, p, quiet = true)
                     val prefs = InAppNotify.prefs(c)

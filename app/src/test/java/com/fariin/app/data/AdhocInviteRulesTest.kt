@@ -50,8 +50,9 @@ class AdhocInviteRulesTest {
     }
 
     @Test fun showsByPlace() {
-        assertEquals(AdhocShow.NOTIFICATION, route(inFront = false))
-        assertEquals(AdhocShow.NOTIFICATION, route(inFront = false, locked = true))
+        assertEquals(AdhocShow.RING, route(inFront = false))
+        assertEquals(AdhocShow.RING, route(inFront = false, locked = true))
+        assertEquals(AdhocShow.NOTIFICATION, route(myCallId = "adhoc_other", inFront = false))
         assertEquals(AdhocShow.QUIET_NOTIFICATION, route(locked = true))
         assertEquals(AdhocShow.INVITE, route())
     }

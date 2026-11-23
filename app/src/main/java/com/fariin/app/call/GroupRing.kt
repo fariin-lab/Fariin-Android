@@ -212,13 +212,16 @@ object GroupRing {
      * and a busy phone tells the server "busy" (iOS reportBusy). [ring] false is a tapped
      * notification or its Join (iOS showInvite): the invitation without a ring, even past the
      * minute, while the call is on and I am on its list. Nothing when the starter is blocked.
+     * With the app closed (data-only push) [ring] true rings full screen the same way; when the
+     * call's doc cannot be read, [onReadFailed] runs (the plain notification), so the invite is not lost.
      */
-    fun onAdhocInvite(context: Context, roomId: String, ring: Boolean) {
+    fun onAdhocInvite(context: Context, roomId: String, ring: Boolean, onReadFailed: (() -> Unit)? = null) {
         val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         app = context.applicationContext
         if (_invite.value?.cid == roomId || GroupCall.ui.value.cid == roomId) return
         scope.launch {
             val doc = try { db.collection("groupCalls").document(roomId).get().await().data } catch (_: Exception) { null }
+            if (doc == null && onReadFailed != null) { onReadFailed(); return@launch }
             val info = com.fariin.app.data.AdhocInviteRules.invite(roomId, doc, me) { com.fariin.app.data.BlockList.contains(it) } ?: return@launch
             val started = (doc?.get("startedAt") as? Timestamp)?.toDate()?.time
             if (GroupCall.ui.value.cid != null || CallManager.ui.value.status.live || _invite.value != null) {
