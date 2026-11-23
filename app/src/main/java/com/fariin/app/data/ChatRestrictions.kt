@@ -33,7 +33,25 @@ object ChatRestrictions {
     private val db get() = com.fariin.app.Fb.db
 
     /** The open chat's restriction, read from the live list (every screen asks the same place). */
-    fun isOn(cid: String): Boolean = cid.isNotEmpty() && ChatsNow.findAny(cid)?.isRestricted == true
+    fun isOn(cid: String): Boolean = cid.isNotEmpty() &&
+        (ChatsNow.findAny(cid)?.isRestricted ?: (opened[cid] == true))
+
+    /** Chats opened that are not in my list (a public group or channel I only visit): their own doc
+     *  says Protect Content, as iOS reads the thread's doc. Without it a guest could screenshot,
+     *  save and forward (K-3). Snapshot state, so a screen reading [isOn] redraws. */
+    private val opened = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
+
+    /** The open thread's conversation doc, as it last read it. */
+    fun noteDoc(cid: String, doc: Map<String, Any?>) {
+        if (cid.isEmpty() || doc.isEmpty()) return
+        val on = docRestricted(doc)
+        if (opened[cid] != on) opened[cid] = on
+    }
+
+    /** Same reading as Conversation.isRestricted, on a raw doc. */
+    fun docRestricted(doc: Map<String, Any?>): Boolean =
+        (doc["restrictedBy"] as? Map<*, *>)?.any { (k, v) -> k is String && v == true } == true ||
+            listOf("noScreenshots", "noForwarding", "noSaving").any { doc[it] == true }
 
     fun restrictedByMe(c: Conversation, me: String) = c.restrictedBy[me] == true
     fun restrictedByThem(c: Conversation, me: String) =

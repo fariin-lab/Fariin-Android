@@ -133,7 +133,9 @@ internal fun rememberSharedMedia(cid: String, me: String, clearedMs: Double = 0.
 private fun ProvideChatMedia(cid: String, content: @Composable () -> Unit) {
     val ctx = LocalContext.current
     val media = LocalChatMedia.current ?: remember(cid) { ChatMedia(ctx.applicationContext, cid, CryptoHub.get(ctx.applicationContext)) }
-    CompositionLocalProvider(LocalChatMedia provides media, content = content)
+    // The viewer reads the chat id for Restricted Chat and Protect Content (no Save, Share, screenshots) (K-4).
+    CompositionLocalProvider(LocalChatMedia provides media,
+        com.fariin.app.ui.thread.LocalThreadCid provides cid, content = content)
 }
 
 /** iOS MediaGalleryView: a photo pages through the photos of [all] in the grid's order; a video opens alone. */

@@ -163,6 +163,9 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     val followedDocs by com.fariin.app.channel.ChannelFollows.docs.collectAsState()
     val channelDoc = s.conv.ifEmpty { followedDocs[cid] ?: com.fariin.app.data.ThreadSeed.conv(cid).orEmpty() }
     val channel = com.fariin.app.ui.channels.rememberChannelThread(cid, me, channelDoc, s.messages) { notice = it }
+    // Protect Content for a chat not in my list (a guest in a public group or channel): from its doc (K-3).
+    val docRestricted = com.fariin.app.data.ChatRestrictions.docRestricted(channelDoc)
+    LaunchedEffect(cid, docRestricted, channelDoc.isEmpty()) { com.fariin.app.data.ChatRestrictions.noteDoc(cid, channelDoc) }
     // A public group I am not in (Explore, a link): its header from the preview, Join where the composer goes.
     val leavingNow by com.fariin.app.data.LeaveUndo.hidden.collectAsState()
     val guest = com.fariin.app.ui.people.rememberGroupGuest(cid, me, channelDoc, channel != null,
