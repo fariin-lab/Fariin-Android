@@ -230,10 +230,20 @@ object GroupRing {
         val name = d["callerName"]?.takeIf { it.isNotEmpty() } ?: "Someone"
         val title = d["title"]?.takeIf { it.isNotEmpty() } ?: CallLinkDefaults.NAME
         scope.launch {
-            val photo = try { db.collection("users").document(caller).get().await().get("photoUrl") as? String } catch (_: Exception) { null }
+            // A nudge can come from a launch intent any app or web page can send: it shows only when
+            // the server marked it on my invite (linkCallNudge writes nudgedAt.<caller>) a short
+            // while ago. That also drops an old one replayed hours later.
+            if (nudge) {
+                val inv = try { db.collection("callLinks").document(roomId).collection("invites").document(me).get().await().data } catch (_: Exception) { null }
+                if (!com.fariin.app.security.EntryRules.nudgeVerified(inv?.get("nudgedAt") as? Map<*, *>, caller, System.currentTimeMillis())) return@launch
+            }
+            val user = try { db.collection("users").document(caller).get().await() } catch (_: Exception) { null }
+            val photo = user?.get("photoUrl") as? String
+            // A nudge shows the caller's own name, not the one the intent carried.
+            val shownName = if (nudge) (user?.get("name") as? String)?.takeIf { it.isNotEmpty() } ?: name else name
             if (_invite.value != null || GroupCall.ui.value.cid != null) return@launch
             ring(GroupInvite(roomId, title, d["video"] != "0" && d["video"] != "false", caller, started ?: System.currentTimeMillis(),
-                listOf(RingFace(caller, name, photo?.ifEmpty { null })), linkKey = key.text, nudge = nudge))
+                listOf(RingFace(caller, shownName, photo?.ifEmpty { null })), linkKey = key.text, nudge = nudge))
         }
     }
 
