@@ -377,6 +377,8 @@ object GroupRing {
 
     /** The system's call notification: the group's name, "Incoming group call", Decline and Join. */
     private fun notifyRing(c: Context, i: GroupInvite) {
+        // The channel may not exist yet after an update with the app never opened (K-71 moved it).
+        com.fariin.app.push.NotificationPoster.ensureChannels(c)
         val person = Person.Builder().setName(i.title).setImportant(true).build()
         val n = NotificationCompat.Builder(c, NotifChannel.CALLS.id)
             .setSmallIcon(R.drawable.ic_stat_fariin)
