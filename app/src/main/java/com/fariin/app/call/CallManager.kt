@@ -120,6 +120,13 @@ object CallManager {
     private var peer = ""
     /** When the current call was made (my dial, or their doc's creation): an older ring from the same person is a leftover. */
     private var callStartMs = 0L
+    /** My dial's create write has gone out (iOS dialCreateStarted): the other phone may see it soon. */
+    private var createStarted = false
+    /**
+     * iOS pendingGlareBusy: crossing rings I won while my own create was still in flight. Their busy
+     * waits for my doc to exist; if my create fails or my dial ends first, they ring here instead.
+     */
+    private val pendingGlare = HashMap<String, Pair<CallDoc, Long?>>()
     private val cid get() = CallWire.convId(me, peer)
     private var recordWritten = false
     private var ringRowWritten = false
@@ -249,6 +256,7 @@ object CallManager {
         val id = signaling.newCallId()
         callId = id
         callStartMs = System.currentTimeMillis()
+        createStarted = false
         setStartRoute(video)
         CallTelecom.placeOutgoing(app, id, name, video)
         after(CallWire.NO_ANSWER_MS) { if (callId == id && status.phase == CallPhase.OUTGOING) ringOut(id) }
@@ -270,23 +278,28 @@ object CallManager {
             val enc = sealer.seal(cid, offer) ?: run { fail(id); return@launch }   // never a plaintext offer
             val my = myProfile()
             val fields = CallWire.createFields(me, uid, my.first, my.second, video, enc, _ui.value.muted, signaling.serverTime)
+            if (callId != id || status.phase != CallPhase.OUTGOING) { releaseGlare(); return@launch }
+            createStarted = true
             val err = signaling.create(id, fields)
             if (err != null) {
-                if (callId != id) return@launch
+                if (callId != id) { releaseGlare(); return@launch }
                 if (signaling.isPermissionDenied(err)) {
                     // The rules refused (they blocked me, or their privacy says no): it ends like a
                     // call nobody took, and no row goes into their chat (iOS audit M-013).
                     recordWritten = true
                     finish(EndReason.DECLINED, updateRemote = false, byUser = false)
                 } else fail(id)
+                releaseGlare()
                 return@launch
             }
             if (callId != id || status.phase != CallPhase.OUTGOING) {
                 // Hung up while the create was in flight: end what now exists.
                 signaling.update(id, CallWire.cancelFields(EndReason.MISSED, signaling.serverTime))
+                releaseGlare()
                 return@launch
             }
             move(CallEvent.DocCreated)
+            flushGlare()   // my call exists now: the crossing rings I won may stand down
             signaling.writeRingRow(cid, id, me, video)
             ringRowWritten = true
             flushLocalCandidates()
@@ -366,7 +379,7 @@ object CallManager {
             // after their side died, a redial over their own ring, or both dialling at once (glare).
             val newer = createdAt == null || createdAt > callStartMs
             when (CallGlareRules.decide(status.phase, status.accepted, GroupCall.ui.value.cid != null, me, peer, d.caller,
-                newer, status.callDocCreated)) {
+                newer, status.callDocCreated, createStarted && status.isCaller)) {
                 CallGlareRules.Verdict.RING -> {}
                 CallGlareRules.Verdict.END_OLD -> { signaling.update(d.id, CallWire.endFields(EndReason.MISSED)); return@launch }
                 CallGlareRules.Verdict.REPLACE -> {
@@ -375,7 +388,12 @@ object CallManager {
                 }
                 CallGlareRules.Verdict.GLARE_WIN -> {
                     // `glare` tells them this busy is the tiebreak, not a busy line.
-                    signaling.update(d.id, CallWire.endFields(EndReason.BUSY) + ("glare" to true))
+                    signaling.update(d.id, CallWire.glareBusyFields())
+                    return@launch
+                }
+                CallGlareRules.Verdict.GLARE_WIN_HOLD -> {
+                    // I win, but my doc is not there yet: their busy waits for it (iOS glareBusy).
+                    pendingGlare[d.id] = d to createdAt
                     return@launch
                 }
                 CallGlareRules.Verdict.GLARE_YIELD -> standDownForGlare()
@@ -548,6 +566,25 @@ object CallManager {
     }
 
     /** Another of my devices answered: this one stops ringing, no record (iOS standDownAnsweredElsewhere). */
+    /** My create landed: the held glare losers are busied now (iOS flushGlareBusy). */
+    private fun flushGlare() {
+        val ids = pendingGlare.keys.toList()
+        pendingGlare.clear()
+        ids.forEach { signaling.update(it, CallWire.glareBusyFields()) }
+    }
+
+    /**
+     * My create failed or my dial ended before it landed (iOS releaseGlareLosers): the crossing
+     * rings I held were never busied, so they ring here now, the way any free phone rings.
+     */
+    private fun releaseGlare() {
+        if (pendingGlare.isEmpty()) return
+        val held = pendingGlare.values.toList()
+        pendingGlare.clear()
+        createStarted = false
+        held.forEach { (d, at) -> finished -= d.id; ring(d, at) }
+    }
+
     /** I lose a glare tiebreak: my dial ends quietly, with no call record (no red missed row for them). */
     private fun standDownForGlare() {
         recordWritten = true

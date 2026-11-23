@@ -108,6 +108,9 @@ object CallWire {
 
     fun endFields(reason: EndReason): Map<String, Any> = mapOf("status" to "ended", "endReason" to reason.wire)
 
+    /** A glare tiebreak's busy (iOS glareBusy): `glare` tells the loser it is not a busy line. */
+    fun glareBusyFields(): Map<String, Any> = endFields(EndReason.BUSY) + ("glare" to true)
+
     /** A ring the caller gave up on (no answer or cancelled): missed plus cancelledAt. */
     fun cancelFields(reason: EndReason, serverTime: Any): Map<String, Any> =
         endFields(reason) + ("cancelledAt" to serverTime)

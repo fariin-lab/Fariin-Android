@@ -380,7 +380,7 @@ object GroupCall {
             }
             if (joinGen != gen || _ui.value.cid != cid) return@launch
             if (pass == null) { fail("Call failed"); return@launch }
-            connectRoom(app, cid, title, video, requireLive, pass)
+            connectRoom(app, cid, title, video, requireLive, pass, gen)
         }
     }
 
@@ -412,6 +412,7 @@ object GroupCall {
         CallTonePlayer.startRingback()
         val app = context.applicationContext
         appContext = app
+        val gen = ++joinGen
         scope.launch {
             val mine = try { db.collection("users").document(meUid).get().await().data } catch (_: Exception) { null }
             val me = CallPerson(meUid, (mine?.get("name") as? String)?.takeIf { it.isNotBlank() }
@@ -437,9 +438,9 @@ object GroupCall {
                 if (_ui.value.cid == roomId) fail(GroupCallWire.joinNotice(e.message))
                 return@launch
             }
-            if (_ui.value.cid != roomId) return@launch
+            if (_ui.value.cid != roomId || joinGen != gen) return@launch
             if (pass == null) { fail("Call failed"); return@launch }
-            connectRoom(app, roomId, title, video, requireLive = true, pass = pass)
+            connectRoom(app, roomId, title, video, requireLive = true, pass = pass, gen = gen)
         }
     }
 
@@ -457,6 +458,7 @@ object GroupCall {
         _ui.value = GroupCallUi(cid = roomId, title = title, connecting = true, cameraOn = video, micOn = mic)
         val app = context.applicationContext
         appContext = app
+        val gen = ++joinGen
         scope.launch {
             val doc = try { db.collection("groupCalls").document(roomId).get().await() } catch (_: Exception) {
                 failAdhocJoin(roomId, com.fariin.app.data.AdhocJoinStep.READ_FAILED)
@@ -477,9 +479,9 @@ object GroupCall {
                 failAdhocJoin(roomId, com.fariin.app.data.AdhocJoinStep.PASS_REFUSED, e.message)
                 return@launch
             }
-            if (_ui.value.cid != roomId) return@launch
+            if (_ui.value.cid != roomId || joinGen != gen) return@launch
             if (pass == null) { failAdhocJoin(roomId, com.fariin.app.data.AdhocJoinStep.NO_PASS); return@launch }
-            connectRoom(app, roomId, title, video, requireLive = true, pass = pass)
+            connectRoom(app, roomId, title, video, requireLive = true, pass = pass, gen = gen)
         }
     }
 
@@ -543,7 +545,8 @@ object GroupCall {
                 listenRequests(tag, roomId)
             }
         }
-        scope.launch { askLinkPass(app, tag, roomId, video) }
+        val gen = ++joinGen
+        scope.launch { askLinkPass(app, tag, roomId, video, gen) }
     }
 
     /** A link pass fetched while the lobby is up (iOS prefetchedLinkToken): one account, 20 s, taken once. */
@@ -592,19 +595,19 @@ object GroupCall {
         return held?.data ?: ask?.job?.await()
     }
 
-    private suspend fun askLinkPass(app: Context, tag: String, roomId: String, video: Boolean) {
+    private suspend fun askLinkPass(app: Context, tag: String, roomId: String, video: Boolean, gen: Long) {
         val reply = takeLinkPass(roomId) ?: try {
             functions.getHttpsCallable("groupCallToken").call(CallLinkWire.tokenRequest(roomId)).await().data
         } catch (e: Exception) {
-            if (_ui.value.cid == tag) fail(linkNotice(e))
+            if (_ui.value.cid == tag && joinGen == gen) fail(linkNotice(e))
             return
         }
-        if (_ui.value.cid != tag) return
-        if ((reply as? Map<*, *>)?.get("pending") == true) { waitForYes(app, tag, roomId, video); return }
+        if (_ui.value.cid != tag || joinGen != gen) return
+        if ((reply as? Map<*, *>)?.get("pending") == true) { waitForYes(app, tag, roomId, video, gen); return }
         val pass = GroupCallWire.parsePass(reply)
         if (pass == null) { fail("Call failed"); return }
         _ui.value = _ui.value.copy(waiting = false)
-        connectRoom(app, tag, _ui.value.title, video, requireLive = true, pass = pass)
+        connectRoom(app, tag, _ui.value.title, video, requireLive = true, pass = pass, gen = gen)
     }
 
     /** iOS linkDocListener and waitTask, beside requestReg while I wait at a link's door. */
@@ -617,7 +620,7 @@ object GroupCall {
         waitJob?.cancel(); waitJob = null
     }
 
-    private fun waitForYes(app: Context, tag: String, roomId: String, video: Boolean) {
+    private fun waitForYes(app: Context, tag: String, roomId: String, video: Boolean, gen: Long) {
         val me = com.fariin.app.Fb.auth.currentUser?.uid
         if (me == null) { fail("Call failed"); return }
         _ui.value = _ui.value.copy(waiting = true)
@@ -630,7 +633,7 @@ object GroupCall {
             done = true
             stopWaiting()
             if (dropKnock) request.delete()
-            scope.launch { askLinkPass(app, tag, roomId, video) }
+            scope.launch { askLinkPass(app, tag, roomId, video, gen) }
         }
         fun end(notice: String) {
             if (done || _ui.value.cid != tag) return
@@ -689,9 +692,8 @@ object GroupCall {
         }
     }
 
-    private suspend fun connectRoom(app: Context, cid: String, title: String, video: Boolean, requireLive: Boolean, pass: GroupPass) {
-        // Callers checked this join is still wanted just before; from here each await is checked again.
-        val gen = joinGen
+    /** [gen]: the join generation of the tap that asked for this room; every await is checked against it. */
+    private suspend fun connectRoom(app: Context, cid: String, title: String, video: Boolean, requireLive: Boolean, pass: GroupPass, gen: Long) {
         var made: Room? = null
         fun gone(): Boolean {
             if (joinGen == gen && _ui.value.cid == cid && (made == null || room === made)) return false
