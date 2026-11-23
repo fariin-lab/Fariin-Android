@@ -232,7 +232,7 @@ class ThreadRepository(
             return
         }
         // Texts still owed from before a kill or an outage: drawn as sending, and driven again.
-        for (e in SendQueue.pending(me, cid)) resend(e)
+        resendAll(SendQueue.pending(me, cid))
         // ...and photos the app was closed on (PhotoOutbox): their bubbles, and the send if none runs.
         resumeOutbox()
         startListeners()
@@ -252,7 +252,7 @@ class ThreadRepository(
             otherReg?.remove(); otherReg = null; myReg?.remove(); myReg = null
             attachPresence(Wire.otherUid(cid, me))
         }
-        for (e in SendQueue.pending(me, cid)) if (!e.refused && !SendQueue.isInFlight(e.clientId)) resend(e)
+        resendAll(SendQueue.pending(me, cid).filter { !it.refused && !SendQueue.isInFlight(it.clientId) })
         chSync?.reattach()
     }
 
@@ -1018,6 +1018,13 @@ class ThreadRepository(
     /** A queued text from an earlier run or a reconnect: sent again unless the server (or
      *  Firestore's own offline queue) already has it. */
     fun resend(e: SendQueue.Entry) = drive(e, checkFirst = true)
+
+    /** Queued texts of this chat, one after the other in the order they were typed (H-89): each
+     *  waits for the one before it to land or fail, so the other person reads them in order. */
+    fun resendAll(list: List<SendQueue.Entry>) {
+        var prev: Job? = null
+        for (e in SendQueue.drainOrder(list)) drive(e, checkFirst = true, on = sendScope, after = prev)?.let { prev = it }
+    }
 
     private fun drive(e: SendQueue.Entry, checkFirst: Boolean) = drive(e, checkFirst, sendScope)
 
@@ -3181,7 +3188,7 @@ class ThreadRepository(
             SendQueue.pruneRefused(me, System.currentTimeMillis() - 30 * 86_400_000.0)
             for ((cid, list) in SendQueue.all(me).filter { !it.refused }.groupBy { it.cid }) {
                 val repo = open[cid] ?: ThreadRepository(cid, me, crypto, scope)
-                for (e in list) if (!SendQueue.isInFlight(e.clientId)) repo.resend(e)
+                repo.resendAll(list.filter { !SendQueue.isInFlight(it.clientId) })
             }
             // Photos, files, songs and playlists the app was closed on before they went (PhotoOutbox, FileOutbox).
             for (cid in (com.fariin.app.local.PhotoOutbox.all(me).map { it.cid } + com.fariin.app.local.FileOutbox.all(me).map { it.cid }).distinct())

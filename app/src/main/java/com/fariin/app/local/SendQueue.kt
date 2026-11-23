@@ -104,6 +104,10 @@ object SendQueue {
 
     @Synchronized fun all(uid: String): List<Entry> { ensure(uid); return entries.values.toList() }
 
+    /** The order a chat's queued texts go out in (H-89): as typed, oldest first, one after another
+     *  (iOS SendQueue drains one at a time). Equal times keep their queue order. */
+    fun drainOrder(list: List<Entry>): List<Entry> = list.sortedBy { it.ts }
+
     fun begin(clientId: String): Boolean = inFlight.add(clientId)
     fun end(clientId: String) { inFlight.remove(clientId) }
     fun isInFlight(clientId: String): Boolean = clientId in inFlight
