@@ -73,7 +73,12 @@ object LocalJson {
         m.type?.let { put("type", it) }
         m.clientTs?.let { put("cts", it) }
         m.clientId?.let { put("cid", it) }
-        m.replyTo?.let { put("re", JSONObject().put("id", it.id).put("a", it.authorId).put("t", it.text)) }
+        // K-80: the story-reply markers too, or a story reply comes back as a broken plain quote.
+        m.replyTo?.let { r -> put("re", JSONObject().put("id", r.id).put("a", r.authorId).put("t", r.text).apply {
+            if (r.isStatus) put("st", true)
+            r.storyThumb?.let { put("sth", it) }
+            if (r.isReaction) put("sr", true)
+        }) }
         if (m.deleted) put("del", true)
         m.deletedBy?.let { put("delBy", it) }
         if (m.edited) put("ed", true)
@@ -167,7 +172,8 @@ object LocalJson {
             id = id, authorId = o.optString("a"), text = o.optString("t"), type = s("type"),
             createdAtMillis = o.optDouble("c", 0.0), hasServerTime = !o.optBoolean("pendingTime"),
             clientTs = d("cts"), clientId = s("cid"),
-            replyTo = o.optJSONObject("re")?.let { Message.ReplyRef(it.optString("id"), it.optString("a"), it.optString("t")) },
+            replyTo = o.optJSONObject("re")?.let { Message.ReplyRef(it.optString("id"), it.optString("a"), it.optString("t"),
+                isStatus = it.optBoolean("st"), storyThumb = it.optString("sth").ifEmpty { null }, isReaction = it.optBoolean("sr")) },
             deleted = o.optBoolean("del"), deletedBy = s("delBy"), edited = o.optBoolean("ed"),
             forwarded = o.optBoolean("fw"), held = o.optBoolean("held"),
             imageUrl = s("img"), videoUrl = s("vid"), audioUrl = s("aud"), fileUrl = s("file"), fileName = s("fname"),
