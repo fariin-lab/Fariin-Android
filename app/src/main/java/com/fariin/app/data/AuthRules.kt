@@ -155,16 +155,23 @@ enum class HandleState { Empty, Invalid, Checking, Free, Taken, Unknown }
 
 object HandleRules {
     /** The line under the username box (iOS OnboardingView). */
-    fun note(state: HandleState, handle: String, hasIdeas: Boolean): String {
+    fun note(state: HandleState, handle: String, hasIdeas: Boolean, refusal: String? = null): String {
         val h = Usernames.sanitize(handle)
         return when (state) {
+            // L-78: a refused shape says why: the server's own sentence, else the local shape rules.
+            HandleState.Invalid -> refusal?.trim()?.takeIf { it.contains(' ') } ?: shapeReason(h)
+                ?: "Letters, numbers and _ only, ${Usernames.MIN}–${Usernames.MAX} characters."
             HandleState.Taken -> if (hasIdeas) "@$h is taken. These are free:" else "@$h is taken. Try adding a number."
             HandleState.Free -> "@$h is available."
             HandleState.Checking -> "Checking…"
             HandleState.Unknown -> "Couldn't check @$h. Check your connection."
-            HandleState.Empty, HandleState.Invalid -> "Letters, numbers and _ only, ${Usernames.MIN}–${Usernames.MAX} characters."
+            HandleState.Empty -> "Letters, numbers and _ only, ${Usernames.MIN}–${Usernames.MAX} characters."
         }
     }
+
+    /** The server's shape rules for a new username, in its words (functions-username newNameReason). */
+    fun shapeReason(h: String): String? = Usernames.shapeProblem(h)
+        ?: if (h.length >= Usernames.MIN && !h.first().isLetter()) "Usernames must start with a letter." else null
 
     /** The state before any server is asked: empty, a bad shape, or worth checking. */
     fun localState(handle: String): HandleState {

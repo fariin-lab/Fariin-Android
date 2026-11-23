@@ -196,4 +196,13 @@ class AuthRulesTest {
         assertEquals("Sign-ups are paused right now. Try again later.",
             AuthMessages.forUnavailable("Sign-ups are paused right now. Try again later."))
     }
+
+    @Test fun aRefusedUsernameSaysWhy() {
+        assertEquals("That username is reserved.", HandleRules.note(HandleState.Invalid, "admin", false, "That username is reserved."))
+        assertEquals("Usernames must start with a letter.", HandleRules.note(HandleState.Invalid, "2pac_fan", false))
+        assertEquals("Usernames can't start or end with _.", HandleRules.note(HandleState.Invalid, "abdi_", false))
+        assertTrue(HandleRules.note(HandleState.Invalid, "ab", false).startsWith("Letters, numbers and _ only"))
+        assertNull(HandleRules.shapeReason("abdi_x"))
+        assertEquals("Usernames must start with a letter.", HandleRules.note(HandleState.Invalid, "2pac_fan", false, "reserved"))
+    }
 }

@@ -92,6 +92,11 @@ fun OnboardingPage(
     var handle by remember { mutableStateOf(demoHandle ?: currentHandle) }
     var state by remember { mutableStateOf(demoState ?: HandleRules.localState(currentHandle)) }
     var ideas by remember { mutableStateOf(demoIdeas) }
+    // L-78: the server's reason for a refused username, shown under the box.
+    var refusal by remember { mutableStateOf<String?>(null) }
+    // L-77: a username this page already claimed (the name was refused after it): never claimed again
+    // and never replaced by a prefill.
+    var claimed by remember { mutableStateOf<String?>(null) }
     var edited by remember { mutableStateOf(false) }
     var autoHandle by remember { mutableStateOf<String?>(null) }
     var photo by remember { mutableStateOf<ByteArray?>(null) }
@@ -124,25 +129,29 @@ fun OnboardingPage(
         checkJob?.cancel()
         val h = Usernames.sanitize(handle)
         state = HandleRules.localState(h)
+        refusal = null
         if (state != HandleState.Checking) return
         checkJob = scope.launch {
             delay(350)
+            // L-72: the quick lookup only rules a name out. A missing usernames doc says nothing
+            // about reserved words, so only the server's check shows "available".
             val quick = quickLookup(h)
-            if (quick != null) { state = quick; if (quick == HandleState.Taken) return@launch }
-            val answer = try { val (free, reason) = api.checkUsername(h); HandleRules.fromServer(free, reason) }
-            catch (_: Exception) { if (quick != null) return@launch; HandleState.Unknown }
-            if (Usernames.sanitize(handle) == h) state = answer
+            if (quick == HandleState.Taken) { state = quick; return@launch }
+            var why: String? = null
+            val answer = try { val (free, reason) = api.checkUsername(h); why = reason; HandleRules.fromServer(free, reason) }
+            catch (_: Exception) { HandleState.Unknown }
+            if (Usernames.sanitize(handle) == h) { state = answer; refusal = if (answer == HandleState.Invalid) why else null }
         }
     }
 
     fun schedulePrefill() {
-        if (edited) return
+        if (edited || claimed != null) return
         ideaJob?.cancel()
         val source = name
         ideaJob = scope.launch {
             delay(700)
             val pick = freeOf(HandleRules.ideas(source), 1).firstOrNull() ?: return@launch
-            if (!edited && name == source) { autoHandle = pick; handle = pick; ideas = emptyList(); scheduleCheck() }
+            if (!edited && claimed == null && name == source) { autoHandle = pick; handle = pick; ideas = emptyList(); scheduleCheck() }
         }
     }
 
@@ -166,8 +175,13 @@ fun OnboardingPage(
         scope.launch {
             try {
                 val h = Usernames.sanitize(handle)
-                if (h.isNotEmpty() && !h.equals(currentHandle, ignoreCase = false)) api.claimUsername(h)
-                api.saveName(name.trim())
+                // L-77: the name is checked first, so a refused name never costs a username claim
+                // (three in a row could hit the daily claim limit and park names).
+                api.checkName(name.trim())
+                if (h.isNotEmpty() && !h.equals(currentHandle, ignoreCase = false) && !h.equals(claimed, ignoreCase = false)) {
+                    api.claimUsername(h); claimed = h
+                }
+                api.writeName(name.trim())
                 photo?.let {
                     try { api.uploadPhoto(it) }
                     catch (_: Exception) { com.fariin.app.ui.components.Snack.show("Photo couldn't be uploaded. Add it later in Edit Profile.", long = true) }
@@ -216,7 +230,7 @@ fun OnboardingPage(
             actions = KeyboardActions(onDone = { if (HandleRules.canContinue(name, state, saving)) save() }),
             accessory = { HandleMark(state) })
         val noteColor = when (state) { HandleState.Taken -> c.red; HandleState.Free -> c.label; else -> c.secondary }
-        Text(HandleRules.note(state, handle, ideas.isNotEmpty()), fontSize = 13.sp, color = noteColor,
+        Text(HandleRules.note(state, handle, ideas.isNotEmpty(), refusal), fontSize = 13.sp, color = noteColor,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 10.dp))
         if (state == HandleState.Taken && ideas.isNotEmpty()) {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).border(BorderStroke(1.dp, c.label.copy(alpha = 0.18f)), RoundedCornerShape(18.dp))) {
