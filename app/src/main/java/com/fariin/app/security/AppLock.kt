@@ -169,7 +169,8 @@ object AppLock {
                 started = (started - 1).coerceAtLeast(0)
                 if (!callScreen(a)) appStarted = (appStarted - 1).coerceAtLeast(0)
                 // Out of sight: nothing started, or only the call's picture-in-picture window left.
-                if (started == 0 || (appStarted == 0 && callInPip && !callScreen(a))) hidden()
+                // Not for a configuration change (dark mode, a new size): the same screen comes back.
+                if (EntryRules.leftApp(started, appStarted, callInPip, callScreen(a), a.isChangingConfigurations)) hidden()
             }
             override fun onActivitySaveInstanceState(a: Activity, b: Bundle) {}
             override fun onActivityDestroyed(a: Activity) { live.remove(a); secureHolds.remove(a.window) }

@@ -645,7 +645,8 @@ class MainActivity : ComponentActivity() {
         PushRouter.activeChatId = null   // a chat open behind the home screen still gets its notification
         DeviceRegistry.stopHeartbeat()
         // A leave still waiting for its Undo runs now, so leaving the app cannot lose it (iOS LeaveGroupUndo).
-        com.fariin.app.data.LeaveUndo.commit()
+        // Not on a configuration change (dark mode): the app is still in use and Undo stays.
+        if (!isChangingConfigurations) com.fariin.app.data.LeaveUndo.commit()
         super.onStop()
     }
 
