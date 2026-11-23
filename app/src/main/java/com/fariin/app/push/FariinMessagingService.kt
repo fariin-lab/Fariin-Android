@@ -75,10 +75,13 @@ class FariinMessagingService : FirebaseMessagingService() {
             return
         }
         // "<name> wants you back in the call" (server groupCallNudge). In front: our banner with Join
-        // (iOS showNudge); behind: our notification. A tap or Join opens the call's invitation.
+        // (iOS showNudge); behind or closed (data-only, words in t / b): our notification. A tap or
+        // Join opens the call's invitation.
         if (message.data["type"] == com.fariin.app.data.GroupNudgeRules.TYPE) {
-            val n = com.fariin.app.data.GroupNudgeRules.parse(message.data) ?: return
-            runBlocking { withTimeoutOrNull(NUDGE_TIMEOUT_MS) { showGroupNudge(applicationContext, n, message.notification?.title, message.notification?.body) } }
+            val r = owned(applicationContext, message) ?: return
+            val n = com.fariin.app.data.GroupNudgeRules.parse(message.data)
+            if (r.post != com.fariin.app.data.DataPushPost.GROUP_NUDGE || n == null) return
+            runBlocking { withTimeoutOrNull(NUDGE_TIMEOUT_MS) { showGroupNudge(applicationContext, n, r.title, r.body, r.silent) } }
             return
         }
         // Added to a multi-person call with no group chat (server ringAdhocRecipients). In front: the
@@ -158,18 +161,21 @@ class FariinMessagingService : FirebaseMessagingService() {
         private const val KEY_TIMEOUT_MS = 3_000L
         private const val HANDLE_TIMEOUT_MS = 15_000L
         private const val NUDGE_TIMEOUT_MS = 5_000L
+        private const val NUDGE_READ_MS = 2_000L
 
         /** DataPushRules.route for this push: null when it is not one of the call or group types. */
         private fun owned(c: Context, m: RemoteMessage): com.fariin.app.data.DataPushRoute? =
             com.fariin.app.data.DataPushRules.route(m.data, m.notification?.title, m.notification?.body, Push.pushOn(c))
 
         /** The group nudge (GroupNudgeRules.route): skipped when I am in that call, it ended, or the group is muted. */
-        private suspend fun showGroupNudge(c: Context, n: com.fariin.app.data.GroupNudge, title: String?, body: String?) {
+        private suspend fun showGroupNudge(c: Context, n: com.fariin.app.data.GroupNudge, title: String, body: String, silent: Boolean) {
             val me = com.fariin.app.Fb.auth.currentUser?.uid.orEmpty()
             if (me.isEmpty()) return
             val db = com.fariin.app.Fb.db
-            val call = try { db.collection("groupCalls").document(n.cid).get().await() } catch (_: Exception) { null }
-            val conv = try { db.collection("conversations").document(n.cid).get().await() } catch (_: Exception) { null }
+            // Each read has its own short limit: a cold start (app closed) can be slow, and an unread
+            // call still shows the nudge (callActive null) instead of the whole push timing out.
+            val call = withTimeoutOrNull(NUDGE_READ_MS) { try { db.collection("groupCalls").document(n.cid).get().await() } catch (_: Exception) { null } }
+            val conv = withTimeoutOrNull(NUDGE_READ_MS) { try { db.collection("conversations").document(n.cid).get().await() } catch (_: Exception) { null } }
             val active = call?.let { it.exists() && it.getBoolean("active") == true }
             val muted = ((conv?.get("mutedBy") as? Map<*, *>)?.get(me) as? Number)?.toLong() ?: 0L
             val inFront = com.fariin.app.AppLifecycle.inFront
@@ -179,11 +185,11 @@ class FariinMessagingService : FirebaseMessagingService() {
                 myCallCid = com.fariin.app.call.GroupCall.ui.value.cid, callActive = active,
                 mutedUntilMs = muted, nowMs = System.currentTimeMillis(),
                 inFront = inFront, locked = appLockShowing(c), preview = prefs.preview)
-            val head = title?.takeIf { it.isNotEmpty() } ?: n.title ?: "Group call"
-            val words = body?.takeIf { it.isNotEmpty() } ?: com.fariin.app.data.GroupNudgeRules.fallbackBody(n)
+            val head = title
+            val words = body
             when (show) {
                 com.fariin.app.data.NudgeShow.NOTHING -> {}
-                com.fariin.app.data.NudgeShow.NOTIFICATION -> NotificationPoster.postGroupNudge(c, head, words, n, quiet = false)
+                com.fariin.app.data.NudgeShow.NOTIFICATION -> NotificationPoster.postGroupNudge(c, head, words, n, quiet = silent)
                 com.fariin.app.data.NudgeShow.QUIET_NOTIFICATION -> {
                     NotificationPoster.postGroupNudge(c, head, words, n, quiet = true)
                     InAppNotify.present(c, InAppRoute.InApp(null, prefs.sound, prefs.vibrate))
