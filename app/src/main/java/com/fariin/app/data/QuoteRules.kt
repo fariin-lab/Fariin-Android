@@ -13,7 +13,7 @@ data class QuoteCard(
     val photoUrl: String = "",
     val username: String = "",
     val text: String = "",
-    /** "text", "photo", "video" or "album". */
+    /** "text", "photo", "video", "album" or "music" (a song or a playlist). */
     val kind: String = "text",
     val image: String = "",
     /**
@@ -23,6 +23,11 @@ data class QuoteCard(
     val locked: Boolean = false,
     /** An album post's pictures (server `images`, up to 4 drawn; iOS 5d2ef4c95). */
     val images: List<String> = emptyList(),
+    /** A quoted song or playlist (server quotes.js, iOS QuoteCard.readMusic): its name, its line
+     *  ("<artist> · 3:07"), and how many songs. All optional; an older server sends none. */
+    val musicTitle: String = "",
+    val musicSub: String = "",
+    val count: Int = 0,
 ) {
     /** OK: the post as it was quoted. DELETED: the channel's face, "Post deleted". HIDDEN: the
      *  channel is private to this reader, nothing of the post. GONE: the channel no longer exists. */
@@ -59,7 +64,9 @@ object QuoteRules {
         fun s(k: String) = d[k] as? String ?: ""
         return QuoteCard(state, s("cid"), s("mid"), s("title"), s("photoUrl"), s("username"), s("text"),
             (d["kind"] as? String)?.ifEmpty { null } ?: "text", s("image"), locked = d["locked"] == true,
-            images = (d["images"] as? List<*>)?.filterIsInstance<String>()?.filter { it.isNotEmpty() } ?: emptyList())
+            images = (d["images"] as? List<*>)?.filterIsInstance<String>()?.filter { it.isNotEmpty() } ?: emptyList(),
+            musicTitle = s("musicTitle").take(128), musicSub = s("musicSub").take(128),
+            count = ((d["count"] as? Number)?.toInt() ?: 0).coerceIn(0, 100))
     }
 
     /** The card's title: the channel's name, or "Channel post" when nothing of it may be shown. */
@@ -72,7 +79,8 @@ object QuoteRules {
     /** The card's middle line. Null card: the quiet loading line. */
     fun body(c: QuoteCard?): String = when (c?.state) {
         null -> "Loading…"
-        QuoteCard.State.OK -> {
+        // A song or playlist: its name over its line (L-93), never "Post".
+        QuoteCard.State.OK -> if (c.kind == "music") musicWords(c) else {
             val kind = when (c.kind) {
                 "photo" -> "Photo"
                 "video" -> "Video"
@@ -84,6 +92,14 @@ object QuoteRules {
         QuoteCard.State.DELETED -> "Post deleted"
         QuoteCard.State.HIDDEN -> "This channel is private"
         QuoteCard.State.GONE -> "Content unavailable"
+    }
+
+    /** iOS musicName over musicLine: "Playlist · N songs" for two songs or more, else "Song". */
+    fun musicWords(c: QuoteCard): String {
+        val playlist = c.count >= 2
+        val name = c.musicTitle.trim().ifEmpty { if (playlist) "Playlist" else "Song" }
+        val line = c.musicSub.trim().ifEmpty { if (playlist) "Playlist · ${c.count} songs" else "Song" }
+        return "$name\n$line"
     }
 
     /** The small line under them. */

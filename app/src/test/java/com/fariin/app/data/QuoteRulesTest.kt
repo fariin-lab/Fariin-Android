@@ -7,6 +7,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class QuoteRulesTest {
+    @Test fun musicCardNamesTheSongOrPlaylist() {
+        val list = QuoteRules.parse(mapOf("state" to "ok", "kind" to "music", "musicTitle" to "Road mix", "count" to 12))!!
+        assertEquals("Road mix\nPlaylist · 12 songs", QuoteRules.body(list))
+        val song = QuoteRules.parse(mapOf("state" to "ok", "kind" to "music", "musicSub" to "Artist · 3:07", "count" to 1))!!
+        assertEquals("Song\nArtist · 3:07", QuoteRules.body(song))
+    }
+
     @Test fun qidShape() {
         assertTrue(QuoteRules.isQid("abc123def456gh78"))
         assertFalse(QuoteRules.isQid("ABC123def456gh78"))
