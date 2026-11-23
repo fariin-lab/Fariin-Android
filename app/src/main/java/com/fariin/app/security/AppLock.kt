@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.os.SystemClock
 import android.view.WindowManager
+import kotlinx.coroutines.flow.first
 
 /**
  * Privacy & Security > App Lock and Screen Security, after Kulan-iOS AppLockPage
@@ -38,8 +39,15 @@ object AppLock {
     /** The call screen is in its picture-in-picture window, so it no longer shows the app. */
     private var callInPip = false
     private var backgroundAt = -1L          // elapsedRealtime when the last activity stopped; -1 = cold
-    @Volatile var unlocked = false
-        private set
+    private val unlockedFlow = kotlinx.coroutines.flow.MutableStateFlow(false)
+    var unlocked: Boolean
+        get() = unlockedFlow.value
+        private set(v) { unlockedFlow.value = v }
+
+    /** Waits until App Lock is passed (at once when it is off or passed already). */
+    suspend fun awaitUnlocked() {
+        unlockedFlow.first { EntryRules.mayStartLobby(enabled(), it) }
+    }
 
     private fun prefs(c: Context = app) = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     fun enabled(c: Context = app) = prefs(c).getBoolean(ENABLED, false)

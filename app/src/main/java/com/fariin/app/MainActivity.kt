@@ -446,6 +446,9 @@ class MainActivity : ComponentActivity() {
         val linkAsk by com.fariin.app.call.CallLinkRouter.pending.collectAsState()
         LaunchedEffect(linkAsk) {
             val (key, video) = linkAsk ?: return@LaunchedEffect
+            // The lobby is its own screen in its own task, in front of the lock page: it starts only
+            // once App Lock is passed, so the link waits here until then.
+            com.fariin.app.security.AppLock.awaitUnlocked()
             com.fariin.app.call.CallLinkRouter.pending.value = null
             nav.navigate("joinlink/$key/${if (video) "video" else "voice"}") { launchSingleTop = true }
         }
