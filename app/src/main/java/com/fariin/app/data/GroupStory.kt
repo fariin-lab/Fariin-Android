@@ -55,16 +55,11 @@ object GroupStoryRights {
     const val NOT_ALLOWED = "You can't post stories in this group any more."
 
     /**
-     * The minimum for this phone's country (K-81). iOS reads the panel's `group_story_countries`
-     * ("SO": 20) before the global number, but the live rules read only the global one, so the
-     * higher of the two: never a button the rules refuse, and iOS's number when it is stricter.
+     * The group story minimum (K-81): ONLY the global `group_story_min_members`. The rules and iOS
+     * read the global number alone, so a per-country number is not read here either.
      */
-    fun minMembers(limits: Map<String, Any?>, country: String): Int {
-        val global = AppLimits.number(limits, "group_story_min_members", MIN_MEMBERS_FALLBACK)
-        val byCountry = (limits["group_story_countries"] as? Map<*, *>)?.get(country.uppercase())
-        val n = (byCountry as? Number)?.toLong()?.takeIf { it > 0 }?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt() ?: return global
-        return maxOf(n, global)
-    }
+    fun minMembers(limits: Map<String, Any?>): Int =
+        AppLimits.number(limits, "group_story_min_members", MIN_MEMBERS_FALLBACK)
 
     /**
      * iOS canPost / rules groupPoster: a group (or channel) I am in, not closed, big enough (a
@@ -113,7 +108,7 @@ object GroupStoryRights {
         val limits = async { runCatching { db.collection("config").document("limits").get().await().data }.getOrNull().orEmpty() }
         val admin = async { runCatching { db.collection("admins").document(me).get().await().exists() }.getOrDefault(false) }
         val open = async { runCatching { db.collection("users").document(me).get().await().getBoolean("groupStoryOpen") }.getOrNull() == true }
-        Gate(minMembers(limits.await(), java.util.Locale.getDefault().country), admin.await(), open.await())
+        Gate(minMembers(limits.await()), admin.await(), open.await())
     }
 
     /**
