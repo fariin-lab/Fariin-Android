@@ -167,6 +167,7 @@ object CallManager {
     fun init(context: Context) {
         if (::app.isInitialized) return
         app = context.applicationContext
+        CallNotifications.clearStale(app, null)   // H-154: a ring left by a process that died
         // The call that is live, written down so a process that dies mid-call is closed on the next
         // start (endAfterCrash). Cleared when the call ends.
         main.launch {

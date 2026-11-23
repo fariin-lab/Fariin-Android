@@ -91,7 +91,9 @@ class CallService : Service() {
     private fun granted(p: String) = ContextCompat.checkSelfPermission(this, p) == PackageManager.PERMISSION_GRANTED
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        CallManager.hangUp()
+        // The app swiped away: the call ends, a group call too (H-112: the mic stayed live in the room).
+        if (CallManager.ui.value.status.live) CallManager.hangUp()
+        if (GroupCall.ui.value.cid != null) GroupCall.leave()
         super.onTaskRemoved(rootIntent)
     }
 }
@@ -150,6 +152,8 @@ object CallNotifications {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            // H-154: if the app dies while it rings, the ring still goes when the ring time is over.
+            .setTimeoutAfter(CallWire.CALLEE_RING_MS + 5_000L)
             .setFullScreenIntent(activity(c, null, 1), true)
             .setContentIntent(activity(c, null, 1))
             .setStyle(NotificationCompat.CallStyle.forIncomingCall(person, activity(c, ACTION_DECLINE, 2), activity(c, ACTION_ACCEPT, 3)))
@@ -160,6 +164,17 @@ object CallNotifications {
 
     private var lastIncoming: String? = null
 
+    /**
+     * H-154: an incoming-call notification left by a process that died while it rang. Run when the
+     * call side starts: any ring notification that is not the call this process is ringing goes.
+     */
+    fun clearStale(c: Context, ringingId: String?) {
+        val nm = c.getSystemService(NotificationManager::class.java) ?: return
+        try {
+            nm.activeNotifications.filter { it.id == INCOMING_ID && it.tag != ringingId }.forEach { nm.cancel(it.tag, INCOMING_ID) }
+        } catch (_: Exception) {}
+    }
+
     fun cancelIncoming(c: Context) {
         lastIncoming?.let { NotificationManagerCompat.from(c).cancel(it, INCOMING_ID) }
         lastIncoming = null
@@ -167,11 +182,16 @@ object CallNotifications {
 
     fun ongoing(c: Context): Notification {
         val ui = CallManager.ui.value
-        val person = Person.Builder().setName(ui.peerName.ifEmpty { "Fariin" }).build()
+        // K-25: a group or link call names its group and says video while my camera or screen is on.
+        val g = GroupCall.ui.value
+        val group = g.cid != null && !ui.status.live
+        val title = (if (group) g.title else ui.peerName).ifEmpty { "Fariin" }
+        val video = if (group) g.cameraOn || g.sharing else ui.status.video
+        val person = Person.Builder().setName(title).build()
         return NotificationCompat.Builder(c, ONGOING_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_fariin)
-            .setContentTitle(ui.peerName.ifEmpty { "Fariin" })
-            .setContentText(if (ui.status.video) "Video call" else "Voice call")
+            .setContentTitle(title)
+            .setContentText(if (group) (if (video) "Group video call" else "Group call") else if (video) "Video call" else "Voice call")
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setOngoing(true)
             .setContentIntent(activity(c, null, 4))
