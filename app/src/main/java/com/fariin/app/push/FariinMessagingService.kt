@@ -96,7 +96,7 @@ class FariinMessagingService : FirebaseMessagingService() {
             // Only the ring itself (data-only, kind "groupring") rings full screen (F-36). The plain
             // "call started" notice of a group too big to ring is a normal notification.
             if (message.data["kind"] == "groupring") {
-                android.os.Handler(android.os.Looper.getMainLooper()).post { com.fariin.app.call.GroupRing.onPush(applicationContext, cid) }
+                android.os.Handler(android.os.Looper.getMainLooper()).post { com.fariin.app.call.GroupRing.onPush(applicationContext, cid, message.data["kind"]) }
             } else if (cid.isNotEmpty() && Push.pushOn(applicationContext)) {
                 NotificationPoster.postChatNotice(applicationContext, NotificationPoster.groupCallTag(cid),
                     message.notification?.title ?: message.data["t"] ?: "Group call",

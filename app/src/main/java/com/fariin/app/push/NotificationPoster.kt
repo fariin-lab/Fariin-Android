@@ -83,7 +83,15 @@ object NotificationPoster {
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build(),
             )
         }
-        nm.createNotificationChannels(listOf(msgs, calls))
+        val missed = NotificationChannel(NotifChannel.MISSED.id, NotifChannel.MISSED.title, NotificationManager.IMPORTANCE_HIGH).apply {
+            description = "Calls you missed"
+            setSound(
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+                AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build(),
+            )
+        }
+        nm.createNotificationChannels(listOf(msgs, calls, missed))
     }
 
     /**
@@ -115,7 +123,8 @@ object NotificationPoster {
             .setWhen(System.currentTimeMillis())
             .setShowWhen(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(if (spec.channel == NotifChannel.CALLS) NotificationCompat.CATEGORY_CALL else NotificationCompat.CATEGORY_MESSAGE)
+            .setCategory(if (spec.channel == NotifChannel.CALLS) NotificationCompat.CATEGORY_CALL
+                else if (spec.channel == NotifChannel.MISSED) "missed_call" else NotificationCompat.CATEGORY_MESSAGE)
         // One group per account; its summary carries the app icon number (AppBadge).
         if (spec.channel == NotifChannel.MESSAGES && me.isNotEmpty()) b.setGroup(AppBadge.group(me))
         // A disappearing message: the notification goes when its newest line's timer runs out

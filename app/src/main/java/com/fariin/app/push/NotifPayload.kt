@@ -76,6 +76,8 @@ enum class NotifChannel(val id: String, val title: String) {
     /** "calls_v2" (K-71): the first "calls" channel could ring the whole ringtone, and a channel
      *  made again under the same id gets its old settings back. */
     CALLS("calls_v2", "Calls"),
+    /** A missed call's row: the plain notification sound, never the ringtone the Calls channel may carry. */
+    MISSED("missed_calls", "Missed Calls"),
 }
 
 /** One notification, ready to draw. */
@@ -188,7 +190,7 @@ object NotifBuilder {
         // stops on answer). Shown as well, its channel played the whole ringtone song on top, past
         // the answer and into the next call (owner's Pixel, 14:07, 2026-11-05).
         if (p.body in CALL_BODIES) return NotifDecision.Skip("call ring is on the call screen")
-        val channel = if (p.kind == "call") NotifChannel.CALLS else NotifChannel.MESSAGES
+        val channel = if (p.kind == "call") NotifChannel.MISSED else NotifChannel.MESSAGES
         val isStory = p.kind == "story"
         val key = p.cid ?: if (isStory && p.aid != null) "story-${p.aid}" else null
         val sender = p.aid
