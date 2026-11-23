@@ -84,6 +84,12 @@ class LiveShareService : Service() {
 
         /** After a restart of the app: the shares still running come back from the phone. */
         fun restore(ctx: Context) {
+            val back = loadSaved(ctx)
+            if (back.isNotEmpty()) runCatching { ContextCompat.startForegroundService(ctx, Intent(ctx, LiveShareService::class.java)) }
+        }
+
+        /** The shares saved on the phone that have not run out, put back in memory (no service start). */
+        private fun loadSaved(ctx: Context): Map<String, Share> {
             val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val now = System.currentTimeMillis()
             val back = p.all.mapNotNull { (cid, v) ->
@@ -93,7 +99,7 @@ class LiveShareService : Service() {
             }.toMap()
             _shares.value = back
             save(ctx)
-            if (back.isNotEmpty()) runCatching { ContextCompat.startForegroundService(ctx, Intent(ctx, LiveShareService::class.java)) }
+            return back
         }
 
         private fun save(ctx: Context) {
@@ -115,10 +121,17 @@ class LiveShareService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP_ALL) { stopAll(this); return START_NOT_STICKY }
+        // A restart after the process died (START_STICKY, null intent) finds memory empty: the shares
+        // come back from the phone, or the chat kept showing a live pin that no longer moved (J-38).
+        val restarted = _shares.value.isEmpty() && loadSaved(this).isNotEmpty()
         prune()
         if (_shares.value.isEmpty()) { stopSelf(); return START_NOT_STICKY }
         val fg = if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
-        runCatching { ServiceCompat.startForeground(this, NOTE_ID, note(), fg) }.onFailure { stopSelf(); return START_NOT_STICKY }
+        runCatching { ServiceCompat.startForeground(this, NOTE_ID, note(), fg) }.onFailure {
+            // The phone refused the restart from the background: end those shares, so nobody sees a frozen pin as live.
+            if (restarted) stopAll(this) else stopSelf()
+            return START_NOT_STICKY
+        }
         listen()
         scheduleTick()
         return START_STICKY
