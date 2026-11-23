@@ -196,7 +196,7 @@ object Glow {
         // only ever written on the main thread, in the order the answers came.
         val bg = com.fariin.app.perf.ListenThread
         glowersReg = db.collection("glows").whereEqualTo("to", newUid).addSnapshotListener(bg.exec) { snap, _ ->
-            val set = snap?.documents?.mapNotNull { it.getString("from") }?.toSet()
+            val set = snap?.documents?.mapNotNull { it.get("from") as? String }?.toSet()
             bg.toMain {
                 if (uid != newUid) return@toMain
                 if (set == null) { glowersFailed = true; publish(); return@toMain }
@@ -205,7 +205,7 @@ object Glow {
             }
         }
         glowingReg = db.collection("glows").whereEqualTo("from", newUid).addSnapshotListener(bg.exec) { snap, _ ->
-            val set = snap?.documents?.mapNotNull { it.getString("to") }?.toSet()
+            val set = snap?.documents?.mapNotNull { it.get("to") as? String }?.toSet()
             bg.toMain {
                 if (uid != newUid) return@toMain
                 if (set == null) { glowingFailed = true; publish(); return@toMain }
@@ -309,7 +309,7 @@ object Glow {
         val snap = db.collection("glows").whereEqualTo("to", me)
             .orderBy("createdAt", Query.Direction.DESCENDING).limit(limit).get().await()
         return snap.documents.mapNotNull { d ->
-            d.getString("from")?.let { it to (d.getTimestamp("createdAt")?.toDate()?.time ?: 0L) }
+            (d.get("from") as? String)?.let { it to ((d.get("createdAt") as? Timestamp)?.toDate()?.time ?: 0L) }
         }
     }
 
@@ -377,19 +377,21 @@ object Glow {
             val snap = db.collection("users").document(uid).collection("publicStories")
                 .whereGreaterThan("expiresAt", Timestamp.now())
                 .orderBy("expiresAt", Query.Direction.DESCENDING).limit(60).get().await()
-            GlowLoad.Loaded(snap.documents.map { d ->
-                val media = d.getString("mediaUrl") ?: ""
-                PostedStory(
-                    id = d.id,
-                    thumbUrl = d.getString("thumbUrl")?.takeIf { it.isNotEmpty() } ?: media,
-                    mediaUrl = media,
-                    blurThumb = d.getString("blurThumb") ?: "",
-                    createdAtMs = d.getTimestamp("createdAt")?.toDate()?.time ?: System.currentTimeMillis(),
-                    expiresAtMs = d.getTimestamp("expiresAt")?.toDate()?.time ?: System.currentTimeMillis(),
-                    isVideo = d.getString("type") == "video",
-                    views = ViewCounts.get(d.id),
-                    audience = d.getString("audience") ?: "everyone",
-                )
+            GlowLoad.Loaded(snap.documents.mapNotNull { d ->
+                runCatching {
+                    val media = d.get("mediaUrl") as? String ?: ""
+                    PostedStory(
+                        id = d.id,
+                        thumbUrl = (d.get("thumbUrl") as? String)?.takeIf { it.isNotEmpty() } ?: media,
+                        mediaUrl = media,
+                        blurThumb = d.get("blurThumb") as? String ?: "",
+                        createdAtMs = (d.get("createdAt") as? Timestamp)?.toDate()?.time ?: System.currentTimeMillis(),
+                        expiresAtMs = (d.get("expiresAt") as? Timestamp)?.toDate()?.time ?: System.currentTimeMillis(),
+                        isVideo = d.get("type") == "video",
+                        views = ViewCounts.get(d.id),
+                        audience = d.get("audience") as? String ?: "everyone",
+                    )
+                }.getOrNull()
             })
         } catch (_: Exception) { GlowLoad.Failed }
     }

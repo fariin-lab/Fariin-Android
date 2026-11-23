@@ -422,7 +422,7 @@ class FirestorePeople(
         val fields = mapOf<String, Any>("photos.$me" to "", "posters.$me" to "")
         try {
             val docs = db.collection("conversations").whereArrayContains("users", me).get().await().documents
-            val (groups, ones) = docs.partition { it.getString("type") == "group" }
+            val (groups, ones) = docs.partition { it.get("type") as? String == "group" }
             for (chunk in ones.chunked(450)) {
                 val b = db.batch()
                 for (d in chunk) b.update(d.reference, fields)
@@ -664,7 +664,7 @@ object PhotoRepublish {
         try {
             val docs = db.collection("conversations").whereArrayContains("users", me).get().await().documents
             // Same split as a photo change: one refused group write must not sink a whole batch.
-            val (groups, ones) = docs.partition { it.getString("type") == "group" }
+            val (groups, ones) = docs.partition { it.get("type") as? String == "group" }
             for (chunk in ones.chunked(450)) {
                 val b = db.batch()
                 for (c in chunk) b.update(c.reference, fields)

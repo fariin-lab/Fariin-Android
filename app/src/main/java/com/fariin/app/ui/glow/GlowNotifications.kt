@@ -119,13 +119,14 @@ suspend fun loadGlowEvents(me: String, mine: List<Story>, conversations: List<Co
         val snap = runCatching {
             com.fariin.app.Fb.db.collection("conversations").whereArrayContains("users", me).get(Source.CACHE).await()
         }.getOrNull()
-        for (d in snap?.documents.orEmpty()) {
-            if (d.getString("type") == "group" || d.getString("startedBy") != me || d.getBoolean("accepted") != true) continue
-            if (d.getString("acceptedVia") == "pin") continue
-            val at = d.getTimestamp("acceptedAt")?.toDate()?.time ?: continue
-            val other = (d.get("users") as? List<*>)?.filterIsInstance<String>()?.firstOrNull { it != me && it.isNotEmpty() } ?: continue
-            val by = d.getString("acceptedBy").orEmpty()
-            if (by.isNotEmpty() && by != other) continue
+        // Both people write a 1:1 doc: safe casts only, and one bad doc is skipped.
+        for (d in snap?.documents.orEmpty()) runCatching {
+            if (d.get("type") as? String == "group" || d.get("startedBy") as? String != me || d.get("accepted") != true) return@runCatching
+            if (d.get("acceptedVia") as? String == "pin") return@runCatching
+            val at = (d.get("acceptedAt") as? com.google.firebase.Timestamp)?.toDate()?.time ?: return@runCatching
+            val other = (d.get("users") as? List<*>)?.filterIsInstance<String>()?.firstOrNull { it != me && it.isNotEmpty() } ?: return@runCatching
+            val by = (d.get("acceptedBy") as? String).orEmpty()
+            if (by.isNotEmpty() && by != other) return@runCatching
             val names = d.get("names") as? Map<*, *>
             val photos = d.get("photos") as? Map<*, *>
             out.add(GlowEvent("accepted-${d.id}", GlowPerson(other, names?.get(other) as? String ?: "", "", photos?.get(other) as? String, at),
@@ -167,7 +168,9 @@ fun GlowNotificationsPage(
     var load by remember { mutableStateOf<GlowLoad<List<GlowEvent>>>(GlowEventsSeen.byMe[me]?.let { GlowLoad.Loaded(it) } ?: GlowLoad.Loading) }
     LaunchedEffect(reload) {
         if (!refreshing && load !is GlowLoad.Loaded) load = GlowLoad.Loading
-        val r = loadGlowEvents(me, mine, conversations)
+        val r = try { loadGlowEvents(me, mine, conversations) }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { GlowLoad.Failed }
         // A failed refresh keeps the rows already up.
         if (r is GlowLoad.Loaded || load !is GlowLoad.Loaded) load = r
         refreshing = false
