@@ -122,8 +122,9 @@ object GroupRingRules {
  * answered or declined on another phone (the call doc's `joined` / `declined`). Ignore and busy
  * go to the server as groupRingAnswer, as iOS sends them.
  *
- * With the app closed, the server's push carries a `notification` block, so Android draws a plain
- * banner itself and nothing here runs (PROGRESS "Server changes needed": a data-only push).
+ * With androidDataPush the ring push is data-only, so this runs with the app closed too (FCM starts
+ * the process) and rings the same way. A big group's "call started" push (kind not "groupring") never
+ * comes here: FariinMessagingService posts it as a normal banner on the Missed Calls channel.
  */
 object GroupRing {
     private const val TAG = "GroupRing"

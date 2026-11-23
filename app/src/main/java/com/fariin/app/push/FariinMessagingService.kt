@@ -95,27 +95,25 @@ class FariinMessagingService : FirebaseMessagingService() {
             android.os.Handler(android.os.Looper.getMainLooper()).post { showAdhocInvite(c, p, r.title, r.body, r.silent) }
             return
         }
-        if (message.data["type"] == "groupcall") {
-            val cid = message.data["cid"].orEmpty()
-            // Only the ring itself (data-only, kind "groupring") rings full screen (F-36). The plain
-            // "call started" notice of a group too big to ring is a normal notification.
-            if (message.data["kind"] == "groupring") {
-                android.os.Handler(android.os.Looper.getMainLooper()).post { com.fariin.app.call.GroupRing.onPush(applicationContext, cid, message.data["kind"]) }
-            } else if (cid.isNotEmpty() && Push.pushOn(applicationContext)) {
-                NotificationPoster.postChatNotice(applicationContext, NotificationPoster.groupCallTag(cid),
-                    message.notification?.title ?: message.data["t"] ?: "Group call",
-                    message.notification?.body ?: message.data["b"] ?: "A call started", message.data.toMap(), call = true)
-            }
-            return
-        }
-        // "Request to join" (server onJoinRequest, L-42): its own notification, so the group's
-        // message lines stay, and the widget does not count it.
-        if (message.data["type"] == "joinrequest") {
-            val cid = message.data["cid"].orEmpty()
-            if (cid.isNotEmpty() && Push.pushOn(applicationContext)) {
-                NotificationPoster.postChatNotice(applicationContext, NotificationPoster.joinRequestTag(cid),
-                    message.notification?.title ?: message.data["t"] ?: "Request to join",
-                    message.notification?.body ?: message.data["b"] ?: "Someone asked to join", message.data.toMap(), call = false)
+        // Only the ring itself (data-only, kind "groupring") rings full screen (F-36). The plain
+        // "call started" notice of a group too big to ring (onGroupCallStarted) is a normal banner
+        // on the Missed Calls channel, drawn by us when it comes data-only (app closed too).
+        // "Request to join" (server onJoinRequest, L-42): its own notification, whose tap opens the
+        // group's join requests (MainActivity), so the group's message lines stay, and the widget
+        // does not count it. Neither goes on to the message path.
+        if (message.data["type"] == com.fariin.app.data.DataPushRules.GROUP_CALL || message.data["type"] == com.fariin.app.data.DataPushRules.JOIN_REQUEST) {
+            val r = owned(applicationContext, message) ?: return
+            when (r.post) {
+                com.fariin.app.data.DataPushPost.GROUP_RING -> {
+                    val c = applicationContext
+                    val kind = message.data["kind"]
+                    android.os.Handler(android.os.Looper.getMainLooper()).post { com.fariin.app.call.GroupRing.onPush(c, r.id, kind) }
+                }
+                com.fariin.app.data.DataPushPost.GROUP_CALL_BANNER -> NotificationPoster.postChatNotice(applicationContext,
+                    NotificationPoster.groupCallTag(r.id), r.title, r.body, message.data.toMap(), call = true, silent = r.silent)
+                com.fariin.app.data.DataPushPost.JOIN_REQUEST -> NotificationPoster.postChatNotice(applicationContext,
+                    NotificationPoster.joinRequestTag(r.id), r.title, r.body, message.data.toMap(), call = false, silent = r.silent)
+                else -> {}
             }
             return
         }

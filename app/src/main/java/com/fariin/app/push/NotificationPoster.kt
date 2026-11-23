@@ -570,10 +570,12 @@ object NotificationPoster {
     /**
      * A chat notice that is not a message, with the app open (L-42 join requests, F-36 a call in a
      * group too big to ring): its own tag, so the chat's lines stay; the tap carries the same keys a
-     * system-drawn one does (MainActivity routes `type`).
+     * system-drawn one does (MainActivity routes `type`). With androidDataPush these come data-only,
+     * so this also draws them with the app closed. [silent]: the push's silent "1", no sound or buzz.
+     * No Reply action, bubble or shortcut on these, so a message request (`req` "1") needs nothing more.
      */
     @SuppressLint("MissingPermission")
-    fun postChatNotice(c: Context, tag: String, title: String, body: String, keys: Map<String, String>, call: Boolean) {
+    fun postChatNotice(c: Context, tag: String, title: String, body: String, keys: Map<String, String>, call: Boolean, silent: Boolean = false) {
         ensureChannels(c)
         val nmc = NotificationManagerCompat.from(c)
         if (!nmc.areNotificationsEnabled()) return
@@ -592,6 +594,7 @@ object NotificationPoster {
             .setCategory(if (call) NotificationCompat.CATEGORY_CALL else NotificationCompat.CATEGORY_SOCIAL)
             .setContentIntent(tap)
             .setAutoCancel(true)
+            .setSilent(silent)
             .build()
         nmc.notify(tag, ID, n)
     }
