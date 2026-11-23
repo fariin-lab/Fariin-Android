@@ -54,6 +54,9 @@ internal fun styledBubble(m: Message, stylesOff: Boolean, plus: com.fariin.app.d
             start = Offset.Zero, end = Offset.Infinite), Color(p.text), glass = false)
         if (!BubbleStyles.SHOWN) return null
     }
+    // A picture style only where it may show (J-133, BubbleStyles.pictureShown): else the plain bubble.
+    if (BubbleArt.find(m.bubbleStyle) != null &&
+        !BubbleStyles.pictureShown(m.bubbleStyle, m.authorId, com.fariin.app.Fb.auth.currentUser?.uid.orEmpty())) return null
     // A picture style (BubbleArt) wins over a colour style with the same id.
     BubbleArt.find(m.bubbleStyle)?.let { a ->
         val look = BubbleArt.look(a.id, stylesOff = false)
