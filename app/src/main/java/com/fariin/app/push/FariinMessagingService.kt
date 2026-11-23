@@ -188,7 +188,9 @@ class FariinMessagingService : FirebaseMessagingService() {
 
         suspend fun handle(c: Context, p: PushData) {
             DeviceRegistry.init(c)
-            val ack = kotlinx.coroutines.coroutineScope { async(kotlinx.coroutines.Dispatchers.IO) { sendAck(p) } }
+            // The delivered tick runs on its own (H-155): a coroutineScope here waited for it before
+            // anything showed. Awaited at the end, so the push is not killed before it is sent.
+            val ack = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).async { sendAck(p) }
             val me = com.fariin.app.Fb.auth.currentUser?.uid ?: ""
             val opened = HashMap<String, String?>()
             // A sender whose key this phone has not seen yet: one short fetch, then open again.
@@ -268,16 +270,14 @@ class FariinMessagingService : FirebaseMessagingService() {
             return bytes
         }
 
-        /** Only our own storage hosts: a sender photo pointing anywhere else would tell that server the
-         *  reader's IP and the time of every notification (review 2026-11-05). */
-        private fun photoHostAllowed(url: String): Boolean {
-            val host = runCatching { URL(url).host.lowercase() }.getOrNull() ?: return false
-            return host == "firebasestorage.googleapis.com" || host == "storage.googleapis.com" ||
-                host.endsWith(".firebasestorage.app") || host.endsWith(".appspot.com")
-        }
+        /** Only our own buckets (NotifPhotoHost, J-44): a sender photo pointing anywhere else would
+         *  tell that server the reader's IP and the time of every notification. */
+        private fun photoHostAllowed(url: String): Boolean = com.fariin.app.data.NotifPhotoHost.allowed(url)
 
         private fun download(url: String): ByteArray? {
             val conn = URL(url).openConnection() as HttpURLConnection
+            // A redirect could leave our bucket: not followed.
+            conn.instanceFollowRedirects = false
             return try {
                 conn.connectTimeout = PHOTO_TIMEOUT_MS.toInt(); conn.readTimeout = PHOTO_TIMEOUT_MS.toInt()
                 if (conn.responseCode != 200) return null
