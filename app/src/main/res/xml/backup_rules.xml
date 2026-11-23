@@ -5,4 +5,6 @@
     <exclude domain="sharedpref" path="fariin_crypto_public.xml" />
     <exclude domain="sharedpref" path="fariin_accounts.xml" />
     <exclude domain="sharedpref" path="fariin_device_sessions.xml" />
+    <!-- F-22/K-90: no settings file at all (device id, Auth store). -->
+    <exclude domain="sharedpref" path="." />
 </full-backup-content>

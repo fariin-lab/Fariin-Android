@@ -7,7 +7,11 @@
         <exclude domain="sharedpref" path="fariin_crypto_identity.xml" />
         <exclude domain="sharedpref" path="fariin_crypto_public.xml" />
         <exclude domain="sharedpref" path="fariin_accounts.xml" />
-        <exclude domain="sharedpref" path="fariin_device_sessions.xml" />
+        <!-- F-22/K-90: no settings file at all. This phone's device id and registered marker
+             (fariin_device), the kept-media marker and the Firebase Auth store (its file name
+             carries the app id) must never reach another phone, or two phones share one
+             device record and the copy opens signed in. -->
+        <exclude domain="sharedpref" path="." />
         <!-- The phone's message history (fariin-local-<uid>.db, plaintext): only our own chat
              backup may carry it, never a system backup (device-storage plan 2026-11-12). -->
         <exclude domain="database" path="." />
@@ -16,7 +20,8 @@
         <exclude domain="sharedpref" path="fariin_crypto_identity.xml" />
         <exclude domain="sharedpref" path="fariin_crypto_public.xml" />
         <exclude domain="sharedpref" path="fariin_accounts.xml" />
-        <exclude domain="sharedpref" path="fariin_device_sessions.xml" />
+        <!-- F-22/K-90: the same, for a phone-to-phone copy (allowBackup false does not stop it). -->
+        <exclude domain="sharedpref" path="." />
         <!-- The chat cache and drafts are sealed with a Keystore key that stays on this phone, and
              the Firestore cache holds the old phone's session: neither is any use on a new one. -->
         <exclude domain="database" path="." />
