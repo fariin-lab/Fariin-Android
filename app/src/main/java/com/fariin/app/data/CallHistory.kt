@@ -169,13 +169,15 @@ data class AdhocCall(
 
     companion object {
         fun from(d: DocumentSnapshot): AdhocCall? {
-            if (d.getString("kind") != "adhoc") return null
+            // Any member writes this doc: safe casts only, so a bad field never crashes the Calls list.
+            if (d.get("kind") as? String != "adhoc") return null
             fun strings(k: String) = (d.get(k) as? List<*>)?.filterIsInstance<String>() ?: emptyList()
             fun map(k: String) = (d.get(k) as? Map<*, *>)?.mapNotNull { (a, b) -> (a as? String)?.let { it to (b as? String ?: "") } }?.toMap() ?: emptyMap()
             val est = DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+            fun time(k: String) = (d.get(k, est) as? com.google.firebase.Timestamp)?.toDate()?.time
             return AdhocCall(d.id, strings("members"), map("names"), map("photos"), strings("joined"),
-                d.getString("startedBy") ?: "", d.getBoolean("video") ?: false, d.getBoolean("active") ?: false,
-                d.getTimestamp("startedAt", est)?.toDate()?.time ?: 0L, d.getTimestamp("endedAt", est)?.toDate()?.time)
+                d.get("startedBy") as? String ?: "", d.get("video") as? Boolean ?: false, d.get("active") as? Boolean ?: false,
+                time("startedAt") ?: 0L, time("endedAt"))
         }
     }
 }
@@ -212,7 +214,7 @@ class CallsRepository(
         val miss = java.util.concurrent.atomic.AtomicReference<Throwable?>(null)
         val adhoc = async {
             runCatching { db.collection("groupCalls").whereArrayContains("members", me).get().await() }.getOrNull()
-                ?.documents?.mapNotNull { AdhocCall.from(it)?.entry(me) }?.also { adhocHeld = it } ?: adhocHeld
+                ?.documents?.mapNotNull { runCatching { AdhocCall.from(it)?.entry(me) }.getOrNull() }?.also { adhocHeld = it } ?: adhocHeld
         }
         val chats = convs.filter { it.id.isNotEmpty() && !it.id.contains('/') && !it.isChannel }.map { c ->
             async {
@@ -229,7 +231,7 @@ class CallsRepository(
                     val name = if (group) c.title.ifEmpty { "Group" } else c.name(me)
                     val photo = if (group) c.avatarUrl else c.photoUrl(me)
                     val other = if (group) "" else c.otherUid(me)
-                    val list = snap.documents.map { entry(it, c.id, name, photo, other, group, me) }
+                    val list = snap.documents.mapNotNull { runCatching { entry(it, c.id, name, photo, other, group, me) }.getOrNull() }
                     cache[c.id] = c.updatedAtMillis to list
                     list
                 }
