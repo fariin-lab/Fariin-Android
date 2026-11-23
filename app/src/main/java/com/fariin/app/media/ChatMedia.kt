@@ -71,6 +71,17 @@ class ChatMedia(
         runCatching { atomicWrite(key(url), plain); MediaOrigin.cached(url, plain.size.toLong()) }
     }
 
+    /** [store] from a plain file on disk (a sent clip), copied, so its bytes never sit in memory. */
+    fun storeFile(url: String, plain: File) {
+        runCatching {
+            val f = key(url); f.parentFile?.mkdirs()
+            val tmp = File(f.parentFile, f.name + ".tmp" + System.nanoTime())
+            plain.copyTo(tmp, overwrite = true)
+            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+            MediaOrigin.cached(url, f.length())
+        }
+    }
+
     /** [own]: the message's own file only, never an alias copy (forward input, MediaOrigin). */
     suspend fun bytes(url: String, enc: EncMeta?, own: Boolean = false): ByteArray? = file(url, enc, own = own)?.let { f ->
         withContext(Dispatchers.IO) { runCatching { f.readBytes() }.getOrNull() }

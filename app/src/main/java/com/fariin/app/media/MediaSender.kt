@@ -246,12 +246,13 @@ class MediaSender(
         MediaSend.noteAnnounced(clientId, msgRef.id)   // before the write: a Cancel during it still takes it down
         batch.commit().await()
         onAnnounced(msgRef.id)
-        val clip = v.file.readBytes()
-        val (cipher, meta) = sealBytes(clip, members)
+        // Out of memory on a long clip: a failed send, never a crash the queue replays (H-58).
+        val (cipher, meta) = try { sealBytes(v.file.readBytes(), members) }
+            catch (e: OutOfMemoryError) { throw java.io.IOException("clip too big for memory", e) }
         // The ring's last 70% (the first 30% was the compression, VideoPrep).
         val url = uploadRetrying(cipher, MediaRules.videoPath(cid, msgRef.id),
             clientId?.let { id -> { f: Float -> UploadProgress.raise(id, 0.3f + 0.7f * f) } })
-        media?.store(url, clip)
+        media?.storeFile(url, v.file)
         msgRef.update(MediaMessages.attachVideo(url, meta, FieldValue.delete())).await()
         com.fariin.app.media.ChatSounds.sent()
         clientId?.let { UploadProgress.done(it) }
@@ -423,6 +424,9 @@ class MediaSender(
         }
         fun dropped(i: Int) = keyOf(i)?.let { MediaSend.isItemCancelled(it) } == true
         val gate = Semaphore(10)   // iOS maxAlbumUploadsInFlight
+        // A clip is read whole and sealed in memory: only two at once (iOS seals two tiles at a time),
+        // so ten long clips never hold ten copies plus their seals.
+        val clipGate = Semaphore(2)
         val kept = coroutineScope {
             val jobs = parts.mapIndexed { i, p ->
                 if (dropped(i)) return@mapIndexed null
@@ -439,11 +443,17 @@ class MediaSender(
                                 val (tc, tm) = sealBytes(p.prep.poster.jpeg, members)
                                 val posterUrl = uploadRetrying(tc, MediaRules.albumTilePath(cid, id, "$i-thumb"))
                                 media?.store(posterUrl, p.prep.poster.jpeg)
-                                val clip = p.prep.file.readBytes()
-                                val (vc, vm) = sealBytes(clip, members)
-                                val vurl = uploadRetrying(vc, MediaRules.albumTilePath(cid, id, "$i-video"), tileProgress(i))
-                                media?.store(vurl, clip)
-                                MediaMessages.Tile(posterUrl, tm, p.prep.width.toDouble(), p.prep.height.toDouble(), vurl, vm, p.prep.duration)
+                                var vm: EncMeta? = null
+                                val vurl = clipGate.withPermit {
+                                    // Out of memory on a long clip: a failed send (its red bubble), never a crash
+                                    // that the queue replays on every return.
+                                    val (vc, vm0) = try { sealBytes(p.prep.file.readBytes(), members) }
+                                        catch (e: OutOfMemoryError) { throw java.io.IOException("clip too big for memory", e) }
+                                    vm = vm0
+                                    uploadRetrying(vc, MediaRules.albumTilePath(cid, id, "$i-video"), tileProgress(i))
+                                }
+                                media?.storeFile(vurl, p.prep.file)
+                                MediaMessages.Tile(posterUrl, tm, p.prep.width.toDouble(), p.prep.height.toDouble(), vurl, vm!!, p.prep.duration)
                             }
                         }
                     }
