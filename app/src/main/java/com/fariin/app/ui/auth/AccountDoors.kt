@@ -230,6 +230,9 @@ fun RestoreAccountPage(handle: String, dueMs: Long, onRestored: () -> Unit) {
             // The server removed the account; this phone's keys and copies go too.
             CryptoHub.get(ctx).destroyIdentity(uid)
             com.fariin.app.local.LocalDb.deleteFor(uid)   // the phone's message history goes with the account
+            // J-101: the chat backup in Drive and its keys go too (capped: a slow Drive never holds this).
+            kotlinx.coroutines.withTimeoutOrNull(15_000) { runCatching { com.fariin.app.backup.Drive.deleteAccount(ctx, uid) } }
+            kotlinx.coroutines.withTimeoutOrNull(5_000) { runCatching { com.fariin.app.backup.BackupStoreKey.delete(ctx, uid) } }
             SessionEnd.deletedNow(ctx)
         }
     })

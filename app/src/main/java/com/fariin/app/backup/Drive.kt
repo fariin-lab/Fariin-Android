@@ -147,4 +147,14 @@ object Drive {
     suspend fun delete(token: String, id: String) {
         runCatching { call(token, "DELETE", "https://www.googleapis.com/drive/v3/files/$id") }
     }
+
+    /**
+     * J-101: every backup file of one account in the app folder (other accounts sharing this Google
+     * Drive keep theirs). Only when Drive is already allowed: no Google screen during a deletion.
+     */
+    suspend fun deleteAccount(ctx: Context, uid: String) {
+        val token = (authorize(ctx) as? Auth.Token)?.value ?: return
+        val mine = runCatching { list(token) }.getOrNull()?.filter { it.uid == uid } ?: return
+        for (f in mine) delete(token, f.id)
+    }
 }

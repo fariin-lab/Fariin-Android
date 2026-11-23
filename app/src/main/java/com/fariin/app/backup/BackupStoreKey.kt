@@ -63,4 +63,20 @@ object BackupStoreKey {
             k
         }
     }
+
+    /**
+     * J-101: Delete it now takes the account's backup keys off this phone and out of Block Store, so
+     * nothing of the deleted account's backup can be opened again from here or a restored phone.
+     */
+    suspend fun delete(ctx: Context, uid: String) = lock.withLock {
+        prefs(ctx).edit().remove("store.$uid").remove("store.m:$uid").apply()
+        runCatching {
+            val all = readAll(ctx)
+            if (!all.has(uid) && !all.has("m:$uid")) return@runCatching
+            all.remove(uid); all.remove("m:$uid")
+            Blockstore.getClient(ctx).storeBytes(StoreBytesData.Builder().setKey(KEY)
+                .setBytes(all.toString().toByteArray(Charsets.UTF_8)).setShouldBackupToCloud(true).build()).await()
+        }
+        Unit
+    }
 }
