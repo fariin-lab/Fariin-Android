@@ -176,9 +176,16 @@ object StoryUploads {
             var exported: java.io.File? = null
             try {
             val source = media.video
-            val media = if (videoEdit == null || source == null) media else {
+            // An unedited clip that is not an mp4 (WebM, MKV, 3GP from the gallery) is exported to
+            // H.264 mp4 like an edited one (H-105): it is stored as video.mp4 and an iPhone cannot
+            // play the others. A clip past 90 s is cut (and so exported) piece by piece below.
+            val spec = videoEdit ?: source?.takeIf {
+                com.fariin.app.data.StoryLimits.segments(it.info.durationSec).isEmpty() &&
+                    (app.contentResolver.getType(it.file) ?: if (it.file.path.orEmpty().endsWith(".mp4", true)) "video/mp4" else null) != "video/mp4"
+            }?.let { com.fariin.app.media.StoryVideoCut.Edit(null, mute = false, crop = null, canvasW = 0, canvasH = 0, overlay = null) }
+            val media = if (spec == null || source == null) media else {
                 val file = java.io.File(app.cacheDir, "story-edit-${System.nanoTime()}.mp4")
-                val part = if (com.fariin.app.media.StoryVideoCut.edit(app, source.file, file, videoEdit))
+                val part = if (com.fariin.app.media.StoryVideoCut.edit(app, source.file, file, spec))
                     runCatching { StoryMedia.prepareVideo(app, Uri.fromFile(file)) }.getOrNull() else null
                 val clip = part?.video
                 if (part == null || clip == null) {
