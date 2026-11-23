@@ -206,6 +206,8 @@ class ThreadRepository(
     fun start() {
         if (msgReg != null) return
         clearStuckSends()
+        // F-15: this phone's wraps of old sealed group items go to the server for later members.
+        GroupKeyRelease.chatOpened(cid)
         // The phone's copy first (iOS ThreadMessageCache), so the chat opens full, offline too;
         // the listener's first answer replaces it.
         if (liveDocs.isEmpty() && _state.value.messages.isEmpty()) {
@@ -999,6 +1001,8 @@ class ThreadRepository(
         val pending = d.metadata.hasPendingWrites()
         parsed[d.id]?.let { p -> if (p.pending == pending && p.epoch == epoch && p.data == data) {
             parsed[d.id] = Parsed(d, p.data, pending, epoch, p.message); return p.message } }
+        // F-15: keys released on the message open old sealed group items (iOS Models.swift:1043).
+        CryptoHub.noteMessageKeys(cid, data)
         val m0 = Message.fromFirestore(d.id, data, cid) { raw, author -> crypto.decrypt(raw, cid, author) }
         val m = if (pending && m0.authorId == me) m0.copy(sendState = Message.SendState.SENDING) else m0
         // Was 400: a long chat scrolled past 400 wiped it, and every page after opened all again.

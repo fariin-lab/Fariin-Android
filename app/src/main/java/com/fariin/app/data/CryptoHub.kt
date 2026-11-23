@@ -33,6 +33,7 @@ object CryptoHub {
     val keysEpoch: StateFlow<Int> = _epoch.asStateFlow()
 
     fun get(context: Context): FariinCrypto = instance ?: synchronized(this) {
+        GroupKeyRelease.attach(context)
         instance ?: FariinCrypto.android(
             context.applicationContext,
             FirestoreKeyDirectory(com.fariin.app.Fb.db,
@@ -60,7 +61,7 @@ object CryptoHub {
         listed.clear()
         for (c in convs) {
             listed[c.id] = c
-            if (c.isGroup && c.e2eeOff) plainGroups.add(c.id)
+            if (c.isGroup && c.e2eeOff) { plainGroups.add(c.id); GroupKeyRelease.noteGroup(c.id) }
         }
         // Old blocks kept on the shared chat move to my private list (waits until that list loaded).
         BlockList.migrate(convs)
@@ -72,6 +73,15 @@ object CryptoHub {
     fun listedAll(): List<Conversation> = listed.values.toList()
 
     fun bumpKeys() { _epoch.value = _epoch.value + 1 }
+
+    /** F-15: a group message's released keys (`rk`, iOS Models.swift:1043). A key not known before
+     *  bumps the keys epoch, so text drawn earlier as a lock opens. */
+    fun noteMessageKeys(cid: String, data: Map<String, Any?>) {
+        if (!Wire.isGroupCid(cid)) return
+        val rk = data["rk"] as? Map<*, *> ?: return
+        val crypto = instance ?: return
+        if (crypto.noteReleased(cid, rk).isNotEmpty()) bumpKeys()
+    }
 
     /** Sign-out: forget the keys in memory (the stored key stays, keys are per uid). */
     fun signedOut() {
