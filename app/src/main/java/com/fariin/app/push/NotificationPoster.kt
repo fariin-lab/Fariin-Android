@@ -71,14 +71,24 @@ object NotificationPoster {
         // sound cannot be changed once made, and one made again under its old id gets its old
         // settings back (K-71), so calls moved to a new id; the old "calls" goes once.
         val sp = c.getSharedPreferences("fariin.notif", Context.MODE_PRIVATE)
+        val notifDefault = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        // A ring the user picked on the old channel carries over to the new one (L-51 reads the ring
+        // from it). Safe: the only post on the new channel is the silent group ring; every alert with
+        // a sound goes on Missed Calls.
+        var carried: android.net.Uri? = null
         if (!sp.getBoolean(OLD_CALLS_GONE, false)) {
+            try {
+                val fresh = nm.getNotificationChannel(NotifChannel.CALLS.id) == null
+                val old = nm.getNotificationChannel(OLD_CALLS_ID)?.sound
+                if (fresh && old != null && com.fariin.app.call.RingtoneChoice.pick(old.toString(), notifDefault?.toString(), null) != null) carried = old
+            } catch (_: Exception) {}
             try { nm.deleteNotificationChannel(OLD_CALLS_ID) } catch (_: Exception) {}
             sp.edit().putBoolean(OLD_CALLS_GONE, true).apply()
         }
         val calls = NotificationChannel(NotifChannel.CALLS.id, NotifChannel.CALLS.title, NotificationManager.IMPORTANCE_HIGH).apply {
             description = "Calls you get"
             setSound(
-                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+                carried ?: notifDefault,
                 AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build(),
             )
@@ -383,7 +393,7 @@ object NotificationPoster {
         }
         val tap = PendingIntent.getActivity(c, ("n${nudge.cid}").hashCode(), open,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val n = NotificationCompat.Builder(c, NotifChannel.CALLS.id)
+        val n = NotificationCompat.Builder(c, NotifChannel.MISSED.id)
             .setSmallIcon(R.drawable.ic_stat_fariin)
             .setColor(Color.rgb(0x1E, 0x88, 0xE5))
             .setContentTitle(title)
@@ -417,7 +427,7 @@ object NotificationPoster {
         val tap = PendingIntent.getActivity(c, ("a${p.roomId}").hashCode(), open,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val video = com.fariin.app.data.AdhocInviteRules.video(body)
-        val n = NotificationCompat.Builder(c, NotifChannel.CALLS.id)
+        val n = NotificationCompat.Builder(c, NotifChannel.MISSED.id)
             .setSmallIcon(R.drawable.ic_stat_fariin)
             .setColor(Color.rgb(0x1E, 0x88, 0xE5))
             .setContentTitle(title)
@@ -573,7 +583,7 @@ object NotificationPoster {
             keys.forEach { (k, v) -> putExtra(k, v) }
         }
         val tap = PendingIntent.getActivity(c, tag.hashCode(), open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val n = NotificationCompat.Builder(c, if (call) NotifChannel.CALLS.id else NotifChannel.MESSAGES.id)
+        val n = NotificationCompat.Builder(c, if (call) NotifChannel.MISSED.id else NotifChannel.MESSAGES.id)
             .setSmallIcon(R.drawable.ic_stat_fariin)
             .setColor(Color.rgb(0x1E, 0x88, 0xE5))
             .setContentTitle(title)
