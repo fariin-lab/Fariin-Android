@@ -2587,6 +2587,7 @@ class ThreadRepository(
                 // The link card's sealed picture goes too (iOS storageUrls).
                 ((data["linkPreview"] as? Map<*, *>)?.get("imageUrl") as? String)?.let(::add)
             }.filter { it.startsWith("https://") || it.startsWith("gs://") }
+            val wasNewest = isNewestShown(m.id)
             var marked = false
             if (data["deleted"] != true) {
                 val strip = hashMapOf<String, Any>("deleted" to true, "text" to "", "type" to "text", "enc" to FieldValue.delete())
@@ -2618,7 +2619,8 @@ class ThreadRepository(
             if (!marked) ref.delete().await()
             // iOS deleteMessage -> removePinnedMessage: a pin must not outlive what it points at.
             if (m.id in PinRules.pinnedIds(_state.value.conv)) try { unpin(m.id) } catch (_: Exception) {}
-            rewriteSummaryAfterDelete()
+            // Only when it was the newest: an older message is not the chat line (audit H-150).
+            if (wasNewest) rewriteSummaryAfterDelete()
             clearReactionPreviewIfFrom(data["reactions"] as? Map<*, *>)
             true
         } catch (_: Exception) { false }
@@ -2650,7 +2652,7 @@ class ThreadRepository(
     private suspend fun rewriteSummaryAfterDelete() {
         // A channel's preview is the server's (CHANNEL-SYNC-SPEC 3-4, iOS serverOwnsPreview; audit A7).
         if (isChannelChat() || isChannel()) return
-        try {
+        try { writeSummaryGuarded {
             val group = Wire.isGroupCid(cid)
             // From the server only (iOS summaryOfNewest): an offline answer from a cache holding none
             // of this chat's messages looked like "nothing left" and wiped the line. A failed read
@@ -2659,7 +2661,7 @@ class ThreadRepository(
                 .limit(if (group) 25 else 1).get(Source.SERVER).await().documents
             val d = (if (group) newest.firstOrNull { it.bool("deleted") != true } else newest.firstOrNull())?.data
             // A group whose 25 newest are all deleted is not proof the chat is empty: keep the line (iOS).
-            if (d == null && group && newest.isNotEmpty()) return
+            if (d == null && group && newest.isNotEmpty()) return@writeSummaryGuarded null
             val update = hashMapOf<String, Any>()
             if (d == null) {
                 update["lastMessage"] = ""; update["lastSender"] = ""
@@ -2693,8 +2695,42 @@ class ThreadRepository(
                 else { update["lastImageUrl"] = FieldValue.delete(); update["lastImageEnc"] = FieldValue.delete() }
                 if (tiles.isNotEmpty()) update["lastImages"] = tiles.take(3) else update["lastImages"] = FieldValue.delete()
             }
-            convRef.update(update).await()
-        } catch (_: Exception) {}
+            update
+        } } catch (_: Exception) {}
+    }
+
+    /**
+     * iOS rewriteSummaryGuarded (audit H-150): write a recomputed chat line only if no message landed
+     * while it was computed. The chat's `updatedAt` (every send stamps it) is read first and checked
+     * again in a transaction; if it moved, the line is computed again (three tries). Offline, or a
+     * failed transaction, falls back to the plain write. [compute] null = nothing to write.
+     */
+    private suspend fun writeSummaryGuarded(compute: suspend () -> Map<String, Any>?) {
+        fun version(d: Map<String, Any?>?): String = when (val v = d?.get("updatedAt")) {
+            is com.google.firebase.Timestamp -> "${v.seconds}.${v.nanoseconds}"
+            is Number -> v.toString()
+            else -> ""
+        }
+        repeat(3) {
+            val before = try { convRef.get(Source.SERVER).await() } catch (_: Exception) { null }
+            if (before == null) {
+                compute()?.let { u -> try { convRef.update(u).await() } catch (_: Exception) {} }
+                return
+            }
+            val seen = version(before.data)
+            val update = compute() ?: return
+            val wrote: Boolean? = try {
+                db.runTransaction { t ->
+                    if (version(t.get(convRef).data) != seen) false else { t.update(convRef, update); true }
+                }.await()
+            } catch (_: Exception) { null }
+            when (wrote) {
+                true -> return
+                false -> {}   // a newer message landed: compute against it
+                null -> { try { convRef.update(update).await() } catch (_: Exception) {}; return }
+            }
+        }
+        // Lost three times: messages are still arriving, and each one set its own line.
     }
 
     /** iOS summaryText: the sealed words, else a label for the kind. */
