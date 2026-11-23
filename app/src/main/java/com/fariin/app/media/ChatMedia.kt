@@ -163,6 +163,19 @@ class ChatMedia(
         MediaOrigin.forget(url)
     }
 
+    /**
+     * F-32: every file of [m] (the copy from BEFORE it turned deleted, as the deleted one names no
+     * urls) leaves this phone: Delete for Everyone, received or own, and the timer burn.
+     */
+    fun forgetMessage(m: com.fariin.app.data.Message) {
+        val urls = listOfNotNull(m.imageUrl, m.videoUrl, m.audioUrl, m.fileUrl, m.thumbUrl) +
+            m.album.flatMap { listOfNotNull(it.imageUrl, it.videoUrl) }
+        for (u in urls) {
+            MediaDownloads.cancel(u)
+            runCatching { forget(u) }
+        }
+    }
+
     private suspend fun download(url: String, enc: EncMeta?): File? {
         dirMade()
         // A plain clip already watched to the end through the stream cache: copied out, not fetched again.
