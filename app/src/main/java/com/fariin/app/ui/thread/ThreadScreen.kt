@@ -1776,9 +1776,10 @@ private fun ThreadContent(
                         else -> onSend(t)
                     }
                 }
-                var attachOpen by remember { mutableStateOf(false) }
+                // Saveable: the chat camera's photo comes back to its sheet after the phone killed the app behind it (L-18).
+                var attachOpen by rememberSaveable { mutableStateOf(false) }
                 // The field's camera opens the same sheet straight onto the camera (iOS showCamera).
-                var attachCamera by remember { mutableStateOf(false) }
+                var attachCamera by rememberSaveable { mutableStateOf(false) }
                 var pollOpen by remember { mutableStateOf(false) }
                 var locationOpen by remember { mutableStateOf(false) }
                 var liveOpen by remember { mutableStateOf(false) }
