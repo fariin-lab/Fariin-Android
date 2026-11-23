@@ -358,8 +358,9 @@ object LinkPreviews {
         val d = runCatching { db.collection("users").document(owner).get().await().data }.getOrNull() ?: return null
         val name = (d["name"] as? String)?.trim().orEmpty()
         val h = (d["handle"] as? String)?.ifEmpty { null } ?: key
-        val photo = (d["photoUrl"] as? String)?.ifEmpty { null }
-        return Draft(url, name.ifEmpty { h }, "@$h", photo?.let { withContext(Dispatchers.IO) { fetchImage(it, url) } })
+        // L-80: no picture on a profile card. Each viewer draws the photo from their own profile
+        // read of the person (ProfileCardPhoto), so photo privacy and blocks hold for every reader.
+        return Draft(url, name.ifEmpty { h }, "@$h", null)
     }
 
     private suspend fun build(url: String): Draft? {

@@ -64,6 +64,12 @@ private fun ArticleCard(lp: Message.LinkPreview, isMe: Boolean) {
     // A profile link whose account was gone at send time says so (iOS profileUnavailable).
     val gone = lp.title == "Unavailable" && lp.desc.isEmpty() &&
         com.fariin.app.data.LinkPreviews.profileHandle(lp.url) != null
+    // L-80: a profile card's photo is never the card's own picture (old cards may hold one); it is
+    // this viewer's own profile read of the person, so their photo privacy and my blocks apply.
+    val profileH = remember(lp.url) { com.fariin.app.data.LinkPreviews.profileHandle(lp.url) }
+    val profilePhoto by produceState<String?>(null, profileH, gone) {
+        if (profileH != null && !gone) value = profileCardPhoto(profileH)
+    }
     ArticleShape(lp.title, if (gone) "This account is no longer available" else lp.desc, StickerGifRules.cardHost(lp.url), isMe,
         onClick = {
             // The card opens exactly as its link does in the text (owner 2026-11-06: a channel's card
@@ -77,7 +83,11 @@ private fun ArticleCard(lp: Message.LinkPreview, isMe: Boolean) {
                 if (usernameIsMine(h)) nav.myProfile() else runCatching { uri.openUri(lp.url) }
             }
         },
-        image = if (lp.imageUrl == null) null else ({
+        image = if (profileH != null) profilePhoto?.let { photo -> ({
+            Box(Modifier.fillMaxWidth().height(170.dp).background(c.secondary.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+                Avatar(photo, 120.dp)
+            }
+        }) } else if (lp.imageUrl == null) null else ({
             Box(Modifier.fillMaxWidth().height(170.dp).background(c.secondary.copy(alpha = 0.15f))) {
                 if (lp.imageEnc != null) {
                     val got = rememberGatedFile(lp.imageUrl, lp.imageEnc, AutoDownload.Kind.PHOTOS)
@@ -213,6 +223,22 @@ internal fun LiveGroupLinkCard(text: String, isMe: Boolean) {
     val show = live is GroupLinkCards.Live.Found ||
         (live == GroupLinkCards.Live.Gone && target is GroupLinkCards.Target.Invite)
     if (show) GroupLinkCard(Message.LinkPreview(url, "", ""), target, isMe)
+}
+
+/**
+ * The photo a profile card shows (L-80, [com.fariin.app.data.ProfileCardPhoto]): the handle's owner
+ * from `usernames/{h}`, then my own profile read of them (their photo privacy applied), none when I
+ * blocked them, the name was released or anything could not be read.
+ */
+private suspend fun profileCardPhoto(h: String): String? {
+    val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return null
+    val key = com.fariin.app.data.Usernames.lookupKey(h) ?: return null
+    return runCatching {
+        val d = com.fariin.app.Fb.db.collection("usernames").document(key).get().await().data ?: return null
+        val uid = (d["uid"] as? String)?.takeIf { it.isNotEmpty() && d["releasedAt"] == null } ?: return null
+        val photo = com.fariin.app.data.FirestorePeople(me, com.fariin.app.data.CryptoHub.crypto).profile(uid)?.photoUrl
+        com.fariin.app.data.ProfileCardPhoto.shown(true, null, photo, com.fariin.app.data.BlockList.contains(uid))
+    }.getOrNull()
 }
 
 /** Whether `usernames/{h}` is mine (a released name is nobody's). False when it cannot be read. */
