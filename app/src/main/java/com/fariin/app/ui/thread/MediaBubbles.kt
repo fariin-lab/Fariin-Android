@@ -271,10 +271,26 @@ internal fun rememberPlaceholder(thumb: String?, blurhash: String?): ImageBitmap
     return v
 }
 
+/**
+ * A sealed thumb from someone else's message, sampled down to about [THUMB_SIDE_PX] on its long side
+ * (audit H-55): a tiny crafted PNG that claims a huge size decoded at full size and ran the phone
+ * out of memory on every scroll past it. Read the size first; no size = no picture.
+ */
+private const val THUMB_SIDE_PX = 128
+
+private fun decodeThumb(bytes: ByteArray): Bitmap? = runCatching {
+    val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, o)
+    if (o.outWidth <= 0 || o.outHeight <= 0) return@runCatching null
+    val opts = BitmapFactory.Options().apply {
+        inSampleSize = com.fariin.app.media.BitmapDecode.sampleSizeFor(o.outWidth, o.outHeight, THUMB_SIDE_PX)
+    }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+}.getOrNull()
+
 private fun makePlaceholder(thumb: String?, blurhash: String?): ImageBitmap? =
     thumb?.let { t ->
-        runCatching { Base64.decode(t, Base64.DEFAULT) }.getOrNull()
-            ?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }?.asImageBitmap()
+        runCatching { Base64.decode(t, Base64.DEFAULT) }.getOrNull()?.let(::decodeThumb)?.asImageBitmap()
     } ?: blurhash?.let { h ->
         BlurHash.decode(h, 32, 32)?.let { px -> Bitmap.createBitmap(px, 32, 32, Bitmap.Config.ARGB_8888).asImageBitmap() }
     }
