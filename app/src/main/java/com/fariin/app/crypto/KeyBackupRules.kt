@@ -65,6 +65,8 @@ object KeyBackupRules {
     /** Play services status codes that mean this phone has no Block Store (not a passing failure). */
     fun noService(statusCode: Int): Boolean = statusCode in NO_SERVICE_CODES
 
-    // CommonStatusCodes.API_NOT_CONNECTED, ConnectionResult.SERVICE_MISSING / SERVICE_INVALID.
-    private val NO_SERVICE_CODES = setOf(17, 1, 9)
+    // CommonStatusCodes.API_NOT_CONNECTED, ConnectionResult.SERVICE_MISSING,
+    // SERVICE_VERSION_UPDATE_REQUIRED, SERVICE_DISABLED, SERVICE_INVALID, API_UNAVAILABLE and
+    // SERVICE_UPDATING: Block Store cannot answer on this phone, so "try again" would never end.
+    private val NO_SERVICE_CODES = setOf(17, 1, 2, 3, 9, 16, 18)
 }
