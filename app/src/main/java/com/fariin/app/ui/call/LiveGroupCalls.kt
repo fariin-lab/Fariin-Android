@@ -1,5 +1,6 @@
 package com.fariin.app.ui.call
 
+import androidx.lifecycle.repeatOnLifecycle
 import com.fariin.app.ui.components.cachedVector
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -100,16 +101,20 @@ object LiveGroupCalls {
     @Composable
     fun rememberPeople(cid: String, fallback: List<String>): List<String> {
         var people by remember(cid) { mutableStateOf(lastPeek[cid] ?: emptyList()) }
-        LaunchedEffect(cid) {
+        // J-151: only while the screen is in front; in background nobody looks, so nothing is asked.
+        val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+        LaunchedEffect(cid, owner) {
             val fn = FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION).getHttpsCallable("groupCallPeek")
-            while (true) {
-                try {
-                    val list = ((fn.call(mapOf("cid" to cid)).await().data as? Map<*, *>)?.get("people") as? List<*>).orEmpty()
-                    val uids = list.mapNotNull { (it as? Map<*, *>)?.get("uid") as? String }
-                    lastPeek[cid] = uids
-                    people = uids
-                } catch (_: Exception) {}
-                delay(15_000)
+            owner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+                while (true) {
+                    try {
+                        val list = ((fn.call(mapOf("cid" to cid)).await().data as? Map<*, *>)?.get("people") as? List<*>).orEmpty()
+                        val uids = list.mapNotNull { (it as? Map<*, *>)?.get("uid") as? String }
+                        lastPeek[cid] = uids
+                        people = uids
+                    } catch (_: Exception) {}
+                    delay(15_000)
+                }
             }
         }
         return people.ifEmpty { fallback }
