@@ -156,7 +156,8 @@ class StickerGifRulesTest {
         assertEquals(other, c.callerUid)
         assertTrue(c.callVideo)
         assertEquals(listOf(other), c.callJoinedUids)
-        val l = Message.fromFirestore("l", mapOf("type" to "text", "authorId" to other, "text" to "hi",
+        // F-27: a card shows only for a site the text itself links to.
+        val l = Message.fromFirestore("l", mapOf("type" to "text", "authorId" to other, "text" to "hi https://fariin.com",
             "linkPreview" to mapOf("url" to "https://fariin.com", "title" to "Fariin", "desc" to "d")), "groupcid", 1.0, noOpen)
         assertEquals("Fariin", l.linkPreview?.title)
         assertEquals("fariin.com", l.linkPreview?.host)
