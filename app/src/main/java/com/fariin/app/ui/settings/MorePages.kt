@@ -344,12 +344,14 @@ private fun DeviceInfoSheet(d: DeviceRow, thisDevice: Boolean, now: Long, onDism
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
             Text(SettingsRules.deviceLine(thisDevice, d.lastSeen, now, ""), fontSize = 17.sp, color = c.secondary,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+            // K-137: the phone's own 12 or 24-hour choice, as every other time in the app.
+            val h24 = android.text.format.DateFormat.is24HourFormat(androidx.compose.ui.platform.LocalContext.current)
             val rows = listOfNotNull(
                 "Model" to d.model,
                 d.os.takeIf { it.isNotEmpty() }?.let { "System" to it },
                 d.app.takeIf { it.isNotEmpty() }?.let { "Fariin" to it },
                 d.location.takeIf { it.isNotEmpty() }?.let { "Location" to it },
-                d.created?.takeIf { it > 0 }?.let { "Signed in" to java.text.SimpleDateFormat("MMM d, yyyy 'at' h:mm a", java.util.Locale.US).format(java.util.Date(it)) },
+                d.created?.takeIf { it > 0 }?.let { "Signed in" to java.text.SimpleDateFormat(if (h24) "MMM d, yyyy 'at' HH:mm" else "MMM d, yyyy 'at' h:mm a", java.util.Locale.US).format(java.util.Date(it)) },
             )
             Column(Modifier.fillMaxWidth().padding(top = 24.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(26.dp)).background(c.card)) {
                 rows.forEachIndexed { i, (k, v) ->
