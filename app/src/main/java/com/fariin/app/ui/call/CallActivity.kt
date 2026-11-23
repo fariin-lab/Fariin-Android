@@ -120,15 +120,33 @@ class CallActivity : ComponentActivity() {
 
         /** A call link (its key in the text form): the pre-join screen (iOS CallLobbyView), then the call. */
         fun startLobby(c: Context, key: String, video: Boolean) {
+            if (refuseOverOneToOne()) return
             c.startActivity(Intent(c, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 .putExtra(EXTRA_LOBBY, key).putExtra(EXTRA_VIDEO, video))
         }
 
         /** A call link (its key in the text form): straight in, no lobby. */
         fun startLink(c: Context, key: String, video: Boolean) {
+            if (refuseOverOneToOne()) return
             c.startActivity(Intent(c, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 .putExtra(EXTRA_LINK, key).putExtra(EXTRA_VIDEO, video))
         }
+
+        /**
+         * K-54: a link opened during a 1:1 call never takes over its screen (iOS refuses with the
+         * busy notice); the 1:1 call goes on.
+         */
+        private fun refuseOverOneToOne(): Boolean {
+            if (!com.fariin.app.call.CallManager.ui.value.status.live) return false
+            com.fariin.app.call.CallPrivacyIndex.notice.value = com.fariin.app.call.CallPrivacyIndex.Notice("Can't Call", "You're already in a call.")
+            return true
+        }
+
+        private const val STATE_GROUP = "state.group"
+        private const val STATE_RING = "state.ring"
+        private const val STATE_LOBBY = "state.lobby"
+        private const val STATE_LOBBY_VIDEO = "state.lobbyVideo"
+        private const val STATE_LOBBY_JOINED = "state.lobbyJoined"
 
         fun startRing(c: Context) {
             c.startActivity(Intent(c, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
@@ -207,6 +225,15 @@ class CallActivity : ComponentActivity() {
         demoCam = f.createVideoTrack("demo-video", src)
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(STATE_GROUP, groupMode)
+        outState.putBoolean(STATE_RING, ringMode)
+        lobbyKey?.let { outState.putString(STATE_LOBBY, it) }
+        outState.putBoolean(STATE_LOBBY_VIDEO, lobbyVideo)
+        outState.putBoolean(STATE_LOBBY_JOINED, lobbyJoined)
+    }
+
     override fun onDestroy() {
         demoCam?.let { try { demoCapturer?.stopCapture() } catch (_: InterruptedException) {}; demoCapturer?.dispose(); demoHelper?.dispose() }
         demoCam = null
@@ -219,6 +246,13 @@ class CallActivity : ComponentActivity() {
         val need = buildList {
             if (!granted(Manifest.permission.RECORD_AUDIO)) add(Manifest.permission.RECORD_AUDIO)
             if (video && !granted(Manifest.permission.CAMERA)) add(Manifest.permission.CAMERA)
+            // L-50: group and link calls pick a Bluetooth headset through the room's audio switch,
+            // which needs Nearby devices on Android 12+. Asked once; a no never stops the call.
+            if ((groupMode || ringMode) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                !granted(Manifest.permission.BLUETOOTH_CONNECT)) {
+                val p = getSharedPreferences("fariin_call_asks", MODE_PRIVATE)
+                if (!p.getBoolean("bt", false)) { p.edit().putBoolean("bt", true).apply(); add(Manifest.permission.BLUETOOTH_CONNECT) }
+            }
         }
         if (need.isEmpty()) { then(); return }
         pending = then; denied = otherwise
@@ -249,6 +283,14 @@ class CallActivity : ComponentActivity() {
         // A screen the system re-created (process restore, a configuration change) gets its first
         // intent back: it must never dial or join again (iOS 2026-11-08: one phone placed 14 calls).
         restored = savedInstanceState != null
+        // K-61: a screen the system rebuilt comes back as the same screen (group call, ring, lobby).
+        savedInstanceState?.let { b ->
+            groupMode = b.getBoolean(STATE_GROUP) || GroupCall.ui.value.cid != null && !CallManager.ui.value.status.live
+            ringMode = b.getBoolean(STATE_RING) && GroupRing.invite.value != null
+            lobbyKey = b.getString(STATE_LOBBY)
+            lobbyVideo = b.getBoolean(STATE_LOBBY_VIDEO, true)
+            lobbyJoined = b.getBoolean(STATE_LOBBY_JOINED)
+        }
         handle(intent)
         // A 1:1 call's window rect follows the screen's size (set once laid out, again after a turn).
         window.decorView.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, orr, ob ->
@@ -260,7 +302,12 @@ class CallActivity : ComponentActivity() {
                     val inv by GroupRing.invite.collectAsState()
                     val i = inv
                     // The ring ended (timed out, the call ended, answered on another phone): the screen goes.
-                    LaunchedEffect(i == null) { if (i == null && ringMode) finish() }
+                    // H-114: a 1:1 ring took over (it stopped this ring): the 1:1 screen, not a close.
+                    LaunchedEffect(i == null) {
+                        if (i == null && ringMode) {
+                            if (CallManager.ui.value.status.live) { ringMode = false; groupMode = false } else finish()
+                        }
+                    }
                     // System back closes the screen; the ring goes on in its notification until the minute is over.
                     androidx.activity.compose.BackHandler { finish() }
                     if (i != null) IncomingGroupCallScreen(i, onIgnore = { GroupRing.decline(); finish() }, onJoin = { muted -> acceptRing(muted) })
@@ -269,6 +316,9 @@ class CallActivity : ComponentActivity() {
                     androidx.activity.compose.BackHandler(enabled = !inPip) { if (GroupCall.ui.value.cid != null) minimizeGroup() else finish() }
                     val live by GroupCall.ui.collectAsState()
                     val g = demoGroup ?: live
+                    // K-25: Home with my camera or screen on goes into the floating window (Android 12+ by itself).
+                    val groupPip = g.joined && (g.cameraOn || g.sharing)
+                    LaunchedEffect(groupPip) { updateGroupPip(groupPip) }
                     LaunchedEffect(g.joined) { if (g.joined) lobbyJoined = true }
                     val inLobby = lobbyKey != null && !lobbyJoined
                     // A call that ended, failed or refused: with a notice, an alert and OK closes the screen
@@ -464,8 +514,22 @@ class CallActivity : ComponentActivity() {
         moveTaskToBack(true)
     }
 
+    /** K-25: a group call's window wish (9:16), auto-entered on Home while my camera or screen is on. */
+    private fun updateGroupPip(wanted: Boolean) {
+        if (!pipAllowed()) return
+        val b = PictureInPictureParams.Builder().setAspectRatio(Rational(9, 16))
+        pipSource(9f / 16f)?.let { b.setSourceRectHint(it) }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) b.setAutoEnterEnabled(wanted).setSeamlessResizeEnabled(true)
+        try { setPictureInPictureParams(b.build()) } catch (_: Exception) {}
+    }
+
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
+        if (groupMode && !ringMode && lobbyKey.let { it == null || lobbyJoined } && pipAllowed() && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            val g = GroupCall.ui.value
+            if (g.joined && (g.cameraOn || g.sharing)) minimizeGroup()
+            return
+        }
         if (groupMode || !pipAllowed() || Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) return
         val u = CallManager.ui.value
         if (CallRouting.pipWanted(u.status.phase, u.cameraOn, u.remoteCameraOn)) {
@@ -517,7 +581,11 @@ class CallActivity : ComponentActivity() {
             GroupRing.ACTION_ACCEPT -> { i.action = null; if (GroupRing.invite.value != null) { ringMode = true; acceptRing(false) } else finish(); return }
             CallNotifications.ACTION_ACCEPT -> withMic(CallManager.ui.value.status.video, { CallManager.accept() }, { CallManager.micDenied() })
             CallNotifications.ACTION_DECLINE -> { CallManager.decline(); finish() }
-            CallNotifications.ACTION_HANGUP -> CallManager.hangUp()
+            CallNotifications.ACTION_HANGUP -> {
+                // H-112: the group call's notification Hang Up leaves the group call.
+                if (!CallManager.ui.value.status.live && GroupCall.ui.value.cid != null) { i.action = null; GroupCall.leave(); finish(); return }
+                CallManager.hangUp()
+            }
         }
         i.action = null
         i.getStringExtra(EXTRA_LOBBY)?.let { text ->
@@ -559,7 +627,13 @@ class CallActivity : ComponentActivity() {
             withMic(video, { GroupCall.join(this, cid, title, video, requireLive = !start) }, { finish() })
             return
         }
-        val uid = i.getStringExtra(EXTRA_UID) ?: return
+        val uid = i.getStringExtra(EXTRA_UID) ?: run {
+            // H-114: a 1:1 ring or call opened this screen over a group ring or a lobby: the 1:1 screen.
+            if (CallManager.ui.value.status.live && GroupCall.ui.value.cid == null && (ringMode || groupMode)) {
+                ringMode = false; groupMode = false; lobbyKey = null; lobbyJoined = false
+            }
+            return
+        }
         i.removeExtra(EXTRA_UID)
         val video = i.getBooleanExtra(EXTRA_VIDEO, false)
         val name = i.getStringExtra(EXTRA_NAME) ?: ""

@@ -18,6 +18,9 @@
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- A Bluetooth headset in group and link calls (the room's audio switch) on Android 12 and later. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
     <!-- Live location (location/LiveShareService.kt): started from the app in front, no background permission. -->
@@ -441,7 +444,7 @@
             android:taskAffinity="com.fariin.app.call"
             android:supportsPictureInPicture="true"
             android:resizeableActivity="true"
-            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|uiMode|density|fontScale|keyboard|keyboardHidden|navigation"
             android:theme="@style/Theme.Fariin" />
         <!-- Voice note controls on the lock screen, the shade and headsets. Not exported: only the
              system (through the platform session) and the app itself control it. -->
