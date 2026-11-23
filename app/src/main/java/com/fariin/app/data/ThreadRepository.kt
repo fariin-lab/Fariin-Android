@@ -2306,6 +2306,16 @@ class ThreadRepository(
         val ok = e.items.size >= 2 && e.items.all { t -> File(t.path).length() > 0 && (t.clip == null || File(t.clip).length() > 0) }
         if (!ok) { com.fariin.app.local.PhotoOutbox.remove(me, e.clientId); return }
         val ref = if (e.replyId != null && e.replyAuthor != null) Message.ReplyRef(e.replyId, e.replyAuthor, e.replyText ?: "") else null
+        // H-58: this album's last replay took the app down (out of memory): it is not replayed again.
+        if (AlbumReplayMark.crashedBefore(e.clientId)) {
+            com.fariin.app.local.PhotoOutbox.remove(me, e.clientId)
+            AlbumReplayMark.clear(e.clientId)
+            failedMedia.add(e.clientId)
+            pending[e.clientId] = Message(id = e.clientId, authorId = me, text = e.caption, type = "album", createdAtMillis = e.ts,
+                hasServerTime = false, clientTs = e.ts, clientId = e.clientId, sendState = Message.SendState.FAILED, replyTo = ref)
+            rebuild()
+            return
+        }
         pending[e.clientId] = Message(
             id = e.clientId, authorId = me, text = e.caption, type = "album", createdAtMillis = e.ts, hasServerTime = false,
             clientTs = e.ts, clientId = e.clientId, sendState = Message.SendState.SENDING, replyTo = ref,
@@ -2322,14 +2332,27 @@ class ThreadRepository(
                 !q.get(Source.CACHE).await().isEmpty || !q.get(Source.SERVER).await().isEmpty
             } catch (_: Exception) { false }
             if (!landed) {
-                val parts = e.items.map { t ->
-                    val pic = PhotoPrep(File(t.path).readBytes(), t.width, t.height, t.blurhash, t.thumb)
-                    if (t.clip != null) MediaSender.AlbumPart.Video(com.fariin.app.media.VideoPrep.describe(File(t.clip), pic.jpeg) ?: error("clip not readable"))
-                    else MediaSender.AlbumPart.Photo(pic)
+                AlbumReplayMark.set(e.clientId)
+                try {
+                    val parts = e.items.map { t ->
+                        val pic = PhotoPrep(File(t.path).readBytes(), t.width, t.height, t.blurhash, t.thumb)
+                        if (t.clip != null) MediaSender.AlbumPart.Video(com.fariin.app.media.VideoPrep.describe(File(t.clip), pic.jpeg) ?: error("clip not readable"))
+                        else MediaSender.AlbumPart.Photo(pic)
+                    }
+                    // Read into memory: the risky part is over (a kill during the upload still resumes).
+                    AlbumReplayMark.clear(e.clientId)
+                    val work: suspend () -> Unit = { sender.album(parts, e.caption, false, e.clientId, e.ts, reply = ref); com.fariin.app.local.PhotoOutbox.remove(me, e.clientId) }
+                    retryMedia[e.clientId] = work
+                    work()
+                } catch (oom: OutOfMemoryError) {
+                    // H-58: too big for this phone: never replayed again, it ends failed (Delete).
+                    com.fariin.app.local.PhotoOutbox.remove(me, e.clientId)
+                    retryMedia.remove(e.clientId)
+                    failedMedia.add(e.clientId)
+                    throw IllegalStateException("album replay out of memory")
+                } finally {
+                    AlbumReplayMark.clear(e.clientId)
                 }
-                val work: suspend () -> Unit = { sender.album(parts, e.caption, false, e.clientId, e.ts, reply = ref); com.fariin.app.local.PhotoOutbox.remove(me, e.clientId) }
-                retryMedia[e.clientId] = work
-                work()
             }
             com.fariin.app.local.PhotoOutbox.remove(me, e.clientId)
         }
@@ -3421,6 +3444,16 @@ class ThreadRepository(
 
 /** Sends that must outlive the chat screen (media uploads and their attach): the app's lifetime. */
 internal val SendScope: CoroutineScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+
+/** H-58: an album replay in progress, kept on disk, so one that took the app down is not replayed again. */
+internal object AlbumReplayMark {
+    private fun prefs() = runCatching {
+        com.google.firebase.FirebaseApp.getInstance().applicationContext.getSharedPreferences("album_replay", android.content.Context.MODE_PRIVATE)
+    }.getOrNull()
+    fun set(clientId: String) { prefs()?.edit()?.putBoolean(clientId, true)?.commit() }
+    fun clear(clientId: String) { prefs()?.edit()?.remove(clientId)?.apply() }
+    fun crashedBefore(clientId: String): Boolean = prefs()?.getBoolean(clientId, false) == true
+}
 
 /** The keys notice's place and words per chat, so a chat opens with it already drawn (see the seed above). */
 internal object KeysNoticeMemo {
