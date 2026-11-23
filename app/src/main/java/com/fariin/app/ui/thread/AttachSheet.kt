@@ -224,7 +224,9 @@ internal fun AttachSheet(
     }
     // Camera: the phone's own camera app (iOS UIImagePickerController .camera); the photo joins the
     // chosen ones, so caption, editor and Send work as for a picked photo.
-    var shotUri by remember { mutableStateOf<Uri?>(null) }
+    // Saved across a process kill (L-18): the camera app may outlive Fariin on a low-memory phone,
+    // and the photo it took must still join the pick when the sheet comes back.
+    var shotUri by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<Uri?>(null) }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val u = shotUri
         if (ok && u != null && picked.size < MediaRules.MEDIA_PER_PICK) {
