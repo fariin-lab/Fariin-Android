@@ -55,6 +55,25 @@ object StoryVideoCut {
     suspend fun cut(context: Context, uri: Uri, out: File, range: LongRange): Boolean =
         edit(context, uri, out, Edit(range, mute = false, crop = null, canvasW = 0, canvasH = 0, overlay = null))
 
+    /**
+     * H-105: whether the picked clip is already an MP4-family file (an `ftyp` box at byte 4: MP4,
+     * MOV, 3GP), which an iPhone plays as posted. WebM, MKV and the rest are not, and must go through
+     * [toMp4] before they are posted as a story's mp4.
+     */
+    fun isMp4Family(context: Context, uri: Uri): Boolean = runCatching {
+        val b = ByteArray(8)
+        val n = context.contentResolver.openInputStream(uri)?.use { s ->
+            var at = 0
+            while (at < 8) { val r = s.read(b, at, 8 - at); if (r < 0) break; at += r }
+            at
+        } ?: 0
+        n == 8 && b[4] == 'f'.code.toByte() && b[5] == 't'.code.toByte() && b[6] == 'y'.code.toByte() && b[7] == 'p'.code.toByte()
+    }.getOrDefault(false)
+
+    /** H-105: the whole clip made again as H.264 MP4 (sized like [cut]); false when it cannot be. */
+    suspend fun toMp4(context: Context, uri: Uri, out: File): Boolean =
+        edit(context, uri, out, Edit(null, mute = false, crop = null, canvasW = 0, canvasH = 0, overlay = null))
+
     /** The clip's upright width and height (rotation applied); 0 x 0 when it cannot be read. */
     private fun sourceSize(context: Context, uri: Uri): Pair<Int, Int> {
         val r = android.media.MediaMetadataRetriever()
