@@ -174,10 +174,13 @@ object NotificationPoster {
 
         // The conversation shortcut (needed for Android's Conversations section, the share sheet
         // and bubbles; system/ChatShortcuts). A group's face is the group photo; a 1:1's is the person.
-        val shortcut = ChatShortcuts.build(c, spec.key, spec.title, spec.isGroup, spec.senderUid,
-            if (spec.isGroup) groupPhoto else senderPhoto, person = if (spec.isGroup) null else sender)
-        try { ShortcutManagerCompat.pushDynamicShortcut(c, shortcut) } catch (_: Exception) {}
-        b.setShortcutId(spec.key)
+        // None while App Lock is on: a shortcut shows the chat's name and face in every share sheet.
+        if (com.fariin.app.security.EntryRules.chatShortcuts(AppLock.enabled(c))) {
+            val shortcut = ChatShortcuts.build(c, spec.key, spec.title, spec.isGroup, spec.senderUid,
+                if (spec.isGroup) groupPhoto else senderPhoto, person = if (spec.isGroup) null else sender)
+            try { ShortcutManagerCompat.pushDynamicShortcut(c, shortcut) } catch (_: Exception) {}
+            b.setShortcutId(spec.key)
+        }
         if (spec.isGroup) b.setLargeIcon(circle(groupPhoto, group = true, squircle = channelChat))
         if (spec.opensChat) {
             val locked = AppLock.enabled(c)

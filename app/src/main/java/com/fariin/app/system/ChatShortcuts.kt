@@ -35,9 +35,12 @@ object ChatShortcuts {
     const val SHARE_CATEGORY = "com.fariin.app.category.SHARE_TARGET"
     /** How many recent chats are published (the launcher shows the first few, the share sheet more). */
     const val MAX_PUBLISHED = 8
+    private const val LOCKED = "#applock"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     @Volatile private var lastSignature: String? = null
+    /** The last list asked for, so App Lock turned off can publish it again at once. */
+    @Volatile private var lastInput: Triple<String, List<Conversation>, List<Conversation>>? = null
 
     /** A chat as the shortcuts need it: pure data, so the choice of chats is testable. */
     data class Entry(
@@ -84,6 +87,13 @@ object ChatShortcuts {
     fun publish(c: Context, me: String, convs: List<Conversation>, all: List<Conversation> = convs) {
         val app = c.applicationContext
         if (com.fariin.app.Fb.auth.currentUser?.uid != me) return   // signing out: the old list must not come back
+        lastInput = Triple(me, convs, all)
+        // App Lock on: no chat names or faces on the launcher or in any share sheet. Cleared once per
+        // run too, for shortcuts an older version left while App Lock was already on.
+        if (!com.fariin.app.security.EntryRules.chatShortcuts(com.fariin.app.security.AppLock.enabled(app))) {
+            if (lastSignature != LOCKED) { clear(app); lastSignature = LOCKED }
+            return
+        }
         val list = choose(convs, me)
         val drop = dropped(all, me)
         val sig = "$me#" + signature(list) + "#" + drop.sorted().joinToString(",")
@@ -139,6 +149,13 @@ object ChatShortcuts {
 
     /** The chat a shortcut id names, for the share sheet's Direct Share target. */
     fun titleOf(c: Context, cid: String): String? = NotifStore.chat(c, cid)?.name
+
+    /** App Lock switched: on clears every chat shortcut, off publishes the last list again. */
+    fun appLockSwitched(c: Context, on: Boolean) {
+        if (on) { clear(c); return }
+        val (me, convs, all) = lastInput ?: return
+        publish(c, me, convs, all)
+    }
 
     /** Sign-out: no chat of the old account stays on the launcher or in the share sheet. */
     fun clear(c: Context) {

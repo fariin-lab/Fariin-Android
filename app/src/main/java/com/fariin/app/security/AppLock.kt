@@ -58,6 +58,7 @@ object AppLock {
         prefs(c).edit().putBoolean(ENABLED, on).apply()
         if (on) unlocked = true     // turned on just now, by the person holding the phone
         reapply()
+        com.fariin.app.system.ChatShortcuts.appLockSwitched(c, on)
     }
     fun setDelay(c: Context, s: Int) = prefs(c).edit().putInt(DELAY, s).apply()
     fun setScreenSecurity(c: Context, on: Boolean) { prefs(c).edit().putBoolean(SCREEN, on).apply(); reapply() }
