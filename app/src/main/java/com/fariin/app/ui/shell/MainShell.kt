@@ -244,15 +244,15 @@ fun MainShell(
     var storyRequest by rememberSaveable { mutableIntStateOf(0) }
     // The launcher's New Story shortcut (system/SystemRouter): the same as the camera button.
     val launcherStory by com.fariin.app.system.SystemRouter.storyRequests.collectAsState()
-    var launcherSeen by rememberSaveable { mutableIntStateOf(0) }
-    LaunchedEffect(launcherStory) { if (launcherStory > launcherSeen) { launcherSeen = launcherStory; storyRequest++; tab = TAB_STORIES } }
+    // The seen counts live as long as the process, as the router's counters do (K-130): saved with
+    // the page they outlived a process kill and swallowed new taps; started at 0 they replayed an old
+    // tap after Log Out and Log In. A count that went back to 0 (SystemRouter.reset) only resets.
+    LaunchedEffect(launcherStory) { if (launcherStory != RouterSeen.story) { RouterSeen.story = launcherStory; if (launcherStory > 0) { storyRequest++; tab = TAB_STORIES } } }
     // A story notification tapped: the Stories tab, without the picker.
     val storiesAsk by com.fariin.app.system.SystemRouter.storiesTabRequests.collectAsState()
-    var storiesSeen by rememberSaveable { mutableIntStateOf(0) }
-    LaunchedEffect(storiesAsk) { if (storiesAsk > storiesSeen) { storiesSeen = storiesAsk; tab = TAB_STORIES } }
+    LaunchedEffect(storiesAsk) { if (storiesAsk != RouterSeen.stories) { RouterSeen.stories = storiesAsk; if (storiesAsk > 0) tab = TAB_STORIES } }
     val settingsAsk by com.fariin.app.system.SystemRouter.settingsTabRequests.collectAsState()
-    var settingsSeen by rememberSaveable { mutableIntStateOf(0) }
-    LaunchedEffect(settingsAsk) { if (settingsAsk > settingsSeen) { settingsSeen = settingsAsk; tab = TAB_SETTINGS } }
+    LaunchedEffect(settingsAsk) { if (settingsAsk != RouterSeen.settings) { RouterSeen.settings = settingsAsk; if (settingsAsk > 0) tab = TAB_SETTINGS } }
     // One count per tab: the tabs stay alive behind each other, and a second tap on Settings must
     // not scroll the hidden chat list to the top (one shared count did).
     var reselect by rememberSaveable { mutableStateOf(listOf(0, 0, 0, 0)) }
@@ -619,3 +619,10 @@ private const val CALLS_FIRST_LOAD_DELAY_MS = 1_500L
 // More solid, still glass (owner 2026-11-11, his Pixel photo: the rows read through the tab bar).
 private const val TAB_FROST_LIGHT = 0.66f
 private const val TAB_FROST_DARK = 0.70f
+
+/** The router counts the shell has acted on, for this process (K-130). */
+private object RouterSeen {
+    var story = 0
+    var stories = 0
+    var settings = 0
+}
