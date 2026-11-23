@@ -182,7 +182,7 @@ object Forwarder {
     }
 
     private suspend fun open(context: Context, src: ChatMedia, m: Message): Payload {
-        val dir = File(context.cacheDir, "outgoing").also { it.mkdirs() }
+        val dir = ChatMedia.outgoingDir(context)
         suspend fun bytes(url: String?, enc: com.fariin.app.crypto.EncMeta?): ByteArray =
             // The message's own file only: an alias copy (MediaOrigin) is never forward input.
             url?.let { src.bytes(it, enc, own = true) } ?: throw SourceUnavailable()

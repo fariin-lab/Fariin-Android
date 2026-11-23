@@ -76,9 +76,20 @@ class VoiceRecorder(private val context: Context) {
             .setAudioAttributes(android.media.AudioAttributes.Builder()
                 .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
                 .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH).build())
-            .setOnAudioFocusChangeListener { }
+            .setOnAudioFocusChangeListener { change ->
+                // A phone call or another app took the sound (L-17): the mic would only record
+                // silence from here, so the chat pauses the take to its review bar.
+                if ((change == android.media.AudioManager.AUDIOFOCUS_LOSS ||
+                        change == android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) && wanted && !paused) {
+                    _interrupted.tryEmit(Unit)
+                }
+            }
             .build()
     }
+
+    private val _interrupted = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    /** The take should pause now (focus lost to a call or another app). The chat collects it. */
+    val interrupted: kotlinx.coroutines.flow.SharedFlow<Unit> = _interrupted
     private fun duck(on: Boolean) {
         val am = context.getSystemService(android.media.AudioManager::class.java) ?: return
         runCatching { if (on) am.requestAudioFocus(duckFocus) else am.abandonAudioFocusRequest(duckFocus) }
@@ -105,7 +116,8 @@ class VoiceRecorder(private val context: Context) {
     }
 
     private fun openRecorder() {
-        val f = File(context.cacheDir, "voice-${System.currentTimeMillis()}.m4a")
+        // Not in the cache: Clear Cache must not take a note still waiting to send (K-45).
+        val f = File(outDir(), "voice-${System.currentTimeMillis()}.m4a")
         val r = if (android.os.Build.VERSION.SDK_INT >= 31) MediaRecorder(context) else @Suppress("DEPRECATION") MediaRecorder()
         try {
             r.setAudioSource(MediaRecorder.AudioSource.MIC)
@@ -157,8 +169,10 @@ class VoiceRecorder(private val context: Context) {
     private fun joinParts(): File? = when (parts.size) {
         0 -> null
         1 -> parts[0]
-        else -> File(context.cacheDir, "voice-${System.currentTimeMillis()}-joined.m4a").takeIf { stitch(parts, it) }
+        else -> File(outDir(), "voice-${System.currentTimeMillis()}-joined.m4a").takeIf { stitch(parts, it) }
     }
+
+    private fun outDir(): File = ChatMedia.outgoingDir(context)
 
     /** Audio thread: drop the joined review copy unless it is one of the stretches itself. */
     private fun dropJoined() {

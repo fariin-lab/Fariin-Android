@@ -36,7 +36,7 @@ class ChatMedia(
     private fun dirMade(): File = dir.also { it.mkdirs() }
 
     /** Where my own outgoing files wait (cleared with the cache, as iOS's temp folder is). */
-    fun localDir(): File = File(context.cacheDir, "outgoing").also { it.mkdirs() }
+    fun localDir(): File = outgoingDir(context)
 
     fun cached(url: String): File? = if (isLocal(url)) null else showable(url)
         // Used = young again, so the size cap (trim) drops the files nobody looked at for longest.
@@ -293,6 +293,7 @@ class ChatMedia(
         fun wipe(context: Context) {
             File(context.cacheDir, "chat-media").deleteRecursively()
             File(context.cacheDir, "outgoing").deleteRecursively()
+            File(context.noBackupFilesDir, "outgoing").deleteRecursively()
             VideoStream.wipe(context)
         }
 
@@ -301,6 +302,12 @@ class ChatMedia(
 
         /** True while [url] is coming down here (a bubble back on screen picks the same one up). */
         fun isFetching(url: String): Boolean = inflight.containsKey(url)
+
+        /**
+         * Sends still waiting for the server (K-45): outside the cache, so the system's Clear cache
+         * and low storage never take them; not backed up. Older sends may still sit in cacheDir/outgoing.
+         */
+        fun outgoingDir(context: Context): File = File(context.noBackupFilesDir, "outgoing").also { it.mkdirs() }
 
         fun isLocal(url: String) = url.startsWith(ASSET) || url.startsWith("/")
         /**
