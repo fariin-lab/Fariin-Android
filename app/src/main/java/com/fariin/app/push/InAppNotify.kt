@@ -30,7 +30,9 @@ sealed class InAppRoute {
     /** The system notification, as before: the app is behind, or the push is not a chat message. */
     data object System : InAppRoute()
     /** In front, a chat message: no system notification; each of these on its own switch. */
-    data class InApp(val banner: InAppBanner?, val sound: Boolean, val vibrate: Boolean) : InAppRoute()
+    data class InApp(val banner: InAppBanner?, val sound: Boolean, val vibrate: Boolean,
+                     /** The chat whose own tone plays, with or without a banner (K-121). */
+                     val toneCid: String? = banner?.cid) : InAppRoute()
 }
 
 /**
@@ -51,11 +53,13 @@ object InAppRules {
         locked: Boolean,
         prefs: InAppPrefs,
         localPhoto: String? = null,
+        /** My screen is shared in a call (K-23): no banner over it. */
+        sharing: Boolean = false,
     ): InAppRoute {
         val s = (decision as? NotifDecision.Show)?.spec ?: return InAppRoute.Nothing
         if (!inFront) return InAppRoute.System
         if (!s.opensChat || s.channel != NotifChannel.MESSAGES) return InAppRoute.System
-        val banner = if (!prefs.preview || locked) null else if (s.key == com.fariin.app.data.OfficialChannel.CID) {
+        val banner = if (!prefs.preview || locked || sharing) null else if (s.key == com.fariin.app.data.OfficialChannel.CID) {
             // Fariin's own messages ("New login") speak as Fariin with its mark, the title in front
             // of the words (iOS InAppBannerCenter.show). The host draws the mark for this cid.
             val head = s.title.trim()
@@ -65,8 +69,16 @@ object InAppRules {
             val photo = if (s.plain) localPhoto else if (s.isGroup) s.groupPhoto ?: localPhoto else s.senderPhoto ?: localPhoto
             InAppBanner(s.key, s.title.ifBlank { "New message" }, s.body, photo)
         }
-        return InAppRoute.InApp(banner, prefs.sound, prefs.vibrate)
+        return InAppRoute.InApp(banner, prefs.sound, prefs.vibrate, toneCid = s.key)
     }
+}
+
+/** My screen is shared in a 1:1 or group call right now (K-23), on every Android version. */
+object ScreenShareLive {
+    fun on(): Boolean = try {
+        com.fariin.app.call.CallManager.ui.value.sharing ||
+            com.fariin.app.call.GroupCall.ui.value.let { it.sharing || it.sharePending }
+    } catch (_: Throwable) { false }
 }
 
 /**
@@ -95,7 +107,7 @@ object InAppNotify {
     fun present(c: Context, r: InAppRoute.InApp) {
         r.banner?.let { b -> scope.launch { banner.value = b; armHide() } }
         if (r.vibrate) buzz.tryEmit(Unit)
-        if (r.sound) playTone(c, r.banner?.cid)
+        if (r.sound) playTone(c, r.toneCid)
     }
 
     fun dismiss() { scope.launch { hideJob?.cancel(); hideJob = null; banner.value = null } }

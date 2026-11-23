@@ -31,6 +31,8 @@ data class PushData(
     val body: String,
     /** A channel post (server channelFanout: data `channel: "1"`, `aid` = the channel itself). */
     val isChannel: Boolean = false,
+    /** A message request from somebody I have not answered (server `req: "1"`, K-100): no Reply. */
+    val isRequest: Boolean = false,
 ) {
     companion object {
         fun parse(data: Map<String, String>, notifTitle: String? = null, notifBody: String? = null): PushData {
@@ -52,6 +54,7 @@ data class PushData(
                 title = notifTitle?.takeIf { it.isNotEmpty() } ?: s("t") ?: "Fariin",
                 body = notifBody?.takeIf { it.isNotEmpty() } ?: s("b") ?: "New message",
                 isChannel = data["channel"] == "1",
+                isRequest = data["req"] == "1",
             )
         }
     }
@@ -70,7 +73,9 @@ data class ChatInfo(
 
 enum class NotifChannel(val id: String, val title: String) {
     MESSAGES("messages", "Messages"),
-    CALLS("calls", "Calls"),
+    /** "calls_v2" (K-71): the first "calls" channel could ring the whole ringtone, and a channel
+     *  made again under the same id gets its old settings back. */
+    CALLS("calls_v2", "Calls"),
 }
 
 /** One notification, ready to draw. */
@@ -98,6 +103,13 @@ data class NotifSpec(
     val expiresAtMs: Long?,
     /** A channel post: drawn as the channel's, not as a person's conversation (NotificationPoster). */
     val isChannel: Boolean = false,
+    /**
+     * Not a message (a reaction, "accepted your request"; K-76): its own notification under this
+     * tag, so it never replaces the chat's lines, and it moves no widget row or app icon number.
+     */
+    val noticeTag: String? = null,
+    /** An unanswered message request (K-100): no Reply and no bubble on it. */
+    val isRequest: Boolean = false,
 )
 
 sealed class NotifDecision {
@@ -106,6 +118,16 @@ sealed class NotifDecision {
 }
 
 object NotifBuilder {
+    /** Chat pushes that are not a message (server onMessageReaction, onRequestAccepted). */
+    val NOTICE_KINDS = setOf("reaction", "requestAccepted")
+
+    /** The words left out while my screen is shared in a call (K-23): "Fariin", "New message". */
+    fun hidden(s: NotifSpec): NotifSpec = s.copy(plain = true, title = "Fariin", line = "New message", body = "New message",
+        senderName = "Fariin", groupName = null, senderPhoto = null, groupPhoto = null)
+
+    /** The tag a non-message chat push posts under (K-76); null for a real message. */
+    fun noticeTag(kind: String, key: String): String? = if (kind in NOTICE_KINDS) "$kind-$key" else null
+
     /** The server's call fallback (index.js ringFallback) says only this in its body. */
     private val CALL_BODIES = setOf("Incoming call", "Incoming video call")
 
@@ -178,6 +200,7 @@ object NotifBuilder {
                 title = p.title, line = p.body, body = p.body, plain = true,
                 senderUid = sender ?: "", senderName = p.title, isGroup = p.isGroup, groupName = null,
                 senderPhoto = null, groupPhoto = null, mid = p.mid, expiresAtMs = p.expiresAtMs,
+                noticeTag = key?.let { noticeTag(p.kind, it) }, isRequest = p.isRequest,
             ))
         }
 
@@ -218,6 +241,7 @@ object NotifBuilder {
             groupName = if (p.isGroup) groupName else null,
             senderPhoto = senderPhoto, groupPhoto = if (p.isGroup) chat?.photo else null,
             mid = p.mid, expiresAtMs = p.expiresAtMs, isChannel = p.isChannel,
+            noticeTag = noticeTag(p.kind, key), isRequest = p.isRequest,
         ))
     }
 }

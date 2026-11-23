@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -70,7 +71,14 @@ fun InAppBannerHost() {
     val banner by InAppNotify.banner.collectAsState()
     // No banner while the screen is being recorded (iOS audit M-030): it carries the opened message,
     // restricted chats included. Android tells an app this from 15 on; the buzz still comes.
-    val recording = rememberScreenRecording()
+    // Nor while my screen is shared in a call (K-23): Android 14 and older cannot tell recording,
+    // but the call knows it is sharing.
+    val callShare by androidx.compose.runtime.remember {
+        kotlinx.coroutines.flow.combine(com.fariin.app.call.CallManager.ui, com.fariin.app.call.GroupCall.ui) { a, g ->
+            a.sharing || g.sharing || g.sharePending
+        }.distinctUntilChanged()
+    }.collectAsState(false)
+    val recording = rememberScreenRecording() || callShare
     Box(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 4.dp), contentAlignment = Alignment.TopCenter) {
         AnimatedContent(
             targetState = banner.takeIf { !recording },

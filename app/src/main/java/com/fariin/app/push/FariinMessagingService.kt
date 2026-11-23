@@ -45,6 +45,13 @@ class FariinMessagingService : FirebaseMessagingService() {
         if (message.data["kind"] != "call" && (alertBody == "Incoming call" || alertBody == "Incoming video call")) {
             com.fariin.app.Fb.auth.currentUser?.uid?.let { com.fariin.app.call.IncomingCallWatcher.onCallPush(applicationContext, it) }
         }
+        // Nobody signed in (K-43: an offline Log Out could not take the token off the account): no
+        // story, reply, mention or reaction alert for the old account. A push means the network is
+        // back, so the token's delete is tried again.
+        if (com.fariin.app.Fb.auth.currentUser == null) {
+            Push.retireIfPending(applicationContext)
+            return
+        }
         // A call ROW's push (a missed call, server onNewMessage) is kind "call" too, but carries the
         // row's `mid`: it is a message notification like any other, not a ring.
         if (message.data["kind"] == "call" && message.data["mid"].isNullOrEmpty()) {
@@ -86,7 +93,26 @@ class FariinMessagingService : FirebaseMessagingService() {
         }
         if (message.data["type"] == "groupcall") {
             val cid = message.data["cid"].orEmpty()
-            android.os.Handler(android.os.Looper.getMainLooper()).post { com.fariin.app.call.GroupRing.onPush(applicationContext, cid) }
+            // Only the ring itself (data-only, kind "groupring") rings full screen (F-36). The plain
+            // "call started" notice of a group too big to ring is a normal notification.
+            if (message.data["kind"] == "groupring") {
+                android.os.Handler(android.os.Looper.getMainLooper()).post { com.fariin.app.call.GroupRing.onPush(applicationContext, cid) }
+            } else if (cid.isNotEmpty() && Push.pushOn(applicationContext)) {
+                NotificationPoster.postChatNotice(applicationContext, NotificationPoster.groupCallTag(cid),
+                    message.notification?.title ?: message.data["t"] ?: "Group call",
+                    message.notification?.body ?: message.data["b"] ?: "A call started", message.data.toMap(), call = true)
+            }
+            return
+        }
+        // "Request to join" (server onJoinRequest, L-42): its own notification, so the group's
+        // message lines stay, and the widget does not count it.
+        if (message.data["type"] == "joinrequest") {
+            val cid = message.data["cid"].orEmpty()
+            if (cid.isNotEmpty() && Push.pushOn(applicationContext)) {
+                NotificationPoster.postChatNotice(applicationContext, NotificationPoster.joinRequestTag(cid),
+                    message.notification?.title ?: message.data["t"] ?: "Request to join",
+                    message.notification?.body ?: message.data["b"] ?: "Someone asked to join", message.data.toMap(), call = false)
+            }
             return
         }
         // "Posted a new story" (server notifyStoryFollowers; no cid, so it is not a chat push). With
@@ -218,25 +244,28 @@ class FariinMessagingService : FirebaseMessagingService() {
             )
             if (decision is NotifDecision.Skip) android.util.Log.d("FariinPush", "not shown: ${decision.why}")
             // In front, a chat message is our banner, not the system's (iOS PushManager.willPresent).
+            val sharing = ScreenShareLive.on()
             val route = InAppRules.route(decision, com.fariin.app.AppLifecycle.inFront, locked = appLockShowing(c),
-                prefs = InAppNotify.prefs(c), localPhoto = p.cid?.let { NotifStore.chat(c, it)?.photo })
+                prefs = InAppNotify.prefs(c), localPhoto = p.cid?.let { NotifStore.chat(c, it)?.photo }, sharing = sharing)
             if (route is InAppRoute.InApp) {
                 InAppNotify.present(c, route)
                 val s = (decision as NotifDecision.Show).spec
-                if (s.opensChat) com.fariin.app.system.FariinWidget.notePush(c, s.key)
+                // Only a real message moves the widget row (K-76: not a reaction or an accept).
+                if (s.opensChat && s.noticeTag == null) com.fariin.app.system.FariinWidget.notePush(c, s.key)
             } else if (decision is NotifDecision.Show) {
-                val s = decision.spec
+                // While my screen is shared in a call, the shade shows no name or words (K-23).
+                val s = if (sharing) NotifBuilder.hidden(decision.spec) else decision.spec
                 val photos = if (s.plain) listOf(null, null) else kotlinx.coroutines.coroutineScope {
                     listOf(s.senderPhoto, s.groupPhoto).map { url -> async(kotlinx.coroutines.Dispatchers.IO) { url?.let { loadAvatar(c, it) } } }
                         .map { it.await() }
                 }
                 // The app icon number: the push has no count on Android, so last known + this one
                 // (a channel post's count lives in the app, as on iOS; in front the list syncs it).
-                AppBadge.notePush(c, me, s.opensChat && !s.isChannel && !com.fariin.app.AppLifecycle.inFront,
+                AppBadge.notePush(c, me, s.opensChat && !s.isChannel && s.noticeTag == null && !com.fariin.app.AppLifecycle.inFront,
                     com.fariin.app.data.AppBadgeRules.messageKey(p.cid, p.cipher))
                 NotificationPoster.post(c, s, photos[0], photos[1], me)
                 // The home screen widget: that chat moves to the top (names only, no words or counts).
-                if (s.opensChat) com.fariin.app.system.FariinWidget.notePush(c, s.key)
+                if (s.opensChat && s.noticeTag == null) com.fariin.app.system.FariinWidget.notePush(c, s.key)
             }
             ack.await()
         }

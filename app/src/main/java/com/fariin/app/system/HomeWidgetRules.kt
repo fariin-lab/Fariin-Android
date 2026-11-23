@@ -73,6 +73,10 @@ object HomeWidgetRules {
         return s.copy(rows = listOf(s.rows[i]) + s.rows.filterIndexed { j, _ -> j != i }, liveAt = 0)
     }
 
+    /** A chat deleted, left or blocked (K-31): off the widget until the list says otherwise. Null = not on it. */
+    fun drop(s: Snapshot, cid: String): Snapshot? =
+        if (s.rows.none { it.cid == cid }) null else s.copy(rows = s.rows.filter { it.cid != cid })
+
     /** A short widget (the small size) draws smaller faces and a tighter header. */
     fun compact(heightDp: Float): Boolean = heightDp < 160f
 

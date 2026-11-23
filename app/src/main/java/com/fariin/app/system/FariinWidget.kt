@@ -164,6 +164,18 @@ object FariinWidget {
         }
     }
 
+    /** A chat was deleted, left or blocked (NotificationPoster.clearChat, K-31): its row goes. */
+    fun forgetChat(c: Context, cid: String) {
+        val app = c.applicationContext
+        scope.launch {
+            if (!placed(app)) return@launch
+            val s = HomeWidgetRules.drop(load(app), cid) ?: return@launch
+            current = s
+            save(app, s)
+            redraw(app, s)
+        }
+    }
+
     /** Sign-out: nothing of this account stays on the home screen. */
     fun clear(c: Context) {
         val app = c.applicationContext

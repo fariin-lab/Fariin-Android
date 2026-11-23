@@ -59,6 +59,8 @@ object NotificationPoster {
     private const val EXTRA_EXPIRES = "fariin.expiresAt"
     /** The message a line (or a plain notification) shows, so a delete-for-everyone can take it down. */
     private const val EXTRA_MID = "fariin.mid"
+    private const val OLD_CALLS_ID = "calls"
+    private const val OLD_CALLS_GONE = "oldCallsChannelGone"
 
     fun ensureChannels(c: Context) {
         val nm = c.getSystemService(NotificationManager::class.java) ?: return
@@ -66,9 +68,12 @@ object NotificationPoster {
             .apply { description = "New messages in your chats" }
         // A short notification sound, never the ringtone: the ring is CallManager's, and a channel
         // ringtone played the whole song over an answered call (owner's Pixel 2026-11-05). A channel's
-        // sound cannot be changed once made, so an old one that rings is made again.
-        nm.getNotificationChannel(NotifChannel.CALLS.id)?.let { old ->
-            if (old.sound == RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)) nm.deleteNotificationChannel(old.id)
+        // sound cannot be changed once made, and one made again under its old id gets its old
+        // settings back (K-71), so calls moved to a new id; the old "calls" goes once.
+        val sp = c.getSharedPreferences("fariin.notif", Context.MODE_PRIVATE)
+        if (!sp.getBoolean(OLD_CALLS_GONE, false)) {
+            try { nm.deleteNotificationChannel(OLD_CALLS_ID) } catch (_: Exception) {}
+            sp.edit().putBoolean(OLD_CALLS_GONE, true).apply()
         }
         val calls = NotificationChannel(NotifChannel.CALLS.id, NotifChannel.CALLS.title, NotificationManager.IMPORTANCE_HIGH).apply {
             description = "Calls you get"
@@ -122,6 +127,13 @@ object NotificationPoster {
             b.addExtras(android.os.Bundle().apply { putLong(EXTRA_EXPIRES, at) })
         }
 
+        // A reaction or "accepted your request" (K-76): its own notification, never in place of the
+        // chat's lines.
+        spec.noticeTag?.let { tag ->
+            b.setStyle(NotificationCompat.BigTextStyle().bigText(spec.body))
+            nmc.notify(tag, ID, b.build()); AppBadge.refresh(c, me)
+            return
+        }
         if (spec.plain) {
             b.setStyle(NotificationCompat.BigTextStyle().bigText(spec.body))
             nmc.notify(spec.key, ID, b.build()); AppBadge.refresh(c, me)
@@ -171,18 +183,27 @@ object NotificationPoster {
         if (!spec.mid.isNullOrEmpty()) line.extras.putString(EXTRA_MID, spec.mid)
         style.addMessage(line)
         b.setStyle(style)
+        // K-32: an older timed line carried under this one keeps its timer. The notification goes at
+        // the earliest live stamp of all its lines, not only the newest's.
+        timeOutAtEarliest(b, style, nowMs)
 
         // The conversation shortcut (needed for Android's Conversations section, the share sheet
         // and bubbles; system/ChatShortcuts). A group's face is the group photo; a 1:1's is the person.
         // None while App Lock is on: a shortcut shows the chat's name and face in every share sheet.
-        if (com.fariin.app.security.EntryRules.chatShortcuts(AppLock.enabled(c))) {
+        // Not for an unanswered request (L-71): its shortcut would put the stranger first in the share
+        // sheet, and a share there accepts the request.
+        if (!spec.isRequest && com.fariin.app.security.EntryRules.chatShortcuts(AppLock.enabled(c))) {
             val shortcut = ChatShortcuts.build(c, spec.key, spec.title, spec.isGroup, spec.senderUid,
                 if (spec.isGroup) groupPhoto else senderPhoto, person = if (spec.isGroup) null else sender)
             try { ShortcutManagerCompat.pushDynamicShortcut(c, shortcut) } catch (_: Exception) {}
             b.setShortcutId(spec.key)
         }
         if (spec.isGroup) b.setLargeIcon(circle(groupPhoto, group = true, squircle = channelChat))
-        if (spec.opensChat) {
+        if (spec.opensChat && spec.isRequest) {
+            // An unanswered message request (K-100): a reply from here would accept the stranger
+            // without the request screen. Mark as read only; the chat opens on tap.
+            if (me.isNotEmpty()) b.addAction(NotifActions.readAction(c, spec.key, me))
+        } else if (spec.opensChat) {
             val locked = AppLock.enabled(c)
             NotifActions.addTo(b, c, spec.key, me, locked)
             bubble(c, spec.key, circle(if (spec.isGroup) groupPhoto else senderPhoto, spec.isGroup), locked)?.let { b.setBubbleMetadata(it) }
@@ -231,12 +252,35 @@ object NotificationPoster {
         n.group?.let { b.setGroup(it) }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) n.bubbleMetadata?.let { b.setBubbleMetadata(NotificationCompat.BubbleMetadata.fromPlatform(it)) }
         NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n)?.let { style ->
-            if (text != null) style.addMessage(text, System.currentTimeMillis(), null as Person?)
+            val now = System.currentTimeMillis()
+            // K-32: a line whose timer ran out is not shown again, and the rest keep their timers.
+            style.messages.removeAll { NotifExpiry.lineGone(it.extras.getLong(EXTRA_EXPIRES, 0L), now) }
+            if (text != null) style.addMessage(text, now, null as Person?)
             b.setStyle(style)
             style.messages.lastOrNull()?.text?.let { b.setContentText(it) }
+            timeOutAtEarliest(b, style, now)
         }
+        n.extras.getString(EXTRA_MID)?.let { mid -> b.addExtras(android.os.Bundle().apply { putString(EXTRA_MID, mid) }) }
         NotifActions.addTo(b, c, cid, me, AppLock.enabled(c))
         nmc.notify(cid, ID, b.build())
+    }
+
+    /** The notification goes at the earliest live timer of its lines (K-32), stamped for pruneExpired. */
+    private fun timeOutAtEarliest(b: NotificationCompat.Builder, style: NotificationCompat.MessagingStyle, nowMs: Long) {
+        val at = NotifExpiry.earliestLive(style.messages.map { it.extras.getLong(EXTRA_EXPIRES, 0L) }, nowMs) ?: return
+        b.setTimeoutAfter(at - nowMs)
+        b.addExtras(android.os.Bundle().apply { putLong(EXTRA_EXPIRES, at) })
+    }
+
+    /**
+     * H-95: when the newest line someone else wrote in the chat's notification was shown (ms), so
+     * a shade action marks read up to there and not past it. 0 = no notification up.
+     */
+    fun shownAt(c: Context, cid: String): Long {
+        val n = try { NotificationManagerCompat.from(c).activeNotifications.firstOrNull { it.tag == cid && it.id == ID }?.notification }
+            catch (_: Exception) { null } ?: return 0L
+        val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n)
+        return style?.messages?.lastOrNull { it.person != null }?.timestamp ?: n.`when`
     }
 
     /** The rules refused a reply sent from the shade: say so, a tap opens the chat. */
@@ -471,11 +515,65 @@ object NotificationPoster {
         }
     }
 
-    /** iOS Push.clear(cid): the chat was opened, its notification goes. */
+    /** iOS Push.clear(cid): the chat was opened, its notification goes (and its reaction, accept,
+     *  join-request and call notices, K-76 / L-42 / F-36). */
     fun clear(c: Context, cid: String) {
-        NotificationManagerCompat.from(c).cancel(cid, ID)
+        val nmc = NotificationManagerCompat.from(c)
+        nmc.cancel(cid, ID)
+        for (k in NotifBuilder.NOTICE_KINDS) NotifBuilder.noticeTag(k, cid)?.let { nmc.cancel(it, ID) }
+        nmc.cancel(joinRequestTag(cid), ID)
+        nmc.cancel(groupCallTag(cid), ID)
         // The last chat notification gone: the summary (and its number) goes too.
         com.fariin.app.Fb.auth.currentUser?.uid?.let { AppBadge.refresh(c, it, except = cid) }
+    }
+
+    /**
+     * K-31 / K-84: the chat was deleted, cleared, left or blocked. Its notifications (with their
+     * decrypted words and a live Reply) go, and its widget row too. Call it from every one of those
+     * paths (single and bulk). Marked read from the list (K-75) is [clearRead]: the row stays.
+     */
+    fun clearChat(c: Context, cid: String) {
+        clear(c, cid)
+        clearGroupNudge(c, cid)
+        try { com.fariin.app.system.FariinWidget.forgetChat(c, cid) } catch (_: Exception) {}
+    }
+
+    /** [clearChat] for each chat of a bulk delete, leave or block. */
+    fun clearChats(c: Context, cids: Collection<String>) { for (cid in cids) clearChat(c, cid) }
+
+    /** K-75: chats marked read from the chat list (one or many): their notifications go. */
+    fun clearRead(c: Context, cids: Collection<String>) { for (cid in cids) clear(c, cid) }
+
+    fun joinRequestTag(cid: String) = "joinrequest-$cid"
+    fun groupCallTag(cid: String) = "groupcall-$cid"
+
+    /**
+     * A chat notice that is not a message, with the app open (L-42 join requests, F-36 a call in a
+     * group too big to ring): its own tag, so the chat's lines stay; the tap carries the same keys a
+     * system-drawn one does (MainActivity routes `type`).
+     */
+    @SuppressLint("MissingPermission")
+    fun postChatNotice(c: Context, tag: String, title: String, body: String, data: Map<String, String>, call: Boolean) {
+        ensureChannels(c)
+        val nmc = NotificationManagerCompat.from(c)
+        if (!nmc.areNotificationsEnabled()) return
+        val open = Intent(c, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            data["cid"]?.let { putExtra(PushRouter.EXTRA_OPEN_CID, it) }
+            data.forEach { (k, v) -> putExtra(k, v) }
+        }
+        val tap = PendingIntent.getActivity(c, tag.hashCode(), open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val n = NotificationCompat.Builder(c, if (call) NotifChannel.CALLS.id else NotifChannel.MESSAGES.id)
+            .setSmallIcon(R.drawable.ic_stat_fariin)
+            .setColor(Color.rgb(0x1E, 0x88, 0xE5))
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setCategory(if (call) NotificationCompat.CATEGORY_CALL else NotificationCompat.CATEGORY_SOCIAL)
+            .setContentIntent(tap)
+            .setAutoCancel(true)
+            .build()
+        nmc.notify(tag, ID, n)
     }
 
     fun clearAll(c: Context) {
@@ -546,6 +644,9 @@ object NotificationPoster {
 object NotifExpiry {
     /** A line stamped [expiresAtMs] (0 = no timer) has run out. */
     fun lineGone(expiresAtMs: Long, nowMs: Long): Boolean = expiresAtMs in 1..nowMs
+
+    /** The soonest stamp still ahead among a notification's lines (0 = no timer); null = none. */
+    fun earliestLive(stamps: List<Long>, nowMs: Long): Long? = stamps.filter { it > nowMs }.minOrNull()
 
     /**
      * The chat list says the chat's newest message (written at [chatUpdatedAtMs]) is past its
