@@ -136,6 +136,17 @@ class ThreadRepository(
     private val olderRegs = ArrayList<ListenerRegistration>()
     /** The ids each older page last held, to drop a message the server deleted from that page. */
     private val olderPageIds = ArrayList<Set<String>>()
+
+    /** H-86: a listener over rows that slid out of the live window (a time span), so an edit or a
+     *  delete there still reaches the open chat. Kept oldest first, under [docsLock]. */
+    private class SlidChunk(val lo: com.google.firebase.Timestamp, val hi: com.google.firebase.Timestamp, val count: Int) {
+        var reg: ListenerRegistration? = null
+        @Volatile var ids: Set<String> = emptySet()
+    }
+    private val slidChunks = ArrayList<SlidChunk>()
+    /** Rows that slid out and no listener covers yet, by id, with their time (under [docsLock]). */
+    private val slidWaiting = HashMap<String, com.google.firebase.Timestamp>()
+    @Volatile private var slidScheduled = false
     /** Sends this phone has started, by clientId, until the server echo carries the same clientId. */
     private val pending = ConcurrentHashMap<String, Message>()
     private var echoWatch: kotlinx.coroutines.Job? = null
@@ -552,13 +563,72 @@ class ThreadRepository(
         for ((id, d) in liveDocs) {
             if (id in ids) continue
             val at = d.tsEstimate("createdAt") ?: continue
-            if (at <= floor) olderDocs[id] = d
+            if (at <= floor) {
+                olderDocs[id] = d
+                if (olderPageIds.none { id in it } && slidChunks.none { id in it.ids }) slidWaiting[id] = at
+            }
+        }
+        // H-86: a listener for them, a few seconds later so a burst of messages makes one.
+        if (slidWaiting.isNotEmpty() && !slidScheduled) {
+            slidScheduled = true
+            listenExec.schedule({ attachSlid() }, 4, java.util.concurrent.TimeUnit.SECONDS)
         }
         return false
     }
 
+    /**
+     * H-86: one listener over the rows waiting in [slidWaiting]. Two neighbour listeners merge into
+     * one when the older holds no more rows than the newer (a binary counter): few listeners, and
+     * each row is read again only a few times however long the chat stays open.
+     */
+    private fun attachSlid() {
+        val gone = ArrayList<ListenerRegistration>()
+        val c = synchronized(docsLock) {
+            slidScheduled = false
+            if (closed || slidWaiting.isEmpty()) return
+            var lo = slidWaiting.values.minOrNull() ?: return
+            val hi = slidWaiting.values.maxOrNull() ?: return
+            var count = slidWaiting.size
+            val ids = HashSet(slidWaiting.keys)
+            slidWaiting.clear()
+            while (slidChunks.isNotEmpty() && slidChunks.last().count <= count) {
+                val prev = slidChunks.removeAt(slidChunks.size - 1)
+                prev.reg?.let { gone.add(it) }
+                lo = minOf(lo, prev.lo); count += prev.count; ids.addAll(prev.ids)
+            }
+            SlidChunk(lo, hi, count).also { it.ids = ids; slidChunks.add(it) }
+        }
+        val reg = convRef.collection("messages")
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .startAt(c.hi).endAt(c.lo)
+            .addSnapshotListener(listenExec) { snap, _ ->
+                if (snap == null || closed) return@addSnapshotListener
+                val ids = snap.documents.mapTo(HashSet()) { it.id }
+                synchronized(docsLock) {
+                    if (slidChunks.none { it === c }) return@addSnapshotListener
+                    for (d in snap.documents) if (!liveDocs.containsKey(d.id)) olderDocs[d.id] = d
+                    // Gone from the server (only the server's answer says so): gone from the screen,
+                    // unless another page or listener still holds it.
+                    if (!snap.metadata.isFromCache) for (id in c.ids) {
+                        if (id in ids || liveDocs.containsKey(id)) continue
+                        if (olderPageIds.none { id in it } && slidChunks.none { it !== c && id in it.ids }) olderDocs.remove(id)
+                    }
+                    if (!snap.metadata.isFromCache || ids.containsAll(c.ids)) c.ids = ids
+                    docsSeq++
+                }
+                rebuild()
+            }
+        val keep = synchronized(docsLock) { if (slidChunks.any { it === c }) { c.reg = reg; true } else false }
+        if (!keep) reg.remove()
+        gone.forEach { it.remove() }
+    }
+
     private fun stopOlder() {
-        val regs = synchronized(docsLock) { olderRegs.toList().also { olderRegs.clear(); olderPageIds.clear() } }
+        val regs = synchronized(docsLock) {
+            val slid = slidChunks.mapNotNull { it.reg }
+            slidChunks.clear(); slidWaiting.clear()
+            olderRegs.toList().also { olderRegs.clear(); olderPageIds.clear() } + slid
+        }
         regs.forEach { it.remove() }
     }
 
