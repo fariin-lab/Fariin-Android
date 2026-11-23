@@ -118,6 +118,7 @@ fun HostMenuItems(g: GroupCallUi, m: GroupMember, canBlock: Boolean, onConfirm: 
             leadingIcon = { Icon(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_pin), null, tint = Color.White) }, onClick = { close(); onPin() })
     }
     if (!GroupCallAdmin.mayModerate(me, g.myRole, m)) return
+    if (!com.fariin.app.security.EntryRules.callExtrasShown(callKeyguardLocked())) return   // over the phone's lock screen
     if (!shownBlocked(g, m)) {
         DropdownMenuItem(text = { Text("Mute", color = Color.White) }, leadingIcon = { Icon(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_mic_off), null, tint = Color.White) },
             onClick = { close(); GroupCall.tapMic(m.id, mute = true) })
@@ -131,6 +132,16 @@ fun HostMenuItems(g: GroupCallUi, m: GroupMember, canBlock: Boolean, onConfirm: 
         DropdownMenuItem(text = { Text("Remove and Block", color = Danger) }, leadingIcon = { Icon(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_block), null, tint = Danger) },
             onClick = { close(); onConfirm(HostConfirm.Block(m)) })
     }
+}
+
+/** The phone's own lock screen is up under the call screen (it shows over it). Checked each second. */
+@Composable
+internal fun callKeyguardLocked(): Boolean {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val km = androidx.compose.runtime.remember(ctx) { ctx.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager }
+    return androidx.compose.runtime.produceState(km.isKeyguardLocked, km) {
+        while (true) { value = km.isKeyguardLocked; kotlinx.coroutines.delay(1_000) }
+    }.value
 }
 
 /** What a tile's long press needs from the stage (iOS CallTileMenu). */

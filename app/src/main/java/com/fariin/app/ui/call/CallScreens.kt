@@ -1149,7 +1149,8 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
                 // iOS `notes`: who joined or left, and the call's short notes, under the header.
                 if (!pip) GroupCallNotes(g, Modifier.align(Alignment.TopCenter))
             }
-            if (g.linkCreator && g.requests.isNotEmpty()) {
+            // Join requests are a host tool: not over the phone's own lock screen.
+            if (g.linkCreator && g.requests.isNotEmpty() && com.fariin.app.security.EntryRules.callExtrasShown(callKeyguardLocked())) {
                 Spacer(Modifier.height(12.dp))
                 CallLinkRequestStack(g.requests, Modifier.padding(horizontal = 14.dp))
             }
@@ -1617,7 +1618,9 @@ private fun MemberTile(
     val metrics = com.fariin.app.call.GroupCallMetrics
     val shape = RoundedCornerShape(if (alone) 0.dp else metrics.TILE_CORNER.dp)
     val glow by animateFloatAsState(if (activeSpeaker) 1f else 0f, tween(200), label = "glow")
-    val tileMenu = LocalTileMenu.current?.takeIf { !isMe && !pip && it.offers(m) }
+    // Over the phone's own lock screen the tile offers Pin only, no host actions.
+    val overLock = !com.fariin.app.security.EntryRules.callExtrasShown(callKeyguardLocked())
+    val tileMenu = LocalTileMenu.current?.takeIf { !isMe && !pip && it.offers(m) && (!overLock || it.canPin) }
     var menuOpen by remember { mutableStateOf(false) }
     Box(modifier) {
         if (glow > 0f) Box(Modifier.matchParentSize().graphicsLayer { alpha = glow }
@@ -1727,7 +1730,9 @@ private fun GroupCallParticipantsSheet(g: GroupCallUi, meId: String?, onFocus: (
     val context = androidx.compose.ui.platform.LocalContext.current
     val isLink = g.linkRoom != null
     val canBlock = GroupCallAdmin.ownsLink(isLink, g.myRole, g.linkCreator)
-    val endBar = GroupCallAdmin.showEndForAll(g.myRole, g.joined)
+    // Over the phone's own lock screen: no Add People, link rows or host tools (anyone may hold it).
+    val extras = com.fariin.app.security.EntryRules.callExtrasShown(callKeyguardLocked())
+    val endBar = extras && GroupCallAdmin.showEndForAll(g.myRole, g.joined)
     ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = Color.Black, contentColor = Color.White, scrimColor = Color.Black.copy(alpha = 0.4f)) {
         Column(Modifier.fillMaxSize().padding(bottom = if (endBar) 8.dp else 24.dp)) {
@@ -1742,7 +1747,7 @@ private fun GroupCallParticipantsSheet(g: GroupCallUi, meId: String?, onFocus: (
             Spacer(Modifier.height(12.dp))
             // iOS groupAddSection / shareSection: Add People first (it rings), then the link's Copy
             // Link and Share Link. Everyone in the call may hand the link on.
-            if (g.joined && (!isLink || g.linkUrl != null)) {
+            if (extras && g.joined && (!isLink || g.linkUrl != null)) {
                 SheetSection {
                     Column {
                         SheetPlainRow(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_add_member), "Add People") { showAdd = true }
@@ -1757,11 +1762,11 @@ private fun GroupCallParticipantsSheet(g: GroupCallUi, meId: String?, onFocus: (
                 Spacer(Modifier.height(20.dp))
             }
             // iOS approvalRow: the link's owner turns Approve New People on or off from the call.
-            if (g.linkCreator && g.linkRoom != null) {
+            if (extras && g.linkCreator && g.linkRoom != null) {
                 LinkApprovalRow(g.linkRoom!!)
                 Spacer(Modifier.height(20.dp))
             }
-            if (g.linkCreator && g.requests.isNotEmpty()) {
+            if (extras && g.linkCreator && g.requests.isNotEmpty()) {
                 SheetSection {
                     Row(Modifier.fillMaxWidth().height(48.dp).clickable { showRequests = true }.padding(horizontal = 16.dp),
                         verticalAlignment = Alignment.CenterVertically) {
@@ -1846,7 +1851,7 @@ private fun GroupCallParticipantsSheet(g: GroupCallUi, meId: String?, onFocus: (
                                 val host = GroupCallAdmin.mayModerate(meId, g.myRole, m)
                                 if (!m.micOn && !host) Icon(androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_mic_off), "Muted", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
                             }
-                            if (GroupCallAdmin.mayModerate(meId, g.myRole, m)) HostRowControls(g, m, canBlock) { confirm = it }
+                            if (extras && GroupCallAdmin.mayModerate(meId, g.myRole, m)) HostRowControls(g, m, canBlock) { confirm = it }
                         }
                     }
                 }
@@ -1860,9 +1865,9 @@ private fun GroupCallParticipantsSheet(g: GroupCallUi, meId: String?, onFocus: (
             }
         }
     }
-    if (showRequests) CallLinkBulkRequestsSheet(g.requests) { showRequests = false }
-    if (showAdd) GroupAddPeopleSheet(g) { showAdd = false }
-    HostDialogs(g, confirm) { confirm = null }
+    if (showRequests && extras) CallLinkBulkRequestsSheet(g.requests) { showRequests = false }
+    if (showAdd && extras) GroupAddPeopleSheet(g) { showAdd = false }
+    if (extras) HostDialogs(g, confirm) { confirm = null }
 }
 
 /**
