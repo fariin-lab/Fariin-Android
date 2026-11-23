@@ -44,7 +44,7 @@ class VideoPrep(
             val out = File(outDir, "send-$id.mp4")
             val cut = VideoTrim.take(uri)
             // A trimmed clip must go trimmed: if the full re-encode fails (some phones and the
-            // emulator have no encoder for it), the cut alone is tried before the uncut original.
+            // emulator have no encoder for it), the cut alone is tried; never the uncut original.
             val shortSide = if (SentQuality.videoHd(context, uri)) 1080 else 540
             // A long clip aims at the export target (62 MB, as iOS): at the fixed 2 Mbit/s a
             // 10-minute video came out near 150 MB. Short clips keep the usual bitrate. One encode
@@ -58,6 +58,13 @@ class VideoPrep(
             if (ok && shortSide >= 1080 && out.length() > MAX_BYTES) {
                 out.delete()
                 ok = transcode(context, uri, out, cut, shortSide = 540, bitrate = minOf(bitrateFor(540), fitBitrate(seconds)), onProgress = onProgress)
+            }
+            // A trim that could not be made never sends the uncut original (H-104): the part cut
+            // out may be private. The send stops and says so.
+            if (cut != null && !(ok && out.length() > 0)) {
+                out.delete()
+                com.fariin.app.ui.components.Snack.show("Couldn't trim this video, so it was not sent. Try again, or send it without trimming.", long = true)
+                return null
             }
             val file = if (ok && out.length() > 0) out else copyOriginal(context, uri, out)
             if (file == null) {
