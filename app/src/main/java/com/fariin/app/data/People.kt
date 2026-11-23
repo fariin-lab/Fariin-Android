@@ -330,8 +330,15 @@ class FirestorePeople(
     }
 
     override suspend fun safetyNumber(uid: String): String? {
+        runCatching { crypto.ensureReady() }
         val mine = crypto.myPublicKeyB64?.let { B64.decode(it) } ?: return null
-        val theirs = crypto.publicKey(uid) ?: return null
+        // J-25: the key the server holds now, not the cached one (it can be a key the chat no longer
+        // uses after a reinstall). The cache only when the server cannot be reached; no key = none.
+        val theirs = when (val r = crypto.fetchFreshKey(uid)) {
+            is com.fariin.app.crypto.FariinCrypto.FreshKey.Key -> r.key
+            com.fariin.app.crypto.FariinCrypto.FreshKey.NoKey -> return null
+            com.fariin.app.crypto.FariinCrypto.FreshKey.Unreachable -> crypto.publicKey(uid) ?: return null
+        }
         return SafetyNumber.compute(me, mine, uid, theirs)
     }
 
