@@ -156,9 +156,19 @@ object ChatShortcuts {
     /** The chat a shortcut id names, for the share sheet's Direct Share target. */
     fun titleOf(c: Context, cid: String): String? = NotifStore.chat(c, cid)?.name
 
-    /** App Lock switched: on clears every chat shortcut, off publishes the last list again. */
+    /**
+     * App Lock switched: on takes every chat off the launcher and the share sheet, off publishes the
+     * last list again. Only the visible (dynamic) shortcuts go: the long-lived cached ones hold each
+     * chat's conversation settings (priority, bubbles), so they stay. clear() is for sign-out only.
+     */
     fun appLockSwitched(c: Context, on: Boolean) {
-        if (on) { clear(c); return }
+        if (on) {
+            lastSignature = null
+            generation++
+            job?.cancel(); job = null
+            try { ShortcutManagerCompat.removeAllDynamicShortcuts(c) } catch (_: Exception) {}
+            return
+        }
         val (me, convs, all) = lastInput ?: return
         publish(c, me, convs, all)
     }
