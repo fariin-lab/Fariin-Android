@@ -47,8 +47,9 @@ object StickerGifRules {
     fun gifBox(width: Double?, height: Double?): Pair<Float, Float> {
         val maxW = 240f
         val maxH = 340f
-        if (width == null || height == null || width <= 0 || height <= 0) return 220f to 220f
-        val aspect = (width / height).toFloat()
+        // NaN or Infinity from a crafted doc is unknown too (audit H-52).
+        if (width == null || height == null || !width.isFinite() || !height.isFinite() || width <= 0 || height <= 0) return 220f to 220f
+        val aspect = (width / height).toFloat().takeIf { it.isFinite() && it > 0 } ?: return 220f to 220f
         var dw = maxW
         var dh = dw / aspect
         if (dh > maxH) { dh = maxH; dw = dh * aspect }

@@ -208,7 +208,7 @@ object MediaRules {
     // ---- Labels
     /** ChatService.voiceDurationLabel: rounded seconds as m:ss. */
     fun durationLabel(seconds: Double): String {
-        val d = seconds.roundToInt().coerceAtLeast(0)
+        val d = if (seconds.isFinite() && seconds > 0) minOf(seconds, 359_999.0).roundToInt() else 0
         return "%d:%02d".format(d / 60, d % 60)
     }
 
@@ -296,8 +296,8 @@ object MediaRules {
     // ---- MessageRowLayout.photoBox: the bubble size for a photo, in dp.
     fun photoBox(pixelW: Double?, pixelH: Double?, maxBubbleWidth: Float, captionWidth: Float = 0f): Pair<Float, Float> {
         val boxMax = min(maxBubbleWidth, 350f)
-        val aspect = if (pixelW != null && pixelH != null && pixelW > 0 && pixelH > 0)
-            (pixelW / pixelH).toFloat().coerceIn(0.35f, 2.857f) else 1f
+        val known = sizeKnown(pixelW, pixelH)
+        val aspect = if (known) (pixelW!! / pixelH!!).toFloat().coerceIn(0.35f, 2.857f) else 1f
         val minW = if (captionWidth > 0) min(boxMax, captionWidth + 24) else 0f
         val maxH = boxMax * 1.2f
         val comfortW = maxH * (9f / 16f)
@@ -306,8 +306,8 @@ object MediaRules {
         if (w < comfortW) { h = min(maxH, comfortW / aspect); w = h * aspect }
         w = max(w, minW)
         if (w > boxMax) { w = boxMax; h = w / aspect }
-        if (pixelW != null && pixelH != null && pixelW > 0 && pixelH > 0) {
-            val srcShort = min(pixelW, pixelH).toFloat()
+        if (known) {
+            val srcShort = min(pixelW!!, pixelH!!).toFloat()
             val dispShort = min(w, h)
             if (dispShort > srcShort && dispShort > 150) {
                 val f = max(150f, srcShort) / dispShort
@@ -326,8 +326,7 @@ object MediaRules {
     // ---- MessageRowLayout.wideMediaBox: a channel post's photo or video takes the post's full
     // width at its own shape, a tall one at most 1.25 x the width (aspect 0.8), a wide one 2.5 : 1.
     fun wideMediaBox(pixelW: Double?, pixelH: Double?, width: Float): Pair<Float, Float> {
-        val aspect = if (pixelW != null && pixelH != null && pixelW > 0 && pixelH > 0)
-            (pixelW / pixelH).toFloat().coerceIn(0.8f, 2.5f) else 1f
+        val aspect = if (sizeKnown(pixelW, pixelH)) (pixelW!! / pixelH!!).toFloat().coerceIn(0.8f, 2.5f) else 1f
         // Capped for a wide screen (iOS 2026-11-17): at most 600 across and 560 down, same shape.
         // A phone held upright is under both; a phone on its side or a tablet no longer gets a
         // portrait post taller than the screen.
@@ -336,6 +335,10 @@ object MediaRules {
         if (h > WIDE_MEDIA_MAX_H) { h = WIDE_MEDIA_MAX_H; w = h * aspect }
         return w.roundToInt().toFloat() to h.roundToInt().toFloat()
     }
+    /** Both sides real: NaN or Infinity from a crafted doc is unknown (audit H-52). */
+    private fun sizeKnown(w: Double?, h: Double?): Boolean =
+        w != null && h != null && w.isFinite() && h.isFinite() && w > 0 && h > 0 && (w / h).isFinite()
+
     const val WIDE_MEDIA_MAX_W = 600f
     const val WIDE_MEDIA_MAX_H = 560f
 }

@@ -3,6 +3,12 @@ package com.fariin.app.data
 import com.fariin.app.crypto.EncMeta
 import com.fariin.app.crypto.Wire
 
+/** A pixel size from someone else's doc: NaN, Infinity, below 1 or absurd = unknown (audit H-52). */
+private fun docSize(v: Any?): Double? = (v as? Number)?.toDouble()?.takeIf { it.isFinite() && it >= 1 && it <= 100_000.0 }
+
+/** A length in seconds from someone else's doc: NaN, Infinity or below 0 = unknown (audit H-53). */
+private fun docSeconds(v: Any?): Double? = (v as? Number)?.toDouble()?.takeIf { it.isFinite() && it >= 0 }?.coerceAtMost(359_999.0)
+
 /**
  * One row of `conversations/{cid}/messages`, as Kulan-iOS Models.swift `Message(id:data:cid:crypto:)`
  * reads it. Text fields arrive already opened by the caller's [open] (the crypto port), so this
@@ -313,7 +319,7 @@ data class Message(
             val text = if (!Wire.isGroupCid(cid) && raw.isNotEmpty() && !raw.startsWith(Wire.ENC1) &&
                 !raw.startsWith(Wire.LEGACY) && (type ?: "text") in PERSON_TYPES) NOT_ENCRYPTED
             else if (raw.isEmpty()) "" else open(raw, author)
-            val created = Conversation.millis(data["createdAt"])
+            val created = Conversation.millis(data["createdAt"]).takeIf { it.isFinite() } ?: 0.0
             val reply = (data["replyTo"] as? Map<*, *>)?.let { r ->
                 ReplyRef(
                     id = r["id"] as? String ?: "",
@@ -336,10 +342,10 @@ data class Message(
                 val url = m["imageUrl"] as? String ?: return@mapNotNull null
                 val video = (m["kind"] as? String) == "video"
                 AlbumItem(url, EncMeta.fromMap(m["enc"] as? Map<*, *>),
-                    (m["width"] as? Number)?.toDouble(), (m["height"] as? Number)?.toDouble(),
+                    docSize(m["width"]), docSize(m["height"]),
                     videoUrl = if (video) m["videoUrl"] as? String else null,
                     videoEnc = if (video) EncMeta.fromMap(m["videoEnc"] as? Map<*, *>) else null,
-                    duration = (m["duration"] as? Number)?.toDouble()).let { a ->
+                    duration = docSeconds(m["duration"])).let { a ->
                     com.fariin.app.media.MediaOrigin.open(m["origin"]) { open(it, author) }
                         ?.let { o -> a.copy(origin = o.key, originSize = o.size) } ?: a
                 }
@@ -412,7 +418,7 @@ data class Message(
                 type = type,
                 createdAtMillis = if (created > 0) created else nowMillis,
                 hasServerTime = created > 0,
-                clientTs = (data["clientTs"] as? Number)?.toDouble(),
+                clientTs = (data["clientTs"] as? Number)?.toDouble()?.takeIf { it.isFinite() },
                 clientId = data["clientId"] as? String,
                 replyTo = reply,
                 deleted = data["deleted"] as? Boolean ?: false,
@@ -429,13 +435,13 @@ data class Message(
                 // only a stand-in ("Document.pdf") then; an unreadable seal keeps the plain one.
                 fileName = openOptional("fileNameEnc") ?: data["fileName"] as? String,
                 enc = EncMeta.fromMap(data["enc"] as? Map<*, *>),
-                width = (data["width"] as? Number)?.toDouble(),
-                height = (data["height"] as? Number)?.toDouble(),
+                width = docSize(data["width"]),
+                height = docSize(data["height"]),
                 blurhash = openOptional("blurhash"),
                 thumb = openOptional("thumb"),
                 thumbUrl = data["thumbUrl"] as? String,
                 thumbEnc = EncMeta.fromMap(data["thumbEnc"] as? Map<*, *>),
-                duration = (data["duration"] as? Number)?.toDouble(),
+                duration = docSeconds(data["duration"]),
                 waveform = (data["waveform"] as? List<*>)?.mapNotNull { (it as? Number)?.toInt() } ?: emptyList(),
                 uploading = data["uploading"] as? Boolean ?: false,
                 viewOnce = data["viewOnce"] as? Boolean ?: false,
@@ -467,7 +473,7 @@ data class Message(
                     if (i != null && n > 0) i to n else null
                 }?.toMap() ?: emptyMap(),
                 pollVoters = (data["pollVoters"] as? Number)?.toInt() ?: 0,
-                pollTallyAt = (data["pollTallyAt"] as? Number)?.toDouble() ?: 0.0,
+                pollTallyAt = (data["pollTallyAt"] as? Number)?.toDouble()?.takeIf { it.isFinite() } ?: 0.0,
                 reactions = (data["reactions"] as? Map<*, *>)?.mapNotNull { (k, v) ->
                     val uid = k as? String ?: return@mapNotNull null
                     // Someone I blocked: their reactions are not shown, 1:1 or group (iOS).

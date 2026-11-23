@@ -225,7 +225,7 @@ private fun MediaTile(item: SharedMedia.Item, modifier: Modifier, cid: String = 
                 contentAlignment = Alignment.Center) {
                 Icon(ImageVector.cachedVector(R.drawable.ic_sf_play_fill), "Video", tint = Color.White, modifier = Modifier.size(22.dp))
             }
-            item.duration?.let { d ->
+            item.duration?.takeIf { it.isFinite() && it > 0 }?.let { d ->
                 Text(MediaRules.durationLabel(d), fontSize = 11.sp, color = Color.White,
                     modifier = Modifier.align(Alignment.BottomStart).padding(4.dp).clip(RoundedCornerShape(50))
                         .background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 5.dp, vertical = 1.dp))
