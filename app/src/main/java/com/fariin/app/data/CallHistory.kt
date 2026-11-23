@@ -168,15 +168,17 @@ data class AdhocCall(
     }
 
     companion object {
-        fun from(d: DocumentSnapshot): AdhocCall? {
-            // Any member writes this doc: safe casts only, so a bad field never crashes the Calls list.
-            if (d.get("kind") as? String != "adhoc") return null
-            fun strings(k: String) = (d.get(k) as? List<*>)?.filterIsInstance<String>() ?: emptyList()
-            fun map(k: String) = (d.get(k) as? Map<*, *>)?.mapNotNull { (a, b) -> (a as? String)?.let { it to (b as? String ?: "") } }?.toMap() ?: emptyMap()
-            val est = DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
-            fun time(k: String) = (d.get(k, est) as? com.google.firebase.Timestamp)?.toDate()?.time
-            return AdhocCall(d.id, strings("members"), map("names"), map("photos"), strings("joined"),
-                d.get("startedBy") as? String ?: "", d.get("video") as? Boolean ?: false, d.get("active") as? Boolean ?: false,
+        fun from(d: DocumentSnapshot): AdhocCall? =
+            fromMap(d.id, d.getData(DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) ?: return null)
+
+        /** Any member writes this doc: safe casts only, so a bad field never crashes the Calls list. */
+        fun fromMap(id: String, d: Map<String, Any?>): AdhocCall? {
+            if (d["kind"] as? String != "adhoc") return null
+            fun strings(k: String) = (d[k] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+            fun map(k: String) = (d[k] as? Map<*, *>)?.mapNotNull { (a, b) -> (a as? String)?.let { it to (b as? String ?: "") } }?.toMap() ?: emptyMap()
+            fun time(k: String) = (d[k] as? com.google.firebase.Timestamp)?.toDate()?.time
+            return AdhocCall(id, strings("members"), map("names"), map("photos"), strings("joined"),
+                d["startedBy"] as? String ?: "", d["video"] as? Boolean ?: false, d["active"] as? Boolean ?: false,
                 time("startedAt") ?: 0L, time("endedAt"))
         }
     }
