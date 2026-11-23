@@ -139,9 +139,13 @@ private fun PdfReader(file: File, name: String, motion: SheetMotion) {
                     val fd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
                     val r = try { PdfRenderer(fd) } catch (e: Exception) { runCatching { fd.close() }; throw e }
                     // Each page's height for its width, read once, so the list knows every page's size
-                    // before any is drawn (no jumping while scrolling).
+                    // before any is drawn (no jumping while scrolling). Kept between 0.05 and 20: a very
+                    // tall narrow page made a list item too tall to lay out, and the viewer crashed.
                     val ratios = try {
-                        (0 until r.pageCount).map { i -> r.openPage(i).use { p -> p.height.toFloat() / p.width.coerceAtLeast(1) } }
+                        (0 until r.pageCount).map { i -> r.openPage(i).use { p ->
+                            val ratio = p.height.toFloat() / p.width.coerceAtLeast(1)
+                            if (ratio.isFinite() && ratio > 0f) ratio.coerceIn(0.05f, 20f) else 1.414f
+                        } }
                     } catch (e: Exception) { runCatching { r.close(); fd.close() }; throw e }
                     Opened.Ready(r, fd, ratios).also { made = it }
                 } catch (_: SecurityException) {
@@ -252,7 +256,9 @@ private fun PageImage(renderer: PdfRenderer, index: Int, ratio: Float, widthPx: 
     LaunchedEffect(index, widthPx) {
         if (widthPx <= 0) return@LaunchedEffect
         // Drawn at twice the screen's width (at most 2400 px) so a pinch to 2x stays sharp.
-        val w = (widthPx * 2).coerceAtMost(2400)
+        // A tall page is drawn narrower rather than taller than 6000 px, so it keeps its shape.
+        val full = (widthPx * 2).coerceAtMost(2400)
+        val w = if (full * ratio > 6000f) (6000f / ratio).toInt().coerceIn(1, full) else full
         val h = (w * ratio).toInt().coerceIn(1, 6000)
         bmp = withContext(Dispatchers.IO) {
             gate.withLock {
