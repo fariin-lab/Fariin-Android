@@ -263,8 +263,9 @@ data class Message(
     /** The poll this message carries (iOS Message.poll), parsed once per copy. */
     val poll: PollCard? by lazy { if (deleted) null else PollRules.parse(text) }
 
-    /** An optimistic copy and its server echo share the clientId, so the row updates in place. */
-    val rowId: String get() = clientId ?: id
+    /** An optimistic copy and its server echo share the clientId, so the row updates in place.
+     *  Only my own: anyone else's message keys by its doc id (H-56, see [RowKeyRules]). */
+    val rowId: String get() = RowKeyRules.rowId(id, clientId, authorId, myUid)
 
     /** The songs this file message plays (MusicRules.refs): a playlist's, or its one song; null = a document. */
     fun musicRefs(): List<MusicRules.Ref>? =
@@ -299,6 +300,8 @@ data class Message(
         })
 
     companion object {
+        /** The signed-in account, for [rowId]; set when a chat opens. */
+        @Volatile var myUid: String? = null
         const val NOT_ENCRYPTED = "This message wasn't encrypted and can't be shown."
         private val PERSON_TYPES = setOf("text", "image", "video", "audio", "file", "album", "gif")
 

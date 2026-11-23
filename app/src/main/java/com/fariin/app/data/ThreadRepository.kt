@@ -63,6 +63,8 @@ class ThreadRepository(
     /** The chat's files (download, open, cache); null where media is not wired (tests). */
     val media: ChatMedia? = null,
 ) {
+    init { Message.myUid = me }
+
     data class State(
         val messages: List<Message> = emptyList(),
         val receipts: Receipts = Receipts(),
@@ -714,10 +716,12 @@ class ThreadRepository(
                 stamped.add(m)
             }
             // My note or photo whose file is still going up: the copy on this phone draws it.
-            val local = m.clientId?.let { localFiles[it] }
+            // This phone's files and cards are for my own sends only (H-56: a reused clientId).
+            val ownKey = m.clientId?.takeIf { m.authorId == me }
+            val local = ownKey?.let { localFiles[it] }
             if (local != null && m.audioUrl == null && m.imageUrl == null) m = m.copy(localPath = local)
-            m.clientId?.let { k -> localUris[k] }?.let { picked -> m = withPicked(m, picked) }
-            m.clientId?.let { k -> localCards[k]?.let { card ->
+            ownKey?.let { k -> localUris[k] }?.let { picked -> m = withPicked(m, picked) }
+            ownKey?.let { k -> localCards[k]?.let { card ->
                 if (m.linkPreview == null && !m.deleted) m = m.copy(linkPreview = card) else localCards.remove(k)
             } }
             if (HiddenMessages.isHidden(m.id)) continue
@@ -1937,7 +1941,8 @@ class ThreadRepository(
             rebuild()
             val work: suspend () -> Unit = {
                 val landed = try {
-                    val q = convRef.collection("messages").whereEqualTo("clientId", e.clientId).limit(1)
+                    // My own doc only (H-56): someone else's message with the same clientId is not my send.
+                    val q = convRef.collection("messages").whereEqualTo("clientId", e.clientId).whereEqualTo("authorId", me).limit(1)
                     !q.get(Source.CACHE).await().isEmpty || !q.get(Source.SERVER).await().isEmpty
                 } catch (_: Exception) { false }
                 // A clip whose message went out before the kill (its upload unfinished) is not sent twice;
@@ -2105,7 +2110,8 @@ class ThreadRepository(
         rebuild()
         val resume: suspend () -> Unit = {
             val landed = try {
-                val q = convRef.collection("messages").whereEqualTo("clientId", e.clientId).limit(1)
+                // My own doc only (H-56): someone else's message with the same clientId is not my send.
+                val q = convRef.collection("messages").whereEqualTo("clientId", e.clientId).whereEqualTo("authorId", me).limit(1)
                 !q.get(Source.CACHE).await().isEmpty || !q.get(Source.SERVER).await().isEmpty
             } catch (_: Exception) { false }
             if (!landed) {
