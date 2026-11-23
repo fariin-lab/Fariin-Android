@@ -389,6 +389,15 @@ class ThreadRepository(
                 live = true
                 windowFromServer = !snap.metadata.isFromCache
                 windowWhole = !snap.metadata.isFromCache && snap.size() < PAGE_SIZE
+                // F-32: a message that turned deleted (Delete for Everyone, seen from the server) takes its
+                // decrypted files with it; the old copy names them.
+                if (!snap.metadata.isFromCache) {
+                    val turned = snap.documentChanges.filter { ch ->
+                        ch.type == com.google.firebase.firestore.DocumentChange.Type.MODIFIED && ch.document.get("deleted") == true
+                    }.map { it.document.id }.toSet()
+                    if (turned.isNotEmpty()) _state.value.messages.filter { it.id in turned && !it.deleted }
+                        .forEach { old -> runCatching { media?.forgetMessage(old) } }
+                }
                 val cut = synchronized(docsLock) {
                     val cut = keepSlidOut(snap.documents, full = snap.size() >= PAGE_SIZE)
                     liveDocs.clear()
