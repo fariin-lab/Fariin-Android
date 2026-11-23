@@ -116,10 +116,15 @@ class MainActivity : ComponentActivity() {
         com.fariin.app.ui.debug.DemoChats.active = demo
         DeviceRegistry.init(this)
         NotificationPoster.ensureChannels(this)
-        takeOpenCid(intent)
-        takeCallLink(intent)
-        com.fariin.app.system.SystemRouter.take(intent)
-        takeLinkNudge(intent)
+        // The link, notification or shortcut that started the app is used once: not again after a
+        // recreate, a restore after Android killed the app, or a relaunch from Recents.
+        val fromHistory = (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
+        if (com.fariin.app.security.EntryRules.takeLaunchIntent(savedInstanceState != null, fromHistory)) {
+            takeOpenCid(intent)
+            takeCallLink(intent)
+            com.fariin.app.system.SystemRouter.take(intent)
+            takeLinkNudge(intent)
+        }
         // Debug builds only: `--ez notifDemo true` posts made-up notifications through the real
         // builder (push/DebugNotifs), no sign-in and no Firebase.
         if (debuggable && intent.getBooleanExtra("notifDemo", false)) com.fariin.app.push.DebugNotifs.post(this)
@@ -678,6 +683,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)   // a later recreate sees this one (its used parts removed), not the first
         takeOpenCid(intent)
         takeCallLink(intent)
         com.fariin.app.system.SystemRouter.take(intent)
