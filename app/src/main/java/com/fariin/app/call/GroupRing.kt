@@ -42,7 +42,11 @@ data class GroupInvite(val cid: String, val title: String, val video: Boolean, v
                        /** A nudge ("wants to talk"), not a ring: no ringtone, Ignore tells nobody (iOS openNudge). */
                        val nudge: Boolean = false,
                        /** A multi-person call with no group chat (groupCalls/adhoc_...): [cid] is its room id. */
-                       val adhoc: Boolean = false) {
+                       val adhoc: Boolean = false,
+                       /** The start time the server gave (null = not known): the key of this one ring (H-37). */
+                       val knownStartMs: Long? = null,
+                       /** When this ring was sent (a link's Add People into a running room): the minute counts from here. */
+                       val ringFromMs: Long? = null) {
     val roomKind: String get() = if (linkKey != null) "link" else if (adhoc) "adhoc" else "group"
 }
 
@@ -89,6 +93,12 @@ object GroupRingRules {
     /** How long the ring stays up from now: what is left of the minute (at least 5 s, iOS's floor). */
     fun ringLeftMs(startedAtMs: Long?, nowMs: Long): Long =
         maxOf(5_000L, GroupCallWire.RING_WINDOW_MS - (nowMs - (startedAtMs ?: nowMs)))
+
+    /**
+     * One ring, not one room: a Decline or Join is remembered for this call (room + its start
+     * time), so the group's next call rings again. A start time not known counts as 0.
+     */
+    fun ringKey(cid: String, startedAtMs: Long?): String = "$cid@${startedAtMs ?: 0L}"
 }
 
 /**
@@ -126,10 +136,11 @@ object GroupRing {
         val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         if (cid.isEmpty() || cid.contains("/")) return
         app = context.applicationContext
-        if (_invite.value?.cid == cid || GroupCall.ui.value.cid == cid || cid in declinedHere) return
+        if (_invite.value?.cid == cid || GroupCall.ui.value.cid == cid) return
         scope.launch {
             val doc = try { db.collection("groupCalls").document(cid).get().await().data } catch (_: Exception) { null }
             val started = (doc?.get("startedAt") as? Timestamp)?.toDate()?.time
+            if (GroupRingRules.ringKey(cid, started) in declinedHere) return@launch
             if (!GroupRingRules.rings(doc, me, started, System.currentTimeMillis())) return@launch
             // In another call, or another ring is up: this one does not ring and the caller is told (iOS reportBusy).
             if (GroupCall.ui.value.cid != null || CallManager.ui.value.status.live || _invite.value != null) {
@@ -141,7 +152,7 @@ object GroupRing {
             val photos = (conv?.get("photos") as? Map<*, *>).orEmpty()
             val title = (conv?.get("title") as? String)?.takeIf { it.isNotEmpty() } ?: (doc["title"] as? String)?.takeIf { it.isNotEmpty() } ?: "Group"
             val face = RingFace(by, names[by] as? String ?: "Someone", photos[by] as? String)
-            ring(GroupInvite(cid, title, doc["video"] == true, by, started ?: System.currentTimeMillis(), listOf(face)))
+            ring(GroupInvite(cid, title, doc["video"] == true, by, started ?: System.currentTimeMillis(), listOf(face), knownStartMs = started))
         }
     }
 
@@ -194,7 +205,6 @@ object GroupRing {
         val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         app = context.applicationContext
         if (_invite.value?.cid == roomId || GroupCall.ui.value.cid == roomId) return
-        if (ring && roomId in declinedHere) return
         scope.launch {
             val doc = try { db.collection("groupCalls").document(roomId).get().await().data } catch (_: Exception) { null }
             val info = com.fariin.app.data.AdhocInviteRules.invite(roomId, doc, me) { com.fariin.app.data.BlockList.contains(it) } ?: return@launch
@@ -203,11 +213,11 @@ object GroupRing {
                 if (ring && GroupCall.ui.value.cid != roomId) answer("busy", roomId, started, roomKind = "adhoc")
                 return@launch
             }
+            if (ring && GroupRingRules.ringKey(roomId, started) in declinedHere) return@launch
             if (ring && !GroupRingRules.rings(doc, me, started, System.currentTimeMillis())) return@launch
-            if (!ring) declinedHere -= roomId
             val faces = info.others.map { RingFace(it.uid, it.name, it.photo) }
             ring(GroupInvite(roomId, info.title, info.video, info.startedBy, started ?: System.currentTimeMillis(), faces,
-                nudge = !ring, adhoc = true))
+                nudge = !ring, adhoc = true, knownStartMs = started))
         }
     }
 
@@ -219,9 +229,11 @@ object GroupRing {
         val caller = d["callerUid"].orEmpty()
         if (caller == me) return
         app = context.applicationContext
-        if (_invite.value?.cid == roomId || GroupCall.ui.value.cid == "link:$roomId" || roomId in declinedHere) return
         val started = d["startedAt"]?.toLongOrNull()
         val sent = d["sentAt"]?.toLongOrNull()
+        if (_invite.value?.cid == roomId || GroupCall.ui.value.cid == "link:$roomId") return
+        // A link room runs on while people are added: one Add People ring is one ring (its sentAt).
+        if (!nudge && GroupRingRules.ringKey(roomId, sent ?: started) in declinedHere) return
         if (!nudge && sent != null && System.currentTimeMillis() - sent > GroupCallWire.RING_WINDOW_MS) return
         if (GroupCall.ui.value.cid != null || CallManager.ui.value.status.live || _invite.value != null) {
             if (!nudge) answer("busy", roomId, started, roomKind = "link")
@@ -243,7 +255,8 @@ object GroupRing {
             val shownName = if (nudge) (user?.get("name") as? String)?.takeIf { it.isNotEmpty() } ?: name else name
             if (_invite.value != null || GroupCall.ui.value.cid != null) return@launch
             ring(GroupInvite(roomId, title, d["video"] != "0" && d["video"] != "false", caller, started ?: System.currentTimeMillis(),
-                listOf(RingFace(caller, shownName, photo?.ifEmpty { null })), linkKey = key.text, nudge = nudge))
+                listOf(RingFace(caller, shownName, photo?.ifEmpty { null })), linkKey = key.text, nudge = nudge,
+                knownStartMs = sent ?: started, ringFromMs = sent))
         }
     }
 
@@ -280,7 +293,7 @@ object GroupRing {
         }
         timer?.cancel()
         timer = scope.launch {
-            delay(GroupRingRules.ringLeftMs(i.startedAtMs, System.currentTimeMillis()))
+            delay(GroupRingRules.ringLeftMs(i.ringFromMs ?: i.startedAtMs, System.currentTimeMillis()))
             if (_invite.value?.cid == i.cid) stop()
         }
     }
@@ -289,7 +302,7 @@ object GroupRing {
     fun decline() {
         val i = _invite.value ?: return
         if (i.nudge) { stop(); return }   // a nudge's Ignore only closes it
-        declinedHere += i.cid
+        declinedHere += GroupRingRules.ringKey(i.cid, i.knownStartMs)
         stop()
         answer("decline", i.cid, i.startedAtMs, tries = 3, roomKind = i.roomKind)
     }
@@ -301,7 +314,7 @@ object GroupRing {
      */
     fun accept(context: Context, muted: Boolean, cameraAllowed: Boolean): GroupInvite? {
         val i = _invite.value ?: return null
-        if (!i.nudge) declinedHere += i.cid   // never ring again for a room I answered
+        if (!i.nudge) declinedHere += GroupRingRules.ringKey(i.cid, i.knownStartMs)   // never ring again for this call
         stop()
         val key = i.linkKey?.let { CallLinkKey.ofText(it) }
         if (key != null) {
@@ -361,7 +374,7 @@ object GroupRing {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setOngoing(true)
             .setSilent(true)
-            .setTimeoutAfter(GroupRingRules.ringLeftMs(i.startedAtMs, System.currentTimeMillis()))
+            .setTimeoutAfter(GroupRingRules.ringLeftMs(i.ringFromMs ?: i.startedAtMs, System.currentTimeMillis()))
             .setFullScreenIntent(pending(c, ACTION_RING, 11), true)
             .setContentIntent(pending(c, ACTION_RING, 11))
             .setStyle(NotificationCompat.CallStyle.forIncomingCall(person, pending(c, ACTION_DECLINE, 12), pending(c, ACTION_ACCEPT, 13)))
