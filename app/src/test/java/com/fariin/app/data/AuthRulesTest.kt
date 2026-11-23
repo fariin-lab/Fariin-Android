@@ -188,4 +188,12 @@ class AuthRulesTest {
                 .mapNotNull { AuthMessages.forAuthCode(it) }
         assertTrue(all.none { it.contains('—') })
     }
+
+    @Test fun pausedSignUpsShowTheServerSentenceNotOffline() {
+        assertEquals(AuthMessages.OFFLINE, AuthMessages.forUnavailable(null))
+        assertEquals(AuthMessages.OFFLINE, AuthMessages.forUnavailable("UNAVAILABLE"))
+        assertEquals(AuthMessages.OFFLINE, AuthMessages.forUnavailable("DEADLINE_EXCEEDED"))
+        assertEquals("Sign-ups are paused right now. Try again later.",
+            AuthMessages.forUnavailable("Sign-ups are paused right now. Try again later."))
+    }
 }

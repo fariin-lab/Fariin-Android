@@ -302,6 +302,18 @@ object AuthMessages {
     }
 
     /** LoginCodeView.plain: the server's own sentence unless it is the generic "internal". */
+    /**
+     * L-87: a callable that answered "unavailable" or ran out of time. Offline only when the server
+     * said nothing of its own (the SDK then gives the bare code name); paused sign-ups arrive as
+     * unavailable WITH the server's sentence, which is shown as it is (iOS does).
+     */
+    fun forUnavailable(message: String?): String {
+        val m = message?.trim().orEmpty()
+        val bare = m.isEmpty() || m.equals("UNAVAILABLE", true) || m.equals("DEADLINE_EXCEEDED", true) ||
+            m.equals("deadline exceeded", true) || m.equals("unavailable", true)
+        return if (bare) OFFLINE else forServer(m)
+    }
+
     fun forServer(message: String?): String =
         if (!message.isNullOrBlank() && !message.lowercase().contains("internal")) message else SOMETHING_WRONG
 }

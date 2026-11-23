@@ -307,7 +307,7 @@ class AuthRepository(
             is FirebaseNetworkException -> AuthMessages.OFFLINE
             is FirebaseFunctionsException ->
                 if (e.code == FirebaseFunctionsException.Code.UNAVAILABLE || e.code == FirebaseFunctionsException.Code.DEADLINE_EXCEEDED)
-                    AuthMessages.OFFLINE else AuthMessages.forServer(e.message)
+                    AuthMessages.forUnavailable(e.message) else AuthMessages.forServer(e.message)
             is FirebaseAuthException -> AuthMessages.forAuthCode(e.errorCode) ?: AuthMessages.SOMETHING_WRONG
             else -> AuthMessages.forServer(e.message)
         }
