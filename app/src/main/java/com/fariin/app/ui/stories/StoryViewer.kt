@@ -2200,7 +2200,9 @@ private fun ChannelStoryFooter(story: Story, service: StoryService, receipts: Bo
             }
         onDispose { reg.remove() }
     }
-    fun n(v: Int) = when { v >= 1_000_000 -> "%.1fM".format(v / 1e6); v >= 1_000 -> "%.1fK".format(v / 1e3); else -> "$v" }.replace(".0", "")
+    // Locale.ROOT: a decimal-comma phone showed "1,0K" and Arabic phones other digits (K-136).
+    fun n(v: Int) = when { v >= 1_000_000 -> String.format(java.util.Locale.ROOT, "%.1fM", v / 1e6)
+        v >= 1_000 -> String.format(java.util.Locale.ROOT, "%.1fK", v / 1e3); else -> "$v" }.replace(".0", "")
     val toast: (String) -> Unit = { android.widget.Toast.makeText(ctx, it, android.widget.Toast.LENGTH_SHORT).show() }
     Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(22.dp)) {
