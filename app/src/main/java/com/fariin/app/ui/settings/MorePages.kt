@@ -464,7 +464,7 @@ private fun NotificationsPage(pop: () -> Unit) {
                 account("notifPreview", on) { preview = !on; p.edit().putBoolean("notif.preview", !on).apply() }
             }
             SettingsRow("Message Sound", trailing = Trailing.OUT_LINK, badge = NewBadgeSpots.NOTIFICATIONS_SOUND) { openSystem(com.fariin.app.push.NotifChannel.MESSAGES.id) }
-            SettingsRow("Call Ringtone", trailing = Trailing.OUT_LINK, last = true) { openSystem(com.fariin.app.push.NotifChannel.CALLS.id) }
+            SettingsRow("Call Ringtone", trailing = Trailing.OUT_LINK, last = true, subtitle = "The ring you hear when someone calls you") { openSystem(com.fariin.app.push.NotifChannel.CALLS.id) }
         }
         SettingsSection(header = "In-App Notifications", footer = "Alerts while Fariin is open. Preview shows the sender and message in the banner.") {
             SwitchRow("In-App Sounds", inSound, enabled = push, badge = NewBadgeSpots.NOTIFICATIONS_IN_APP_SOUNDS) { inSound = it; p.edit().putBoolean("notif.inAppSound", it).apply() }
