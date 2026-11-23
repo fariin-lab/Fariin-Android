@@ -78,13 +78,20 @@ object AutoSaveMedia {
     /**
      * [id] is "cid/messageId". The id is claimed before the copy and given back if it fails.
      * [sentAtMs]: when the message was sent; older than the start or the 7 day window is not saved.
+     * [expiring]: the message has an expiry (`expiresAt`); it is never saved (K-26).
      */
-    fun save(c: Context, id: String, file: File, isVideo: Boolean, sentAtMs: Double? = null) {
+    fun save(c: Context, id: String, file: File, isVideo: Boolean, sentAtMs: Double? = null, expiring: Boolean = false) {
         val app = c.applicationContext
         val cid = id.substringBefore('/')
         if (!savesMedia(app, cid) || GallerySaver.needsPermission(app)) return
         if (sentAtMs != null && sentAtMs < maxOf(sinceMs(app, cid), System.currentTimeMillis() - WINDOW_MS)) return
         if (!claim(app, id)) return
+        // A disappearing message, or a chat with the timer on, never goes into the gallery: the
+        // chat copy goes when the timer ends, a gallery copy would stay (K-26). The id stays
+        // claimed, so turning the timer off later does not save the old media.
+        if (expiring) return
+        val timed = com.fariin.app.data.CryptoHub.listedConversation(cid)
+        if (timed != null && timed.disappearSeconds > 0) return
         // Nothing from a message request nobody has accepted (iOS isUnansweredRequest). The id stays
         // claimed, so accepting later does not pour the old pictures in.
         val conv = com.fariin.app.data.CryptoHub.listedConversation(cid)
