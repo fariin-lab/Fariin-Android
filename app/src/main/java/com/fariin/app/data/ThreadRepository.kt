@@ -168,6 +168,9 @@ class ThreadRepository(
      * of spinning for ever: the red mark with Resend and Delete, as a failed send before its write.
      */
     private val failedMedia: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    /** H-28: half-sent video messages of mine being taken down (doc ids): never drawn, so the
+     *  failed copy on this phone shows in their place until the delete lands. */
+    private val takenDown: MutableSet<String> = ConcurrentHashMap.newKeySet()
     private val processStartMs = ThreadRepositoryStart.ms
     /** File, song and playlist sends, by clientId: the kinds whose Resend picks up where it stopped (MediaSender.PlaylistUpload, FileUpload). */
     private val playlistSends: MutableSet<String> = ConcurrentHashMap.newKeySet()
@@ -775,6 +778,7 @@ class ThreadRepository(
             Conversation.millis((_state.value.conv["memberSince"] as? Map<*, *>)?.get(me)) else 0.0
         // A synced channel draws its store (ChannelSync); everything else the window and older pages.
         for (d in chSync?.docsOrNull() ?: (olderDocs.values + liveDocs.values)) {
+            if (d.id in takenDown) continue
             var m = parse(d)
             if (m.uploading && m.authorId == me && m.sendState == null) m.clientId?.let { k ->
                 // A file, song or playlist THIS phone started, still `uploading` from before this app
@@ -1675,7 +1679,20 @@ class ThreadRepository(
                 com.fariin.app.media.MediaSend.clearItems(clientId)
                 com.fariin.app.media.MediaSend.finish(clientId)
             } catch (e: Exception) {
+                // H-28 (iOS cancels it too): a video whose message went out before its clip. Files,
+                // songs and playlists resume on their own message instead (playlistSends).
+                val announced = if (clientId in playlistSends) null else com.fariin.app.media.MediaSend.announcedId(clientId)
                 if (mediaSendEnded(clientId, e)) { com.fariin.app.local.PhotoOutbox.remove(me, clientId); com.fariin.app.local.FileOutbox.remove(me, clientId); return@launch }
+                if (announced != null) {
+                    // The half message is taken down and this phone's copy drawn failed in its place,
+                    // so Resend writes one new message, never a second one beside a ring that spins
+                    // for ever on both phones.
+                    val shown = _state.value.messages.firstOrNull { it.clientId == clientId && it.authorId == me && it.id == announced }
+                    if (pending[clientId] == null && shown != null)
+                        pending[clientId] = shown.copy(id = clientId, uploading = false, sendState = Message.SendState.FAILED)
+                    takenDown.add(announced)
+                    SendScope.launch(Dispatchers.IO) { cancelAnnounced(announced) }
+                }
                 // Refused for good: no resend at the next start either.
                 if (SendQueue.isPermanent(e)) { com.fariin.app.local.PhotoOutbox.remove(me, clientId); com.fariin.app.local.FileOutbox.remove(me, clientId) }
                 if (!retryMedia.containsKey(clientId)) retryMedia[clientId] = work
@@ -1757,8 +1774,14 @@ class ThreadRepository(
             val snap = runCatching {
                 convRef.collection("messages").whereEqualTo("authorId", me).whereEqualTo("uploading", true).get().await()
             }.getOrNull() ?: return@launch
+            // H-28: a send this phone still holds in its outbox (or is running) is never swept: its
+            // resume finishes it, or takes the half message down and sends it again.
+            val kept = (com.fariin.app.local.PhotoOutbox.all(me).map { it.clientId } +
+                com.fariin.app.local.FileOutbox.all(me).map { it.clientId }).toHashSet()
             for (d in snap.documents) {
                 val made = d.ts("createdAt")?.toDate()?.time ?: continue
+                val k = d.get("clientId") as? String
+                if (k != null && (k in kept || com.fariin.app.media.MediaSend.isInFlight(k))) continue
                 if (made < cutoff) cancelAnnounced(d.id)
             }
         }
@@ -2034,13 +2057,18 @@ class ThreadRepository(
             localFiles[e.clientId] = if (video) e.poster!! else e.path
             rebuild()
             val work: suspend () -> Unit = {
-                val landed = try {
+                val found = try {
                     // My own doc only (H-56): someone else's message with the same clientId is not my send.
                     val q = convRef.collection("messages").whereEqualTo("clientId", e.clientId).whereEqualTo("authorId", me).limit(1)
-                    !q.get(Source.CACHE).await().isEmpty || !q.get(Source.SERVER).await().isEmpty
-                } catch (_: Exception) { false }
-                // A clip whose message went out before the kill (its upload unfinished) is not sent twice;
-                // that one is the stuck-send case, not this queue's.
+                    q.get(Source.CACHE).await().documents.firstOrNull() ?: q.get(Source.SERVER).await().documents.firstOrNull()
+                } catch (_: Exception) { null }
+                // H-28: a clip whose message went out before the kill with its upload unfinished (the
+                // server says so): that half message is taken down and the clip sent again as one new
+                // message. Before, the stuck sweep deleted it after 30 minutes and the clip was lost.
+                val half = video && found != null && found.getBoolean("uploading") == true &&
+                    runCatching { found.reference.get(Source.SERVER).await().getBoolean("uploading") == true }.getOrDefault(false)
+                if (half) { takenDown.add(found!!.id); cancelAnnounced(found.id) }
+                val landed = found != null && !half
                 if (!landed && voice) {
                     voiceNow(com.fariin.app.media.VoiceRecorder.Result(f, e.duration, e.wave, e.viewOnce), e.clientId, e.ts)
                 } else if (!landed && video) {
