@@ -17,6 +17,8 @@ object OfficialPushTopics {
     private const val PREFS = "fariin_official"
     /** What Firebase was last told, so a country change can leave the old country's topics. */
     private const val JOINED = "official.push.topics"
+    /** The Fariin chat's mute as last synced, for [resync]. */
+    private const val MUTED = "official.push.muted"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private fun country(): String? =
@@ -33,10 +35,21 @@ object OfficialPushTopics {
         return t
     }
 
+    /**
+     * Show Notifications was turned on or off (Push.register / unregister, K-119): leave or rejoin the
+     * topics at once, with the Fariin chat's mute as last known.
+     */
+    fun resync(c: Context) {
+        val prefs = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val signedIn = com.fariin.app.Fb.auth.currentUser != null
+        sync(c, prefs.getBoolean(MUTED, false), signedIn)
+    }
+
     /** Join what is missing, leave what is no longer wanted. Cheap to call often: only the difference goes. */
     @Synchronized
     fun sync(c: Context, muted: Boolean, signedIn: Boolean = true) {
         val prefs = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (signedIn) prefs.edit().putBoolean(MUTED, muted).apply()
         val joined = prefs.getStringSet(JOINED, emptySet()).orEmpty()
         val target = wanted(muted, signedIn, Push.pushOn(c), country())
         if (joined == target) return

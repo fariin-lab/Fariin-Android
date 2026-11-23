@@ -78,7 +78,11 @@ object Push {
         val app = c.applicationContext
         if (com.fariin.app.FariinApp.usingLocalBackend) return   // no FCM emulator: never touch the real project
         scope.launch {
-            val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return@launch
+            // Nobody signed in: a token an offline Log Out retired is still deleted (K-43), so the old
+            // account's alerts stop reaching this phone.
+            val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: run { retirePending(app); return@launch }
+            // The Fariin chat's topics follow the switch (K-119).
+            OfficialPushTopics.resync(app)
             if (!prefs(app).contains(PUSH_ON)) {
                 val off = try {
                     com.fariin.app.Fb.db.collection("users").document(uid).get().await()
@@ -134,6 +138,8 @@ object Push {
     /** True once the token is off the account; false when it may still be listed there. */
     suspend fun unregister(c: Context): Boolean {
         if (com.fariin.app.FariinApp.usingLocalBackend) return true
+        // Show Notifications off: the Fariin chat's topics go at once too (K-119).
+        OfficialPushTopics.resync(c)
         val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return false
         val token = try { FirebaseMessaging.getInstance().token.await() } catch (_: Exception) { null } ?: return false
         val db = com.fariin.app.Fb.db
@@ -167,6 +173,14 @@ object Push {
         if (com.fariin.app.FariinApp.usingLocalBackend) return
         val app = c.applicationContext
         prefs(app).edit().putBoolean(RETIRE, true).apply()
+        scope.launch { retirePending(app) }
+    }
+
+    /** A push reached a phone with nobody signed in (K-43): the network is up, try the delete again. */
+    fun retireIfPending(c: Context) {
+        if (com.fariin.app.FariinApp.usingLocalBackend) return
+        val app = c.applicationContext
+        if (!prefs(app).getBoolean(RETIRE, false)) return
         scope.launch { retirePending(app) }
     }
 
