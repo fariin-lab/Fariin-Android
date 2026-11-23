@@ -825,6 +825,8 @@ class ThreadRepository(
             }
             // Sent while I had them blocked (now or in a past block): never shown (iOS BlockList.hides).
             if (m.authorId != me && BlockList.hides(m.authorId, m.createdAtMillis)) continue
+            // F-4: the server held it (a block it saw at send time): never shown to me, whatever createdAt says.
+            if (m.held && m.authorId != me) continue
             all[m.rowId] = m
             if (d.metadata.hasPendingWrites()) unconfirmed.add(m.rowId)
         }
@@ -837,6 +839,7 @@ class ThreadRepository(
             if (Disappearing.isExpired(m, now) || HiddenMessages.isHidden(m.id)) continue
             if (wontOpenHere(m, keysSince)) continue
             if (m.authorId != me && BlockList.hides(m.authorId, m.createdAtMillis)) continue
+            if (m.held && m.authorId != me) continue
             all[m.rowId] = m
         }
         newestUnopened?.let { n ->
@@ -2990,6 +2993,7 @@ class ThreadRepository(
                 clearedMs > 0 && m.createdAtMillis <= clearedMs -> null
                 HiddenMessages.isHidden(m.id) -> null
                 m.authorId != me && BlockList.hides(m.authorId, m.createdAtMillis) -> null
+                m.held && m.authorId != me -> null
                 m.text == Message.NOT_ENCRYPTED -> null
                 // Ran out on the timer, the server has not deleted it yet: search never finds it.
                 Disappearing.isExpired(m, now) -> null
