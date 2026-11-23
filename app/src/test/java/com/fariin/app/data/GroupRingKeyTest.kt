@@ -22,6 +22,15 @@ class GroupRingKeyTest {
         assertEquals("g1@0", GroupRingRules.ringKey("g1", null))
     }
 
+    @Test fun ringPushAlwaysRings() = org.junit.Assert.assertTrue(GroupRingRules.ringsForPush("groupring", emptyList<String>(), "me", 40))
+    @Test fun bigGroupAlertDoesNotRing() = org.junit.Assert.assertFalse(GroupRingRules.ringsForPush(null, null, "me", 40))
+    @Test fun smallGroupAlertRingsBeforeRung() = org.junit.Assert.assertTrue(GroupRingRules.ringsForPush(null, null, "me", 5))
+    @Test fun rungListDecides() {
+        org.junit.Assert.assertTrue(GroupRingRules.ringsForPush("groupcall", listOf("me"), "me", 40))
+        org.junit.Assert.assertFalse(GroupRingRules.ringsForPush("groupcall", listOf("x"), "me", 5))
+    }
+    @Test fun unknownSizeDoesNotRing() = org.junit.Assert.assertFalse(GroupRingRules.ringsForPush(null, null, "me", null))
+
     @Test fun linkRingCountsFromSentAt() {
         // A ring sent 50 s after the room started still gets most of its minute.
         assertEquals(50_000L, GroupRingRules.ringLeftMs(100_000L, 110_000L))

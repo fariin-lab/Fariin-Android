@@ -99,6 +99,17 @@ object GroupRingRules {
      * time), so the group's next call rings again. A start time not known counts as 0.
      */
     fun ringKey(cid: String, startedAtMs: Long?): String = "$cid@${startedAtMs ?: 0L}"
+
+    /**
+     * F-36: a big group's call is announced, not rung. The server's ring push says kind
+     * "groupring"; the plain "groupcall" alert rings only when the call doc's server-only `rung`
+     * names me, or, before the server wrote it, when the group is small enough to be rung.
+     */
+    fun ringsForPush(kind: String?, rung: List<*>?, me: String, memberCount: Int?): Boolean = when {
+        kind == "groupring" -> true
+        rung != null -> rung.contains(me)
+        else -> memberCount != null && memberCount <= GroupCallWire.GROUP_RING_MAX_MEMBERS
+    }
 }
 
 /**
@@ -131,8 +142,8 @@ object GroupRing {
     private var app: Context? = null
     private val db get() = com.fariin.app.Fb.db
 
-    /** The `groupcall` push (FariinMessagingService). */
-    fun onPush(context: Context, cid: String) {
+    /** The `groupcall` push (FariinMessagingService); [kind] is the push's `kind` (F-36). */
+    fun onPush(context: Context, cid: String, kind: String? = null) {
         val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         if (cid.isEmpty() || cid.contains("/")) return
         app = context.applicationContext
@@ -148,6 +159,7 @@ object GroupRing {
             }
             val by = doc?.get("startedBy") as? String ?: return@launch
             val conv = try { db.collection("conversations").document(cid).get().await().data } catch (_: Exception) { null }
+            if (!GroupRingRules.ringsForPush(kind, doc["rung"] as? List<*>, me, (conv?.get("users") as? List<*>)?.size)) return@launch
             val names = (conv?.get("names") as? Map<*, *>).orEmpty()
             val photos = (conv?.get("photos") as? Map<*, *>).orEmpty()
             val title = (conv?.get("title") as? String)?.takeIf { it.isNotEmpty() } ?: (doc["title"] as? String)?.takeIf { it.isNotEmpty() } ?: "Group"
