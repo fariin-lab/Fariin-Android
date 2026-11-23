@@ -37,7 +37,7 @@ object R2Media {
         size?.let { data["size"] = it }; contentType?.let { data["contentType"] = it }
         val r = fn().call(data).await().getData() as? Map<*, *>
         val url = r?.get("url") as? String
-        if (url == null) null else url to ((r["headers"] as? Map<*, *>)?.get("Content-Type") as? String)
+        if (url == null) null else url to ((r?.get("headers") as? Map<*, *>)?.get("Content-Type") as? String)
     } catch (e: kotlinx.coroutines.CancellationException) {
         throw e
     } catch (e: com.google.firebase.functions.FirebaseFunctionsException) {
