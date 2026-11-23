@@ -132,10 +132,23 @@ object Passkeys {
         } catch (_: GetCredentialCancellationException) { throw SheetCancelled() }
         catch (_: NoCredentialException) { throw SheetCancelled() }
         val json = (cred as? PublicKeyCredential)?.authenticationResponseJson ?: throw AuthFlowError(AuthFlowError.Kind.PasskeyFailed)
-        val out = call("passkeyAuthVerify", mapOf("challengeId" to challengeId, "response" to fromJson(JSONObject(json))))
+        val out = try {
+            call("passkeyAuthVerify", mapOf("challengeId" to challengeId, "response" to fromJson(JSONObject(json))))
+        } catch (e: com.google.firebase.functions.FirebaseFunctionsException) {
+            // The server no longer knows this passkey (removed on another phone): its refusal names
+            // it in details.unknownCredentialId. Telling the password manager to drop it needs the
+            // signalUnknownCredential call of androidx.credentials 1.6; this app is on 1.5.0, so it
+            // is only logged for now.
+            unknownCredentialId(e.details)?.let { android.util.Log.w("FariinAuth", "passkey unknown to the server: $it") }
+            throw e
+        }
         val token = out["token"] as? String ?: throw AuthFlowError(AuthFlowError.Kind.PasskeyFailed)
         auth.signInWithToken(token)
     }
+
+    /** details.unknownCredentialId of a passkeyAuthVerify refusal, when it names one. */
+    internal fun unknownCredentialId(details: Any?): String? =
+        ((details as? Map<*, *>)?.get("unknownCredentialId") as? String)?.takeIf { it.isNotEmpty() }
 
     data class Row(val id: String, val name: String, val createdMs: Double?, val lastUsedMs: Double?)
 
