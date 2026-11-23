@@ -10,6 +10,7 @@ class Wire(private val nacl: NaCl) {
     companion object {
         const val ENC1 = "enc1:"          // 1:1 text
         const val ENCG1 = "encg1:"        // group text (sealed groups only)
+        const val MAX_ENCG1_CHARS = 1_000_000   // the server text cap is 700000
         const val LEGACY = "enc:"         // an old, fake format; never opened
 
         // What the iOS `decrypt` returns instead of text (Crypto.swift:718-721). The UI tests for
@@ -85,6 +86,7 @@ class Wire(private val nacl: NaCl) {
 
     fun parseEncg1(raw: String): GroupEnvelope? {
         if (!raw.startsWith(ENCG1)) return null
+        if (raw.length > MAX_ENCG1_CHARS) return null   // far above any real group envelope
         val json = B64.decode(raw.substring(ENCG1.length)) ?: return null
         val obj = MiniJson.parse(Utf8.decodeStrict(json) ?: return null) as? Map<*, *> ?: return null
         val n = obj["n"] as? String ?: return null

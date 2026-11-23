@@ -102,11 +102,12 @@ class CryptoDecryptor(private val crypto: FariinCrypto) : MessageDecryptor {
         if (raw.isEmpty()) return local(conv)
         // Released keys on the conversation itself open an old sealed group line (Crypto.swift rk).
         if (conv.isGroup && conv.releasedKeys.isNotEmpty()) crypto.noteReleased(conv.id, conv.releasedKeys)
-        return crypto.decrypt(raw, conv.id, conv.lastSender)
+        // A crafted line must never crash the chat list: it shows as "Message".
+        return try { crypto.decrypt(raw, conv.id, conv.lastSender) } catch (_: Throwable) { null }
     }
 
     override fun open(conv: Conversation, sealed: String, author: String): String? =
-        try { crypto.decrypt(sealed, conv.id, author) } catch (_: Exception) { null }
+        try { crypto.decrypt(sealed, conv.id, author) } catch (_: Throwable) { null }
 
     override fun peekPreview(conv: Conversation, me: String): String? {
         val raw = conv.lastMessageCipher

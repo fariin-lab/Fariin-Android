@@ -53,7 +53,10 @@ object MiniJson {
     fun parse(s: String): Any? = try {
         val p = Parser(s); p.ws(); val v = p.value(); p.ws()
         if (p.i != s.length) null else v
-    } catch (_: RuntimeException) { null }
+    } catch (_: Throwable) { null }   // StackOverflowError too: a crafted text must never crash a screen
+
+    /** Deepest nesting the reader takes. Real envelopes and markers are 2-3 deep. */
+    const val MAX_DEPTH = 16
 
     fun writeObject(m: Map<String, Any?>): String = StringBuilder().also { writeValue(it, m) }.toString()
 
@@ -92,6 +95,8 @@ object MiniJson {
 
     private class Parser(val s: String) {
         var i = 0
+        private var depth = 0
+        private fun enter() { if (++depth > MAX_DEPTH) error("too deep") }
         fun ws() { while (i < s.length && s[i] in " \t\r\n") i++ }
         fun value(): Any? {
             ws()
@@ -108,21 +113,23 @@ object MiniJson {
         }
         fun lit(w: String, v: Any?): Any? { if (!s.startsWith(w, i)) error("bad literal"); i += w.length; return v }
         fun obj(): Map<String, Any?> {
+            enter()
             val m = LinkedHashMap<String, Any?>(); i++; ws()
-            if (s[i] == '}') { i++; return m }
+            if (s[i] == '}') { i++; depth--; return m }
             while (true) {
                 ws(); val k = str(); ws()
                 if (s[i] != ':') error("colon"); i++
                 m[k] = value(); ws()
-                when (s[i]) { ',' -> i++; '}' -> { i++; return m }; else -> error("obj") }
+                when (s[i]) { ',' -> i++; '}' -> { i++; depth--; return m }; else -> error("obj") }
             }
         }
         fun arr(): List<Any?> {
+            enter()
             val l = ArrayList<Any?>(); i++; ws()
-            if (s[i] == ']') { i++; return l }
+            if (s[i] == ']') { i++; depth--; return l }
             while (true) {
                 l.add(value()); ws()
-                when (s[i]) { ',' -> i++; ']' -> { i++; return l }; else -> error("arr") }
+                when (s[i]) { ',' -> i++; ']' -> { i++; depth--; return l }; else -> error("arr") }
             }
         }
         fun str(): String {
