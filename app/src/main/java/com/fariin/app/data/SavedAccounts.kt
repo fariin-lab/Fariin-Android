@@ -159,8 +159,16 @@ object DeviceSessionKeys {
     suspend fun revoke(deviceIds: List<String>): Boolean =
         try { fn.getHttpsCallable("revokeDeviceSessions").call(mapOf("deviceIds" to deviceIds)).await(); true } catch (_: Exception) { false }
 
-    suspend fun revokeAllOthers(c: Context) {
-        try { fn.getHttpsCallable("revokeDeviceSessions").call(mapOf("allExcept" to DeviceRegistry.thisDeviceId(c))).await() } catch (_: Exception) {}
+    /** F-19: true only when the server confirmed it, three tries (1 s, 2 s apart), as iOS. */
+    suspend fun revokeAllOthers(c: Context): Boolean {
+        for (attempt in 0 until 3) {
+            if (attempt > 0) kotlinx.coroutines.delay(attempt * 1000L)
+            try {
+                fn.getHttpsCallable("revokeDeviceSessions").call(mapOf("allExcept" to DeviceRegistry.thisDeviceId(c))).await()
+                return true
+            } catch (_: Exception) {}
+        }
+        return false
     }
 
     /** Signed in: make sure this phone holds a key for this account. Cheap when it already does. */

@@ -312,7 +312,12 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
             onYes = { pending = null; run { signOut(d) } }, onNo = { pending = null })
     }
     if (all) YesNo("Sign out all other devices?", "This device stays signed in.", "Sign out all",
-        onYes = { all = false; run { others.forEach { signOut(it) }; com.fariin.app.data.DeviceSessionKeys.revokeAllOthers(ctx) } }, onNo = { all = false })
+        onYes = { all = false; run {
+            // F-19: every other phone's one-tap key ends FIRST; if the server never confirms, nothing is removed.
+            if (!com.fariin.app.data.DeviceSessionKeys.revokeAllOthers(ctx))
+                throw DeviceSignOutProblem("Those devices could not be logged out right now. Check your connection and try again.")
+            others.forEach { signOut(it) }
+        } }, onNo = { all = false })
 }
 
 /**
