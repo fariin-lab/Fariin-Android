@@ -1998,7 +1998,8 @@ class ThreadRepository(
             val url = sref.downloadUrl.await().toString()
             msg.update(mapOf("imageUrl" to url, "enc" to meta.asMap(), "uploading" to false)).await()
         } catch (e: Exception) {
-            runCatching { msg.delete().await() }
+            // H-151: the message goes, and the chat line no longer says "Sticker" for it (iOS guard).
+            if (runCatching { msg.delete().await() }.isSuccess) runCatching { rewriteSummaryAfterDelete() }
             throw e
         }
     }
