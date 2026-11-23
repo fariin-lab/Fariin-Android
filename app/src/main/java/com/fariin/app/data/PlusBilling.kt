@@ -195,7 +195,9 @@ object PlusBilling {
             } catch (e: FirebaseFunctionsException) {
                 when {
                     e.code == FirebaseFunctionsException.Code.NOT_FOUND -> {}
-                    PlusStore.detailsCode(e) == "OTHER_ACCOUNT" -> notice = e.message
+                    // L-99: only to the account that tried to buy. A shared Play account's other
+                    // Fariin account saw this on every launch from the quiet start check.
+                    PlusStore.detailsCode(e) == "OTHER_ACCOUNT" -> if (fromBuy) notice = e.message
                     fromBuy -> notice = "Fariin could not confirm your subscription right now. Try again in a moment."
                 }
             } catch (_: Exception) {
