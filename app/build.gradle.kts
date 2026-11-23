@@ -23,15 +23,15 @@ android {
         targetSdk = 36
         versionName = "1.0"
         // K-66: the store refuses an update whose versionCode is not higher, and it stood at 1.
-        // Derived from the name ("1.2.3" -> 10203) times 1000, plus a build number (0-999) from
-        // -PbuildNumber or the CI's GITHUB_RUN_NUMBER when there is one: 1.0 is 10000000, 1.0
-        // build 42 is 10000042. A new version name always goes higher than every build before it.
+        // Derived from the name ("1.2.3" -> 123) times 1,000,000, plus a build number (0-999999)
+        // ONLY from an explicit -PbuildNumber (the store upload job passes it). CI test builds and
+        // local builds both get the bare name code, so one never blocks the other as a downgrade.
+        // 1.0 is 100000000; 1.0 build 1200 is 100001200. Fits an Int up to version 21.
         versionCode = run {
             val parts = versionName!!.split('.').map { it.toIntOrNull() ?: 0 } + listOf(0, 0, 0)
-            val fromName = parts[0] * 10000 + parts[1].coerceIn(0, 99) * 100 + parts[2].coerceIn(0, 99)
-            val build = ((project.findProperty("buildNumber") as? String) ?: System.getenv("GITHUB_RUN_NUMBER"))
-                ?.toIntOrNull()?.coerceIn(0, 999) ?: 0
-            fromName * 1000 + build
+            val fromName = parts[0].coerceIn(0, 21) * 100 + parts[1].coerceIn(0, 9) * 10 + parts[2].coerceIn(0, 9)
+            val build = (project.findProperty("buildNumber") as? String)?.toIntOrNull()?.coerceIn(0, 999_999) ?: 0
+            fromName * 1_000_000 + build
         }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // The map's key: the app's own key from google-services.json (already in the repo), so no
