@@ -101,6 +101,22 @@ object BubbleStyles {
 
     private fun picturesLockedNow(): Boolean = PlusStore.state("pictureBubbles") == PlusStore.State.LOCKED
 
+    /**
+     * J-133, the receiver's side: a picture style on someone else's message draws only when picture
+     * styles are free, or its author has Plus. While Plus is not visible to me (OFF) nothing is known
+     * about the author, and the style draws as before. Call while drawing: an unknown author is asked
+     * for through [PlusStore.showsBadge] and the bubble redraws when the answer comes.
+     */
+    fun pictureShown(id: String?, authorId: String, me: String): Boolean {
+        if (BubbleArt.find(id) == null || authorId == me) return true
+        val mode = PlusStore.state("pictureBubbles")
+        return pictureShownRule(mode) { PlusStore.showsBadge(authorId) }
+    }
+
+    /** Pure: OFF = free (or Plus not visible here) draws; LOCKED or ON = Plus pictures, the author's badge decides. */
+    fun pictureShownRule(mode: PlusStore.State, authorHasPlus: () -> Boolean): Boolean =
+        mode == PlusStore.State.OFF || authorHasPlus()
+
     /** May I pick it (and send it): a picture style unless locked; a colour style unless it is Plus (not on sale yet). */
     // featureLocked: the Plus answer; tests pass their own, the app reads PlusStore.
     fun mayUse(id: String?, featureLocked: () -> Boolean = ::picturesLockedNow): Boolean =
