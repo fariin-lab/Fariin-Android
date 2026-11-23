@@ -19,6 +19,8 @@ android {
     defaultConfig {
         applicationId = "com.fariin.app"
         resValue("bool", "fariin_debug_appcheck", "false")
+        // Play asks for the native libraries' symbols, so crash reports from them can be read.
+        ndk { debugSymbolLevel = "SYMBOL_TABLE" }
         minSdk = 28
         targetSdk = 36
         versionName = "1.0"
@@ -190,7 +192,7 @@ dependencies {
     // Chat video send: 540p H.264 like iOS VideoTranscoder (media worker).
     implementation("androidx.media3:media3-transformer:1.8.0")
     // Fariin Plus subscriptions (Google Play Billing; shown only while the server opens purchases).
-    implementation("com.android.billingclient:billing-ktx:7.1.1")
+    implementation("com.android.billingclient:billing-ktx:8.3.0")
     implementation("androidx.media3:media3-effect:1.8.0")
     // Story camera (ui/stories/StoryCamera.kt): CameraX preview, photo and video capture.
     implementation("androidx.camera:camera-camera2:1.4.2")
