@@ -2,7 +2,6 @@ package com.fariin.app.ui.channels
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
@@ -54,6 +53,7 @@ object PostToStory {
     private const val H = 1920
     /** iOS: a reposted video plays at most this long. */
     private const val CLIP_MS = 60_000L
+    private const val AVATAR_MAX_BYTES = 5 * 1024 * 1024
 
     /** The story picture and its tap target, or null when the post's picture could not be read. */
     suspend fun build(ctx: Context, info: ChannelInfo, m: Message): StoryMedia.Prepared? = withContext(Dispatchers.IO) {
@@ -61,17 +61,33 @@ object PostToStory {
         val pic: Bitmap? = pictureOf(m)?.let { (url, enc) ->
             val media = com.fariin.app.media.ChatMedia(app, info.cid, com.fariin.app.data.CryptoHub.get(app))
             val f = runCatching { media.cached(url) ?: media.file(url, enc) }.getOrNull() ?: return@withContext null
-            BitmapFactory.decodeFile(f.path) ?: return@withContext null
+            // Sampled down, never full size: a huge channel photo ran the phone out of memory.
+            com.fariin.app.media.BitmapDecode.fromUri(app, android.net.Uri.fromFile(f), H) ?: return@withContext null
         }
+        // The channel photo with time limits and a size cap, so a slow or huge one cannot hang the share.
         val avatar: Bitmap? = info.avatarUrl?.let { u ->
-            runCatching { java.net.URL(u).openStream().use { BitmapFactory.decodeStream(it) } }.getOrNull()
+            runCatching {
+                val conn = java.net.URL(u).openConnection().apply { connectTimeout = 5_000; readTimeout = 5_000 }
+                val bytes = conn.getInputStream().use { s ->
+                    val buf = java.io.ByteArrayOutputStream()
+                    val chunk = ByteArray(16 * 1024)
+                    while (true) {
+                        val n = s.read(chunk)
+                        if (n < 0) break
+                        buf.write(chunk, 0, n)
+                        if (buf.size() > AVATAR_MAX_BYTES) error("too big")
+                    }
+                    buf.toByteArray()
+                }
+                com.fariin.app.media.BitmapDecode.fromBytes(bytes, 256)
+            }.getOrNull()
         }
         val out = Bitmap.createBitmap(W, H, Bitmap.Config.ARGB_8888)
         val c = Canvas(out)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
         // The ground: the picture blurred (drawn tiny, then stretched) and darkened, or the gradient.
         if (pic != null) {
-            val small = Bitmap.createScaledBitmap(pic, 27, (27f * pic.height / pic.width).toInt().coerceAtLeast(1), true)
+            val small = Bitmap.createScaledBitmap(pic, 27, (27f * pic.height / pic.width.coerceAtLeast(1)).toInt().coerceIn(1, 200), true)
             val s = maxOf(W.toFloat() / small.width, H.toFloat() / small.height)
             val dw = small.width * s; val dh = small.height * s
             c.drawBitmap(small, null, RectF((W - dw) / 2, (H - dh) / 2, (W + dw) / 2, (H + dh) / 2), paint)
