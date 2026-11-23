@@ -114,7 +114,7 @@ object StoryList {
             allowsReplies = data["allowsReplies"] as? Boolean ?: true,
             captureProtected = data["captureProtected"] as? Boolean ?: false,
             isPublic = data["public"] as? Boolean ?: false,
-            durationSec = (data["duration"] as? Number)?.toDouble() ?: 0.0,
+            durationSec = (data["duration"] as? Number)?.toDouble()?.takeIf { it.isFinite() && it > 0 }?.coerceAtMost(3600.0) ?: 0.0,
             blurThumb = data["blurThumb"] as? String ?: "",
             recipientsLeft = (data["recipientUids"] as? List<*>)?.size ?: -1,
             taps = StoryTaps.list(data["stickers"]),

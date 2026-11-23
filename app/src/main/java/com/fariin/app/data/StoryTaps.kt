@@ -28,16 +28,19 @@ object StoryTaps {
         val url = d["url"] as? String ?: return null
         val scheme = url.substringBefore("://", "").lowercase()
         if (scheme != "http" && scheme != "https") return null
-        val x = (d["x"] as? Number)?.toDouble() ?: return null
-        val y = (d["y"] as? Number)?.toDouble() ?: return null
-        val w = (d["w"] as? Number)?.toDouble() ?: return null
-        val h = (d["h"] as? Number)?.toDouble() ?: return null
+        // The poster writes these: NaN, Infinity or a huge number crashed every viewer when the
+        // area was laid out, so a target outside a sane range is dropped.
+        fun num(k: String, lo: Double, hi: Double) = (d[k] as? Number)?.toDouble()?.takeIf { it.isFinite() && it >= lo && it <= hi }
+        val x = num("x", -1.0, 2.0) ?: return null
+        val y = num("y", -1.0, 2.0) ?: return null
+        val w = num("w", 0.0, 4.0) ?: return null
+        val h = num("h", 0.0, 4.0) ?: return null
         if (w <= 0 || h <= 0) return null
-        return StoryTapTarget(x, y, w, h, (d["rotation"] as? Number)?.toDouble() ?: 0.0, url,
-            (d["aspect"] as? Number)?.toDouble()?.takeIf { it > 0 })
+        return StoryTapTarget(x, y, w, h, num("rotation", -100.0, 100.0) ?: 0.0, url,
+            num("aspect", 0.01, 100.0))
     }
 
-    fun list(raw: Any?): List<StoryTapTarget> = (raw as? List<*>).orEmpty().mapNotNull { from(it) }
+    fun list(raw: Any?): List<StoryTapTarget> = (raw as? List<*>).orEmpty().mapNotNull { runCatching { from(it) }.getOrNull() }
 
     /** iOS StoryTapTarget.asDictionary: the `stickers` entry as it is written; no aspect key when there is none. */
     fun asMap(t: StoryTapTarget): Map<String, Any> {

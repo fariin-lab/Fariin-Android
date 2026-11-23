@@ -108,4 +108,13 @@ class StoryTapsTest {
         assertEquals(listOf(StoryTaps.asMap(t)), p["stickers"])
         assertTrue((StoryRules.payload("me", false, "S2", "", StoryAudienceChoice.MY_CHATS, "all", setOf("a"), "E", "N", "b")["stickers"] as List<*>).isEmpty())
     }
+    @Test fun dropsANaNOrHugePosition() {
+        assertNull(StoryTaps.from(raw + ("x" to Double.NaN)))
+        assertNull(StoryTaps.from(raw + ("y" to Double.POSITIVE_INFINITY)))
+        assertNull(StoryTaps.from(raw + ("w" to 1e30)))
+        assertNull(StoryTaps.from(raw + ("h" to Double.NaN)))
+        assertEquals(0.0, StoryTaps.from(raw + ("rotation" to Double.NaN))!!.rotation, 1e-9)
+        assertNull(StoryTaps.from(raw + ("aspect" to Double.POSITIVE_INFINITY))!!.aspect)
+        assertEquals(1, StoryTaps.list(listOf(raw + ("x" to Double.NaN), raw, "nope")).size)
+    }
 }
