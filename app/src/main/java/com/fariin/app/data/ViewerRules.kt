@@ -71,7 +71,9 @@ object ViewerRules {
                 else -> {}
             }
         }
-        return out
+        // A message whose id is another album's "<id>-<index>" key: the first one stays, so the
+        // pager never sees one key twice, which crashed it (audit H-128).
+        return out.distinctBy { it.key }
     }
 
     private fun albumPage(m: Message, i: Int, a: Message.AlbumItem) = Page(
@@ -87,7 +89,7 @@ object ViewerRules {
      */
     fun sharedPages(items: List<SharedMedia.Item>, tapped: SharedMedia.Item): Pair<List<Page>, Int> {
         if (tapped.isVideo) return listOf(sharedPage(tapped)) to 0
-        val photos = items.filter { !it.isVideo }
+        val photos = items.filter { !it.isVideo }.distinctBy { it.id }   // one key once (audit H-128)
         return photos.map(::sharedPage) to photos.indexOfFirst { it.id == tapped.id }.coerceAtLeast(0)
     }
 

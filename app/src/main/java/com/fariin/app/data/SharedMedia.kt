@@ -79,7 +79,8 @@ object SharedMedia {
             .sortedByDescending { it.createdAtMillis }
         return Lists(
             // One album photo deleted for me is hidden by its own "<messageId>-<index>" id (iOS expandedGalleryItems).
-            media = shown.flatMap(::items).filter { !hidden(it.id) },
+            // One id once: a message named like an album tile ("<id>-0") made a list key twice (audit H-128).
+            media = shown.flatMap(::items).filter { !hidden(it.id) }.distinctBy { it.id },
             files = shown.filter { it.type == "file" && it.fileUrl != null },
             voice = shown.filter { it.type == "audio" && it.audioUrl != null },
             links = shown.mapNotNull { m -> if (isPlainText(m)) firstLink(m.text)?.let { m to it } else null },

@@ -29,6 +29,16 @@ class CrashDocsTest {
         assertEquals("Poll", ActivityItem.shown(marker))
     }
 
+    @Test fun albumKeyCollisionIsDeduped() {
+        val album = Message(id = "al", authorId = "u", text = "", type = "album", createdAtMillis = 2.0,
+            album = listOf(Message.AlbumItem("a", null, null, null), Message.AlbumItem("b", null, null, null)))
+        val photo = Message(id = "al-0", authorId = "u", text = "", type = "image", imageUrl = "c", createdAtMillis = 1.0)
+        val keys = ViewerRules.chatGallery(listOf(photo, album)).map { it.key }
+        assertEquals(keys.distinct(), keys)
+        val ids = SharedMedia.lists(listOf(album, photo), 3.0).media.map { it.id }
+        assertEquals(ids.distinct(), ids)
+    }
+
     private fun msg(d: Map<String, Any?>) = Message.fromFirestore("m", d, "g_x") { r, _ -> r }
 
     @Test fun infiniteSizeIsUnknown() {
