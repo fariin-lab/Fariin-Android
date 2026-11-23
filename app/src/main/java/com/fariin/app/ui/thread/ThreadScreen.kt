@@ -3481,7 +3481,7 @@ private fun Composer(
     // Another app or a phone call took the sound, or the app went behind (L-17): the take is kept,
     // locked and paused to the review bar, as for a call above.
     LaunchedEffect(Unit) {
-        VoiceRecorder.interrupted.collect { if (recording && !reviewing) { locked = true; pauseOrResume() } }
+        recorder.interrupted.collect { if (recording && !reviewing) { locked = true; pauseOrResume() } }
     }
     DisposableEffect(recLifecycle) {
         val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
