@@ -69,7 +69,7 @@ object InAppRules {
             val photo = if (s.plain) localPhoto else if (s.isGroup) s.groupPhoto ?: localPhoto else s.senderPhoto ?: localPhoto
             InAppBanner(s.key, s.title.ifBlank { "New message" }, s.body, photo)
         }
-        return InAppRoute.InApp(banner, prefs.sound, prefs.vibrate, toneCid = s.key)
+        return InAppRoute.InApp(banner, prefs.sound && !s.silent, prefs.vibrate && !s.silent, toneCid = s.key)
     }
 }
 
