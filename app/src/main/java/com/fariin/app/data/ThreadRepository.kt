@@ -179,6 +179,8 @@ class ThreadRepository(
     /** The live window's last answer came from the server (not the phone's cache): only then may
      *  this chat vouch for what it filed (safety review 2026-11-12, both apps). */
     @Volatile private var windowFromServer = false
+    /** The live window's last server answer was short: it holds the whole chat (H-87). */
+    @Volatile private var windowWhole = false
     /** An older page was answered from the cache once: older pages no longer count as one unbroken run. */
     @Volatile private var olderFromCache = false
     @Volatile private var msgFailed = false
@@ -317,6 +319,7 @@ class ThreadRepository(
                 seeded = false
                 live = true
                 windowFromServer = !snap.metadata.isFromCache
+                windowWhole = !snap.metadata.isFromCache && snap.size() < PAGE_SIZE
                 synchronized(docsLock) {
                     keepSlidOut(snap.documents, full = snap.size() >= PAGE_SIZE)
                     liveDocs.clear()
@@ -809,14 +812,16 @@ class ThreadRepository(
             // Safety review 2026-11-12: vouch only for server rows (never cache, seed or local-db
             // rows), never past a message this phone could not open yet ("…", or a group lock whose
             // key may still be released), and the newest point is the newest SERVER row.
-            val serverDocs = if (olderFromCache) liveDocs.values.toList() else (liveDocs.values + olderDocs.values)
-            val times = serverDocs.filter { !it.metadata.hasPendingWrites() }.mapNotNull { it.ts("createdAt")?.toDate()?.time }
+            // H-87 (as iOS): only the live window vouches. It is one unbroken run from the newest by
+            // definition; older pages and rows that slid out may sit across a hole (a reconnect after
+            // 60+ new messages), and vouching for them moved the mark and the cursor over it.
+            val times = liveDocs.values.filter { !it.metadata.hasPendingWrites() }.mapNotNull { it.ts("createdAt")?.toDate()?.time }
             val unopened = sorted.any { !it.deleted && (it.text == "\u2026" || it.text == Wire.LOCKED) }
             // 1:1 only (owner 2026-11-12): every group stays on the server, so it never vouches.
             val vouch = windowFromServer && !unopened && chSync == null && !isChannelChat() && !Wire.isGroupCid(cid) && times.isNotEmpty()
             com.fariin.app.local.LocalDb.save(me, cid, sorted, cursor = vouch,
                 oldestFiledMs = times.minOrNull(), newestFiledMs = times.maxOrNull(),
-                reachedStart = !_state.value.canLoadOlder && !olderFromCache, mediaWatch = vouch)
+                reachedStart = windowWhole, mediaWatch = vouch)
         }
         scheduleBurn(Disappearing.nextExpiry(stamped, now))
         if (due.isNotEmpty()) burn(due)
