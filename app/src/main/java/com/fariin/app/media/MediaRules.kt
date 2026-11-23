@@ -140,9 +140,17 @@ object MediaRules {
     }
 
     // ---- Files
+    /**
+     * K-41: a file name as shown, with the direction controls taken out (U+202A to U+202E and
+     * U+2066 to U+2069, plus the marks U+200E and U+200F), so "Statement<U+202E>fdp.html" reads as
+     * the .html it is and never as a fake ".pdf". Use it wherever a received name is drawn.
+     */
+    fun shownFileName(name: String): String =
+        name.filterNot { it in '‪'..'‮' || it in '⁦'..'⁩' || it == '‎' || it == '‏' }
+
     /** A name that is safe as one path part: no folders, no control characters, not empty. */
     fun safeFileName(name: String): String {
-        val base = name.substringAfterLast('/').substringAfterLast('\\')
+        val base = shownFileName(name).substringAfterLast('/').substringAfterLast('\\')
             .filter { it >= ' ' && it != ':' && it != '*' && it != '?' && it != '"' && it != '<' && it != '>' && it != '|' }
             .trim().trimStart('.')
         return base.take(120).ifEmpty { "File" }

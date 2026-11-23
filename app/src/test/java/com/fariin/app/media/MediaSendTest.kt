@@ -107,6 +107,10 @@ class MediaSendTest {
         assertEquals("evil.txt", MediaRules.safeFileName("../../evil.txt"))
         assertEquals("x.pdf", MediaRules.safeFileName("C:\\dir\\x.pdf"))
         assertEquals("File", MediaRules.safeFileName("..."))
+        // K-41: direction controls never make a fake file type.
+        assertEquals("Statementfdp.html", MediaRules.shownFileName("Statement‮fdp.html"))
+        assertEquals("ab.txt", MediaRules.shownFileName("⁦a⁩b‏.txt"))
+        assertEquals("Statementfdp.html", MediaRules.safeFileName("Statement‪fdp.html"))
         assertEquals("chat/c/m.mp4.enc", MediaRules.videoPath("c", "m"))
         assertEquals("chat/c/m-3-video.enc", MediaRules.albumTilePath("c", "m", "3-video"))
     }
