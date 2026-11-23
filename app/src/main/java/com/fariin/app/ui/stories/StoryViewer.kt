@@ -1745,7 +1745,8 @@ private fun StoryMedia(
         // everything, stretched to the card, and a spinner over it until the real one is in.
         val blur = remember(story.blurThumb) {
             story.blurThumb.takeIf { it.isNotEmpty() }?.let { b ->
-                runCatching { android.util.Base64.decode(b, android.util.Base64.DEFAULT).let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) } }.getOrNull()
+                // Sampled down on decode (H-55): a crafted huge picture here must never fill the memory.
+                runCatching { android.util.Base64.decode(b, android.util.Base64.DEFAULT).let { com.fariin.app.media.BitmapDecode.fromBytes(it, 64) } }.getOrNull()
             }?.asImageBitmap()
         }
         if (blur != null) androidx.compose.foundation.Image(blur, null, contentScale = ContentScale.Crop,
