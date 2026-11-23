@@ -2774,7 +2774,8 @@ class ThreadRepository(
             var marked = false
             if (data["deleted"] != true) {
                 val strip = hashMapOf<String, Any>("deleted" to true, "text" to "", "type" to "text", "enc" to FieldValue.delete())
-                for (k in TOMBSTONE_STRIP) strip[k] = FieldValue.delete()
+                // Only fields the message has (F-16): an absent one changes nothing anyway.
+                for (k in TOMBSTONE_STRIP) if (data.containsKey(k)) strip[k] = FieldValue.delete()
                 if (data["authorId"] as? String != me) strip["deletedBy"] = me
                 // The newest message (1:1 or group): the chat list line changes in the SAME write. Done after
                 // the server's ack only, an app killed offline (or before the ack) kept the deleted
@@ -3382,7 +3383,9 @@ class ThreadRepository(
         val TOMBSTONE_STRIP = listOf("imageUrl", "videoUrl", "thumbUrl", "audioUrl", "fileUrl", "album",
             "fileName", "fileSize", "waveform", "duration", "blurhash", "linkPreview", "poll", "locationCard",
             "contactCard", "replyTo", "reactions", "videoEnc", "thumbEnc", "viewOnce", "mentions", "forwarded",
-            "fwdChannel", "fwd", "thumb", "edits", "editedAt", "quote", "bs", "bsd", "fx", "fmt", "origin", "fileNameEnc")   // bs/bsd: the rules refuse a tombstone keeping a bubble style (iOS b189891b)
+            "fwdChannel", "fwd", "thumb", "edits", "editedAt", "quote", "bs", "bsd", "fmt", "origin", "fileNameEnc")   // bs/bsd: the rules refuse a tombstone keeping a bubble style (iOS b189891b)
+        // F-16: no "fx" here: the live tombstone rule does not list it, so deleting it was refused and the
+        // delete fell back to a hard delete. Add it back (both apps) once the rule lists fx.
     }
 }
 
