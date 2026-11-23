@@ -332,6 +332,8 @@ object VoicePlayer {
                     }
                 }
                 tick()
+                // The 50 ms ticker runs only while sound comes out (J-152).
+                if (player === p) runTicker(isPlaying)
             }
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) {
@@ -353,6 +355,9 @@ object VoicePlayer {
             }
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 _state.value = _state.value.copy(playing = false, failed = _state.value.failed + id)
+                // A dead player is not kept or polled (J-152); a tap starts a fresh one.
+                ticker?.cancel()
+                if (player === p) main.launch { if (player === p) { player = null; VoiceSession.close(); p.release() } }
             }
         })
         p.prepare()
@@ -367,8 +372,12 @@ object VoicePlayer {
         watchCalls()
         _state.value = _state.value.copy(id = id, playing = true, failed = _state.value.failed - id, cid = cid, author = author,
             messageId = messageId ?: music?.messageId, pausedByUser = false, music = music)
+        runTicker(true)
+    }
+
+    private fun runTicker(on: Boolean) {
         ticker?.cancel()
-        ticker = main.launch { while (isActive) { tick(); delay(50) } }
+        ticker = if (on) main.launch { while (isActive) { tick(); delay(50) } } else null
     }
 
     private fun save() {
@@ -390,7 +399,8 @@ object VoicePlayer {
     fun playableFile(context: Context, file: File): File? {
         val head = runCatching { file.inputStream().use { s -> ByteArray(8).also { s.read(it) } } }.getOrNull() ?: return null
         if (!CafOpus.isCaf(head)) return file
-        val ogg = File(context.cacheDir, "voice-play-" + file.name + ".ogg")
+        // Beside the note in chat-media (H-133): trimmed with it, forgotten with it, wiped at sign-out.
+        val ogg = File(File(context.cacheDir, "chat-media").also { it.mkdirs() }, "voice-play-" + file.name + ".ogg")
         if (ogg.exists() && ogg.length() > 0) return ogg
         // A malformed or crafted .caf (oversized chunk, a packet too big for one Ogg page) is
         // "can't play", never a crash (review 2026-11-05).

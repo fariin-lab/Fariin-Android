@@ -157,6 +157,9 @@ class ChatMedia(
         if (isLocal(url)) return
         runCatching { key(url).delete() }
         runCatching { alias(url).delete() }
+        // A voice note's playable Ogg copy (VoicePlayer.playableFile), when one was made.
+        runCatching { File(dir, "voice-play-" + key(url).name + ".ogg").delete() }
+        runCatching { File(dir, "voice-play-" + alias(url).name + ".ogg").delete() }
         MediaOrigin.forget(url)
     }
 
@@ -292,6 +295,8 @@ class ChatMedia(
          *  DiskImageCache.removeAll), never left for the next account. */
         fun wipe(context: Context) {
             File(context.cacheDir, "chat-media").deleteRecursively()
+            // Played voice notes' Ogg copies from before they moved into chat-media (H-133).
+            context.cacheDir.listFiles()?.forEach { if (it.name.startsWith("voice-play-")) it.delete() }
             File(context.cacheDir, "outgoing").deleteRecursively()
             File(context.noBackupFilesDir, "outgoing").deleteRecursively()
             VideoStream.wipe(context)
