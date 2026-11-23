@@ -22,6 +22,9 @@ object BlockList {
         val owner: String? = null,
         val entries: Map<String, Double> = emptyMap(),
         val spans: Map<String, List<ClosedFloatingPointRange<Double>>> = emptyMap(),
+        /** The blocked list has been read for [owner]: from the server, or a saved copy that holds
+         *  someone (iOS isLoaded). The chat list and delivered marks wait for it (F-61). */
+        val loaded: Boolean = false,
     ) {
         fun contains(uid: String) = entries.containsKey(uid)
 
@@ -69,7 +72,7 @@ object BlockList {
                 val server = !snap.metadata.isFromCache
                 com.fariin.app.perf.ListenThread.toMain {
                     if (uid == newUid) {
-                        _snap.value = _snap.value.copy(owner = newUid, entries = e)
+                        _snap.value = _snap.value.copy(owner = newUid, entries = e, loaded = _snap.value.loaded || server || e.isNotEmpty())
                         if (server && !listLoaded) { listLoaded = true; migrate(CryptoHub.listedAll()) }
                     }
                 }

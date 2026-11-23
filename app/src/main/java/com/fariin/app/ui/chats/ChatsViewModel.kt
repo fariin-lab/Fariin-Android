@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.runningFold
 
 /** What the Chats tab draws. */
 data class ChatsUiState(
@@ -57,6 +59,14 @@ class ChatsViewModel(
             cont.invokeOnCancellation { auth.removeAuthStateListener(l) }
         }
     }
+
+    /** True once my block list loaded, or after 3 s; each block list change passes on, so the
+     *  rows redraw on a block or unblock (F-61). */
+    private val blockGate = kotlinx.coroutines.flow.merge(
+        com.fariin.app.data.BlockList.state.map { it.owner == me && it.loaded },
+        kotlinx.coroutines.flow.flow { kotlinx.coroutines.delay(3_000); emit(true) })
+        .runningFold(false) { was, now -> was || now }
+        .combine(com.fariin.app.data.BlockList.state.map { it.entries.keys }.distinctUntilChanged()) { ok, _ -> ok }
 
     /** Bumped by Retry on the list's error page: a fresh listener, not a timer. */
     private val reloadTick = kotlinx.coroutines.flow.MutableStateFlow(0)
@@ -102,12 +112,17 @@ class ChatsViewModel(
             if (s is ConversationsRepository.State.Loaded)
                 s.copy(conversations = s.conversations.filter { it.id !in hidden && !com.fariin.app.data.FormerGroups.hides(it) }) else s
         }
+        // The rows follow my block list, and wait for it to load (up to 3 s, so an offline start
+        // still draws): a blocked person's preview and badge flashed after a fresh sign-in (F-61).
+        .combine(blockGate) { s, ok -> if (ok || s is ConversationsRepository.State.Failed) s else null }
+        .filterNotNull()
         .onEach { s ->
             if (s is ConversationsRepository.State.Loaded) {
                 scheduleListBurn(s.conversations)
                 warmKeys(s.conversations)
-                // iOS: delivered marks only from a server answer, for the chats the list shows.
-                if (!s.fromCache && crypto != null) com.fariin.app.data.DeliveryReceipts.mark(ChatList.visible(s.conversations, me), me)
+                // iOS: delivered marks only from a server answer, for every chat, archived and
+                // requests too (H-91); a blocked person's chat is skipped inside mark.
+                if (!s.fromCache && crypto != null) com.fariin.app.data.DeliveryReceipts.mark(s.conversations, me)
             }
         }
         // A chat with only a draft, a kept voice note or a call going on stays listed (iOS visible).
