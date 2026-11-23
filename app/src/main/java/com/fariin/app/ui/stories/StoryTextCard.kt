@@ -172,7 +172,7 @@ private fun drawStoryLinkCard(c: android.graphics.Canvas, d: com.fariin.app.data
     val large = style == TextStoryRules.LinkStyle.LARGE
     val u = cw / TextStoryRules.LINK_REF_W
     val bare = d.title.isEmpty() && d.desc.isEmpty()
-    val pic = if (bare) null else d.jpeg?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) }
+    val pic = if (bare || !cardPicture(d)) null else d.jpeg?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) }
     val radius = (if (bare) 12f else 18f) * u
     val shape = android.graphics.Path().apply {
         addRoundRect(android.graphics.RectF(left, top, left + cw, top + ch), radius, radius, android.graphics.Path.Direction.CW)
@@ -234,11 +234,18 @@ private fun drawStoryLinkCard(c: android.graphics.Canvas, d: com.fariin.app.data
     c.restore()
 }
 
+/**
+ * L-80: a profile link card is drawn with no picture (ProfileCardPhoto), even from a draft that still
+ * holds one. The card is burned into the story photo, so a viewer has no card picture to replace.
+ */
+private fun cardPicture(d: com.fariin.app.data.LinkPreviews.Draft): Boolean =
+    com.fariin.app.data.ProfileCardPhoto.senderCarriesImage(com.fariin.app.data.LinkPreviews.profileHandle(d.url) != null)
+
 /** The card's height for [style], from the same numbers the drawing uses (iOS StoryTextLinkPreview.height). */
 internal fun storyLinkCardHeight(d: com.fariin.app.data.LinkPreviews.Draft, style: TextStoryRules.LinkStyle, cardW: Float): Float {
     val bare = d.title.isEmpty() && d.desc.isEmpty()
     val (pw, ph) = d.picSize
-    return TextStoryRules.linkCardHeight(cardW, style, d.jpeg != null && !bare, pw, ph, d.isVideo, d.title.isNotEmpty())
+    return TextStoryRules.linkCardHeight(cardW, style, d.jpeg != null && !bare && cardPicture(d), pw, ph, d.isVideo, d.title.isNotEmpty())
 }
 
 /** The style a fresh link starts in: the tall card for a video or a portrait picture. */
@@ -283,7 +290,7 @@ private fun drawPosterCard(c: android.graphics.Canvas, d: com.fariin.app.data.Li
     c.drawColor(android.graphics.Color.WHITE)
     if (picH > 0f) {
         val area = android.graphics.RectF(left, top, left + cw, top + picH)
-        val pic = d.jpeg?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) }
+        val pic = if (!cardPicture(d)) null else d.jpeg?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) }
         if (pic != null) { drawFilled(c, pic, area); pic.recycle() }
         else c.drawRect(area, Paint().apply { color = android.graphics.Color.rgb(235, 235, 235) })
         if (d.isVideo) {
