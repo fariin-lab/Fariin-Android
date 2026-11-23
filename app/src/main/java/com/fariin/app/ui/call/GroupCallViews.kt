@@ -201,6 +201,8 @@ fun CallLobbyScreen(keyText: String, videoFromPath: Boolean, g: GroupCallUi, onL
     var released by remember { mutableStateOf(false) }
     var peek by remember { mutableStateOf<LinkPeek?>(null) }
     var gone by remember { mutableStateOf(key == null) }
+    var docGone by remember { mutableStateOf(false) }   // the link doc says revoked or expired (K-63: a first guess)
+    var peekFailed by remember { mutableStateOf(false) }
     var starting by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
     var noteAt by remember { mutableLongStateOf(0L) }
@@ -218,17 +220,21 @@ fun CallLobbyScreen(keyText: String, videoFromPath: Boolean, g: GroupCallUi, onL
         val k = key ?: return@LaunchedEffect
         val me = com.fariin.app.Fb.auth.currentUser?.uid
         if (me != null) myPhoto = try { com.fariin.app.Fb.db.collection("users").document(me).get().await().getString("photoUrl") } catch (_: Exception) { null }
-        // The link's own document first: revoked, expired or missing says so at once (its creator
-        // keeps the server's say, a revoked link's call can still be running).
+        // The link's own document first. K-63: revoked or expired is only a first guess for others
+        // too; the server lets people it approved or invited back in, so the first peek decides
+        // (iOS CallLobbyView). Only when no peek answers does the doc's word stand.
         val d = CallLinks.readDoc(k.roomId)
         val creator = d?.get("creatorUid") == me
         val expired = (d?.get("expiresAt") as? com.google.firebase.Timestamp)?.toDate()?.before(java.util.Date()) == true
-        if (!creator && (d?.get("revoked") == true || expired)) { gone = true; return@LaunchedEffect }
+        if (!creator && (d?.get("revoked") == true || expired)) {
+            docGone = true
+            if (peekFailed) { gone = true; return@LaunchedEffect }
+        }
         // iOS: the join pass ahead of the tap, asked for BEFORE the camera prompt (which can sit on
         // screen); only where the join needs no approval, and not when the server already said no.
         if (d != null) {
             val approval = d["restrictions"] == "adminApproval"
-            val serverSaysNo = peek?.let { it.gone || (it.approval && !it.iAmCreator) } ?: false
+            val serverSaysNo = peek?.let { it.gone || (it.approval && !it.iAmCreator) } ?: docGone
             if ((creator || !approval) && !serverSaysNo) { GroupCall.prefetchLinkPass(k.roomId); passAt = System.currentTimeMillis() }
         }
         val enc = d?.get("encName") as? String
@@ -239,7 +245,9 @@ fun CallLobbyScreen(keyText: String, videoFromPath: Boolean, g: GroupCallUi, onL
     LaunchedEffect(key, locked) {
         val k = key ?: return@LaunchedEffect
         while (!gone && !locked) {
-            CallLinks.peek(k)?.let { p ->
+            val answer = CallLinks.peek(k)
+            if (answer == null && peek == null) { peekFailed = true; if (docGone) gone = true }
+            answer?.let { p ->
                 if (!starting) {
                     peek = p
                     // iOS apply/renewPass: a gone or now-approval link drops the pass; a healthy one
