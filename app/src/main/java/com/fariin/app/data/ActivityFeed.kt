@@ -208,7 +208,7 @@ object ActivityFeed {
         }
         prefsReg = user(me).collection("activityMeta").document("prefs").addSnapshotListener { snap, _ ->
             if (snap == null) return@addSnapshotListener
-            val m = snap.getBoolean("muted") == true
+            val m = snap.get("muted") == true
             _muted.value = m
             app?.getSharedPreferences(PIN_FILE, 0)?.let { if (it.getBoolean("muted.$me", false) != m) it.edit().putBoolean("muted.$me", m).apply() }
         }

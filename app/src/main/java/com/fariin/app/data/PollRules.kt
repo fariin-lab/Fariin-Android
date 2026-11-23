@@ -46,8 +46,11 @@ object PollRules {
     /** Message.poll: null for anything that is not a well-formed poll (at least two options). */
     fun parse(text: String): PollCard? {
         if (!text.startsWith(MARKER)) return null
+        if (text.length > MAX_MARKER_CHARS) return null   // a crafted marker; a real poll is a few KB
         return try {
-            val obj = JSONObject(String(Base64.getDecoder().decode(text.substring(MARKER.length).trim()), Charsets.UTF_8))
+            val json = String(Base64.getDecoder().decode(text.substring(MARKER.length).trim()), Charsets.UTF_8)
+            if (tooDeep(json)) return null
+            val obj = JSONObject(json)
             val id = obj.opt("id") as? String ?: return null
             val q = obj.opt("q") as? String ?: return null
             val arr = obj.optJSONArray("opts") ?: return null
@@ -58,8 +61,26 @@ object PollRules {
                 .mapNotNull { (quiz.opt(it) as? Number)?.toInt() }.filter { it >= 0 && it < opts.size }
             val ends = (obj.opt("ends") as? Number)?.toDouble() ?: 0.0
             PollCard(id, q, opts, obj.optBoolean("multi", false), obj.optBoolean("anon", false),
-                correct, if (ends > 0) ends else null, readImages(obj.optJSONArray("imgs"), opts.size))
-        } catch (_: Exception) { null }
+                correct, if (ends.isFinite() && ends > 0) ends else null, readImages(obj.optJSONArray("imgs"), opts.size))
+        } catch (_: Throwable) { null }   // StackOverflowError too (audit H-57)
+    }
+
+    /** Far above any real marker (ten options with pictures and their keys). */
+    const val MAX_MARKER_CHARS = 512 * 1024
+    private const val MAX_DEPTH = 16
+
+    /** Nesting deeper than [MAX_DEPTH], counted outside strings: refused before the parser recurses. */
+    private fun tooDeep(s: String): Boolean {
+        var depth = 0; var inStr = false; var esc = false
+        for (c in s) {
+            if (inStr) { if (esc) esc = false else if (c == '\\') esc = true else if (c == '"') inStr = false; continue }
+            when (c) {
+                '"' -> inStr = true
+                '{', '[' -> if (++depth > MAX_DEPTH) return true
+                '}', ']' -> depth--
+            }
+        }
+        return false
     }
 
     /** `imgs` is read only when it is a list exactly as long as `opts`; a null or url-less entry = no picture. */

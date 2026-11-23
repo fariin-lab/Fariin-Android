@@ -22,6 +22,13 @@ class CrashDocsTest {
         assertEquals(mapOf("u" to "a.b"), v["w"])
     }
 
+    @Test fun deepPollMarkerIsRefused() {
+        val json = "{\"id\":\"p\",\"q\":\"Q\",\"opts\":[\"a\",\"b\"],\"x\":" + "[".repeat(1000) + "]".repeat(1000) + "}"
+        val marker = PollRules.MARKER + java.util.Base64.getEncoder().encodeToString(json.toByteArray())
+        assertNull(PollRules.parse(marker))
+        assertEquals("Poll", ActivityItem.shown(marker))
+    }
+
     private fun msg(d: Map<String, Any?>) = Message.fromFirestore("m", d, "g_x") { r, _ -> r }
 
     @Test fun infiniteSizeIsUnknown() {
