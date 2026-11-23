@@ -129,6 +129,8 @@ object QuoteStore {
                 })
                 put("cid", c.cid); put("mid", c.mid); put("title", c.title); put("photoUrl", c.photoUrl)
                 put("username", c.username); put("text", c.text); put("kind", c.kind); put("image", c.image)
+                // A song or playlist keeps its name and line in the saved copy too (L-93).
+                if (c.kind == "music") { put("musicTitle", c.musicTitle); put("musicSub", c.musicSub); put("count", c.count) }
             })
         }
         com.fariin.app.local.LocalCache.saveQuotes(uid, o.toString())
