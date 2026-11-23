@@ -36,6 +36,7 @@ class SessionEndWipeTest {
         "top row hidden",
         "group page previews",
         "explore cache",
+        "shell requests",
         "call links",
         "sticker favorites",
         "gate memory",

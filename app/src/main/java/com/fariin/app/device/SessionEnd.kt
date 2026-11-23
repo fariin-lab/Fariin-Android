@@ -259,6 +259,7 @@ object SessionEnd {
         },
         WipeStep("group page previews") { _, _ -> com.fariin.app.channel.ChannelService.wipePreviews() },   // kept public group pages hold my member/requested state (iOS)
         WipeStep("explore cache") { c, _ -> com.fariin.app.channel.ExploreCache.wipe(c) },   // Explore's kept lists are per account (iOS SessionWipe)
+        WipeStep("shell requests") { _, _ -> com.fariin.app.system.SystemRouter.reset() },   // K-130: an old tap never opens a tab for the next account
         WipeStep("call links") { _, _ -> com.fariin.app.call.CallLinks.reset() },
         WipeStep("sticker favorites") { c, _ -> com.fariin.app.data.StickerFavorites.wipe(c) },   // the account keeps its backup
         WipeStep("gate memory") { c, _ -> com.fariin.app.ui.auth.GateMemory.clear(c) },   // the next account waits for its checks

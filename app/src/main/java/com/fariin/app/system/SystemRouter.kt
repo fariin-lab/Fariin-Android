@@ -25,6 +25,15 @@ object SystemRouter {
     /** The Settings tab, asked from a page above the shell (an official announcement's button). */
     val settingsTabRequests = MutableStateFlow(0)
 
+    /**
+     * K-130: sign-out puts every count back to 0, so the next account's shell (its seen values start
+     * at 0) does not act on a tap made under the old one and open on Stories or Settings.
+     */
+    fun reset() {
+        pending.value = null
+        storyRequests.value = 0; storiesTabRequests.value = 0; settingsTabRequests.value = 0
+    }
+
     fun take(intent: Intent?) {
         // A story push tapped while the app was closed: the system's notification hands its data
         // keys to the launcher activity (server notifyStoryFollowers: kind "story", no cid).
