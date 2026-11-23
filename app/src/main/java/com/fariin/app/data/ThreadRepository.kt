@@ -88,7 +88,12 @@ class ThreadRepository(
         val former: Boolean = false,
         /** 1:1 only: the other person's profile is gone (iOS otherAccountDeleted, see [DeletedAccount]). */
         val otherDeleted: Boolean = false,
+        /** K-45: a short line for the screen when a send's saved file was gone at resume (its bubble
+         *  shows failed); null = nothing to say. Cleared with [clearOutboxNotice]. */
+        val outboxNotice: String? = null,
     )
+
+    fun clearOutboxNotice() { _state.update { it.copy(outboxNotice = null) } }
 
     private val convRef = db.collection("conversations").document(cid)
     // Drawn from the first frame as it will stay (ThreadSeed): the chat list's copy of this
@@ -2103,7 +2108,20 @@ class ThreadRepository(
         for (e in com.fariin.app.local.PhotoOutbox.all(me)) {
             if (e.cid != cid || pending.containsKey(e.clientId)) continue
             val f = File(e.path)
-            if (!f.exists() || f.length() == 0L) { com.fariin.app.local.PhotoOutbox.remove(me, e.clientId); continue }
+            if (!f.exists() || f.length() == 0L) {
+                // K-45: the saved file is gone (cleared storage, a move): a failed bubble and a short
+                // notice, never a spinner and never a silent loss.
+                com.fariin.app.local.PhotoOutbox.remove(me, e.clientId)
+                val kind = when (e.kind) { "voice" -> "audio"; "video" -> "video"; else -> "image" }
+                pending[e.clientId] = Message(id = e.clientId, authorId = me, text = e.caption, type = kind,
+                    createdAtMillis = e.ts, hasServerTime = false, clientTs = e.ts, clientId = e.clientId,
+                    sendState = Message.SendState.FAILED)
+                failedMedia.add(e.clientId)
+                _state.update { it.copy(outboxNotice = if (e.kind == "voice") "A voice message could not be sent: its recording is gone."
+                    else "A photo or video could not be sent: its file is gone.") }
+                rebuild()
+                continue
+            }
             val video = e.kind == "video"
             val voice = e.kind == "voice"
             if (e.kind == "album") { resumeAlbum(e); continue }
@@ -2206,7 +2224,10 @@ class ThreadRepository(
         rebuild()
         // Its message written and its bytes gone: the server's copy shows failed (Delete). The entry
         // stays as the mark that this phone started it (FileOutbox.failedHere); Delete removes it.
-        if (!ok) { if (e.messageId != null) { pending.remove(e.clientId); rebuild() }; return }
+        if (!ok) {
+            _state.update { it.copy(outboxNotice = "A file could not be sent: it is no longer on this phone.") }   // K-45
+            if (e.messageId != null) { pending.remove(e.clientId); rebuild() }; return
+        }
         val work: suspend () -> Unit = {
             val cur = com.fariin.app.local.FileOutbox.get(me, e.clientId) ?: e
             // Written before the kill? Asked by id: this phone's cache first, then the server.
