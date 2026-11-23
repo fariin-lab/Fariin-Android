@@ -553,14 +553,14 @@ object NotificationPoster {
      * system-drawn one does (MainActivity routes `type`).
      */
     @SuppressLint("MissingPermission")
-    fun postChatNotice(c: Context, tag: String, title: String, body: String, data: Map<String, String>, call: Boolean) {
+    fun postChatNotice(c: Context, tag: String, title: String, body: String, keys: Map<String, String>, call: Boolean) {
         ensureChannels(c)
         val nmc = NotificationManagerCompat.from(c)
         if (!nmc.areNotificationsEnabled()) return
         val open = Intent(c, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            data["cid"]?.let { putExtra(PushRouter.EXTRA_OPEN_CID, it) }
-            data.forEach { (k, v) -> putExtra(k, v) }
+            keys["cid"]?.let { putExtra(PushRouter.EXTRA_OPEN_CID, it) }
+            keys.forEach { (k, v) -> putExtra(k, v) }
         }
         val tap = PendingIntent.getActivity(c, tag.hashCode(), open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val n = NotificationCompat.Builder(c, if (call) NotifChannel.CALLS.id else NotifChannel.MESSAGES.id)
