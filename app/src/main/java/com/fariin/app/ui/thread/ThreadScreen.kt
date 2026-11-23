@@ -3477,6 +3477,18 @@ private fun Composer(
             was = live
         }
     }
+    // Another app or a phone call took the sound, or the app went behind (L-17): the take is kept,
+    // locked and paused to the review bar, as for a call above.
+    LaunchedEffect(Unit) {
+        VoiceRecorder.interrupted.collect { if (recording && !reviewing) { locked = true; pauseOrResume() } }
+    }
+    DisposableEffect(recLifecycle) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_STOP && recording && !reviewing) { locked = true; pauseOrResume() }
+        }
+        recLifecycle.addObserver(obs)
+        onDispose { recLifecycle.removeObserver(obs) }
+    }
 
     // As iOS ChatComposerView: a 40 glass "+" (the attach sheet), the glass message pill with the
     // camera and the sticker button inside, and a 40 glass circle that is the mic until there are
