@@ -694,7 +694,7 @@ object GroupCall {
         val gen = joinGen
         var made: Room? = null
         fun gone(): Boolean {
-            if (joinGen == gen && room != null && room === made && _ui.value.cid == cid) return false
+            if (joinGen == gen && _ui.value.cid == cid && (made == null || room === made)) return false
             // Left while this step was out: the half-open room goes quietly (leave() may have done it).
             made?.let { m -> if (room !== m) runCatching { m.disconnect(); m.release() } }
             return true
