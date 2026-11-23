@@ -252,4 +252,15 @@ class PollRulesTest {
             prevMine = listOf(0), prevAt = 100.0)
         assertEquals(2, v.size)   // one other voter plus me, not three
     }
+
+    @Test fun rowStateSaysMyVoteAndTheQuizAnswer() {
+        assertEquals("Your vote", PollRules.rowState(0, listOf(0), emptyList(), reveal = false))
+        assertNull(PollRules.rowState(1, listOf(0), emptyList(), reveal = false))
+        // Before the answer shows, a quiz says only my pick, never the right one.
+        assertNull(PollRules.rowState(1, listOf(0), listOf(1), reveal = false))
+        assertEquals("Correct answer", PollRules.rowState(1, listOf(0), listOf(1), reveal = true))
+        assertEquals("Your answer, wrong", PollRules.rowState(0, listOf(0), listOf(1), reveal = true))
+        assertEquals("Your answer, correct", PollRules.rowState(1, listOf(1), listOf(1), reveal = true))
+        assertNull(PollRules.rowState(2, listOf(1), listOf(1), reveal = true))
+    }
 }

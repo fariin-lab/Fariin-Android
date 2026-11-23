@@ -53,6 +53,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -227,6 +230,11 @@ private fun PollCardBody(m: Message, poll: PollCard, ctx: PollContext, isMe: Boo
             Box(Modifier.fillMaxWidth().heightIn(min = if (pic != null) 54.dp else 46.dp)
                 .clip(CircleShape).background(pal.track)
                 .then(if (ringed) Modifier.border(1.5.dp, pal.ring, CircleShape) else Modifier)
+                // TalkBack hears my vote and the quiz answer; the tick and cross alone are only colour (K-106).
+                .semantics {
+                    selected = i in mine
+                    PollRules.rowState(i, mine, poll.correct, reveal)?.let { stateDescription = it }
+                }
                 .clickable(enabled = canVote) {
                     val next = PollRules.toggle(poll, mine, i, canVote) ?: return@clickable
                     tap()

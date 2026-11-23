@@ -311,4 +311,16 @@ object PollRules {
         if (mine.isNotEmpty() && me.isNotEmpty()) res[me] = mine
         return res
     }
+
+    /**
+     * What TalkBack says for option [i] after the name (K-106): which one I voted for and, once a
+     * quiz shows its answer, which one was right and whether mine was wrong. Null = nothing to say.
+     */
+    fun rowState(i: Int, mine: List<Int>, correct: List<Int>, reveal: Boolean): String? = when {
+        reveal && i in correct && i in mine -> "Your answer, correct"
+        reveal && i in correct -> "Correct answer"
+        reveal && i in mine -> "Your answer, wrong"
+        i in mine -> "Your vote"
+        else -> null
+    }
 }
