@@ -102,6 +102,12 @@ class ShareActivity : ComponentActivity() {
             startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             finish(); return
         }
+        // An account not through the gate (the Restore page after a scheduled deletion, a profile
+        // not made yet) shares nothing: the app opens on its own gate instead (K-86).
+        if (!com.fariin.app.ui.auth.GateMemory.wasReady(this, me)) {
+            startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            finish(); return
+        }
         var target = intent.getStringExtra(ShortcutManagerCompat.EXTRA_SHORTCUT_ID)
         val shared = mutableStateOf<Shared?>(null)
         // The chat list for the picker: what the app already holds, or the phone's saved copy.

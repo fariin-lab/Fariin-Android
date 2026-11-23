@@ -31,6 +31,12 @@ class BubbleActivity : ComponentActivity() {
         val me = com.fariin.app.Fb.auth.currentUser?.uid
         val chat = intent.getStringExtra(PushRouter.EXTRA_OPEN_CID)
         if (me == null || chat == null) { finish(); return }
+        // An account not through the gate (the Restore page after a scheduled deletion) gets no
+        // chat here: the app opens on its own gate instead (K-86).
+        if (!com.fariin.app.ui.auth.GateMemory.wasReady(this, me)) {
+            startActivity(android.content.Intent(this, com.fariin.app.MainActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            finish(); return
+        }
         cid = chat
         DeviceRegistry.init(this)
         enableEdgeToEdge()
