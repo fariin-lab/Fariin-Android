@@ -334,7 +334,7 @@ internal fun PictureBox(
     val saveCtx = LocalContext.current
     LaunchedEffect(got.file, autoSaveId) {
         val f = got.file ?: return@LaunchedEffect
-        autoSaveId?.let { com.fariin.app.media.AutoSaveMedia.save(saveCtx, it, f, isVideo = false, sentAtMs = m.createdAtMillis) }
+        autoSaveId?.let { com.fariin.app.media.AutoSaveMedia.save(saveCtx, it, f, isVideo = false, sentAtMs = m.createdAtMillis, expiring = m.expiresAtMillis != null) }
     }
     // The download whose state this picture wears: a video's clip, or the photo itself (iOS
     // MediaDownloadOverlay). A video's poster just loads (small), with nothing drawn over it.

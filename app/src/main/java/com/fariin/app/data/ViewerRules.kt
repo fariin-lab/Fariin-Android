@@ -24,6 +24,8 @@ object ViewerRules {
         val atMillis: Double? = null,
         val albumParent: String? = null,
         val once: Pair<String, String>? = null,
+        /** A disappearing message: never auto-saved to Photos (K-26). */
+        val expiring: Boolean = false,
     )
 
     /**
@@ -47,7 +49,7 @@ object ViewerRules {
             key = m.id, messageId = m.id, isVideo = video, url = url,
             enc = if (!video && m.localPath != null) null else m.enc,
             posterUrl = if (video) m.thumbUrl else null, posterEnc = if (video) m.thumbEnc else null,
-            authorId = m.authorId, atMillis = m.createdAtMillis, once = once,
+            authorId = m.authorId, atMillis = m.createdAtMillis, once = once, expiring = m.expiresAtMillis != null,
         )) to 0
     }
 
@@ -66,7 +68,8 @@ object ViewerRules {
                 Message.MediaKind.PHOTO -> {
                     val url = m.localPath ?: m.imageUrl ?: continue
                     out += Page(key = m.id, messageId = m.id, isVideo = false, url = url,
-                        enc = if (m.localPath != null) null else m.enc, authorId = m.authorId, atMillis = m.createdAtMillis)
+                        enc = if (m.localPath != null) null else m.enc, authorId = m.authorId, atMillis = m.createdAtMillis,
+                        expiring = m.expiresAtMillis != null)
                 }
                 else -> {}
             }
@@ -80,7 +83,7 @@ object ViewerRules {
         key = "${m.id}-$i", messageId = m.id, isVideo = a.isVideo,
         url = a.videoUrl ?: a.imageUrl, enc = if (a.isVideo) a.videoEnc else a.enc,
         posterUrl = if (a.isVideo) a.imageUrl else null, posterEnc = if (a.isVideo) a.enc else null,
-        authorId = m.authorId, atMillis = m.createdAtMillis, albumParent = m.id,
+        authorId = m.authorId, atMillis = m.createdAtMillis, albumParent = m.id, expiring = m.expiresAtMillis != null,
     )
 
     /**

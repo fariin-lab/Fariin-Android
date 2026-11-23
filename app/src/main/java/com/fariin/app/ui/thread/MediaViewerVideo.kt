@@ -146,13 +146,13 @@ internal fun VideoPage(p: ViewerRules.Page, current: Boolean, ctl: VideoCtl, chr
     val autoSave = p.once == null && !mine && saveCid.isNotEmpty() && p.messageId != null
     LaunchedEffect(file) {
         val f = file ?: return@LaunchedEffect
-        if (autoSave) com.fariin.app.media.AutoSaveMedia.save(ctx, "$saveCid/${p.messageId}/v/${p.key}", f, isVideo = true, sentAtMs = p.atMillis)
+        if (autoSave) com.fariin.app.media.AutoSaveMedia.save(ctx, "$saveCid/${p.messageId}/v/${p.key}", f, isVideo = true, sentAtMs = p.atMillis, expiring = p.expiring)
     }
     if (streaming && autoSave && current) LaunchedEffect(p.url) {
         if (!com.fariin.app.media.AutoSaveMedia.savesMedia(ctx, saveCid)) return@LaunchedEffect
         while (!kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.fariin.app.media.VideoStream.fullyCached(ctx, p.url) }) delay(1_000)
         media.file(p.url, p.enc, video = true)?.let {
-            com.fariin.app.media.AutoSaveMedia.save(ctx, "$saveCid/${p.messageId}/v/${p.key}", it, isVideo = true, sentAtMs = p.atMillis)
+            com.fariin.app.media.AutoSaveMedia.save(ctx, "$saveCid/${p.messageId}/v/${p.key}", it, isVideo = true, sentAtMs = p.atMillis, expiring = p.expiring)
         }
     }
     val poster = rememberBitmap(rememberPlainFile(p.posterUrl, p.posterEnc), 720)

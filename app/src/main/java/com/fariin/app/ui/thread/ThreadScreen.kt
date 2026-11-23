@@ -2826,7 +2826,7 @@ private fun MediaRow(
                 LaunchedEffect(clip.file) {
                     val f = clip.file ?: return@LaunchedEffect
                     if (!isMe && !m.viewOnce && threadCid.isNotEmpty())
-                        com.fariin.app.media.AutoSaveMedia.save(clipSaveCtx, "$threadCid/${m.id}/v/${m.id}", f, isVideo = true, sentAtMs = m.createdAtMillis)
+                        com.fariin.app.media.AutoSaveMedia.save(clipSaveCtx, "$threadCid/${m.id}/v/${m.id}", f, isVideo = true, sentAtMs = m.createdAtMillis, expiring = m.expiresAtMillis != null)
                 }
                 PictureBox(m, local ?: m.thumbUrl, if (local != null) null else m.thumbEnc, maxW, RectangleShape, captionW, busy || !ready, onOpen = {
                     // Only a delivered clip opens (iOS onTapMedia: sendState == nil), not one still on its way.

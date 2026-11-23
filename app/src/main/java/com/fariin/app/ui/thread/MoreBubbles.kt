@@ -203,7 +203,7 @@ internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsul
                         val picked = rememberLocalPreview(item.localUri, item.isVideo, com.fariin.app.media.LocalPreview.TILE_SIDE)
                         if (!item.isVideo) androidx.compose.runtime.LaunchedEffect(got.file, autoSaveId) {
                             val f = got.file ?: return@LaunchedEffect
-                            autoSaveId?.let { com.fariin.app.media.AutoSaveMedia.save(saveCtx, "$it/$at", f, isVideo = false, sentAtMs = m.createdAtMillis) }
+                            autoSaveId?.let { com.fariin.app.media.AutoSaveMedia.save(saveCtx, "$it/$at", f, isVideo = false, sentAtMs = m.createdAtMillis, expiring = m.expiresAtMillis != null) }
                         }
                         val pendingFetch = got.state != Fetch.DONE
                         Box(
