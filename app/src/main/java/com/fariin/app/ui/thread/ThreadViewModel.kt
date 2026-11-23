@@ -59,6 +59,8 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     // read...), each a rebuild of the whole chat: 35 in three sends on the Pixel trace 2026-11-20, a
     // late frame each on the Oppo. The first shows at once; the rest within 120 ms land as one.
     val s by vm.repo.state.collectSettled(ready = { it.loaded }, throttleMs = 120)
+    // A queued send that could not go (its file or recording is gone, K-45): said once, then cleared.
+    LaunchedEffect(s.outboxNotice) { s.outboxNotice?.let { com.fariin.app.ui.components.Snack.show(it); vm.repo.clearOutboxNotice() } }
     val pinnedMsgs by vm.repo.pinned.collectSettled()
     val keys by CryptoHub.keysEpoch.collectAsState()
     val listed = remember(s.conv, keys) { CryptoHub.listedConversation(cid) }
