@@ -47,7 +47,7 @@ object PollVotes {
             e.reg = if (channel) {
                 if (me.isEmpty()) null else votesRef(cid, mid).document(me).addSnapshotListener { snap, _ ->
                     val mine = PollRules.readOptions(snap?.get("options"))
-                    val at = snap?.getTimestamp("at")?.toDate()?.time?.toDouble() ?: 0.0
+                    val at = (snap?.get("at") as? com.google.firebase.Timestamp)?.toDate()?.time?.toDouble() ?: 0.0
                     // A real change of my vote: remember the one it replaces (iOS listenChannel).
                     val old = e.flow.value
                     val was = old.byUid[me].orEmpty()
@@ -122,8 +122,9 @@ object PollVotes {
                 if (err != null || snap == null || !snap.exists()) return@addSnapshotListener
                 onTally(Tally(PollRules.readCounts(snap.get("pollCounts")),
                     (snap.get("pollVoters") as? Number)?.toInt() ?: 0,
-                    (snap.get("pollTallyAt") as? Number)?.toDouble() ?: 0.0,
-                    snap.getBoolean("pollClosed") ?: false))
+                    (snap.get("pollTallyAt") as? Number)?.toDouble()?.takeIf { it.isFinite() } ?: 0.0,
+                    // Not a typed getter: a text or number pollClosed threw here (audit H-126).
+                    snap.get("pollClosed") == true))
             }
     }
 
