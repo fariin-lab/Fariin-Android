@@ -214,6 +214,7 @@ fun PasswordPage(auth: AuthRepository, onBack: () -> Unit, onForgot: (String) ->
 fun ResetCodePage(auth: AuthRepository, address: String, onBack: () -> Unit, onDone: () -> Unit, demo: Boolean = false) {
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
+    val ctx = androidx.compose.ui.platform.LocalContext.current.applicationContext
     var passwordStep by remember { mutableStateOf(false) }
     var code by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -241,6 +242,12 @@ fun ResetCodePage(auth: AuthRepository, address: String, onBack: () -> Unit, onD
             try {
                 auth.confirmPasswordReset(code, password)
                 try { auth.reauthEmail(password) } catch (_: Exception) {}
+                // J-100 (iOS PasswordView): the reset ended EVERY one-tap key, this phone's too. The
+                // dead one goes and a fresh one is asked for, or the saved card loses one-tap.
+                com.fariin.app.Fb.auth.currentUser?.uid?.let { uid ->
+                    com.fariin.app.data.DeviceSessionKeys.forget(ctx, uid)
+                    com.fariin.app.data.DeviceSessionKeys.ensureIssued(ctx)
+                }
                 saved = true
             } catch (e: Exception) { error = AuthRepository.codeMessageFor(e); passwordStep = false; code = "" }
             working = false
