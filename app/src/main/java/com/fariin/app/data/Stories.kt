@@ -253,9 +253,13 @@ class StoriesRepository(
                     if (u.isEmpty() || u.contains('/')) continue
                     asked += u
                     launch {
+                        // Someone else's doc: a number in name or photoUrl must not crash the app start.
                         val snap = runCatching { db.collection("users").document(u).get().await() }.getOrNull()
-                        if (snap != null && snap.exists()) {
-                            profiles[u] = (snap.getString("name") ?: "") to snap.getString("photoUrl")
+                        val row = runCatching {
+                            if (snap != null && snap.exists()) ((snap.get("name") as? String) ?: "") to (snap.get("photoUrl") as? String) else null
+                        }.getOrNull()
+                        if (row != null) {
+                            profiles[u] = row
                             trySend(build())
                         }
                     }
@@ -263,7 +267,7 @@ class StoriesRepository(
                 trySend(build())
             }
 
-            fun parse(docs: List<DocumentSnapshot>) = docs.mapNotNull { d -> d.data?.let { StoryList.parse(d.id, it) } }
+            fun parse(docs: List<DocumentSnapshot>) = docs.mapNotNull { d -> runCatching { d.data?.let { StoryList.parse(d.id, it) } }.getOrNull() }
 
             val stories = db.collection("stories")
             val regs = mutableListOf<ListenerRegistration>()
