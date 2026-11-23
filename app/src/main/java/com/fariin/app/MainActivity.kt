@@ -431,6 +431,8 @@ class MainActivity : ComponentActivity() {
             val cid = pending ?: return@LaunchedEffect
             PushRouter.pendingOpen.value = null
             // The official chat is its own page, not a thread (iOS opens it for its pushes).
+            // A join request tap (L-42) opens that group's Join Requests page, not the chat.
+            if (cid.startsWith(JOIN_REQUESTS_OPEN)) { nav.navigate("channelrequests/${cid.removePrefix(JOIN_REQUESTS_OPEN)}") { launchSingleTop = true }; return@LaunchedEffect }
             nav.navigateChat(com.fariin.app.push.PushTapRoute.route(cid))
         }
         // The launcher's long-press New Chat / New Story (system/SystemRouter).
@@ -794,6 +796,8 @@ class MainActivity : ComponentActivity() {
         intent.removeExtra(PushRouter.EXTRA_OPEN_CID)
         // A cid becomes a document id and a page route: an empty or slashed one is refused (iOS didReceive).
         if (!com.fariin.app.channel.ChannelRules.safeId(cid)) return
+        val joinRequest = intent.getStringExtra("type") == "joinrequest"
+        intent.removeExtra("type")
         intent.getStringExtra(com.fariin.app.push.NotificationPoster.EXTRA_REPLIES_MID)?.takeIf { it.isNotEmpty() }?.let { mid ->
             intent.removeExtra(com.fariin.app.push.NotificationPoster.EXTRA_REPLIES_MID)
             com.fariin.app.ui.channels.PostQuotesSheet.pendingFocus.value = com.fariin.app.data.PostReplyRules.focusOf(mid,
@@ -817,7 +821,7 @@ class MainActivity : ComponentActivity() {
                 return@launch
             }
             PushRouter.pendingMid.value = mid?.let { com.fariin.app.push.PushOpen(cid, it, tapMs) }
-            PushRouter.pendingOpen.value = cid
+            PushRouter.pendingOpen.value = if (joinRequest) JOIN_REQUESTS_OPEN + cid else cid
         }
     }
 
@@ -994,6 +998,9 @@ internal class AfterFirstFrame(delayMs: Long, start: () -> Unit) {
 }
 
 internal const val THREAD_ROUTE = "thread/{cid}"
+
+/** PushRouter.pendingOpen for a join request tap: this prefix, then the group's cid (L-42). */
+private const val JOIN_REQUESTS_OPEN = "joinrequests:"
 
 /**
  * Single top only when the page on top is not a different chat: launchSingleTop on "thread/{cid}"

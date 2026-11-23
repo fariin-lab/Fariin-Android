@@ -81,7 +81,16 @@ object ChatListActions {
      * markUnread): read = every post, or one post back for Mark as Unread. The channel's own
      * document is refused to a follower.
      */
-    suspend fun setUnread(me: String, c: Conversation, on: Boolean): Boolean =
+    /** The shade copy of a chat goes with it (K-31) or once it is read (K-75). */
+    private val appCtx get() = com.google.firebase.FirebaseApp.getInstance().applicationContext
+
+    suspend fun setUnread(me: String, c: Conversation, on: Boolean): Boolean {
+        // Read from the list (one row or many): its notifications go, as opening the chat does (K-75).
+        if (!on) runCatching { com.fariin.app.push.NotificationPoster.clearRead(appCtx, listOf(c.id)) }
+        return setUnreadDoc(me, c, on)
+    }
+
+    private suspend fun setUnreadDoc(me: String, c: Conversation, on: Boolean): Boolean =
         if (c.isFollower(me)) (me == DemoChats.ME || com.fariin.app.channel.ChannelService.setRead(c.id, if (on) maxOf(0, c.postCount - 1) else c.postCount))
         else if (on) merge(me, c.id, mapOf("markedUnread" to mapOf(me to true)))
         else merge(me, c.id, buildMap {
@@ -94,6 +103,11 @@ object ChatListActions {
 
     /** Delete for me: the chat empties and leaves my list until something new arrives (iOS deleteForMe). */
     suspend fun deleteForMe(me: String, c: Conversation): Boolean =
+        deleteForMeDoc(me, c).also { clearShade(c.id) }
+
+    private fun clearShade(cid: String) { runCatching { com.fariin.app.push.NotificationPoster.clearChat(appCtx, cid) } }
+
+    private suspend fun deleteForMeDoc(me: String, c: Conversation): Boolean =
         // Server time, not the phone's (iOS): the mark is compared with server stamps on all my devices.
         merge(me, c.id, mapOf("clearedAt" to mapOf(me to com.fariin.app.data.ServerClock.nowMsSynced()), "unreadCount" to mapOf(me to 0)))
             // The phone's own copy of the chat goes too (device-storage phase 1).
@@ -215,11 +229,17 @@ object ChatListActions {
     /** Leave a group, or a channel I am a member of (owner or admin), with ChatService.leaveGroup. */
     suspend fun leave(me: String, cid: String) {
         if (me == DemoChats.ME) return
+        clearShade(cid)
         com.fariin.app.data.FirestorePeople(me, com.fariin.app.data.CryptoHub.crypto).leaveGroup(cid)
     }
 
     /** Delete [c] by its [deleteKind] at once (the multi-select path, as iOS deleteChats: no Undo). */
-    suspend fun deleteByKind(me: String, c: Conversation): Boolean = when (deleteKind(me, c)) {
+    suspend fun deleteByKind(me: String, c: Conversation): Boolean {
+        clearShade(c.id)
+        return deleteByKindDoc(me, c)
+    }
+
+    private suspend fun deleteByKindDoc(me: String, c: Conversation): Boolean = when (deleteKind(me, c)) {
         DeleteKind.HIDE -> deleteForMe(me, c)
         DeleteKind.UNFOLLOW -> me == DemoChats.ME || runCatching { com.fariin.app.channel.ChannelService.unfollow(c.id) }.isSuccess
         DeleteKind.LEAVE_GROUP, DeleteKind.LEAVE_CHANNEL -> runCatching { leave(me, c.id) }.isSuccess

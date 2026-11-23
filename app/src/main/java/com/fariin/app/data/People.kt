@@ -287,7 +287,7 @@ class FirestorePeople(
                     com.fariin.app.location.LiveShareService.stop(com.google.firebase.FirebaseApp.getInstance().applicationContext, direct)
                 }
                 // Their banners go from the shade with the block (K-31).
-                com.fariin.app.push.NotificationPoster.clearChat(direct)
+                com.fariin.app.push.NotificationPoster.clearChat(com.google.firebase.FirebaseApp.getInstance().applicationContext, direct)
             }
             return@ok
         }
