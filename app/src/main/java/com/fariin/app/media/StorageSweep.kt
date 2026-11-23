@@ -26,10 +26,12 @@ object StorageSweep {
     fun sizes(c: Context): Sizes {
         val media = size(File(c.cacheDir, MEDIA))
         val imgDir = imageDir(c)
-        val images = imgDir?.let { size(it) } ?: 0L
+        // The saved faces for notifications count as pictures too (K-127).
+        val faces = com.fariin.app.push.NotifStore.avatarBytes(c)
+        val images = (imgDir?.let { size(it) } ?: 0L) + faces
         val all = size(c.cacheDir) + (c.externalCacheDir?.let { size(it) } ?: 0L)
         val outgoing = size(File(c.cacheDir, OUTGOING))
-        val inCache = if (imgDir != null && imgDir.startsWith(c.cacheDir)) images else 0L
+        val inCache = if (imgDir != null && imgDir.startsWith(c.cacheDir)) images - faces else 0L
         // Copies of sends (outside the cache since K-45) count as temporary files too (H-106).
         val sending = size(File(c.noBackupFilesDir, OUTGOING))
         return Sizes(media, images, maxOf(0L, all - media - inCache - outgoing) + outgoing + sending)
@@ -79,6 +81,7 @@ object StorageSweep {
     /** Clear Cache: everything that downloads again, except waiting sends and files in use. */
     fun clear(c: Context, nowMs: Long = System.currentTimeMillis()) {
         runCatching { coil3.SingletonImageLoader.get(c).diskCache?.clear() }
+        runCatching { com.fariin.app.push.NotifStore.clearAvatars(c) }   // K-127: they download again
         val recent = nowMs - HOUR_MS
         fun wipe(dir: File?) {
             dir?.listFiles()?.forEach { f ->
