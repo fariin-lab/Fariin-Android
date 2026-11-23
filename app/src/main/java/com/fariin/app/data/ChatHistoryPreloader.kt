@@ -32,6 +32,25 @@ object ChatHistoryPreloader {
     private val warming = HashSet<String>()
     private val warmedAt = HashMap<String, Double>()
 
+    // J-92: warmedAt kept across launches, so a cold start does not read the top 20 chats again.
+    @Volatile private var prefs: android.content.SharedPreferences? = null
+    private var prefsRead = false
+
+    fun attach(ctx: android.content.Context) {
+        if (prefs == null) prefs = ctx.applicationContext.getSharedPreferences("chatPreload.v1", android.content.Context.MODE_PRIVATE)
+    }
+
+    /** The saved stamps, once (under the object's lock). Keys are "<me>/<cid>". */
+    private fun readSaved(me: String) {
+        if (prefsRead) return
+        val p = prefs ?: return
+        prefsRead = true
+        for ((k, v) in p.all) if (k.startsWith("$me/")) (v as? String)?.toDoubleOrNull()?.let { warmedAt[k.removePrefix("$me/")] = it }
+    }
+
+    private var debounce: kotlinx.coroutines.Job? = null
+    private const val DEBOUNCE_MS = 1_500L
+
     // Shared with iOS 2026-11-07: the top 20 of the list.
     private const val TOP_CHATS = 20
 
@@ -76,10 +95,25 @@ object ChatHistoryPreloader {
         // elsewhere only the chats near the top (the ones about to be opened), not up to 300 of them.
         val power = com.fariin.app.perf.PowerSaving.state.value
         if (power.deviceClass == com.fariin.app.perf.PerfClass.LOW || power.batterySaverOn) return
+        // J-92: one pass per 1.5 s of list changes (a busy list sends many snapshots).
+        debounce?.cancel()
+        debounce = scope.launch {
+            kotlinx.coroutines.delay(DEBOUNCE_MS)
+            synchronized(this@ChatHistoryPreloader) {
+                if (ThreadRepository.anyOpen()) return@launch
+                pick(conversations, me)
+            }
+        }
+    }
+
+    private fun pick(conversations: List<Conversation>, me: String) {
+        readSaved(me)
         val now = System.currentTimeMillis().toDouble()
         val top = conversations.sortedByDescending { it.displayUpdatedAt(me) }.take(TOP_CHATS).map { it.id }.toSet()
         val ranked = conversations.asSequence()
             .filter { it.id in top }
+            // J-92: never a channel (iOS ChatHistoryPreloader): every post would make each follower read 60.
+            .filter { !it.isChannel }
             .filter { !it.localPending && it.id !in warming && it.displayUpdatedAt(me) > (warmedAt[it.id] ?: 0.0) }
             .sortedWith(compareBy<Conversation> { it.isMuted(me, now) }
                 .thenBy { !it.hasUnreadMark(me) }
@@ -112,14 +146,20 @@ object ChatHistoryPreloader {
     }
 
     @Synchronized
-    fun stopAll() { warming.clear(); warmedAt.clear(); lastList = emptyList(); lastMe = "" }
+    fun stopAll() { debounce?.cancel(); warming.clear(); warmedAt.clear(); prefsRead = false; lastList = emptyList(); lastMe = "" }
 
     private fun warm(c: Conversation, me: String) {
         val cid = c.id
         val stamp = c.displayUpdatedAt(me)
         warming += cid
         scope.launch {
-            val ok = withTimeoutOrNull(GIVE_UP_MS) {
+            // J-92: the phone's cache already holds the newest row: nothing to read from the server.
+            val cachedNewest = runCatching {
+                (com.fariin.app.Fb.db.collection("conversations").document(cid).collection("messages")
+                    .orderBy("createdAt", Query.Direction.DESCENDING).limit(1).get(Source.CACHE).await()
+                    .documents.firstOrNull()?.get("createdAt") as? com.google.firebase.Timestamp)?.toDate()?.time?.toDouble()
+            }.getOrNull()
+            val ok = if (!behind(stamp, cachedNewest)) true else withTimeoutOrNull(GIVE_UP_MS) {
                 runCatching {
                     com.fariin.app.Fb.db.collection("conversations").document(cid).collection("messages")
                         .orderBy("createdAt", Query.Direction.DESCENDING)
@@ -129,7 +169,7 @@ object ChatHistoryPreloader {
             } == true
             synchronized(this@ChatHistoryPreloader) {
                 warming -= cid
-                if (ok) warmedAt[cid] = stamp
+                if (ok) { warmedAt[cid] = stamp; prefs?.edit()?.putString("$me/$cid", stamp.toString())?.apply() }
             }
             // A slot is free: the next chat behind goes (only those not yet warmed to their time).
             if (ok && com.fariin.app.AppLifecycle.inFront) retry()   // not after a failure: offline it would loop

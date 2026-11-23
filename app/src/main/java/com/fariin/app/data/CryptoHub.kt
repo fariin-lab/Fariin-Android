@@ -34,6 +34,7 @@ object CryptoHub {
 
     fun get(context: Context): FariinCrypto = instance ?: synchronized(this) {
         GroupKeyRelease.attach(context)
+        ChatHistoryPreloader.attach(context)
         instance ?: FariinCrypto.android(
             context.applicationContext,
             FirestoreKeyDirectory(com.fariin.app.Fb.db,
