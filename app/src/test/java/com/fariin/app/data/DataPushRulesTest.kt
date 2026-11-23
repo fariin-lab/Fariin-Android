@@ -8,7 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DataPushRulesTest {
-    private val adhoc = mapOf("type" to "adhoccall", "roomId" to "adhoc_abc", "t" to "Ann & Bob", "b" to "Ann is inviting you to a voice call")
+    private val adhoc = mapOf("type" to "adhoccall", "roomId" to "adhoc_abc", "callerUid" to "bob", "t" to "Ann & Bob", "b" to "Ann is inviting you to a voice call")
     private val nudge = mapOf("type" to "groupnudge", "cid" to "g1", "callerUid" to "bob", "callerName" to "Bob",
         "title" to "Team", "t" to "Team", "b" to "Bob wants you back in the call")
     private val join = mapOf("type" to "joinrequest", "cid" to "g1", "t" to "Team", "b" to "Ann asked to join")
@@ -27,7 +27,7 @@ class DataPushRulesTest {
     }
 
     @Test fun adhocWithNoWordsHasTheFallback() {
-        val r = route(mapOf("type" to "adhoccall", "roomId" to "adhoc_abc"))!!
+        val r = route(mapOf("type" to "adhoccall", "roomId" to "adhoc_abc", "kind" to "groupring"))!!
         assertEquals(AdhocInviteRules.FALLBACK_TITLE, r.title)
         assertEquals(AdhocInviteRules.FALLBACK_BODY, r.body)
     }
@@ -105,5 +105,94 @@ class DataPushRulesTest {
         }
         assertTrue(DataPushRules.route(join + ("silent" to "1") + ("cid" to ""), null, null, true)!!.silent)
         assertNotEquals(DataPushPost.IGNORE, route(join + ("req" to "1"))!!.post)
+    }
+
+    // The server's exact data-only payloads (all strings, no notification part).
+
+    private fun ringKeys(cid: String, roomKind: String, callId: String) = mapOf(
+        "kind" to "groupring", "cid" to cid, "roomKind" to roomKind, "roomId" to cid, "callId" to callId,
+        "callerUid" to "bob", "callerName" to "Bob", "title" to "Team", "video" to "false",
+        "startedAt" to "1763900000000", "sentAt" to "1763900120000")
+
+    @Test fun shape1AdhocRing() {
+        val d = ringKeys("adhoc_abc", "adhoc", "") + mapOf("type" to "adhoccall", "video" to "true",
+            "t" to "Fariin", "b" to "Someone is inviting you to a call")
+        val r = route(d)!!
+        assertEquals(DataPushPost.ADHOC_RING, r.post)
+        assertEquals("adhoc_abc", r.id)
+        assertEquals("Fariin", r.title)
+        assertEquals("Someone is inviting you to a call", r.body)
+    }
+
+    @Test fun shape2AdhocFallbackIsAPlainBannerNeverARing() {
+        val r = route(mapOf("type" to "adhoccall", "roomId" to "adhoc_abc", "t" to "Ann & Bob", "b" to "Ann is inviting you to a call"))!!
+        assertEquals(DataPushPost.ADHOC_NOTICE, r.post)
+        assertEquals("adhoc_abc", r.id)
+        assertEquals("Ann & Bob", r.title)
+        assertEquals("Ann is inviting you to a call", r.body)
+    }
+
+    @Test fun shape3RingAgainRings() {
+        val group = route(ringKeys("g1", "group", "rec9") + ("type" to "groupcall"))!!
+        assertEquals(DataPushPost.GROUP_RING, group.post)
+        assertEquals("g1", group.id)
+        assertEquals(1763900120000L, group.sentAtMs)
+        val multi = route(ringKeys("adhoc_abc", "adhoc", "rec9") + ("type" to "groupcall"))!!
+        assertEquals(DataPushPost.ADHOC_RING, multi.post)
+        assertEquals("adhoc_abc", multi.id)
+        // A link room's ring is "linkring" (with its key); this push cannot ring it.
+        assertEquals(DataPushPost.IGNORE, route(ringKeys("room1", "link", "rec9") + ("type" to "groupcall"))!!.post)
+    }
+
+    @Test fun shape4GroupNudgeTitleIsTheGroupsBannerUsesTB() {
+        val d = mapOf("type" to "groupnudge", "cid" to "g1", "callerUid" to "bob", "callerName" to "Bob", "title" to "Team",
+            "video" to "false", "startedAt" to "1763900000000", "t" to "Bob", "b" to "wants you back in the call")
+        val r = route(d)!!
+        assertEquals(DataPushPost.GROUP_NUDGE, r.post)
+        assertEquals("g1", r.id)
+        assertEquals("Bob", r.title)
+        assertEquals("wants you back in the call", r.body)
+        assertEquals("Team", GroupNudgeRules.parse(d)!!.title)
+    }
+
+    @Test fun shape5JoinRequest() {
+        val r = route(mapOf("type" to "joinrequest", "cid" to "g1", "t" to "Team", "b" to "Ann asked to join"))!!
+        assertEquals(DataPushPost.JOIN_REQUEST, r.post)
+        assertEquals("g1", r.id)
+        assertEquals("Ann asked to join", r.body)
+    }
+
+    @Test fun shape6SmallGroupRing() {
+        val r = route(ringKeys("g1", "group", "rec9") + ("type" to "groupcall"))!!
+        assertEquals(DataPushPost.GROUP_RING, r.post)
+        // Told from a banner by the caller or room even without kind "groupring".
+        assertEquals(DataPushPost.GROUP_RING, route(mapOf("type" to "groupcall", "cid" to "g1", "callerUid" to "bob"))!!.post)
+        assertEquals(DataPushPost.GROUP_RING, route(mapOf("type" to "groupcall", "cid" to "g1", "roomId" to "g1"))!!.post)
+    }
+
+    @Test fun shape7BigGroupNoticeNeverRings() {
+        val r = route(mapOf("type" to "groupcall", "cid" to "g1", "t" to "Team", "b" to "Bob started a call"))!!
+        assertEquals(DataPushPost.GROUP_CALL_BANNER, r.post)
+        assertEquals("g1", r.id)
+        assertEquals("Bob started a call", r.body)
+    }
+
+    @Test fun shape8MessagePushGoesDownTheMessagePath() {
+        val d = mapOf("mid" to "m1", "cid" to "a_b", "aid" to "a", "ackUid" to "b", "ack" to "tok", "expiresAt" to "0",
+            "sn" to "Ann", "kind" to "text", "g" to "0", "sp" to "x", "ct" to "zz", "t" to "Ann", "b" to "Hi",
+            "req" to "1", "silent" to "1")
+        assertNull(route(d))
+        assertFalse(DataPushRules.owns(d["type"]))
+    }
+
+    @Test fun shape9ChannelPostGoesDownTheMessagePath() {
+        assertNull(route(mapOf("cid" to "ch1", "channel" to "1", "aid" to "ch1", "sn" to "News", "sp" to "x",
+            "t" to "News", "b" to "Post", "silent" to "1")))
+    }
+
+    @Test fun clashKindIsTheMessageTypeWithNoTypeKey() {
+        assertNull(route(mapOf("cid" to "g1", "kind" to "text", "callerUid" to "bob")))
+        assertNull(route(mapOf("cid" to "g1", "kind" to "groupring")))
+        assertEquals(DataPushPost.GROUP_CALL_BANNER, route(mapOf("type" to "groupcall", "cid" to "g1", "kind" to "text"))!!.post)
     }
 }

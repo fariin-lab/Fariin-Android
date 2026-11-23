@@ -90,9 +90,10 @@ class FariinMessagingService : FirebaseMessagingService() {
         if (message.data["type"] == com.fariin.app.data.AdhocInviteRules.TYPE) {
             val r = owned(applicationContext, message) ?: return
             val p = com.fariin.app.data.AdhocInviteRules.parse(message.data)
-            if (r.post != com.fariin.app.data.DataPushPost.ADHOC_RING || p == null) return
+            val ring = r.post == com.fariin.app.data.DataPushPost.ADHOC_RING
+            if ((!ring && r.post != com.fariin.app.data.DataPushPost.ADHOC_NOTICE) || p == null) return
             val c = applicationContext
-            android.os.Handler(android.os.Looper.getMainLooper()).post { showAdhocInvite(c, p, r.title, r.body, r.silent) }
+            android.os.Handler(android.os.Looper.getMainLooper()).post { showAdhocInvite(c, p, r.title, r.body, r.silent, ring) }
             return
         }
         // Only the ring itself (data-only, kind "groupring") rings full screen (F-36). The plain
@@ -104,10 +105,16 @@ class FariinMessagingService : FirebaseMessagingService() {
         if (message.data["type"] == com.fariin.app.data.DataPushRules.GROUP_CALL || message.data["type"] == com.fariin.app.data.DataPushRules.JOIN_REQUEST) {
             val r = owned(applicationContext, message) ?: return
             when (r.post) {
+                // A ring (it names the caller or room, or kind "groupring"): told to onPush as the ring.
                 com.fariin.app.data.DataPushPost.GROUP_RING -> {
                     val c = applicationContext
-                    val kind = message.data["kind"]
-                    android.os.Handler(android.os.Looper.getMainLooper()).post { com.fariin.app.call.GroupRing.onPush(c, r.id, kind) }
+                    android.os.Handler(android.os.Looper.getMainLooper()).post { com.fariin.app.call.GroupRing.onPush(c, r.id, "groupring", r.sentAtMs) }
+                }
+                // Ring Again of a multi-person call (roomKind "adhoc").
+                com.fariin.app.data.DataPushPost.ADHOC_RING -> {
+                    val c = applicationContext
+                    val p = com.fariin.app.data.AdhocCallPush(r.id)
+                    android.os.Handler(android.os.Looper.getMainLooper()).post { showAdhocInvite(c, p, r.title, r.body, r.silent, ring = true) }
                 }
                 com.fariin.app.data.DataPushPost.GROUP_CALL_BANNER -> NotificationPoster.postChatNotice(applicationContext,
                     NotificationPoster.groupCallTag(r.id), r.title, r.body, message.data.toMap(), call = true, silent = r.silent)
@@ -202,7 +209,8 @@ class FariinMessagingService : FirebaseMessagingService() {
         }
 
         /** The multi-person call invite (AdhocInviteRules.route), on the main thread. */
-        private fun showAdhocInvite(c: Context, p: com.fariin.app.data.AdhocCallPush, title: String, body: String, silent: Boolean) {
+        /** [ring] false = the fallback push (roomId, t, b only): behind or closed it is the plain banner, never a ring. */
+        private fun showAdhocInvite(c: Context, p: com.fariin.app.data.AdhocCallPush, title: String, body: String, silent: Boolean, ring: Boolean) {
             val me = com.fariin.app.Fb.auth.currentUser?.uid.orEmpty()
             val show = com.fariin.app.data.AdhocInviteRules.route(p, me, Push.pushOn(c),
                 myCallId = com.fariin.app.call.GroupCall.ui.value.cid,
@@ -213,9 +221,10 @@ class FariinMessagingService : FirebaseMessagingService() {
                 com.fariin.app.data.AdhocShow.BUSY -> com.fariin.app.call.GroupRing.answer("busy", p.roomId, null, roomKind = "adhoc")
                 com.fariin.app.data.AdhocShow.NOTIFICATION -> NotificationPoster.postAdhocInvite(c, title, body, p, quiet = silent)
                 // Closed or behind: our own ring; the plain notification only when the call cannot be read.
-                com.fariin.app.data.AdhocShow.RING -> com.fariin.app.call.GroupRing.onAdhocInvite(c, p.roomId, ring = true) {
-                    NotificationPoster.postAdhocInvite(c, title, body, p, quiet = silent)
-                }
+                com.fariin.app.data.AdhocShow.RING -> if (!ring) NotificationPoster.postAdhocInvite(c, title, body, p, quiet = silent)
+                    else com.fariin.app.call.GroupRing.onAdhocInvite(c, p.roomId, ring = true) {
+                        NotificationPoster.postAdhocInvite(c, title, body, p, quiet = silent)
+                    }
                 com.fariin.app.data.AdhocShow.QUIET_NOTIFICATION -> {
                     NotificationPoster.postAdhocInvite(c, title, body, p, quiet = true)
                     val prefs = InAppNotify.prefs(c)

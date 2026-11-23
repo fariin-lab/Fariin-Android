@@ -143,8 +143,11 @@ object GroupRing {
     private var app: Context? = null
     private val db get() = com.fariin.app.Fb.db
 
-    /** The `groupcall` push (FariinMessagingService); [kind] is the push's `kind` (F-36). */
-    fun onPush(context: Context, cid: String, kind: String? = null) {
+    /**
+     * The `groupcall` push (FariinMessagingService); [kind] is the push's `kind` (F-36). [sentAtMs]
+     * is the ring's own `sentAt`: a Ring Again minutes into the call rings for a minute from then.
+     */
+    fun onPush(context: Context, cid: String, kind: String? = null, sentAtMs: Long? = null) {
         val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         if (cid.isEmpty() || cid.contains("/")) return
         app = context.applicationContext
@@ -152,8 +155,9 @@ object GroupRing {
         scope.launch {
             val doc = try { db.collection("groupCalls").document(cid).get().await().data } catch (_: Exception) { null }
             val started = (doc?.get("startedAt") as? Timestamp)?.toDate()?.time
-            if (GroupRingRules.ringKey(cid, started) in declinedHere) return@launch
-            if (!GroupRingRules.rings(doc, me, started, System.currentTimeMillis())) return@launch
+            val ringFrom = sentAtMs ?: started
+            if (GroupRingRules.ringKey(cid, ringFrom) in declinedHere) return@launch
+            if (!GroupRingRules.rings(doc, me, ringFrom, System.currentTimeMillis())) return@launch
             // In another call, or another ring is up: this one does not ring and the caller is told (iOS reportBusy).
             if (GroupCall.ui.value.cid != null || CallManager.ui.value.status.live || _invite.value != null) {
                 answer("busy", cid, started); return@launch
@@ -165,7 +169,8 @@ object GroupRing {
             val photos = (conv?.get("photos") as? Map<*, *>).orEmpty()
             val title = (conv?.get("title") as? String)?.takeIf { it.isNotEmpty() } ?: (doc["title"] as? String)?.takeIf { it.isNotEmpty() } ?: "Group"
             val face = RingFace(by, names[by] as? String ?: "Someone", photos[by] as? String)
-            ring(GroupInvite(cid, title, doc["video"] == true, by, started ?: System.currentTimeMillis(), listOf(face), knownStartMs = started))
+            ring(GroupInvite(cid, title, doc["video"] == true, by, started ?: System.currentTimeMillis(), listOf(face),
+                knownStartMs = ringFrom, ringFromMs = sentAtMs))
         }
     }
 
