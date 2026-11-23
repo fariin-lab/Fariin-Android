@@ -272,9 +272,13 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
                 // @fariin channel opened in the app.
                 val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
                 val newsScope = androidx.compose.runtime.rememberCoroutineScope()
+                // Found while the page is open, so the tap itself opens at once.
+                LaunchedEffect(Unit) { runCatching { FariinNews.resolve(ctx.applicationContext) } }
                 SettingsRow("Fariin News", painterResource(R.drawable.ic_set_news)) {
+                    val known = FariinNews.cid(ctx)
+                    if (known != null) { channelNav.open(known); return@SettingsRow }
                     newsScope.launch {
-                        val cid = FariinNews.cid ?: com.fariin.app.data.PublicGroups.resolveGroup(FariinNews.HANDLE)?.also { FariinNews.cid = it }
+                        val cid = FariinNews.resolve(ctx.applicationContext)
                         if (cid != null) channelNav.open(cid)
                         else android.widget.Toast.makeText(ctx, "Couldn't open Fariin News. Check your connection and try again.", android.widget.Toast.LENGTH_SHORT).show()
                     }
@@ -646,8 +650,25 @@ private fun TabSideEffects(active: androidx.compose.runtime.State<Boolean>, hasP
     }
 }
 
-/** The official news channel behind Settings › Fariin News; its cid is found once by name. */
+/**
+ * The official news channel behind Settings › Fariin News. Its cid is found by name ONCE and kept on
+ * the phone (owner 2026-11-22: the row "takes late to open" because every app start asked the server
+ * again on the tap; iOS keeps it in UserDefaults since 11-19). Settings warms it in the background.
+ */
 private object FariinNews {
     const val HANDLE = "fariin"
-    @Volatile var cid: String? = null
+    private const val PREFS = "fariin_news"
+    private const val KEY = "cid"
+    @Volatile private var cached: String? = null
+
+    fun cid(c: android.content.Context): String? =
+        cached ?: c.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE).getString(KEY, null)
+            ?.takeIf { it.isNotEmpty() }?.also { cached = it }
+
+    /** The cid, from the phone or else asked once and saved; null when the server could not say. */
+    suspend fun resolve(c: android.content.Context): String? = cid(c)
+        ?: com.fariin.app.data.PublicGroups.resolveGroup(HANDLE)?.also { found ->
+            cached = found
+            c.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE).edit().putString(KEY, found).apply()
+        }
 }
