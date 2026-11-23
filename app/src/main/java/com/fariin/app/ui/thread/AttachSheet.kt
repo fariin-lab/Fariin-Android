@@ -153,6 +153,9 @@ internal fun AttachSheet(
     val statusTop = androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(density)
     motion.mid = (windowH * 0.38f - statusTop - with(density) { 10.dp.toPx() }).coerceAtLeast(1f)
     val sheetScroll = com.fariin.app.ui.components.rememberSheetScroll(motion)
+    // One send per open (K-55): a second tap while the sheet closes (keyboard first, then the curve)
+    // sent the same album, GIF or file again.
+    val sentOnce = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     val picked = remember { mutableStateListOf<Uri>() }
     val videos = remember { mutableStateListOf<Uri>() }
     var caption by remember { mutableStateOf("") }
@@ -277,8 +280,9 @@ internal fun AttachSheet(
         // Kept for the Files page's Recent list (iOS RecentFiles), then sent.
         uris.forEach { RecentFiles.record(context, it) }
         when {
+            uris.isEmpty() || !sentOnce.compareAndSet(false, true) -> Unit
             uris.size == 1 -> { onSendFile(uris[0]); motion.close() }
-            uris.size > 1 -> { onSendFiles(uris); motion.close() }
+            else -> { onSendFiles(uris); motion.close() }
         }
     }
     val onePhoto = picked.size == 1 && picked[0] !in videos
@@ -323,10 +327,10 @@ internal fun AttachSheet(
                     onBrowse = { files.launch(arrayOf("*/*")) },
                     onGallery = { files.launch(arrayOf("image/*", "video/*")) },
                     onAudio = { files.launch(arrayOf("audio/*")) },
-                    onSend = { u -> RecentFiles.record(context, u); onSendFile(u); motion.close() },
-                    onSendPhotos = { l -> onSendFiles(l); motion.close() })
+                    onSend = { u -> if (sentOnce.compareAndSet(false, true)) { RecentFiles.record(context, u); onSendFile(u); motion.close() } },
+                    onSendPhotos = { l -> if (sentOnce.compareAndSet(false, true)) { onSendFiles(l); motion.close() } })
             } else if (page == SheetPage.GIFS && onGif != null) {
-                Box(Modifier.fillMaxSize().padding(bottom = 84.dp + navBottomDp)) { GifTab(onGif = { g -> onGif(g); motion.close() },
+                Box(Modifier.fillMaxSize().padding(bottom = 84.dp + navBottomDp)) { GifTab(onGif = { g -> if (sentOnce.compareAndSet(false, true)) { onGif(g); motion.close() } },
                     onCaption = onGifCaption?.let { cb -> { g: com.fariin.app.data.StickerGifRules.Gif -> motion.close(); cb(g) } }) }
             } else if (page == SheetPage.ALBUMS) {
                 // The 10 dp sits INSIDE the scroll: as an outer padding it cut the scrolled rows flat
@@ -425,7 +429,7 @@ internal fun AttachSheet(
                     Spacer(Modifier.width(8.dp))
                     Box(
                         Modifier.size(44.dp).clip(CircleShape).background(c.blue)
-                            .clickable { onSendMedia(picked.toList(), caption, viewOnce); motion.close() },
+                            .clickable { if (sentOnce.compareAndSet(false, true)) { onSendMedia(picked.toList(), caption, viewOnce); motion.close() } },
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(ImageVector.cachedVector(R.drawable.ic_sf_arrow_up), "Send", tint = Color.White, modifier = Modifier.size(22.dp))
@@ -442,18 +446,18 @@ internal fun AttachSheet(
         if (onePhoto) PhotoDrawEditor(u, editOnly = false, startDrawing = false,
             onClose = { drawOn = null; if (cameraFirst && picked.size == 1) onDismiss() },
             allowViewOnce = allowViewOnce,
-            onSend = { photo, cap, once ->
+            onSend = { photo, cap, once -> if (sentOnce.compareAndSet(false, true)) {
                 // A view-once camera shot that was cropped or drawn on goes out as the edited copy;
                 // the original is not needed and must not stay in the cache (the send removes the rest).
                 if (once && photo != u) deleteEditedCopy(context, u)
-                drawOn = null; onSendMedia(listOf(photo), cap, once); finish() })
+                drawOn = null; onSendMedia(listOf(photo), cap, once); finish() } })
         // One video chosen: the video editor (iOS VideoApprovalView), the trimmer and Send.
         else if (picked.size == 1 && u in videos) VideoEditor(u, caption, onCaption = { caption = it }, onClose = { drawOn = null },
-            onSend = { cap -> drawOn = null; onSendMedia(listOf(u), cap, false); finish() })
+            onSend = { cap -> if (sentOnce.compareAndSet(false, true)) { drawOn = null; onSendMedia(listOf(u), cap, false); finish() } })
     }
     pagerAt?.let { at ->
         MediaPagerEditor(picked, videos, at, caption, onCaption = { caption = it }, onClose = { pagerAt = null },
-            onSend = { list, cap -> pagerAt = null; onSendMedia(list, cap, false); finish() })
+            onSend = { list, cap -> if (sentOnce.compareAndSet(false, true)) { pagerAt = null; onSendMedia(list, cap, false); finish() } })
     }
 }
 

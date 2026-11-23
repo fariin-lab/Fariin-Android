@@ -126,6 +126,8 @@ private fun PickerPage(onDismiss: () -> Unit, onShareLive: (() -> Unit)?, onSend
     val c = Fariin.colors
     val ctx = LocalContext.current
     var askLive by remember { mutableStateOf(false) }
+    // One send per open (K-55): a second tap while the sheet closes sent the spot again.
+    val sentOnce = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     if (askLive && onShareLive != null) com.fariin.app.ui.components.GlassAlert(onDismissRequest = { askLive = false },
         title = "Share your live location?",
         message = "Your spot will keep updating in this chat as you move, for as long as you choose, even when Fariin is closed. Stop it any time.",
@@ -447,6 +449,7 @@ private fun PickerPage(onDismiss: () -> Unit, onShareLive: (() -> Unit)?, onSend
             },
             onSend = {
                 val s = spot ?: return@BottomPanel
+                if (!sentOnce.compareAndSet(false, true)) return@BottomPanel
                 val out = LocationShare.outgoing(s.latitude, s.longitude, sendExact, name, area)
                 onSend(out.lat, out.lon, out.label)
                 onDismiss()

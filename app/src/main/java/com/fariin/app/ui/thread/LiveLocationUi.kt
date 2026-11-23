@@ -281,6 +281,8 @@ internal fun LiveSharePage(ui: ThreadUi, onDismiss: () -> Unit, onSend: (String)
                     prefs.edit().putBoolean("explained", true).apply(); explained = true }), dismissOnAction = false)
         return
     }
+    // One start per open (K-55): a second tap while the sheet closes sent a second live card.
+    val sentOnce = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     FariinSheetDialog(onDismiss, handle = true) { motion ->
         Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
             Box(Modifier.fillMaxWidth().weight(1f)) {
@@ -334,6 +336,7 @@ internal fun LiveSharePage(ui: ThreadUi, onDismiss: () -> Unit, onSend: (String)
                 Box(Modifier.fillMaxWidth().height(52.dp).clip(CircleShape).background(if (fix != null) c.accent else c.accent.copy(alpha = 0.4f))
                     .clickable(enabled = fix != null) {
                             val f = fix ?: return@clickable
+                            if (!sentOnce.compareAndSet(false, true)) return@clickable
                             val until = System.currentTimeMillis() + length
                             val text = CardRules.liveText(f.latitude, f.longitude, until, note.trim().ifEmpty { null })
                             onSend(text)
