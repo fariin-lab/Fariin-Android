@@ -69,12 +69,17 @@ object HistoryPull {
             if (newest == null) {   // an empty chat: nothing to vouch for yet
                 LocalDb.setSyncedUpTo(me, cid, 0L); LocalDb.setMeta(me, "pull.$cid", "done"); return
             }
-            t0 = newest; oldest = newest + 1
+            t0 = newest; oldest = newest
             LocalDb.setMeta(me, "pull.$cid", progress())
         }
+        // L-62: pages go on from the last row read (createdAt, then doc id: HistoryPageRules), so rows
+        // sharing the page edge's millisecond are never skipped. A fresh start or a resume from the
+        // note reads every row in or before the note's millisecond (read twice = filed twice, harmless).
+        var last: com.google.firebase.firestore.DocumentSnapshot? = null
         while (true) {
-            val snap = msgs.orderBy("createdAt", Query.Direction.DESCENDING)
-                .whereLessThan("createdAt", com.google.firebase.Timestamp(java.util.Date(oldest ?: (t0 + 1))))
+            val ordered = msgs.orderBy("createdAt", Query.Direction.DESCENDING)
+            val snap = (last?.let { ordered.startAfter(it) }
+                ?: ordered.whereLessThan("createdAt", com.google.firebase.Timestamp(java.util.Date((oldest ?: t0) + 1))))
                 .limit(PAGE).get(Source.SERVER).await()
             val page = snap.documents.map { d ->
                 Message.fromFirestore(d.id, d.data ?: emptyMap(), cid) { raw, author -> crypto.decrypt(raw, cid, author) }
@@ -93,6 +98,7 @@ object HistoryPull {
             val pageOldest = snap.documents.mapNotNull { it.getTimestamp("createdAt")?.toDate()?.time }.minOrNull()
             if (pageOldest != null) { oldest = pageOldest; LocalDb.setMeta(me, "pull.$cid", progress()) }
             if (snap.size() < PAGE) break
+            last = snap.documents.last()
         }
         // The whole history up to T0 is on this phone: the mark starts, and the cursor with it,
         // below the oldest message whose file is still missing (InboxSync goes on from there).
