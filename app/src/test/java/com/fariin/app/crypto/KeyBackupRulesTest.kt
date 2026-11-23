@@ -42,6 +42,19 @@ class KeyBackupRulesTest {
         assertEquals(Write.KEEP_OTHER, KeyBackupRules.writeStep(found(pkA, made = 1L), pkB, 999L, adopted = false))
     }
 
+    @Test fun thePublishedKeyDecides() {
+        val pkC = ByteArray(32) { 3 }
+        // Mine is the one on the server: the stale backup is replaced.
+        assertEquals(Write.WRITE, KeyBackupRules.writeStep(found(pkA), pkB, 200L, adopted = false, published = pkB))
+        // The backup's is the one on the server: this phone takes it.
+        assertEquals(Write.RESTORE_OTHER, KeyBackupRules.writeStep(found(pkA), pkB, 200L, adopted = false, published = pkA))
+        // Neither, or the server not known: both stay.
+        assertEquals(Write.KEEP_OTHER, KeyBackupRules.writeStep(found(pkA), pkB, 200L, adopted = false, published = pkC))
+        assertEquals(Write.KEEP_OTHER, KeyBackupRules.writeStep(found(pkA), pkB, 200L, adopted = false, published = null))
+        // A key the person brought back wins over the server's.
+        assertEquals(Write.WRITE, KeyBackupRules.writeStep(found(pkA), pkB, 200L, adopted = true, published = pkA))
+    }
+
     @Test fun aKeyThePersonBroughtBackReplacesIt() {
         assertEquals(Write.WRITE, KeyBackupRules.writeStep(found(pkA), pkB, 200L, adopted = true))
     }

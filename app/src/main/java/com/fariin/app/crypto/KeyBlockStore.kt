@@ -66,21 +66,28 @@ object KeyBlockStore {
     }
 
     /** Saves my key when [KeyBackupRules.writeStep] allows it. Throws when the entry could not be
-     *  read, so the caller tries again on a later start. [adopted]: the person chose this key. */
-    suspend fun save(context: Context, uid: String, sk: ByteArray, pk: ByteArray, made: Long, adopted: Boolean = false) = lock.withLock {
+     *  read, so the caller tries again on a later start. [adopted]: the person chose this key;
+     *  [published]: the server's key for this account now (null = not known). Returns the saved
+     *  entry when it, not mine, is the published key (the caller takes it), else null. */
+    suspend fun save(context: Context, uid: String, sk: ByteArray, pk: ByteArray, made: Long, adopted: Boolean = false,
+                     published: ByteArray? = null): KeyBackupRules.Read.Found? = lock.withLock {
         val all = readAll(context)
         val json = all.json ?: throw CryptoException("key backup not readable now")
-        when (KeyBackupRules.writeStep(entry(json, uid), pk, made, adopted)) {
-            KeyBackupRules.Write.SKIP -> return@withLock
+        val existing = entry(json, uid)
+        when (KeyBackupRules.writeStep(existing, pk, made, adopted, published)) {
+            KeyBackupRules.Write.SKIP -> return@withLock null
             KeyBackupRules.Write.KEEP_OTHER -> {
-                android.util.Log.w("FariinKeys", "backup holds another key for this account: kept"); return@withLock
+                android.util.Log.w("FariinKeys", "backup holds another key for this account, neither is published: both kept")
+                return@withLock null
             }
+            KeyBackupRules.Write.RESTORE_OTHER -> return@withLock existing as KeyBackupRules.Read.Found
             KeyBackupRules.Write.WRITE -> Unit
         }
         val keys = json.optJSONObject("keys") ?: JSONObject()
         keys.put(uid, JSONObject().put("sk", B64.encode(sk)).put("pk", B64.encode(pk)).put("made", made))
         writeAll(context, json.put("v", 1).put("keys", keys))
         android.util.Log.i("FariinKeys", "key backed up")
+        null
     }
 
     /** This account's entry, or why there is none ([KeyBackupRules.Read]). */

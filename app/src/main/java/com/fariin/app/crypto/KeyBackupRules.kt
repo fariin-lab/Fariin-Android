@@ -8,8 +8,11 @@ package com.fariin.app.crypto
  *
  * - Only a read that worked and holds nothing for this account (or a phone with no Block Store at
  *   all) may lead to a new key. A timeout or an error means "try again", never "none".
- * - A saved key that differs from mine is never replaced by the app on its own. Only a key the
- *   person brought back on purpose (Backup PIN, as iOS adoptRestoredIdentity) replaces it.
+ * - A saved key that differs from mine: the one the server has published for this account wins.
+ *   Mine published: the stale backup is replaced. The backup's published: this phone takes it.
+ *   Neither (or the server unknown): both stay, nothing is written. A key the person brought back
+ *   on purpose (Backup PIN, as iOS adoptRestoredIdentity) always replaces it. iOS has no automatic
+ *   key backup (its Keychain key is ThisDeviceOnly), so this rule is ours.
  * Pure and unit tested (KeyBackupRulesTest).
  */
 object KeyBackupRules {
@@ -39,15 +42,19 @@ object KeyBackupRules {
         Read.Failed, Read.TimedOut -> Restore.TRY_AGAIN
     }
 
-    enum class Write { WRITE, SKIP, KEEP_OTHER }
+    /** RESTORE_OTHER: the backup holds the key the server has published; this phone should take it. */
+    enum class Write { WRITE, SKIP, KEEP_OTHER, RESTORE_OTHER }
 
-    /** Saving my key: what the backup's current entry allows. [adopted]: the person chose this key. */
-    fun writeStep(existing: Read, pk: ByteArray, made: Long, adopted: Boolean): Write = when (existing) {
+    /** Saving my key: what the backup's current entry allows. [adopted]: the person chose this key.
+     *  [published]: the public key the server holds for this account now (null = not known). */
+    fun writeStep(existing: Read, pk: ByteArray, made: Long, adopted: Boolean, published: ByteArray? = null): Write = when (existing) {
         is Read.Found -> when {
             !existing.valid -> Write.WRITE
             existing.pk.contentEquals(pk) ->
                 if (made == existing.made || made == 0L) Write.SKIP else Write.WRITE
             adopted -> Write.WRITE
+            published != null && published.contentEquals(pk) -> Write.WRITE
+            published != null && published.contentEquals(existing.pk) -> Write.RESTORE_OTHER
             else -> Write.KEEP_OTHER
         }
         Read.Empty -> Write.WRITE

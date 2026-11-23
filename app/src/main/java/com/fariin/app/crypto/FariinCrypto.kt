@@ -42,7 +42,7 @@ class FariinCrypto(
     /** The automatic backup (Android: Block Store; iOS: iCloud Keychain): read before a new keypair
      *  is ever made, written once the keypair is known, forgotten with the account. */
     private val backupLoad: suspend (uid: String) -> KeyBackupRules.Read = { KeyBackupRules.Read.NoService },
-    private val backupSave: suspend (uid: String, sk: ByteArray, pk: ByteArray, made: Long, adopted: Boolean) -> Unit = { _, _, _, _, _ -> },
+    private val backupSave: suspend (uid: String, sk: ByteArray, pk: ByteArray, made: Long, adopted: Boolean, published: ByteArray?) -> KeyBackupRules.Read.Found? = { _, _, _, _, _, _ -> null },
     private val backupForget: suspend (uid: String) -> Unit = {},
 ) {
     val wire = Wire(nacl)
@@ -54,6 +54,9 @@ class FariinCrypto(
         fun pkName(uid: String) = "fariin_public_key_v1.$uid"
         /** When this phone's keypair was made, ms as a string (iOS Keychain, same name). */
         fun sinceName(uid: String) = "fariin_keys_since_v1.$uid"
+        /** Set while a Backup PIN key is not yet in the automatic backup: the save is tried again
+         *  on the next launch with the person's choice kept (it may replace a saved key). */
+        fun adoptPendingName(uid: String) = "fariin_key_adopt_pending_v1.$uid"
 
         /** The app's instance wiring: Keystore-wrapped private key, prefs for public keys. */
         fun android(
@@ -65,7 +68,7 @@ class FariinCrypto(
             directory, currentUid, groupIsPlain,
             keyStoreMadeAt = { KeystoreSecretStore.Made.at() },
             backupLoad = { uid -> KeyBlockStore.read(context.applicationContext, uid) },
-            backupSave = { uid, sk, pk, made, adopted -> KeyBlockStore.save(context.applicationContext, uid, sk, pk, made, adopted) },
+            backupSave = { uid, sk, pk, made, adopted, published -> KeyBlockStore.save(context.applicationContext, uid, sk, pk, made, adopted, published) },
             backupForget = { uid -> KeyBlockStore.delete(context.applicationContext, uid) },
         )
     }
@@ -130,8 +133,24 @@ class FariinCrypto(
         val sk = mySecretKey ?: return
         val pk = myPublicKey ?: return
         backedUp = true
-        val adopted = adoptedKey
-        scope.launch { runCatching { backupSave(uid, sk, pk, keysSince() ?: 0L, adopted) }.onFailure { backedUp = false } }
+        val adopted = adoptedKey || secrets.lookup(adoptPendingName(uid)) is SecretStore.Lookup.Found
+        scope.launch {
+            runCatching {
+                // The server's key decides between this phone's key and a different saved one. Mine
+                // is published first (a no-op when it already is), so a slow publish cannot make the
+                // old server key look like the live one; only a refused publish leaves it there.
+                val b64 = B64.encode(pk)
+                directory.publishIfChanged(uid, b64)
+                val published = (directory.fetch(uid, serverOnly = true) as? KeyDirectory.Fetch.Key)
+                    ?.let { B64.decode(it.publicKeyB64) }
+                val take = backupSave(uid, sk, pk, keysSince() ?: 0L, adopted, published)
+                if (adopted) secrets.delete(adoptPendingName(uid))
+                if (take != null && currentUid() == uid && myPublicKey?.contentEquals(pk) == true) {
+                    android.util.Log.w("FariinKeys", "the backup holds the published key: this phone takes it")
+                    adoptIdentity(take.sk, take.pk, take.made, byPerson = false)
+                }
+            }.onFailure { backedUp = false }
+        }
     }
 
     private fun initKeys(restored: KeyBlockStore.Saved? = null, mayMakeNew: Boolean = true) {
@@ -225,7 +244,7 @@ class FariinCrypto(
      * stored, dated from when it was first made, and published again, so every older message opens.
      * False when the pair does not belong together; nothing changes then.
      */
-    fun adoptIdentity(sk: ByteArray, pk: ByteArray, made: Long): Boolean {
+    fun adoptIdentity(sk: ByteArray, pk: ByteArray, made: Long, byPerson: Boolean = true): Boolean {
         val uid = currentUid() ?: return false
         if (sk.size != NaCl.SECRET_KEY_BYTES || !nacl.boxPublicKey(sk).contentEquals(pk)) return false
         if (!secrets.set(skName(uid), B64.encode(sk)) || !secrets.set(pkName(uid), B64.encode(pk))) return false
@@ -236,7 +255,8 @@ class FariinCrypto(
             keysSinceCache = uid to since
             opened.clear(); fileOpenSeen.clear()
         }
-        backedUp = false; adoptedKey = true
+        backedUp = false; adoptedKey = byPerson
+        if (byPerson) secrets.set(adoptPendingName(uid), "1")
         scope.launch { directory.publishIfChanged(uid, B64.encode(pk)) }
         backUpOnce()
         return true
@@ -244,7 +264,7 @@ class FariinCrypto(
 
     /** Account deletion: the stored key goes too. */
     fun destroyIdentity(uid: String) {
-        listOf(skName(uid), pkName(uid), sinceName(uid), LEGACY_SK, LEGACY_PK).forEach { secrets.delete(it) }
+        listOf(skName(uid), pkName(uid), sinceName(uid), adoptPendingName(uid), LEGACY_SK, LEGACY_PK).forEach { secrets.delete(it) }
         scope.launch { runCatching { backupForget(uid) } }   // a deleted account leaves no key behind
         wipeIdentity()
     }
