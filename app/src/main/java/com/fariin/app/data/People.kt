@@ -279,6 +279,16 @@ class FirestorePeople(
                     "blockedAt.$me" to FieldValue.delete(), "blockClearedAt.$me" to FieldValue.delete())).await()
             }
             revokeStoryAudience(uid)
+            // My live location in our 1:1 stops: a blocked person must not keep watching it (F-3,
+            // as iOS LiveLocationSharer.stop). The stop writes ended with no position.
+            val direct = Wire.directCid(me, uid)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                if (com.fariin.app.location.LiveShareService.shares.value.containsKey(direct)) runCatching {
+                    com.fariin.app.location.LiveShareService.stop(com.google.firebase.FirebaseApp.getInstance().applicationContext, direct)
+                }
+                // Their banners go from the shade with the block (K-31).
+                com.fariin.app.push.NotificationPoster.clearChat(direct)
+            }
             return@ok
         }
         // Start of the span: the private entry's time; for a block kept only the old way, on the
@@ -688,9 +698,11 @@ object ChatKey {
     const val MIN = 4
     const val MAX = 6
     const val GENERIC_FAILURE = "Unable to verify Chat Key."
-    fun isValid(pin: String) = pin.length in MIN..MAX && pin.all { it.isDigit() }
-    /** Paste keeps the digits only, at most six. */
-    fun fromPaste(text: String) = text.filter { it.isDigit() }.take(MAX)
+    /** ASCII digits only, as the server checks (K-117). */
+    fun isValid(pin: String) = pin.length in MIN..MAX && pin.all { it in '0'..'9' }
+    /** Paste keeps the digits only, at most six, as ASCII: an Eastern Arabic key becomes 0-9 (K-117). */
+    fun fromPaste(text: String) = text.mapNotNull { ch -> Character.digit(ch, 10).takeIf { it >= 0 }?.let { '0' + it } }
+        .joinToString("").take(MAX)
     /**
      * iOS ChatPin.lockedUntil: the server's lockout deadline (ms), latched from its refusal so the
      * next try is refused here in the same words without spending an attempt. A key that opened
