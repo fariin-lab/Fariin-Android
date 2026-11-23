@@ -357,7 +357,10 @@ class FariinCrypto(
         }
     }
 
-    /** A decrypt failed: refetch once per (uid, item) per session; keep the old key on errors. */
+    /** A decrypt failed: refetch once per (uid, item) per session; keep the old key on errors.
+     *  L-5: "no key" never deletes a known key either. A deleted account has no key on the server,
+     *  and throwing ours away turned the whole 1:1 chat into "..." for good; the old key still
+     *  opens its history. A new key from the server replaces it the usual way (adoptKey). */
     fun refreshKeyAfterFailure(uid: String, item: String? = null) {
         if (uid.isEmpty()) return
         if (item != null) {
@@ -366,11 +369,7 @@ class FariinCrypto(
         }
         if (!keyRefreshInFlight.add(uid)) return
         scope.launch {
-            try {
-                if (fetchKeyResult(uid, serverOnly = true) == KeyDirectory.Fetch.NoKey) {
-                    pubCache.remove(uid); peers.forget(uid)
-                }
-            } finally { keyRefreshInFlight.remove(uid) }
+            try { fetchKeyResult(uid, serverOnly = true) } finally { keyRefreshInFlight.remove(uid) }
         }
     }
 
