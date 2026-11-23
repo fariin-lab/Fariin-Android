@@ -51,7 +51,7 @@ object BackupArchive {
         val buf = StringBuilder(); var rows = 0; var bytes = 0; var count = 0
         fun flush() {
             if (rows == 0) return
-            val name = "m-%04d.bin".format(chunks.size + 1)
+            val name = "m-%04d.bin".format(java.util.Locale.ROOT, chunks.size + 1)
             files[name] = seal(c, archiveKey, buf.toString().toByteArray(Charsets.UTF_8))
             chunks.add(name); buf.setLength(0); rows = 0; bytes = 0
         }

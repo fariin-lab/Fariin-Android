@@ -22,7 +22,7 @@ object BackupMedia {
 
     class Item(val entry: Map<String, Any?>, val name: String, val itemKey: ByteArray, val file: java.io.File)
 
-    private fun hex(b: ByteArray) = b.joinToString("") { "%02x".format(it) }
+    private fun hex(b: ByteArray) = b.joinToString("") { "%02x".format(java.util.Locale.ROOT, it) }
 
     fun identity(id: String, slot: String, i: Int?, url: String?) = "$id|$slot|${i ?: -1}|${url ?: ""}"
 
