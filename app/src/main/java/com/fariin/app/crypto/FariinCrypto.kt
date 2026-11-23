@@ -41,8 +41,8 @@ class FariinCrypto(
     private val keyStoreMadeAt: () -> Long? = { null },
     /** The automatic backup (Android: Block Store; iOS: iCloud Keychain): read before a new keypair
      *  is ever made, written once the keypair is known, forgotten with the account. */
-    private val backupLoad: suspend (uid: String) -> KeyBlockStore.Saved? = { null },
-    private val backupSave: suspend (uid: String, sk: ByteArray, pk: ByteArray, made: Long) -> Unit = { _, _, _, _ -> },
+    private val backupLoad: suspend (uid: String) -> KeyBackupRules.Read = { KeyBackupRules.Read.NoService },
+    private val backupSave: suspend (uid: String, sk: ByteArray, pk: ByteArray, made: Long, adopted: Boolean) -> Unit = { _, _, _, _, _ -> },
     private val backupForget: suspend (uid: String) -> Unit = {},
 ) {
     val wire = Wire(nacl)
@@ -64,8 +64,8 @@ class FariinCrypto(
             PeerKeys(PrefsKeyValueStore(context.getSharedPreferences("fariin_crypto_public", Context.MODE_PRIVATE))),
             directory, currentUid, groupIsPlain,
             keyStoreMadeAt = { KeystoreSecretStore.Made.at() },
-            backupLoad = { uid -> KeyBlockStore.load(context.applicationContext, uid) },
-            backupSave = { uid, sk, pk, made -> KeyBlockStore.save(context.applicationContext, uid, sk, pk, made) },
+            backupLoad = { uid -> KeyBlockStore.read(context.applicationContext, uid) },
+            backupSave = { uid, sk, pk, made, adopted -> KeyBlockStore.save(context.applicationContext, uid, sk, pk, made, adopted) },
             backupForget = { uid -> KeyBlockStore.delete(context.applicationContext, uid) },
         )
     }
@@ -89,16 +89,39 @@ class FariinCrypto(
             if (mySecretKey != null) return@withLock
             // No key on this phone (a reinstall, a new phone): the backup's key first, never a new
             // one while an old one can be had (owner 2026-11-11, his key lost on the Pixel).
+            // J-5: a slow or failed read is "try again", never "none" (KeyBackupRules).
             val uid = currentUid()
-            val restored = if (uid != null && secrets.lookup(skName(uid)) is SecretStore.Lookup.NotFound &&
-                secrets.lookup(LEGACY_SK) is SecretStore.Lookup.NotFound)
-                runCatching { kotlinx.coroutines.withTimeoutOrNull(4_000) { backupLoad(uid) } }.getOrNull() else null
-            initKeys(restored)
+            if (uid != null && secrets.lookup(skName(uid)) is SecretStore.Lookup.NotFound &&
+                secrets.lookup(LEGACY_SK) is SecretStore.Lookup.NotFound) {
+                if (now() < backupRetryAt) throw CryptoException("key backup not answered yet")
+                val read = try {
+                    withTimeoutOrNull(KeyBackupRules.READ_TIMEOUT_MS) { backupLoad(uid) } ?: KeyBackupRules.Read.TimedOut
+                } catch (e: kotlinx.coroutines.CancellationException) { throw e
+                } catch (_: Exception) { KeyBackupRules.Read.Failed }
+                val pairOk = read is KeyBackupRules.Read.Found && read.valid &&
+                    nacl.boxPublicKey(read.sk).contentEquals(read.pk)
+                when (KeyBackupRules.restoreStep(read, pairOk)) {
+                    KeyBackupRules.Restore.TRY_AGAIN -> {
+                        backupRetryAt = now() + KeyBackupRules.RETRY_AFTER_MS
+                        android.util.Log.w("FariinKeys", "key backup gave no answer: no new key, trying again later")
+                        throw CryptoException("key backup not answered yet")
+                    }
+                    KeyBackupRules.Restore.USE_BACKUP -> {
+                        val f = read as KeyBackupRules.Read.Found
+                        initKeys(KeyBlockStore.Saved(f.sk, f.pk, f.made), mayMakeNew = false)
+                    }
+                    KeyBackupRules.Restore.MAKE_NEW -> initKeys(null)
+                }
+            } else initKeys(null)
         }
         backUpOnce()
     }
 
     @Volatile private var backedUp = false
+    /** After a backup read gave no answer: until then calls fail at once (J-5). */
+    @Volatile private var backupRetryAt = 0L
+    /** The key now held was brought back by the person (Backup PIN): it may replace a saved one. */
+    @Volatile private var adoptedKey = false
 
     /** Once a run: the keypair in the automatic backup (a write of the same bytes is harmless). */
     private fun backUpOnce() {
@@ -107,10 +130,11 @@ class FariinCrypto(
         val sk = mySecretKey ?: return
         val pk = myPublicKey ?: return
         backedUp = true
-        scope.launch { runCatching { backupSave(uid, sk, pk, keysSince() ?: 0L) }.onFailure { backedUp = false } }
+        val adopted = adoptedKey
+        scope.launch { runCatching { backupSave(uid, sk, pk, keysSince() ?: 0L, adopted) }.onFailure { backedUp = false } }
     }
 
-    private fun initKeys(restored: KeyBlockStore.Saved? = null) {
+    private fun initKeys(restored: KeyBlockStore.Saved? = null, mayMakeNew: Boolean = true) {
         val uid = currentUid() ?: throw CryptoException("ensureReady() called before sign-in")
         for (k in listOf(skName(uid), pkName(uid), LEGACY_SK, LEGACY_PK)) {
             if (secrets.lookup(k) is SecretStore.Lookup.Unreadable) throw CryptoException("key store not readable right now")
@@ -135,6 +159,8 @@ class FariinCrypto(
                 if (restored.made > 0) { secrets.set(sinceName(uid), restored.made.toString()); keysSinceCache = uid to restored.made }
                 else { secrets.set(sinceName(uid), "0"); keysSinceCache = uid to 0L }
             }
+            // The backup's key could not be stored: never a new key in its place (J-5).
+            !mayMakeNew -> throw CryptoException("restored key could not be stored")
             else -> {
                 val kp = nacl.boxKeyPair()
                 sk = kp.secretKey; pk = kp.publicKey
@@ -172,6 +198,7 @@ class FariinCrypto(
     /** Sign-out: forget in memory; the stored key is KEPT (keys are per uid). */
     fun wipeIdentity() {
         mySecretKey = null; myPublicKey = null; keysSinceCache = null; backedUp = false
+        adoptedKey = false; backupRetryAt = 0L
         pubCache.clear(); didWarm = false; opened.clear()
     }
 
@@ -209,7 +236,7 @@ class FariinCrypto(
             keysSinceCache = uid to since
             opened.clear(); fileOpenSeen.clear()
         }
-        backedUp = false
+        backedUp = false; adoptedKey = true
         scope.launch { directory.publishIfChanged(uid, B64.encode(pk)) }
         backUpOnce()
         return true
