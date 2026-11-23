@@ -310,7 +310,60 @@ class ThreadRepository(
         closed = false
         firstMsgAnswer = true
         firstConvAnswer = true
-        msgReg = convRef.collection("messages")
+        listenFrom = if (Wire.isGroupCid(cid)) GroupManage.historyStart(_state.value.conv, me) else null
+        listenMessages()
+        convReg = convRef.addSnapshotListener(listenExec) { snap, err ->
+            // Busy groups: every member's lastRead, unreadCount and typing write lands here. The
+            // newest copy is kept and handled at most once per interval; the first one at once.
+            if (snap != null) {
+                latestConv = snap
+                val wait = convGate.ask(System.currentTimeMillis(), urgent = firstConvAnswer) ?: return@addSnapshotListener
+                firstConvAnswer = false
+                if (wait == 0L) handleConv() else listenExec.schedule({ handleConv() }, wait, java.util.concurrent.TimeUnit.MILLISECONDS)
+                return@addSnapshotListener
+            }
+            onConv(null, err)
+        }
+        if (!Wire.isGroupCid(cid)) attachPresence(Wire.otherUid(cid, me))
+        // A block or unblock made while the chat is open re-filters what shows. The list as it is now
+        // is skipped (the listener's first answer applies it), and a later change rebuilds off the main
+        // thread: this rebuild used to run inside the opening frame, waiting on the listener's lock.
+        scope.launch(Dispatchers.Default) { BlockList.state.drop(1).collect { if (msgReg != null) rebuild() } }
+        // Keys in the background, then re-open what drew as "…" (iOS keyPreloadTask).
+        // Only when something new came: every open bumped the epoch, and every chat row under the
+        // sliding chat watches it, so the whole list rebuilt mid-slide (cheap phone trace 2026-11-16).
+        scope.launch(Dispatchers.IO) {
+            val wasReady = crypto.isReady
+            try { crypto.ensureReady() } catch (_: Exception) {}
+            val others = memberUids().filter { it != me }
+            val missing = others.filterNot(crypto::hasKey)
+            crypto.preloadKeys(others)
+            if (!wasReady && crypto.isReady || missing.any(crypto::hasKey)) {
+                CryptoHub.bumpKeys()
+                rebuild()
+            }
+        }
+    }
+
+    /**
+     * F-2: Chat History hidden for new members is a query limit, not only a screen filter: every
+     * group message query starts at my history start (`createdAt >= start`), so the rule that
+     * refuses older docs can go live without failing the whole query (iOS ThreadRepository).
+     */
+    @Volatile private var listenFrom: Double? = null
+
+    private fun messagesQuery(from: Double? = historyFrom()): Query {
+        val base: Query = convRef.collection("messages")
+        return if (from != null) base.whereGreaterThanOrEqualTo("createdAt",
+            com.google.firebase.Timestamp(java.util.Date(from.toLong()))) else base
+    }
+
+    private fun historyFrom(): Double? =
+        if (Wire.isGroupCid(cid)) GroupManage.historyStart(_state.value.conv, me) else null
+
+    /** The newest page's listener (made again when my history start moves). */
+    private fun listenMessages() {
+        msgReg = messagesQuery(listenFrom)
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .limit(PAGE_SIZE)
             // Metadata too: a media message's last write (attach the file URL, drop `uploading`)
@@ -348,37 +401,17 @@ class ThreadRepository(
                 if (!snap.metadata.isFromCache) owedSynced = true
                 askRedraw(urgent)
             }
-        convReg = convRef.addSnapshotListener(listenExec) { snap, err ->
-            // Busy groups: every member's lastRead, unreadCount and typing write lands here. The
-            // newest copy is kept and handled at most once per interval; the first one at once.
-            if (snap != null) {
-                latestConv = snap
-                val wait = convGate.ask(System.currentTimeMillis(), urgent = firstConvAnswer) ?: return@addSnapshotListener
-                firstConvAnswer = false
-                if (wait == 0L) handleConv() else listenExec.schedule({ handleConv() }, wait, java.util.concurrent.TimeUnit.MILLISECONDS)
-                return@addSnapshotListener
-            }
-            onConv(null, err)
-        }
-        if (!Wire.isGroupCid(cid)) attachPresence(Wire.otherUid(cid, me))
-        // A block or unblock made while the chat is open re-filters what shows. The list as it is now
-        // is skipped (the listener's first answer applies it), and a later change rebuilds off the main
-        // thread: this rebuild used to run inside the opening frame, waiting on the listener's lock.
-        scope.launch(Dispatchers.Default) { BlockList.state.drop(1).collect { if (msgReg != null) rebuild() } }
-        // Keys in the background, then re-open what drew as "…" (iOS keyPreloadTask).
-        // Only when something new came: every open bumped the epoch, and every chat row under the
-        // sliding chat watches it, so the whole list rebuilt mid-slide (cheap phone trace 2026-11-16).
-        scope.launch(Dispatchers.IO) {
-            val wasReady = crypto.isReady
-            try { crypto.ensureReady() } catch (_: Exception) {}
-            val others = memberUids().filter { it != me }
-            val missing = others.filterNot(crypto::hasKey)
-            crypto.preloadKeys(others)
-            if (!wasReady && crypto.isReady || missing.any(crypto::hasKey)) {
-                CryptoHub.bumpKeys()
-                rebuild()
-            }
-        }
+    }
+
+    /** My history start changed (the chat doc came, or the admin changed the setting): listen again from it. */
+    private fun relistenMessages(from: Double?) {
+        if (msgReg == null || closed) return
+        msgReg?.remove()
+        listenFrom = from
+        msgFailed = false
+        firstMsgAnswer = true
+        if (_state.value.error != null) _state.update { it.copy(error = null) }
+        listenMessages()
     }
 
     /** One redraw from listener answers: at once when [urgent], else folded per [msgGate] (listener thread only). */
@@ -432,6 +465,8 @@ class ThreadRepository(
                 if (receipts != _state.value.receipts) _state.update { it.copy(receipts = receipts) }
             } else _state.update { it.copy(receipts = receipts, conv = data) }
             // Chat History for new members changed (or my join time arrived): the list is cut again.
+            if (Wire.isGroupCid(cid) && msgReg != null && GroupManage.historyStart(data, me) != listenFrom)
+                relistenMessages(GroupManage.historyStart(data, me))
             if (Wire.isGroupCid(cid) && msgReg != null && GroupManage.historyStart(data, me) != startBefore) rebuild()
             // My Clear Chat / Delete for Me moved (here or on my other device): cut the chat again.
             else if (msgReg != null && clearedAtOf(data) != clearedBefore) rebuild()
@@ -603,7 +638,7 @@ class ThreadRepository(
             }
             SlidChunk(lo, hi, count).also { it.ids = ids; slidChunks.add(it) }
         }
-        val reg = convRef.collection("messages")
+        val reg = messagesQuery()
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .startAt(c.hi).endAt(c.lo)
             .addSnapshotListener(listenExec) { snap, _ ->
@@ -664,7 +699,7 @@ class ThreadRepository(
         // rebuild the whole chat on the main thread, and wait there for the listener's lock while it
         // opened messages; a short chat asks for it as it opens, so it landed mid-slide (cheap
         // phone trace 2026-11-16: up to 16 ms a frame blocked on that lock alone).
-        val reg = convRef.collection("messages")
+        val reg = messagesQuery()
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .startAt(oldest)
             .limit(PAGE_SIZE)
@@ -2705,7 +2740,7 @@ class ThreadRepository(
             if (shownNewest) batch.update(convRef, sum)
             batch.commit().await()
             if (!shownNewest && !media) {
-                val newest = convRef.collection("messages").orderBy("createdAt", Query.Direction.DESCENDING).limit(1).get().await()
+                val newest = messagesQuery().orderBy("createdAt", Query.Direction.DESCENDING).limit(1).get().await()
                 if (newest.documents.firstOrNull()?.id == m.id) try { convRef.update(sum).await() } catch (_: Exception) {}
             }
             true
@@ -2804,7 +2839,7 @@ class ThreadRepository(
             // From the server only (iOS summaryOfNewest): an offline answer from a cache holding none
             // of this chat's messages looked like "nothing left" and wiped the line. A failed read
             // writes nothing.
-            val newest = convRef.collection("messages").orderBy("createdAt", Query.Direction.DESCENDING)
+            val newest = messagesQuery().orderBy("createdAt", Query.Direction.DESCENDING)
                 .limit(if (group) 25 else 1).get(Source.SERVER).await().documents
             val d = (if (group) newest.firstOrNull { it.bool("deleted") != true } else newest.firstOrNull())?.data
             // A group whose 25 newest are all deleted is not proof the chat is empty: keep the line (iOS).
@@ -2980,7 +3015,7 @@ class ThreadRepository(
     fun seenCorpus(): List<ChatSearch.Item>? = ChatSearch.seen["$me/$cid"]
 
     private suspend fun readCorpus(limit: Int): List<ChatSearch.Item> {
-        val snap = convRef.collection("messages")
+        val snap = messagesQuery()
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .limit(limit.toLong())
             .get().await()
