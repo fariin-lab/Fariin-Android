@@ -46,7 +46,12 @@ object ChatBackup {
 
     /** The password / 64-digit key wrap kept on this phone (the Argon2 result and its salt), so
      *  daily backups need nothing typed. Never leaves the phone. */
-    fun hasPassword(ctx: Context, uid: String): Boolean = prefs(ctx).contains("pw.$uid")
+    // K-46: on only when the wrap still opens. A remote sign-out forgets this phone's AtRest key, and
+    // Settings showed the password on while every backup after it went out without it.
+    fun hasPassword(ctx: Context, uid: String): Boolean = passwordWrap(ctx, uid) != null
+    /** A password was set here but its wrap no longer opens (the sealing key is gone). */
+    private fun passwordLost(ctx: Context, uid: String): Boolean =
+        prefs(ctx).contains("pw.$uid") && passwordWrap(ctx, uid) == null
     private fun passwordWrap(ctx: Context, uid: String): Pair<ByteArray, ByteArray>? {
         // Sealed with this phone's Keystore key (local/AtRest), never readable as stored.
         val k = prefs(ctx).getString("pw.$uid", null)?.let { com.fariin.app.crypto.B64.decode(it) }
@@ -67,6 +72,8 @@ object ChatBackup {
         e.apply()
     }
     fun lastSize(ctx: Context, uid: String): Long = prefs(ctx).getLong("size.$uid", 0L)
+
+    const val PASSWORD_AGAIN = "Type your backup password again in Chat Backup, then back up."
 
     sealed class Result {
         object Done : Result()
@@ -144,6 +151,8 @@ object ChatBackup {
     suspend fun backUp(ctx: Context, uid: String, automatic: Boolean, token: String? = null): Result = lock.withLock {
         if (!ENABLED) return Result.Failed("Chat backup is not on yet.")
         if (automatic && (!LocalDb.hasSyncedMarks(uid) || restoreWaiting(ctx, uid))) return Result.NothingToBackUp
+        // K-46: never a password-less set that would replace (and delete) the one the password opens.
+        if (passwordLost(ctx, uid)) return Result.Failed(PASSWORD_AGAIN)
         val tok = token ?: when (val a = Drive.authorize(ctx)) {
             is Drive.Auth.Token -> a.value
             is Drive.Auth.Ask -> return Result.NeedsGoogle(a)
