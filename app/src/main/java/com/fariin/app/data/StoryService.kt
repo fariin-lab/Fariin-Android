@@ -392,6 +392,7 @@ class StoryService(
         StoryPrivacyStore.linkStory(story.id, choice.tagLabel, if (custom) lists.map { it.id } else emptyList(),
             if (custom) lists.joinToString(", ") { it.name } else "")
         if (everyone) runCatching {
+            // The repost credit too (post path, iOS): without it strangers see a repost as mine.
             mirror.set(mapOf(
                 "authorUid" to me, "createdAt" to Timestamp(Date(story.createdAtMs)), "expiresAt" to Timestamp(Date(story.expiresAtMs)),
                 "mediaUrl" to story.mediaUrl, "thumbUrl" to story.thumbUrl, "blurThumb" to story.blurThumb,
@@ -399,7 +400,7 @@ class StoryService(
                 "caption" to story.caption, "duration" to story.durationSec,
                 "allowsReplies" to replies, "captureProtected" to story.captureProtected,
                 "hiddenTokens" to hiddenFrom.map { StoryAudienceToken.token(it) },
-            )).await()
+            ).let { m -> story.repostOf?.let { m + ("repostOf" to it.asMap()) } ?: m }).await()
         }
     }
 
