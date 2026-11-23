@@ -38,4 +38,12 @@ class DeviceRecordTest {
         for (x in DeviceRecord.Reason.values()) assertFalse(DeviceRecord.noticeMessage(x).contains('—'))
         assertTrue(DeviceRecord.noticeMessage(DeviceRecord.Reason.DEVICE_LIMIT).contains("5 devices"))
     }
+
+    @Test fun authErrorsEndTheSessionWithTheRightNotice() {
+        assertEquals(DeviceRecord.Reason.ACCOUNT_SUSPENDED, DeviceRecord.reasonForAuthError("ERROR_USER_DISABLED"))
+        for (c in listOf("ERROR_USER_NOT_FOUND", "ERROR_USER_TOKEN_EXPIRED", "ERROR_INVALID_USER_TOKEN"))
+            assertEquals(DeviceRecord.Reason.SIGNED_OUT_ELSEWHERE, DeviceRecord.reasonForAuthError(c))
+        assertEquals(null, DeviceRecord.reasonForAuthError("ERROR_NETWORK_REQUEST_FAILED"))
+        assertEquals(null, DeviceRecord.reasonForAuthError(null))
+    }
 }

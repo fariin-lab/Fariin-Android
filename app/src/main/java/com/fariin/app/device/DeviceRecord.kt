@@ -62,6 +62,16 @@ object DeviceRecord {
         else -> Reason.SIGNED_OUT_ELSEWHERE
     }
 
+    /**
+     * F-21: the Auth error codes that mean this session is over (iOS SessionRecovery): disabled is
+     * "Account suspended", the rest a plain "Logged out". Any other code decides nothing.
+     */
+    fun reasonForAuthError(code: String?): Reason? = when (code) {
+        "ERROR_USER_DISABLED" -> Reason.ACCOUNT_SUSPENDED
+        "ERROR_USER_NOT_FOUND", "ERROR_USER_TOKEN_EXPIRED", "ERROR_INVALID_USER_TOKEN" -> Reason.SIGNED_OUT_ELSEWHERE
+        else -> null
+    }
+
     const val MAX_DEVICES = 5
 
     /** The iOS alert, word for word (RootView.swift:330-343). */

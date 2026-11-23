@@ -126,8 +126,8 @@ object SessionEnd {
     }
 
     /** Texts still in this account's send queue (they are wiped with the account on log out). */
-    fun unsentCount(): Int {
-        val uid = com.fariin.app.Fb.auth.currentUser?.uid ?: return 0
+    fun unsentCount(forUid: String? = com.fariin.app.Fb.auth.currentUser?.uid): Int {
+        val uid = forUid ?: return 0
         return runCatching { com.fariin.app.local.SendQueue.all(uid).count { !it.refused } }.getOrDefault(0)
     }
 
@@ -158,15 +158,21 @@ object SessionEnd {
      *  False (nothing done) when the removal was about an account that is no longer signed in. */
     suspend fun revokedSignOut(c: Context): Boolean {
         val uid = DeviceRegistry.revokedUid
-        if (uid == null || com.fariin.app.Fb.auth.currentUser?.uid != uid) {
+        val now = com.fariin.app.Fb.auth.currentUser?.uid
+        // F-21: Auth already dropped this account by itself (revoked tokens, disabled, deleted). Nothing
+        // can be written for it any more, but the phone's copy of it still goes, as for a removal.
+        val authGone = now == null && uid != null && DeviceRegistry.lostUid == uid
+        if (uid == null || (now != uid && !authGone)) {
             android.util.Log.w(BootWatch.TAG, "removed-device sign-out for an old session dropped")
             return false
         }
         // The server already ended this session, so nothing can wait: the count goes into the notice.
-        droppedByRevoke = unsentCount()
-        DeviceRegistry.forgetAfterRevoke()
+        droppedByRevoke = unsentCount(uid)
+        DeviceRegistry.forgetAfterRevoke(uid)
         var tokenOff = false
-        kotlinx.coroutines.coroutineScope {
+        // No account to write as: the call still ends here, its writes simply fail.
+        if (authGone) BootWatch.capped(BootWatch.SIGN_OUT_STEP_MS) { endCalls(); true }
+        else kotlinx.coroutines.coroutineScope {
             // F-20: a live call or a ring ends here too, as at Log Out, or the other side keeps a
             // call nobody is in and this phone keeps talking after it was signed out.
             launch { step(uid, "calls") { endCalls() } }

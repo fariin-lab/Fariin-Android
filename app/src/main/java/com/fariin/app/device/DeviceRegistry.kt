@@ -51,6 +51,14 @@ object DeviceRegistry {
         private set
 
     @Volatile private var registered = false
+    /** True from [start] until a sign-out of ours stops the registry ([stopWatching]). */
+    @Volatile private var live = false
+    @Volatile private var authSeen: String? = null
+    @Volatile private var authListener: FirebaseAuth.AuthStateListener? = null
+    /** F-21: the account Auth itself dropped (tokens revoked, account disabled or deleted). */
+    @Volatile var lostUid: String? = null
+        private set
+    @Volatile private var lostReason: DeviceRecord.Reason? = null
     @Volatile private var watcher: ListenerRegistration? = null
     @Volatile private var heartbeat: Job? = null
     @Volatile private var lastTouch = 0L
@@ -121,7 +129,49 @@ object DeviceRegistry {
     /** Record this phone and watch for a remote sign-out. Safe on every launch and sign-in. */
     fun start(context: Context) {
         init(context)
+        live = true
+        watchAuth()
         scope.launch { register() }
+    }
+
+    /**
+     * F-21 (iOS SessionRecovery): Auth can end the session on its own, when the refresh tokens were
+     * revoked or the account was disabled or deleted. Every sign-out of ours stops the registry
+     * first, so Auth going empty while [live] is one we did not start: the same teardown as a
+     * removed device runs (MainActivity, through [revoked]).
+     */
+    private fun watchAuth() {
+        if (authListener != null) return
+        val l = FirebaseAuth.AuthStateListener { a ->
+            val now = a.currentUser?.uid
+            val was = authSeen
+            authSeen = now
+            if (was != null && now == null && live) scope.launch { authLost(was) }
+        }
+        authListener = l
+        com.fariin.app.Fb.auth.addAuthStateListener(l)
+    }
+
+    /** A refused read: ask Auth for a fresh token, which tells a dead session from a rules refusal. */
+    private suspend fun checkToken(uid: String) {
+        val user = com.fariin.app.Fb.auth.currentUser?.takeIf { it.uid == uid } ?: return
+        try { user.getIdToken(true).await() }
+        catch (e: com.google.firebase.auth.FirebaseAuthInvalidUserException) {
+            val r = DeviceRecord.reasonForAuthError(e.errorCode) ?: return
+            lostReason = r
+            authLost(uid)
+        } catch (_: Exception) {}   // offline or a passing error: nothing is decided
+    }
+
+    private suspend fun authLost(uid: String) {
+        if (lostUid == uid) return
+        lostUid = uid
+        // The token check and Auth's own sign-out arrive together: a moment so the reason wins.
+        delay(500)
+        android.util.Log.w(BootWatch.TAG, "auth ended the session on its own: teardown")
+        revokedUid = uid
+        _revoked.value = lostReason ?: DeviceRecord.Reason.SIGNED_OUT_ELSEWHERE
+        lostReason = null
     }
 
     private suspend fun register() {
@@ -220,6 +270,10 @@ object DeviceRegistry {
             if (snap == null && error != null) {
                 // An error ends the listener for good; drop it so the next start watches again.
                 watcher?.remove(); watcher = null
+                val code = (error as? com.google.firebase.firestore.FirebaseFirestoreException)?.code
+                if (code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED ||
+                    code == com.google.firebase.firestore.FirebaseFirestoreException.Code.UNAUTHENTICATED)
+                    scope.launch { checkToken(uid) }
                 return@addSnapshotListener
             }
             if (snap == null || snap.metadata.isFromCache || snap.metadata.hasPendingWrites()) return@addSnapshotListener
@@ -284,6 +338,7 @@ object DeviceRegistry {
     // ------------------------------------------------------------------ sign-out
 
     fun stopWatching() {
+        live = false
         watcher?.remove(); watcher = null
         registered = false
         stopHeartbeat()
@@ -300,11 +355,10 @@ object DeviceRegistry {
     }
 
     /** Another phone took over: the marker goes (the record is already gone). */
-    fun forgetAfterRevoke() {
+    fun forgetAfterRevoke(uid: String? = this.uid) {
         stopWatching()
-        val uid = uid
         if (uid != null && ::app.isInitialized) prefs().edit().remove(registeredKey(uid)).apply()
     }
 
-    fun clearRevoked() { _revoked.value = null; revokedUid = null }
+    fun clearRevoked() { _revoked.value = null; revokedUid = null; lostUid = null }
 }
