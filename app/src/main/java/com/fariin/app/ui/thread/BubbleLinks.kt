@@ -252,7 +252,7 @@ private fun openWeb(ctx: Context, url: String, onFail: () -> Unit) {
     if (social.any { host == it || host.endsWith(".$it") }) {
         if (android.os.Build.VERSION.SDK_INT >= 30) {
             try { ctx.startActivity(Intent(view).addFlags(Intent.FLAG_ACTIVITY_REQUIRE_NON_BROWSER)); return }
-            catch (_: ActivityNotFoundException) {}
+            catch (_: Exception) {}   // any refusal falls through to the browser (F-27)
         }
     }
     if (host == "play.google.com" || host == "maps.google.com" || host == "maps.app.goo.gl") { start(ctx, view, onFail); return }
@@ -261,7 +261,8 @@ private fun openWeb(ctx: Context, url: String, onFail: () -> Unit) {
 }
 
 private fun start(ctx: Context, intent: Intent, onFail: () -> Unit) {
-    try { ctx.startActivity(intent) } catch (_: ActivityNotFoundException) { onFail() } catch (_: SecurityException) { onFail() }
+    // Every refusal (no app, not allowed, a bad link card intent) says so, never closes the app (F-27).
+    try { ctx.startActivity(intent) } catch (_: Exception) { onFail() }
 }
 
 /** A web address from outside a bubble (a profile link): the same opener as a tapped link. */
