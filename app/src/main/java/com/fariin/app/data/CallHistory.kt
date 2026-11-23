@@ -169,7 +169,7 @@ data class AdhocCall(
 
     companion object {
         fun from(d: DocumentSnapshot): AdhocCall? =
-            fromMap(d.id, d.getData(DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) ?: return null)
+            d.getData(DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)?.let { fromMap(d.id, it) }
 
         /** Any member writes this doc: safe casts only, so a bad field never crashes the Calls list. */
         fun fromMap(id: String, d: Map<String, Any?>): AdhocCall? {
