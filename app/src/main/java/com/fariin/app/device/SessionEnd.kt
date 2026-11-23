@@ -60,6 +60,13 @@ object SessionEnd {
             launch { step(uid, "presence") { com.fariin.app.data.Presence.set(online = false, context = c) } }
             launch { step(uid, "device record") { DeviceRegistry.removeThisDevice() } }
             launch { step(uid, "push token") { tokenOff = Push.unregister(c) } }
+            // L-100: this account's private key leaves this phone's cloud-backed Block Store, so a
+            // guest's key does not stay in the phone owner's Google backup. Only this uid's entry; the
+            // key on the phone itself stays, and the next sign-in here saves it again. A Log Out for
+            // deletion keeps it, so a restore within the grace period still reads old messages.
+            if (!deleting && uid != null) launch {
+                step(uid, "key backup") { com.fariin.app.crypto.KeyBlockStore.delete(c.applicationContext, uid) }
+            }
         }
         if (endAuth(uid)) {
             // Offline, the token could not come off the account: the token itself is retired, so
