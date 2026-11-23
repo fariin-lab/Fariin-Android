@@ -543,6 +543,14 @@ internal fun ScanQrPage(onMyCode: () -> Unit, onClose: () -> Unit, onDone: () ->
             onDone()
             return
         }
+        // A public name, fariin.com/<name> (the channel QR, a public group's link): the same open a
+        // tapped name link does, which finds the channel, group or person (L-61).
+        if (QrRules.handleFrom(code) == null && QrRules.bareNameFrom(code) != null &&
+            com.fariin.app.ui.thread.ExternalLinks.take(code.trim())) {
+            handling = true
+            onDone()
+            return
+        }
         val h = QrRules.handleFrom(code)
         if (h == null) {
             notFound = true; offline = false
