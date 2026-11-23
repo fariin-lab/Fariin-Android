@@ -223,14 +223,16 @@ private fun AlertButtons(buttons: List<@Composable () -> Unit>, g: AlertGlass, p
             val half = (w - gapPx) / 2
             val sideBySide = pairs && ms.size == 2 && ms.all { it.maxIntrinsicWidth(h) <= half }
             if (sideBySide) {
-                val ps = ms.map { it.measure(Constraints.fixed(half, h)) }
-                layout(w, h) { ps[0].place(0, 0); ps[1].place(w - half, 0) }
+                // At least 50 tall; a label that wraps at a large font grows the pill instead of being cut (K-107).
+                val ps = ms.map { it.measure(Constraints(minWidth = half, maxWidth = half, minHeight = h)) }
+                val rowH = ps.maxOf { it.height }
+                layout(w, rowH) { ps[0].place(0, (rowH - ps[0].height) / 2); ps[1].place(w - half, (rowH - ps[1].height) / 2) }
             } else {
                 // Stacked: the main action on top, as the system alerts (the list form keeps its order).
                 val ordered = if (pairs && ms.size == 2) listOf(ms[1], ms[0]) else ms
-                val ps = ordered.map { it.measure(Constraints.fixed(w, h)) }
-                val total = ps.size * h + (ps.size - 1).coerceAtLeast(0) * gapPx
-                layout(w, total) { ps.forEachIndexed { i, p -> p.place(0, i * (h + gapPx)) } }
+                val ps = ordered.map { it.measure(Constraints(minWidth = w, maxWidth = w, minHeight = h)) }
+                val total = ps.sumOf { it.height } + (ps.size - 1).coerceAtLeast(0) * gapPx
+                layout(w, total) { var y = 0; ps.forEach { p -> p.place(0, y); y += p.height + gapPx } }
             }
         }
     }

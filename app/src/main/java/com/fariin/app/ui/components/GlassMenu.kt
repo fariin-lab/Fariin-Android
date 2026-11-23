@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -250,7 +251,10 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
                             .padding(start = 54.dp, end = 18.dp, top = 8.dp, bottom = 2.dp))
                     rows.forEachIndexed { i, it ->
                         if (it.divider && i > 0) Box(Modifier.padding(horizontal = 18.dp).fillMaxWidth().height(0.5.dp).background(c.separator))
-                        Row(Modifier.fillMaxWidth().height(52.dp).onGloballyPositioned { if (i == 0) rowH = it.size.height }
+                        // At least 52 tall: a two-line label at a large font grows every row to the tallest, so none is cut
+                        // and the press highlight (one row height) still lines up (K-107).
+                        Row(Modifier.fillMaxWidth().heightIn(min = maxOf(52.dp, with(density) { rowH.toDp() }))
+                            .onGloballyPositioned { if (it.size.height > rowH) rowH = it.size.height }
                             .padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
                             val tick = androidx.compose.ui.graphics.vector.rememberVectorPainter(
                                 androidx.compose.ui.graphics.vector.ImageVector.cachedVector(com.fariin.app.R.drawable.ic_sf_checkmark))
