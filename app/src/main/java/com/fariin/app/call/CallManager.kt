@@ -118,6 +118,8 @@ object CallManager {
     private val me: String get() = com.fariin.app.Fb.auth.currentUser?.uid ?: ""
     private var callId: String? = null
     private var peer = ""
+    /** When the current call was made (my dial, or their doc's creation): an older ring from the same person is a leftover. */
+    private var callStartMs = 0L
     private val cid get() = CallWire.convId(me, peer)
     private var recordWritten = false
     private var ringRowWritten = false
@@ -245,6 +247,7 @@ object CallManager {
         CallAudio.start(app, speaker = video)
         val id = signaling.newCallId()
         callId = id
+        callStartMs = System.currentTimeMillis()
         setStartRoute(video)
         CallTelecom.placeOutgoing(app, id, name, video)
         after(CallWire.NO_ANSWER_MS) { if (callId == id && status.phase == CallPhase.OUTGOING) ringOut(id) }
@@ -357,15 +360,40 @@ object CallManager {
             if (signaling.screenRefused(me, d.id)) return@launch
             // My own block list too, so a failed server read never lets someone I blocked ring (iOS).
             if (com.fariin.app.data.BlockList.contains(d.caller)) return@launch
-            // A group call is a live call too (iOS inGroupCall): it never rings over one.
+            // A group call is a live call too (iOS inGroupCall): it never rings over one. The same
+            // person again is settled first (iOS settleAgainstCurrentCall): a leftover, a recall
+            // after their side died, a redial over their own ring, or both dialling at once (glare).
+            val newer = createdAt == null || createdAt > callStartMs
+            when (CallGlareRules.decide(status.phase, status.accepted, GroupCall.ui.value.cid != null, me, peer, d.caller,
+                newer, status.callDocCreated)) {
+                CallGlareRules.Verdict.RING -> {}
+                CallGlareRules.Verdict.END_OLD -> { signaling.update(d.id, CallWire.endFields(EndReason.MISSED)); return@launch }
+                CallGlareRules.Verdict.REPLACE -> {
+                    val wasRing = status.phase == CallPhase.INCOMING
+                    finish(if (wasRing) EndReason.MISSED else EndReason.HANGUP, updateRemote = true, byUser = !wasRing, quiet = true)
+                }
+                CallGlareRules.Verdict.GLARE_WIN -> {
+                    // `glare` tells them this busy is the tiebreak, not a busy line.
+                    signaling.update(d.id, CallWire.endFields(EndReason.BUSY) + ("glare" to true))
+                    return@launch
+                }
+                CallGlareRules.Verdict.GLARE_YIELD -> standDownForGlare()
+                CallGlareRules.Verdict.BUSY -> {
+                    // Already in a call (also one started during the read above): busy, as iOS
+                    // endRingIfUnclaimed with busy.
+                    signaling.calleeEndRing(d.id, CallWire.endFields(EndReason.BUSY), deviceClaim)
+                    return@launch
+                }
+            }
             if (status.live || GroupCall.ui.value.cid != null) {
-                // Already in a call (also one started during the read above): busy, as iOS
-                // endRingIfUnclaimed with busy.
                 signaling.calleeEndRing(d.id, CallWire.endFields(EndReason.BUSY), deviceClaim)
                 return@launch
             }
+            // H-114: a 1:1 ring takes over a group ring (iOS oneToOneTookOver): one ringtone, one screen.
+            GroupRing.invite.value?.let { gi -> GroupRing.stop(); if (!gi.nudge) GroupRing.answer("busy", gi.cid, gi.startedAtMs, roomKind = gi.roomKind) }
             resetCallVars()
             callId = d.id
+            callStartMs = createdAt ?: System.currentTimeMillis()
             peer = d.caller
             _ui.value = CallUi(peerUid = d.caller, peerName = shownName(d.caller, d.callerName ?: "Caller"), peerPhoto = d.callerPhoto,
                 cameraOn = d.video, speaker = d.video, remoteCameraOn = d.cams[d.caller] ?: d.video)
@@ -519,6 +547,12 @@ object CallManager {
     }
 
     /** Another of my devices answered: this one stops ringing, no record (iOS standDownAnsweredElsewhere). */
+    /** I lose a glare tiebreak: my dial ends quietly, with no call record (no red missed row for them). */
+    private fun standDownForGlare() {
+        recordWritten = true
+        finish(EndReason.HANGUP, updateRemote = true, byUser = false, quiet = true)
+    }
+
     private fun standDown() {
         recordWritten = true
         finish(EndReason.HANGUP, updateRemote = false, byUser = false, quiet = true)
@@ -530,6 +564,9 @@ object CallManager {
         if (d.id != callId || !status.live) return
         val s = status
         if (d.ended) {
+            // Glare heard from this side first: the other phone won and busied my dial. Not a busy
+            // line: my dial goes quietly and their call rings here (iOS standDownForGlare).
+            if (d.glare && s.isCaller && s.phase == CallPhase.OUTGOING) { standDownForGlare(); return }
             val reason = EndReason.from(d.endReason)
             if (!s.isCaller && s.phase == CallPhase.INCOMING) {
                 // The ring is over (they cancelled, or another device took it): no "missed" row from
