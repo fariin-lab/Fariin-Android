@@ -73,6 +73,10 @@ object GroupManage {
      * Where my chat in a group starts (iOS Conversation.historyStart): my join time when I came in
      * after history was hidden; null (everything) otherwise, including for anyone already in it then.
      */
+    /** F-2: a group message query that starts at my history start (`createdAt >= start`); as is when null. */
+    fun startAt(q: com.google.firebase.firestore.Query, start: Double?): com.google.firebase.firestore.Query =
+        if (start != null) q.whereGreaterThanOrEqualTo("createdAt", com.google.firebase.Timestamp(java.util.Date(start.toLong()))) else q
+
     fun historyStart(doc: Map<String, Any?>, me: String): Double? {
         val hide = com.fariin.app.data.Conversation.millis(doc["hideHistoryAt"])
         if (hide <= 0) return null

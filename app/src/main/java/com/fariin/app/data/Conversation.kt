@@ -67,6 +67,10 @@ data class Conversation(
     val verified: Boolean = false,
     /** A group whose document says `e2ee == false`. */
     val e2eeOff: Boolean = false,
+    /** F-2: when the admins hid Chat History for new members (`hideHistoryAt`), 0 when shown. */
+    val hideHistoryAt: Double = 0.0,
+    /** Per member, when they joined (`memberSince`). */
+    val memberSince: Map<String, Double> = emptyMap(),
     val lastPlainTag: String? = null,
     val disappearSeconds: Int = 0,
     /** When the newest message falls due on the timer (server `lastExpiresAt`, ms), or null. */
@@ -147,6 +151,13 @@ data class Conversation(
     }
 
     val isGroup: Boolean get() = convType == "group"
+
+    /** F-2: where my chat in this group starts (the same rule as GroupManage.historyStart); null = all of it. */
+    fun historyStart(me: String): Double? {
+        if (!isGroup || hideHistoryAt <= 0) return null
+        val since = memberSince[me] ?: 0.0
+        return if (since > 0 && since >= hideHistoryAt) since else null
+    }
 
     fun otherUid(me: String): String = users.firstOrNull { it != me } ?: ""
     fun others(me: String): List<String> = users.filter { it != me }
@@ -357,6 +368,8 @@ data class Conversation(
                     ListThumb(u, com.fariin.app.crypto.EncMeta.fromMap(m["enc"] as? Map<*, *>))
                 } ?: emptyList(),
                 e2eeOff = type == "group" && (data["e2ee"] as? Boolean) == false,
+                hideHistoryAt = millis(data["hideHistoryAt"]),
+                memberSince = doubleMap(data["memberSince"]),
                 lastPlainTag = data["lastPlainTag"] as? String,
                 disappearSeconds = (data["disappearSeconds"] as? Number)?.toInt() ?: 0,
                 lastExpiresAtMillis = millis(data["lastExpiresAt"]).takeIf { it > 0 },

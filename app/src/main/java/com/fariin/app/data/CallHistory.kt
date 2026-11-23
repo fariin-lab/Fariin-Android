@@ -222,8 +222,9 @@ class CallsRepository(
             async {
                 cache[c.id]?.takeIf { it.first == c.updatedAtMillis && !dirty.remove(c.id) }?.second ?: run {
                     val read = runCatching {
-                        db.collection("conversations").document(c.id).collection("messages")
-                            .whereEqualTo("type", "call").get().await()
+                        // F-2: from my history start when the group hides older history (index: type + createdAt).
+                        GroupManage.startAt(db.collection("conversations").document(c.id).collection("messages")
+                            .whereEqualTo("type", "call"), c.historyStart(me)).get().await()
                     }
                     val snap = read.getOrNull() ?: run {
                         if (cache[c.id] == null) miss.set(read.exceptionOrNull())

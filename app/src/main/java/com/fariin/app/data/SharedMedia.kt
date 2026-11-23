@@ -204,7 +204,9 @@ class SharedMediaSource(
     suspend fun fetch(): List<Message>? {
         if (cid.isEmpty()) return null
         return try {
-            val snap = db.collection("conversations").document(cid).collection("messages")
+            // F-2: a group that hides older history is read from my start.
+            val from = if (Wire.isGroupCid(cid)) CryptoHub.listedConversation(cid)?.historyStart(me) else null
+            val snap = GroupManage.startAt(db.collection("conversations").document(cid).collection("messages"), from)
                 .orderBy("createdAt", Query.Direction.DESCENDING).limit(SharedMedia.WINDOW).get().await()
             snap.documents.map { d ->
                 Message.fromFirestore(d.id, d.data ?: emptyMap(), cid) { raw, author -> crypto.decrypt(raw, cid, author) }

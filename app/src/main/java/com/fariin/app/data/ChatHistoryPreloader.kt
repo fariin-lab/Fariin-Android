@@ -152,16 +152,17 @@ object ChatHistoryPreloader {
         val cid = c.id
         val stamp = c.displayUpdatedAt(me)
         warming += cid
+        val from = c.historyStart(me)   // F-2
         scope.launch {
             // J-92: the phone's cache already holds the newest row: nothing to read from the server.
             val cachedNewest = runCatching {
-                (com.fariin.app.Fb.db.collection("conversations").document(cid).collection("messages")
+                (GroupManage.startAt(com.fariin.app.Fb.db.collection("conversations").document(cid).collection("messages"), from)
                     .orderBy("createdAt", Query.Direction.DESCENDING).limit(1).get(Source.CACHE).await()
                     .documents.firstOrNull()?.get("createdAt") as? com.google.firebase.Timestamp)?.toDate()?.time?.toDouble()
             }.getOrNull()
             val ok = if (!behind(stamp, cachedNewest)) true else withTimeoutOrNull(GIVE_UP_MS) {
                 runCatching {
-                    com.fariin.app.Fb.db.collection("conversations").document(cid).collection("messages")
+                    GroupManage.startAt(com.fariin.app.Fb.db.collection("conversations").document(cid).collection("messages"), from)
                         .orderBy("createdAt", Query.Direction.DESCENDING)
                         .limit(ThreadRepository.PAGE_SIZE)
                         .get(Source.SERVER).await()

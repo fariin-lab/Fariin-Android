@@ -60,7 +60,7 @@ object ChatExportRun {
         val col = com.fariin.app.Fb.db.collection("conversations").document(job.cid).collection("messages")
         // A failed read is an error, never a half-empty file that looks whole (iOS).
         val docs = try {
-            if (group) col.orderBy("createdAt", Query.Direction.DESCENDING).limit(ChatExport.GROUP_CAP.toLong()).get().await().documents.reversed()
+            if (group) com.fariin.app.data.GroupManage.startAt(col, conv?.historyStart(me)).orderBy("createdAt", Query.Direction.DESCENDING).limit(ChatExport.GROUP_CAP.toLong()).get().await().documents.reversed()
             else col.orderBy("createdAt").get().await().documents
         } catch (e: Exception) {
             coroutineContext.ensureActive()
