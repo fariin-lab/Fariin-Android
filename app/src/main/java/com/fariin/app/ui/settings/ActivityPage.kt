@@ -155,7 +155,9 @@ fun ActivityScreen(onBack: () -> Unit, onOpen: (ActivityItem) -> Unit) {
 @Composable
 private fun ActivityRow(i: ActivityItem, onTap: () -> Unit) {
     val c = Fariin.colors
-    val pic = i.thumb.isNotEmpty()
+    // An r2: picture comes through the channel's own media (L-53); no grey square while it loads or fails.
+    val thumb = rememberActivityThumb(i)
+    val pic = thumb != null
     Row(Modifier.fillMaxWidth().clickable(onClick = onTap).heightIn(min = if (i.isReact) 92.dp else 80.dp)
         .padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         if (i.isReact || (i.isComment && i.hasFrom2)) ReactFaces(i) else if (i.isQuote) Box(Modifier.size(56.dp)) {
@@ -253,7 +255,7 @@ private fun ActivityRow(i: ActivityItem, onTap: () -> Unit) {
         if (pic) {
             Spacer(Modifier.width(10.dp))
             Box(Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)).background(c.label.copy(alpha = 0.06f)), contentAlignment = Alignment.Center) {
-                AsyncImage(i.thumb, null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
+                AsyncImage(thumb, null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
                 if (i.thumbKind == "video") Icon(ImageVector.cachedVector(R.drawable.ic_sf_play_fill), null, tint = Color.White, modifier = Modifier.size(18.dp))
             }
         }
@@ -339,9 +341,10 @@ private fun ReactorsSheet(i: ActivityItem, onDismiss: () -> Unit, onComment: () 
                     Text(if (i.mineAid.isNotEmpty()) "Your reply" else "Your comment", fontSize = 13.sp, color = c.secondary)
                     Text(i.mineText, fontSize = 15.sp, color = c.label, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
-                if (i.thumb.isNotEmpty()) {
+                val sheetThumb = rememberActivityThumb(i)
+                if (sheetThumb != null) {
                     Spacer(Modifier.width(10.dp))
-                    AsyncImage(i.thumb, null, contentScale = ContentScale.Crop,
+                    AsyncImage(sheetThumb, null, contentScale = ContentScale.Crop,
                         modifier = Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)).background(c.label.copy(alpha = 0.06f)))
                 }
             }
@@ -403,4 +406,13 @@ private fun ReactorsSheet(i: ActivityItem, onDismiss: () -> Unit, onComment: () 
             Spacer(Modifier.height(8.dp))
         }
     }
+}
+
+/** The row's picture as the image loader can draw it: an r2: file from that channel's own folder
+ *  (as a quote's picture, rememberQuotePicture), an https link as it is; null when none or still coming. */
+@Composable
+private fun rememberActivityThumb(i: ActivityItem): Any? {
+    if (i.thumb.isEmpty()) return null
+    return com.fariin.app.ui.thread.rememberQuotePicture(
+        com.fariin.app.data.QuoteCard(com.fariin.app.data.QuoteCard.State.OK, cid = i.cid), i.thumb)
 }
