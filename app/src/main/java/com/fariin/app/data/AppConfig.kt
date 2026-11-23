@@ -86,8 +86,9 @@ object AppConfig {
     /** The old switches that apply on the NEXT launch (all but groupCreate and groupStats). */
     val nextLaunchKeys: Set<String> = setOf(
         // profileLinks applies as soon as the config arrives (iOS b6dbdbf28, 2026-11-16).
-        "glow", "insights", "myProfileCard", "twoStep", "storyList", "pollRows",
-        "stickerEdit", "chatBackup", "chatTransfer", "historyPull", "videoStream", "r2Media",
+        // r2Media applies live too (iOS ConfigClient, F-60): it is read at each upload.
+        "glow", "insights", "myProfileCard", "twoStep", "storyList", "pollRows", "pollCard",
+        "stickerEdit", "chatBackup", "chatTransfer", "historyPull", "videoStream",
         "groups", "groupE2EE", "groupCalls", "callLinks",
     )
 
