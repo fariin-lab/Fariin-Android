@@ -58,6 +58,7 @@ import com.fariin.app.media.VoicePlayer
 import com.fariin.app.media.VoicePreview
 import com.fariin.app.media.VoiceRecordRules
 import com.fariin.app.ui.theme.Fariin
+import kotlinx.coroutines.launch
 import java.io.File
 import com.fariin.app.R
 
@@ -116,8 +117,14 @@ private fun OneTimeVoicePage(m: Message, cid: String, onClose: () -> Unit) {
             VoicePlayer.stop()
             val url = m.audioUrl
             val f = url?.let { media.file(it, m.enc) }
-            if (f == null || !player.load(f, rewindAtEnd = false)) { failed = true; return@LaunchedEffect }
-            file = f
+            // A note from an iPhone is CAF Opus: played through its Ogg copy, as the bubble's player does (H-40).
+            val playable = f?.let { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { VoicePlayer.playableFile(ctx, it) } }
+            if (playable == null || !player.load(playable, rewindAtEnd = false)) {
+                failed = true
+                url?.let { media.forget(it) }   // the plain copy (and any Ogg copy) never stays
+                return@LaunchedEffect
+            }
+            file = playable
             heard = true
             // The sender's "Opened" (iOS markVoicePlayedThrottled on open).
             com.fariin.app.data.PlayedVoice.markPlayed(ctx, cid, m.createdAtMillis)
@@ -133,6 +140,17 @@ private fun OneTimeVoicePage(m: Message, cid: String, onClose: () -> Unit) {
             onDispose {
                 player.release()
                 file?.delete()
+                // The decrypted note and its Ogg copy go, even when the page closed before they came
+                // (K-95): a download still running is stopped, and whatever it leaves is removed.
+                m.audioUrl?.let { url ->
+                    com.fariin.app.media.MediaDownloads.cancel(url)
+                    media.forget(url)
+                    if (com.fariin.app.media.ChatMedia.isFetching(url)) com.fariin.app.media.MediaDownloads.scope.launch {
+                        var waited = 0
+                        while (com.fariin.app.media.ChatMedia.isFetching(url) && waited < 240) { kotlinx.coroutines.delay(500); waited++ }
+                        media.forget(url)
+                    }
+                }
                 if (heard) ViewedOnce.mark(ctx, m.id, cid)
             }
         }
