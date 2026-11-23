@@ -56,7 +56,7 @@ object Forwarder {
             }.getOrNull()
         } ?: return Live.AsHeld
         val live = when {
-            !read.exists() || read.getBoolean("deleted") == true -> Live.Deleted
+            !read.exists() || read.get("deleted") == true -> Live.Deleted
             read.getBoolean("edited") == true -> {
                 val fresh = runCatching {
                     Message.fromFirestore(m.id, read.data ?: emptyMap(), cid) { raw, author -> crypto.decrypt(raw, cid, author) }

@@ -221,13 +221,13 @@ class ChannelSync(
                 var removed = 0
                 synchronized(h) {
                     for (d in snap.documents) {
-                        if (d.getBoolean("clear") == true) {
+                        if (d.get("clear") == true) {
                             val ms = (d.get("before") as? Number)?.toLong() ?: continue
                             removed += h.clearBefore(ms * 1000, now).size
                             continue
                         }
-                        if (d.getBoolean("gone") != true) continue
-                        val mid = d.getString("mid") ?: continue
+                        if (d.get("gone") != true) continue
+                        val mid = d.get("mid") as? String ?: continue
                         if (h.remove(mid, chgOf(d) ?: d.id.toLongOrNull(), now) == ChannelHistory.Outcome.REMOVED) removed++
                     }
                     if (!snap.metadata.isFromCache) {
@@ -261,7 +261,7 @@ class ChannelSync(
         tooLongRunning = true
         scope.launch {
             try {
-                val seq = convRef.get(Source.SERVER).await().getLong("chSeq")
+                val seq = (convRef.get(Source.SERVER).await().get("chSeq") as? Number)?.toLong()
                 val snap = convRef.collection("messages").orderBy("createdAt", Query.Direction.DESCENDING)
                     .limit(pageSize).get(Source.SERVER).await()
                 val h = history ?: return@launch
@@ -356,7 +356,7 @@ class ChannelSync(
 
     /** What the reader would see of a post: not deleted, not a notice, not hidden by me. */
     private fun visible(d: ChannelHistory.Doc<DocumentSnapshot>): Boolean =
-        !d.deleted && d.value.getString("type") != "system" && !HiddenMessages.isHidden(d.id)
+        !d.deleted && d.value.get("type") as? String != "system" && !HiddenMessages.isHidden(d.id)
 
     /** Registry of this run's channel stores, per account and channel (iOS ChannelHistoryRegistry). */
     object Registry {
@@ -401,9 +401,10 @@ class ChannelSync(
         }
 
         /** A doc as the store sees it; null without a server `createdAt` (a send not yet stamped). */
+        // Admins write posts: safe casts only, a bad createdAt or deleted is never a crash.
         fun docOf(d: DocumentSnapshot): ChannelHistory.Doc<DocumentSnapshot>? {
-            val at = d.getTimestamp("createdAt") ?: return null
-            return ChannelHistory.Doc(d.id, micros(at), d.getBoolean("deleted") == true, chgOf(d), d)
+            val at = d.get("createdAt") as? Timestamp ?: return null
+            return ChannelHistory.Doc(d.id, micros(at), d.get("deleted") == true, chgOf(d), d)
         }
     }
 }

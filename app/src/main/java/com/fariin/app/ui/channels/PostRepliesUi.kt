@@ -267,7 +267,7 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
         scope.launch {
             val owner = runCatching {
                 val d = com.fariin.app.Fb.db.collection("usernames").document(key).get().await()
-                d.getString("uid")?.takeIf { it.isNotEmpty() && d.get("releasedAt") == null }
+                (d.get("uid") as? String)?.takeIf { it.isNotEmpty() && d.get("releasedAt") == null }
             }.getOrNull()
             val me = com.fariin.app.Fb.auth.currentUser?.uid
             when {
@@ -315,7 +315,7 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
             .collection("messages").document(mid).collection("rh").document("head")
             .addSnapshotListener { snap, _ ->
                 if (snap == null) return@addSnapshotListener
-                headChanged((snap.getLong("rev") ?: 0L).toInt())
+                headChanged(((snap.get("rev") as? Number)?.toLong() ?: 0L).toInt())
             }
     }
 

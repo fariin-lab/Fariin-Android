@@ -461,7 +461,7 @@ object NotificationPoster {
                     db.collection("conversations").document(cid).collection("messages").document(mid)
                         .get(com.google.firebase.firestore.Source.SERVER).await()
                 } catch (_: Exception) { continue }
-                if (!d.exists() || d.getBoolean("deleted") == true) gone += cid
+                if (!d.exists() || d.get("deleted") == true) gone += cid
             }
             for (cid in gone) try { nm.cancel(cid, ID) } catch (_: Exception) {}
             if (gone.isNotEmpty()) com.fariin.app.Fb.auth.currentUser?.uid?.let { AppBadge.refresh(app, it) }

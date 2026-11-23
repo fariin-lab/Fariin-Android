@@ -97,7 +97,7 @@ class NotifActionWorker(c: Context, params: WorkerParameters) : CoroutineWorker(
         val recent = withTimeoutOrNull(STEP_MS) {
             runCatching { conv.collection("messages").orderBy("createdAt", Query.Direction.DESCENDING).limit(30).get().await() }.getOrNull()
         } ?: return null
-        val lastMine = recent.documents.firstOrNull { it.getString("authorId") == me && it.getString("type") != "system" }
+        val lastMine = recent.documents.firstOrNull { it.get("authorId") as? String == me && it.get("type") as? String != "system" }
             ?.let { com.fariin.app.data.Conversation.millis(it.get("createdAt")) }?.takeIf { it > 0 }
         return com.fariin.app.data.GroupAdmins.slowWait(d, me, lastMine, now)
     }

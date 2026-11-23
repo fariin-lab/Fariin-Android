@@ -90,6 +90,6 @@ object OpenGate {
         if (cid.isEmpty() || '/' in cid || mid.isEmpty() || '/' in mid) return false
         val m = runCatching { com.fariin.app.Fb.db.collection("conversations").document(cid)
             .collection("messages").document(mid).get().await() }.getOrNull() ?: return false
-        return !m.metadata.isFromCache && (!m.exists() || m.getBoolean("deleted") == true)
+        return !m.metadata.isFromCache && (!m.exists() || m.get("deleted") == true)
     }
 }

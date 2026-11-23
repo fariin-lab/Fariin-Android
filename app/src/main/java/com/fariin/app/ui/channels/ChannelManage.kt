@@ -445,8 +445,8 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: (
                     val got = HashMap<String, String>()
                     for (uid in admins) {
                         val ref = com.fariin.app.Fb.db.collection("users").document(uid)
-                        var h: String? = runCatching { ref.get(com.google.firebase.firestore.Source.CACHE).await().getString("handle") }.getOrNull()
-                        if (h.isNullOrEmpty()) h = runCatching { ref.get().await().getString("handle") }.getOrNull()
+                        var h: String? = runCatching { ref.get(com.google.firebase.firestore.Source.CACHE).await().get("handle") as? String }.getOrNull()
+                        if (h.isNullOrEmpty()) h = runCatching { ref.get().await().get("handle") as? String }.getOrNull()
                         if (!h.isNullOrEmpty()) got[uid] = h
                     }
                     adminHandles = got
