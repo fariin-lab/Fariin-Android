@@ -126,7 +126,14 @@ internal fun FileBody(m: Message, isMe: Boolean, width: Dp, meta: @Composable ()
                     .background(if (isMe) Color.White.copy(alpha = 0.22f) else c.blue.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center,
             ) {
-                if (previewBmp != null) Image(previewBmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                // The real type always shows, also over a preview picture: a name that hides its ending
+                // (a direction mark) cannot pass an HTML file off as a PDF (K-41).
+                if (previewBmp != null) {
+                    Image(previewBmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    Text(MediaRules.fileBadge(name), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1,
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 3.dp).clip(RoundedCornerShape(3.dp))
+                            .background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 3.dp))
+                }
                 else Text(MediaRules.fileBadge(name), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isMe) Color.White else c.blue)
                 if (busy || opening) Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
                     val all by UploadProgress.map.collectAsState()
@@ -138,7 +145,7 @@ internal fun FileBody(m: Message, isMe: Boolean, width: Dp, meta: @Composable ()
             }
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(name, fontSize = 16.sp, color = ink, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.MiddleEllipsis)
+                Text(MediaRules.shownFileName(name), fontSize = 16.sp, color = ink, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.MiddleEllipsis)
                 Text(
                     MediaRules.bubbleSizeLabel(m.fileSize) + if (busy) " · Uploading" else "",
                     fontSize = 13.sp, color = sub,
