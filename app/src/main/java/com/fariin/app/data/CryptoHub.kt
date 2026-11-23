@@ -40,7 +40,9 @@ object CryptoHub {
                 // A phone a newer sign-in replaced publishes nothing (Crypto.swift:320-331).
                 mayPublish = { uid -> com.fariin.app.device.DeviceRegistry.mayPublish(context.applicationContext, uid) }),
             { com.fariin.app.Fb.auth.currentUser?.uid },
-            groupIsPlain = { cid -> isPlainGroup(cid) },
+            // F-10: the groupE2EE switch (config/features, off by default) seals every group again;
+            // plain only when it is off and the group says e2ee == false (iOS Crypto.swift:1418-1434).
+            groupIsPlain = { cid -> !AppFeatures.value("groupE2EE", false) && isPlainGroup(cid) },
         ).also { instance = it }
     }
 
