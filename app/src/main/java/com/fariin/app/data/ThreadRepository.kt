@@ -320,12 +320,14 @@ class ThreadRepository(
                 live = true
                 windowFromServer = !snap.metadata.isFromCache
                 windowWhole = !snap.metadata.isFromCache && snap.size() < PAGE_SIZE
-                synchronized(docsLock) {
-                    keepSlidOut(snap.documents, full = snap.size() >= PAGE_SIZE)
+                val cut = synchronized(docsLock) {
+                    val cut = keepSlidOut(snap.documents, full = snap.size() >= PAGE_SIZE)
                     liveDocs.clear()
                     for (d in snap.documents) liveDocs[d.id] = d
                     docsSeq++
+                    cut
                 }
+                if (cut) _state.update { it.copy(canLoadOlder = true, loadingOlder = false) }
                 if (!snap.metadata.isFromCache && snap.size() < PAGE_SIZE) _state.update { it.copy(canLoadOlder = false) }
                 if (!snap.metadata.isFromCache) owedSynced = true
                 askRedraw(urgent)
@@ -534,15 +536,25 @@ class ThreadRepository(
      * of vanishing from the open screen. One that left while newer than the window's oldest was
      * deleted, and goes.
      */
-    private fun keepSlidOut(now: List<DocumentSnapshot>, full: Boolean) {
-        if (!full || liveDocs.isEmpty()) return
+    private fun keepSlidOut(now: List<DocumentSnapshot>, full: Boolean): Boolean {
+        if (!full || liveDocs.isEmpty()) return false
         val ids = now.mapTo(HashSet()) { it.id }
-        val floor = now.mapNotNull { it.tsEstimate("createdAt") }.minOrNull() ?: return
+        // H-27: nothing in common with the window on screen = maybe a hole in between. What was
+        // held goes, and older pages start again from the new window (WindowGapRules).
+        if (WindowGapRules.cutOff(liveDocs.keys, ids, full)) {
+            stopOlder()
+            olderDocs.clear()
+            dbOlder.clear()
+            olderFromCache = false
+            return true
+        }
+        val floor = now.mapNotNull { it.tsEstimate("createdAt") }.minOrNull() ?: return false
         for ((id, d) in liveDocs) {
             if (id in ids) continue
             val at = d.tsEstimate("createdAt") ?: continue
             if (at <= floor) olderDocs[id] = d
         }
+        return false
     }
 
     private fun stopOlder() {
