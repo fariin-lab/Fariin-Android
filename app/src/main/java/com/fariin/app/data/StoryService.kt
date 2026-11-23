@@ -87,12 +87,15 @@ class StoryService(
         // when I switched off (`firstAt`, else `viewedAt`, at or before `offAt`); no offAt known = none new.
         val off = StoryReceiptPrefs.on.value == false
         val cutoff = StoryReceiptPrefs.offAtMs ?: Long.MIN_VALUE
+        // Each view doc is written by the viewer: read it with safe casts, one bad doc is skipped.
         snap.documents.filter { d ->
-            !off || ((d.getTimestamp("firstAt") ?: d.getTimestamp("viewedAt"))?.toDate()?.time ?: Long.MAX_VALUE) <= cutoff
-        }.map { d ->
-            val (name, photo) = who(d.id)
-            StoryViewer(d.id, name, photo, d.getTimestamp("viewedAt")?.toDate()?.time ?: System.currentTimeMillis(),
-                d.getString("reaction"))
+            !off || (((d.get("firstAt") as? Timestamp) ?: (d.get("viewedAt") as? Timestamp))?.toDate()?.time ?: Long.MAX_VALUE) <= cutoff
+        }.mapNotNull { d ->
+            runCatching {
+                val (name, photo) = who(d.id)
+                StoryViewer(d.id, name, photo, (d.get("viewedAt") as? Timestamp)?.toDate()?.time ?: System.currentTimeMillis(),
+                    d.get("reaction") as? String)
+            }.getOrNull()
         }.sortedByDescending { it.viewedAtMs }
     } catch (e: kotlinx.coroutines.CancellationException) {
         // A newer read replaced this one (the views listener fires as it attaches): not a failure,
