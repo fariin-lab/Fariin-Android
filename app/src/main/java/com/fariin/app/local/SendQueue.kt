@@ -61,8 +61,10 @@ object SendQueue {
         entries.clear()
         val f = file(uid)
         if (f != null && f.exists()) {
-            val text = AtRest.open(f.readBytes())?.toString(Charsets.UTF_8)
-            if (text != null) runCatching { decode(text) }.getOrNull()?.forEach { entries[it.clientId] = it }
+            val text = runCatching { AtRest.open(f.readBytes())?.toString(Charsets.UTF_8) }.getOrNull()
+            val read = text?.let { runCatching { decode(it) }.getOrNull() }
+            // A file that will not open is kept aside, never written over by the next save (L-83).
+            if (read == null) SafeWrite.setAside(f) else read.forEach { entries[it.clientId] = it }
         }
         loadedFor = uid
     }
@@ -73,7 +75,7 @@ object SendQueue {
         try {
             if (entries.isEmpty()) { f.delete(); return }
             val sealed = AtRest.seal(encode(entries.values.toList()).toByteArray(Charsets.UTF_8)) ?: return
-            f.parentFile?.mkdirs(); f.writeBytes(sealed)
+            SafeWrite.replace(f, sealed)   // temp file, then rename (L-83): never a torn queue
         } catch (_: Exception) {}
     }
 

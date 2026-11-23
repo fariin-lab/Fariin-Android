@@ -37,9 +37,12 @@ object Drafts {
      *  the start-up thread gets there first; every read and write below waits for it. */
     private val disk = LoadOnce {
         val f = file
-        val m = try {
-            if (f != null && f.exists()) AtRest.open(f.readBytes())?.toString(Charsets.UTF_8)?.let(::decode) ?: emptyMap() else emptyMap()
-        } catch (_: Exception) { emptyMap() }
+        val m: Map<String, String> = if (f == null || !f.exists()) emptyMap() else (try {
+            AtRest.open(f.readBytes())?.toString(Charsets.UTF_8)?.let(::decode)
+        } catch (_: Exception) { null }) ?: run {
+            // A file that will not open is kept aside, never written over by the next save (L-83).
+            SafeWrite.setAside(f); emptyMap()
+        }
         // Anything set while the file was read cannot exist: set() waits for this read.
         fmts = m.filterKeys { it.startsWith(FMT) }.mapKeys { it.key.removePrefix(FMT) }
         _map.value = m.filterKeys { !it.startsWith(FMT) }
@@ -103,7 +106,7 @@ object Drafts {
                 try {
                     if (snapshot.isEmpty()) f.delete() else {
                         val sealed = AtRest.seal(encode(snapshot).toByteArray(Charsets.UTF_8)) ?: return@launch
-                        f.parentFile?.mkdirs(); f.writeBytes(sealed)
+                        SafeWrite.replace(f, sealed)   // temp file, then rename (L-83)
                     }
                 } catch (_: Exception) {}
             }
