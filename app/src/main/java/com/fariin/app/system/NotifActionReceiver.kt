@@ -33,6 +33,8 @@ class NotifActionReceiver : BroadcastReceiver() {
         val me = com.fariin.app.Fb.auth.currentUser?.uid ?: return
         // A notification from an account that is no longer signed in does nothing.
         if (intent.getStringExtra(NotifActions.EXTRA_ME) != me) { NotificationPoster.clear(c, cid); return }
+        // The newest line this notification showed (H-95), read before it is posted again or goes.
+        val shown = NotificationPoster.shownAt(c, cid)
         when (intent.action) {
             NotifActions.ACTION_REPLY -> {
                 val text = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(NotifActions.KEY_TEXT)?.toString()?.trim()
@@ -42,19 +44,19 @@ class NotifActionReceiver : BroadcastReceiver() {
                 SendQueue.add(me, e)
                 // Android keeps a spinner on the reply field until the notification is posted again.
                 NotificationPoster.showMyReply(c, cid, text)
-                enqueue(c, NotifActionWorker.KIND_REPLY, cid, me, e.clientId)
+                enqueue(c, NotifActionWorker.KIND_REPLY, cid, me, e.clientId, shown)
             }
             NotifActions.ACTION_READ -> {
                 NotificationPoster.clear(c, cid)
-                enqueue(c, NotifActionWorker.KIND_READ, cid, me, null)
+                enqueue(c, NotifActionWorker.KIND_READ, cid, me, null, shown)
             }
         }
     }
 
-    private fun enqueue(c: Context, kind: String, cid: String, me: String, clientId: String?) {
+    private fun enqueue(c: Context, kind: String, cid: String, me: String, clientId: String?, shownMs: Long) {
         val req = OneTimeWorkRequestBuilder<NotifActionWorker>()
             .setInputData(workDataOf(NotifActionWorker.KIND to kind, NotifActionWorker.CID to cid,
-                NotifActionWorker.ME to me, NotifActionWorker.CLIENT_ID to clientId))
+                NotifActionWorker.ME to me, NotifActionWorker.CLIENT_ID to clientId, NotifActionWorker.SHOWN_MS to shownMs))
             .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
