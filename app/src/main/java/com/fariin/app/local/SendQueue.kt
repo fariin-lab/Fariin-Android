@@ -125,8 +125,18 @@ object SendQueue {
         else -> false
     }
 
+    /**
+     * K-44: the files go too, not only the memory copy. Log Out says these texts are lost, so the
+     * same account signing back in must not send them later. Every account's queue on this phone,
+     * set-aside copies included (sendqueue.bin*).
+     */
     @Synchronized fun wipe() {
         entries.clear(); loadedFor = null; inFlight.clear()
+        runCatching {
+            root?.listFiles()?.forEach { dir ->
+                dir.listFiles()?.forEach { f -> if (f.name.startsWith("sendqueue.bin")) f.delete() }
+            }
+        }
     }
 
     fun encode(list: List<Entry>): String = JSONArray().also { a ->
