@@ -280,7 +280,7 @@ class ThreadRepository(
         val ids = snap.documents.mapTo(HashSet()) { it.id }
         // A short page is the whole chat; a full one covers from its oldest row up.
         val lo = if (snap.size() < PAGE_SIZE) Long.MIN_VALUE
-            else snap.documents.mapNotNull { it.getTimestamp("createdAt")?.toDate()?.time }.minOrNull() ?: return
+            else snap.documents.mapNotNull { it.ts("createdAt")?.toDate()?.time }.minOrNull() ?: return
         val gone = rows.filter { (id, at) -> at >= lo && id !in ids }.keys
         if (gone.isNotEmpty()) com.fariin.app.local.LocalDb.forget(me, cid, gone)
     }
@@ -309,7 +309,7 @@ class ThreadRepository(
                 if (snap.metadata.isFromCache && snap.isEmpty && (synchronized(docsLock) { liveDocs.isNotEmpty() } || seeded)) return@addSnapshotListener
                 // The first answer and any change to my own message draw at once (no added send
                 // latency); everything else is folded into one redraw per interval.
-                val urgent = firstMsgAnswer || snap.documentChanges.any { it.document.getString("authorId") == me }
+                val urgent = firstMsgAnswer || snap.documentChanges.any { it.document.str("authorId") == me }
                 firstMsgAnswer = false
                 if (!snap.metadata.isFromCache) dropRemovedSaved(snap)
                 seeded = false
@@ -532,10 +532,10 @@ class ThreadRepository(
     private fun keepSlidOut(now: List<DocumentSnapshot>, full: Boolean) {
         if (!full || liveDocs.isEmpty()) return
         val ids = now.mapTo(HashSet()) { it.id }
-        val floor = now.mapNotNull { it.getTimestamp("createdAt", DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) }.minOrNull() ?: return
+        val floor = now.mapNotNull { it.tsEstimate("createdAt") }.minOrNull() ?: return
         for ((id, d) in liveDocs) {
             if (id in ids) continue
-            val at = d.getTimestamp("createdAt", DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) ?: continue
+            val at = d.tsEstimate("createdAt") ?: continue
             if (at <= floor) olderDocs[id] = d
         }
     }
@@ -552,7 +552,7 @@ class ThreadRepository(
     fun loadOlder() {
         val s = _state.value
         if (!s.canLoadOlder || s.loadingOlder || !s.loaded) return
-        val oldest = synchronized(docsLock) { (liveDocs.values + olderDocs.values).toList() }.mapNotNull { it.getTimestamp("createdAt") }.minOrNull() ?: return
+        val oldest = synchronized(docsLock) { (liveDocs.values + olderDocs.values).toList() }.mapNotNull { it.ts("createdAt") }.minOrNull() ?: return
         // The phone's own history (device-storage plan phase 1, same rule as iOS): used for an
         // older page only when the server cannot answer (offline, or nothing in 8 s). Online the
         // server stays the authority, so a message deleted for everyone never comes back from a
@@ -592,7 +592,7 @@ class ThreadRepository(
                     first = false
                     // Rows the database drew (while offline) for this span that the server no longer has: gone.
                     if (!snap.metadata.isFromCache && snap.documents.isNotEmpty() && dbOlder.isNotEmpty()) {
-                        val lo = snap.documents.mapNotNull { it.getTimestamp("createdAt")?.toDate()?.time }.minOrNull() ?: 0L
+                        val lo = snap.documents.mapNotNull { it.ts("createdAt")?.toDate()?.time }.minOrNull() ?: 0L
                         val hi = oldest.toDate().time
                         val gone = dbOlder.values.filter { it.createdAtMillis.toLong() in lo..hi && it.id !in ids }.map { it.id }
                         if (gone.isNotEmpty()) { gone.forEach { dbOlder.remove(it) }; com.fariin.app.local.LocalDb.forget(me, cid, gone) }
@@ -806,7 +806,7 @@ class ThreadRepository(
             // rows), never past a message this phone could not open yet ("…", or a group lock whose
             // key may still be released), and the newest point is the newest SERVER row.
             val serverDocs = if (olderFromCache) liveDocs.values.toList() else (liveDocs.values + olderDocs.values)
-            val times = serverDocs.filter { !it.metadata.hasPendingWrites() }.mapNotNull { it.getTimestamp("createdAt")?.toDate()?.time }
+            val times = serverDocs.filter { !it.metadata.hasPendingWrites() }.mapNotNull { it.ts("createdAt")?.toDate()?.time }
             val unopened = sorted.any { !it.deleted && (it.text == "\u2026" || it.text == Wire.LOCKED) }
             // 1:1 only (owner 2026-11-12): every group stays on the server, so it never vouches.
             val vouch = windowFromServer && !unopened && chSync == null && !isChannelChat() && !Wire.isGroupCid(cid) && times.isNotEmpty()
@@ -1660,7 +1660,7 @@ class ThreadRepository(
                 convRef.collection("messages").whereEqualTo("authorId", me).whereEqualTo("uploading", true).get().await()
             }.getOrNull() ?: return@launch
             for (d in snap.documents) {
-                val made = d.getTimestamp("createdAt")?.toDate()?.time ?: continue
+                val made = d.ts("createdAt")?.toDate()?.time ?: continue
                 if (made < cutoff) cancelAnnounced(d.id)
             }
         }
@@ -2314,13 +2314,13 @@ class ThreadRepository(
     private fun heldMembers(): List<String>? {
         val snap = latestConv ?: return null
         if (convReg == null || snap.metadata.isFromCache || !snap.exists()) return null
-        if (snap.getBoolean("e2ee") == false) CryptoHub.notePlainGroup(cid)
+        if (snap.bool("e2ee") == false) CryptoHub.notePlainGroup(cid)
         return (snap.get("users") as? List<*>)?.filterIsInstance<String>()?.takeIf { it.isNotEmpty() }
     }
 
     private suspend fun serverMembers(): List<String> = try {
         val snap = convRef.get(Source.SERVER).await()
-        if (snap.getBoolean("e2ee") == false) CryptoHub.notePlainGroup(cid)
+        if (snap.bool("e2ee") == false) CryptoHub.notePlainGroup(cid)
         (snap.get("users") as? List<*>)?.filterIsInstance<String>()
     } catch (_: Exception) { null } ?: memberUids()
 
@@ -2362,7 +2362,7 @@ class ThreadRepository(
         val knocking = if (local != null) isKnock(local.startedBy, local.accepted, local.lastSender)
             else try {
                 val d = convRef.get().await()
-                isKnock(d.getString("startedBy") ?: "", d.getBoolean("accepted") ?: false, d.getString("lastSender") ?: "")
+                isKnock(d.str("startedBy") ?: "", d.bool("accepted") ?: false, d.str("lastSender") ?: "")
             } catch (_: Exception) { false }
         // iOS: before a first message, read the live switch once, since the rules read it.
         val firstMessage = knocking || local == null
@@ -2447,7 +2447,7 @@ class ThreadRepository(
         val ref = db.collection("users").document(me).collection("limits").document("requests")
         try {
             val snap = ref.get().await()
-            val start = snap.getTimestamp("windowStart")?.toDate()?.time
+            val start = snap.ts("windowStart")?.toDate()?.time
             if (snap.exists() && start != null && System.currentTimeMillis() - start < 24 * 3600_000L) {
                 ref.update("count", FieldValue.increment(1)).await()
             } else {
@@ -2516,7 +2516,7 @@ class ThreadRepository(
     private suspend fun isChannel(): Boolean {
         if (!Wire.isGroupCid(cid)) return false
         (_state.value.conv["channel"] as? Boolean)?.let { return it }
-        return try { convRef.get().await().getBoolean("channel") == true } catch (_: Exception) { false }
+        return try { convRef.get().await().bool("channel") == true } catch (_: Exception) { false }
     }
 
     /** ChatService.editMessage: re-sealed, the replaced text appended to `edits` (at most 10). */
@@ -2632,8 +2632,8 @@ class ThreadRepository(
         if (reactions.isNullOrEmpty()) return
         try {
             val d = convRef.get().await()
-            val by = d.getString("lastReactionBy") ?: return
-            val enc = d.getString("lastReactionEnc") ?: return
+            val by = d.str("lastReactionBy") ?: return
+            val enc = d.str("lastReactionEnc") ?: return
             if (reactions[by] as? String != enc) return
             convRef.update(mapOf<String, Any>(
                 "lastReactionEnc" to FieldValue.delete(), "lastReactionBy" to FieldValue.delete(),
@@ -2657,7 +2657,7 @@ class ThreadRepository(
             // writes nothing.
             val newest = convRef.collection("messages").orderBy("createdAt", Query.Direction.DESCENDING)
                 .limit(if (group) 25 else 1).get(Source.SERVER).await().documents
-            val d = (if (group) newest.firstOrNull { it.getBoolean("deleted") != true } else newest.firstOrNull())?.data
+            val d = (if (group) newest.firstOrNull { it.bool("deleted") != true } else newest.firstOrNull())?.data
             // A group whose 25 newest are all deleted is not proof the chat is empty: keep the line (iOS).
             if (d == null && group && newest.isNotEmpty()) return
             val update = hashMapOf<String, Any>()
@@ -2821,7 +2821,7 @@ class ThreadRepository(
     /** iOS isHiddenByBlock: a fetched message left out because I had its author blocked when it was sent. */
     fun isHiddenByBlock(id: String): Boolean {
         val d = synchronized(docsLock) { liveDocs[id] ?: olderDocs[id] } ?: return false
-        val author = d.getString("authorId") ?: return false
+        val author = d.str("authorId") ?: return false
         return author != me && BlockList.hides(author, Conversation.millis(d.get("createdAt")))
     }
 
@@ -2922,7 +2922,7 @@ class ThreadRepository(
             return try {
                 ref.update("reactions.$me", FieldValue.delete()).await()
                 val cs = convRef.get().await()
-                if (cs.getString("lastReactionBy") == me) convRef.update(mapOf(
+                if (cs.str("lastReactionBy") == me) convRef.update(mapOf(
                     "lastReactionEnc" to FieldValue.delete(), "lastReactionBy" to FieldValue.delete(),
                     "lastReactionToAuthor" to FieldValue.delete(), "lastReactionAt" to FieldValue.delete(),
                     "lastReactionToEnc" to FieldValue.delete(), "lastReactionToImages" to FieldValue.delete(),
@@ -3195,3 +3195,10 @@ private object ThreadRepositoryStart {
     val ms: Double = (System.currentTimeMillis() - android.os.SystemClock.elapsedRealtime() +
         android.os.Process.getStartElapsedRealtime()).toDouble()
 }
+
+// Other people write these docs: never a typed getter, which throws on a wrong type (audit H-54).
+private fun DocumentSnapshot.ts(field: String): com.google.firebase.Timestamp? = get(field) as? com.google.firebase.Timestamp
+private fun DocumentSnapshot.tsEstimate(field: String): com.google.firebase.Timestamp? =
+    get(field, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) as? com.google.firebase.Timestamp
+private fun DocumentSnapshot.str(field: String): String? = get(field) as? String
+private fun DocumentSnapshot.bool(field: String): Boolean? = get(field) as? Boolean

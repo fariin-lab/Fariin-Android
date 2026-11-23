@@ -44,4 +44,12 @@ class CrashDocsTest {
         assertEquals("0:00", MediaRules.durationLabel(Double.POSITIVE_INFINITY))
         assertEquals("1:05", MediaRules.durationLabel(65.0))
     }
+
+    @Test fun stringCreatedAtReadsAsNotSet() {
+        val m = Message.fromFirestore("m", mapOf("text" to "hi", "createdAt" to "2026-11-23"), "g_x", nowMillis = 5.0) { r, _ -> r }
+        assertEquals(5.0, m.createdAtMillis, 0.0)
+        assertTrue(!m.hasServerTime)
+        val inf = Message.fromFirestore("m", mapOf("text" to "hi", "createdAt" to Double.POSITIVE_INFINITY), "g_x", nowMillis = 5.0) { r, _ -> r }
+        assertEquals(5.0, inf.createdAtMillis, 0.0)
+    }
 }
