@@ -132,6 +132,9 @@ class ShareActivity : ComponentActivity() {
             if (s.empty) { Toast.makeText(this@ShareActivity, skippedLine ?: "Nothing to share", Toast.LENGTH_SHORT).show(); finish() }
             else {
                 skippedLine?.let { Toast.makeText(this@ShareActivity, it, Toast.LENGTH_LONG).show() }
+                // The picker reads the chat list once when it opens: from a closed app it opened on
+                // an empty list and said "No chats yet" for good (L-11). It opens once the list is in.
+                listing.join()
                 shared.value = s
             }
         }
