@@ -55,6 +55,9 @@ fun AccountGate(me: String, auth: AuthRepository, onOwnPage: () -> Unit = {}, co
     var trusted by remember(me) { mutableStateOf(opened) }
     var phase by remember(me) { mutableStateOf<Phase>(if (opened) Phase.Ready else Phase.Loading) }
     var verified by remember(me) { mutableStateOf(!opened) }
+    // L-40: true once the server (or cache) really answered for this account. A fresh sign-in that
+    // opened on no answer keeps asking, and is not remembered as ready until then.
+    var confirmed by remember(me) { mutableStateOf(opened) }
     val attempts = remember(me) { com.fariin.app.device.BootAttempts() }
     // The watchdog: the logo page never stays past 8 s. The app opens and the check runs once more
     // behind it (a stalled Firestore client after two account changes left iOS on the logo for good).
@@ -89,8 +92,17 @@ fun AccountGate(me: String, auth: AuthRepository, onOwnPage: () -> Unit = {}, co
         if (twoStep == null) recheckTwoStep = true
         // Both reads have a limit: a stalled client must not hold the logo page.
         val ref = com.fariin.app.Fb.db.collection("users").document(me)
-        val doc = com.fariin.app.device.BootWatch.capped(com.fariin.app.device.BootWatch.SERVER_READ_MS) { ref.get(Source.SERVER).await() }
+        suspend fun read() = com.fariin.app.device.BootWatch.capped(com.fariin.app.device.BootWatch.SERVER_READ_MS) { ref.get(Source.SERVER).await() }
             ?: com.fariin.app.device.BootWatch.capped(com.fariin.app.device.BootWatch.CACHE_READ_MS) { ref.get(Source.CACHE).await() }
+        var doc = read()
+        // L-40: a fresh sign-in already opened on no answer asks again, 2 s then doubling up to 30 s,
+        // so a new account with no name still reaches Create your profile once the network answers.
+        var wait = 2_000L
+        while (doc == null && trusted && !confirmed && current()) {
+            kotlinx.coroutines.delay(wait); wait = (wait * 2).coerceAtMost(30_000L)
+            doc = read()
+        }
+        if (doc != null) confirmed = true
         if (!current()) { android.util.Log.w(com.fariin.app.device.BootWatch.TAG, "late account check dropped"); return@LaunchedEffect }
         // No answer at all on a fresh sign-in: open the app and ask once more behind it (the same
         // way out as the watchdog), never "Create your profile" for an account that has one.
@@ -108,7 +120,7 @@ fun AccountGate(me: String, auth: AuthRepository, onOwnPage: () -> Unit = {}, co
         if (trusted && doc == null) return@LaunchedEffect
         phase = if (p.name.isNotBlank() && p.handle.isNotEmpty()) Phase.Ready else Phase.Onboarding(p.handle)
     }
-    LaunchedEffect(me, phase) { if (phase == Phase.Ready) GateMemory.markReady(ctx, me) else if (phase != Phase.Loading) GateMemory.clear(ctx) }
+    LaunchedEffect(me, phase, confirmed) { if (phase == Phase.Ready) { if (confirmed) GateMemory.markReady(ctx, me) } else if (phase != Phase.Loading) GateMemory.clear(ctx) }
 
     val ownPage = newPasswordFor != null || (phase != Phase.Ready && phase != Phase.Loading)
     LaunchedEffect(ownPage) { if (ownPage) onOwnPage() }
