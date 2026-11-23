@@ -33,6 +33,7 @@ class SessionEndWipeTest {
         "send queue",
         "delivery cursors",
         "safety key log",
+        "top row hidden",
         "group page previews",
         "explore cache",
         "call links",

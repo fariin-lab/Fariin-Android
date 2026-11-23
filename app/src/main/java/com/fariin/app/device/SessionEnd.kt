@@ -247,6 +247,16 @@ object SessionEnd {
         WipeStep("send queue") { _, _ -> com.fariin.app.local.SendQueue.wipe() },
         WipeStep("delivery cursors") { _, _ -> com.fariin.app.local.Cursors.reset() },   // delivery marks sent, by chat id: the next account writes its own
         WipeStep("safety key log") { _, _ -> com.fariin.app.crypto.SafetyKeyLog.wipe() },   // the next account starts its own key record (iOS)
+        // J-112: the chats removed from the top row (ChatListScreen TopPeersHidden, one entry per uid):
+        // only the account kept for a return keeps its own; nobody else's stays on this phone.
+        WipeStep("top row hidden") { c, keepFor ->
+            runCatching {
+                val p = c.getSharedPreferences("top_peers_hidden", Context.MODE_PRIVATE)
+                val e = p.edit()
+                for (k in p.all.keys) if (k != keepFor) e.remove(k)
+                e.apply()
+            }
+        },
         WipeStep("group page previews") { _, _ -> com.fariin.app.channel.ChannelService.wipePreviews() },   // kept public group pages hold my member/requested state (iOS)
         WipeStep("explore cache") { c, _ -> com.fariin.app.channel.ExploreCache.wipe(c) },   // Explore's kept lists are per account (iOS SessionWipe)
         WipeStep("call links") { _, _ -> com.fariin.app.call.CallLinks.reset() },
