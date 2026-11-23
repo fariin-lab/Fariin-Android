@@ -57,6 +57,8 @@ object SessionEnd {
         var tokenOff = false
         kotlinx.coroutines.coroutineScope {
             launch { step(uid, "calls") { endCalls() } }
+            // K-101: a leave, delete or clear still in its 5 s Undo runs now, before Auth goes.
+            launch { step(uid, "pending undo") { com.fariin.app.data.LeaveUndo.commitNow() } }
             launch { step(uid, "presence") { com.fariin.app.data.Presence.set(online = false, context = c) } }
             launch { step(uid, "device record") { DeviceRegistry.removeThisDevice() } }
             launch { step(uid, "push token") { tokenOff = Push.unregister(c) } }
@@ -164,7 +166,12 @@ object SessionEnd {
         droppedByRevoke = unsentCount()
         DeviceRegistry.forgetAfterRevoke()
         var tokenOff = false
-        step(uid, "push token") { tokenOff = Push.unregister(c) }
+        kotlinx.coroutines.coroutineScope {
+            // F-20: a live call or a ring ends here too, as at Log Out, or the other side keeps a
+            // call nobody is in and this phone keeps talking after it was signed out.
+            launch { step(uid, "calls") { endCalls() } }
+            launch { step(uid, "push token") { tokenOff = Push.unregister(c) } }
+        }
         if (!endAuth(uid)) return false
         if (!tokenOff) Push.retireToken(c)
         wipe(c)

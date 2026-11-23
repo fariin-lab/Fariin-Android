@@ -158,6 +158,17 @@ object LeaveUndo {
         restore = null
     }
 
+    private var running: Job? = null
+
+    /**
+     * K-101: Log Out runs a leave, delete or clear still inside its Undo window and waits for it,
+     * while this account can still write it (iOS commits the pending Undo before SessionWipe).
+     */
+    suspend fun commitNow() {
+        kotlinx.coroutines.withContext(Dispatchers.Main) { commit() }
+        running?.join()
+    }
+
     /** Run the waiting leave now. The group stays hidden through it; a failure gives it back. */
     fun commit() {
         timer?.cancel(); timer = null
@@ -170,7 +181,7 @@ object LeaveUndo {
         val back = restore
         keepsChat = false
         restore = null
-        scope.launch {
+        running = scope.launch {
             try {
                 p.second()
                 // The list drops it when the server's copy arrives; hidden a moment longer (iOS).
