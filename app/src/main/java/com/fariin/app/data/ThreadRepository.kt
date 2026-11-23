@@ -1114,7 +1114,19 @@ class ThreadRepository(
      *  waits for the one before it to land or fail, so the other person reads them in order. */
     fun resendAll(list: List<SendQueue.Entry>) {
         var prev: Job? = null
-        for (e in SendQueue.drainOrder(list)) drive(e, checkFirst = true, on = sendScope, after = prev)?.let { prev = it }
+        val group = Wire.isGroupCid(cid)
+        for (e in SendQueue.drainOrder(list)) {
+            val before = prev
+            // H-29: slow mode lets one message through per wait. The next queued text waits it out,
+            // instead of going at once and being removed by the server after it showed as sent.
+            val after = if (!group || before == null) before else sendScope.launch {
+                before.join()
+                val d = _state.value.conv.takeIf { it.isNotEmpty() } ?: runCatching { convRef.get().await().data }.getOrNull()
+                val wait = d?.let { if (GroupAdmins.slows(it, me)) GroupAdmins.slowSeconds(it) else 0 } ?: 0
+                if (wait > 0) kotlinx.coroutines.delay(wait * 1000L + 1000L)
+            }
+            drive(e, checkFirst = true, on = sendScope, after = after)?.let { prev = it }
+        }
     }
 
     private fun drive(e: SendQueue.Entry, checkFirst: Boolean) = drive(e, checkFirst, sendScope)
