@@ -10,7 +10,7 @@ object OutgoingSweepRules {
     const val SAFE_AGE_MS = 24L * 60 * 60 * 1000
 
     /** The outbox stores' raw JSON as one text to look names up in ("\/" read back as "/"). */
-    fun heldText(raws: Collection<String?>): String = raws.filterNotNull().joinToString("\n") { it.replace("\/", "/") }
+    fun heldText(raws: Collection<String?>): String = raws.filterNotNull().joinToString("\n") { it.replace("\\/", "/") }
 
     fun deletable(name: String, lastModifiedMs: Long, nowMs: Long, held: String): Boolean =
         name.isNotEmpty() && nowMs - lastModifiedMs > SAFE_AGE_MS && !held.contains("/$name\"")

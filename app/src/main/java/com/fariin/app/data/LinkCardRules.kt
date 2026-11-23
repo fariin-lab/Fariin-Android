@@ -12,7 +12,7 @@ object LinkCardRules {
         val low = clean.lowercase()
         if (!low.startsWith("http://") && !low.startsWith("https://")) return null
         val host = hostOf(clean) ?: return null
-        val inText = text.split(Regex("\s+")).asSequence()
+        val inText = text.split(Regex("\\s+")).asSequence()
             .map { it.trim('(', ')', '[', ']', '<', '>', '"', '\'', ',', '.', '!', '?', ';', ':') }
             .filter { it.isNotEmpty() && '.' in it }
             .mapNotNull { TextFormat.cleanUrl(it) }
