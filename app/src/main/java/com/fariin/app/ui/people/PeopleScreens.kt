@@ -748,11 +748,13 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             val h = person?.handle.orEmpty()
             val card = if (h.isEmpty()) "Chat with $shownName on Fariin" else com.fariin.app.data.QrRules.userLink(h)
             val crypto = com.fariin.app.data.CryptoHub.get(shareCtx.applicationContext)
-            scope.launch {
+            // The app-lifetime send scope (K-49): Back or a closed page does not stop the sends.
+            com.fariin.app.data.SendScope.launch(kotlinx.coroutines.Dispatchers.Main) {
                 var ok = true
                 for (cid in targets) {
-                    val repo = com.fariin.app.data.ThreadRepository.openOrQuiet(cid, me, crypto, scope)
-                    try { repo.sendSharedLink(card) } catch (_: Exception) { ok = false }
+                    try {
+                        com.fariin.app.data.ThreadRepository.openOrQuiet(cid, me, crypto, com.fariin.app.data.SendScope).sendSharedLink(card)
+                    } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { ok = false }
                 }
                 com.fariin.app.ui.components.Snack.show(if (ok) "Sent" else "Couldn't send. Try again.")
             }

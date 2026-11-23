@@ -1325,11 +1325,12 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
         if (myUid != null) com.fariin.app.ui.thread.ForwardSheet(myUid, onDismiss = { sendingLink = null }, title = "Share with") { targets ->
             sendingLink = null
             val crypto = com.fariin.app.data.CryptoHub.get(ctx.applicationContext)
-            scope.launch {
+            // The app-lifetime send scope (K-49): Back or a closed page does not stop the sends.
+            com.fariin.app.data.SendScope.launch(kotlinx.coroutines.Dispatchers.Main) {
                 var ok = true
                 for (t in targets) try {
-                    com.fariin.app.data.ThreadRepository.openOrQuiet(t, myUid, crypto, scope).sendForwardedText(url, forwarded = false)
-                } catch (_: Exception) { ok = false }
+                    com.fariin.app.data.ThreadRepository.openOrQuiet(t, myUid, crypto, com.fariin.app.data.SendScope).sendForwardedText(url, forwarded = false)
+                } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { ok = false }
                 Snack.show(if (ok) "Sent" else "Couldn't send. Try again.")
             }
         }

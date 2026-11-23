@@ -190,11 +190,12 @@ private fun LinkBody(s: LinkState, onUsed: () -> Unit, onDeleted: (() -> Unit)?,
         sendingLink = false
         val url = s.url ?: return@ForwardSheet
         val crypto = com.fariin.app.data.CryptoHub.get(ctx.applicationContext)
-        sendScope.launch {
+        // The app-lifetime send scope (K-49): Back or a closed page does not stop the sends.
+        com.fariin.app.data.SendScope.launch(kotlinx.coroutines.Dispatchers.Main) {
             var ok = true
             for (cid in targets) try {
-                com.fariin.app.data.ThreadRepository.openOrQuiet(cid, myUid, crypto, sendScope).sendForwardedText(url, forwarded = false)
-            } catch (_: Exception) { ok = false }
+                com.fariin.app.data.ThreadRepository.openOrQuiet(cid, myUid, crypto, com.fariin.app.data.SendScope).sendForwardedText(url, forwarded = false)
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { ok = false }
             com.fariin.app.ui.components.Snack.show(if (ok) "Sent" else "Couldn't send. Try again.")
         }
     }
