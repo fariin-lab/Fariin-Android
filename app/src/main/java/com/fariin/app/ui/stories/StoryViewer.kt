@@ -1353,17 +1353,23 @@ private fun StoryPage(
     if (poster && active) {
         DisposableEffect(story.id) {
             var job: kotlinx.coroutines.Job? = null
+            var first = true
             fun refresh() {
                 job?.cancel()
+                val prewarm = first
+                first = false
                 job = storyScope.launch {
+                    // Later ticks wait a moment, so a burst of new views is one read, not one each.
+                    if (!prewarm) kotlinx.coroutines.delay(1500)
                     service.viewSummary(story.id, who)?.let { summaries[story.id] = it }
-                    // The viewers list too, so a swipe up shows the real rows from its first frame (iOS).
-                    service.fetchViewers(story.id, who)?.let { StoryViewersCache.put(story.id, it) }
+                    // The viewers list once, so a swipe up shows the real rows from its first frame (iOS);
+                    // the open sheet rereads it itself (never 500 rows on every new view).
+                    if (prewarm) service.fetchViewers(story.id, who)?.let { StoryViewersCache.put(story.id, it) }
                 }
             }
             refresh()
             val reg = service.watchViews(story.id) { refresh() }
-            onDispose { reg.remove(); job?.cancel() }
+            onDispose { reg?.remove(); job?.cancel() }
         }
     }
 

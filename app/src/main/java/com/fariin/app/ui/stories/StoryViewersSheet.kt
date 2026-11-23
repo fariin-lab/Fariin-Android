@@ -448,9 +448,14 @@ internal fun ViewersSheet(
     val loadScope = rememberCoroutineScope()
     DisposableEffect(storyId) {
         var job: Job? = null
+        var first = true
         fun load() {
             job?.cancel()
+            val now = first
+            first = false
             job = loadScope.launch {
+                // A live tick waits a moment: a burst of new views is one reread, not one each.
+                if (!now) delay(1500)
                 var got = service.fetchViewers(storyId, who)
                 while (got == null) { failed = true; delay(3000); got = service.fetchViewers(storyId, who) }
                 failed = false; people = got; StoryViewersCache.put(storyId, got)
@@ -458,7 +463,7 @@ internal fun ViewersSheet(
         }
         load()
         val reg = service.watchViews(storyId) { load() }
-        onDispose { reg.remove(); job?.cancel() }
+        onDispose { reg?.remove(); job?.cancel() }
     }
     val d = LocalDensity.current.density
     var sheetH by remember { mutableFloatStateOf(1f) }

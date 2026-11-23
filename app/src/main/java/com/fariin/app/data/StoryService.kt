@@ -111,6 +111,12 @@ class StoryService(
         val meta = runCatching {
             db.collection("stories").document(storyId).collection("meta").document("views").get().await()
         }.getOrNull()
+        // Receipts off (iOS fetchViewSummary): the count is the frozen list, never the live counter,
+        // so the number cannot show viewers who came after offAt.
+        if (StoryReceiptPrefs.on.value == false) {
+            val frozen = fetchViewers(storyId, who) ?: return null
+            return StoryViewSummary.counted(frozen).copy(repostCount = (meta?.get("repostCount") as? Number)?.toInt() ?: 0)
+        }
         val fromMeta = meta?.data?.let { summaryOf(it, who) }
         if (fromMeta != null && fromMeta.count > 0) return fromMeta
         val receipts = fetchViewers(storyId, who) ?: return fromMeta
@@ -118,9 +124,16 @@ class StoryService(
             else StoryViewSummary.counted(receipts).copy(repostCount = fromMeta?.repostCount ?: 0)
     }
 
-    /** Live counter while my story is on screen (iOS observeViewCount); any change re-reads. */
-    fun watchViews(storyId: String, onChange: () -> Unit): ListenerRegistration =
-        db.collection("stories").document(storyId).collection("views").addSnapshotListener { s, _ -> if (s != null) onChange() }
+    /**
+     * Live counter while my story is on screen (iOS observeViewCount): one listener on the small
+     * `meta/views` doc, never on the receipts, so a popular story costs the same as a quiet one.
+     * Null with receipts off: the list is frozen at offAt, there is nothing new to hear.
+     */
+    fun watchViews(storyId: String, onChange: () -> Unit): ListenerRegistration? {
+        if (StoryReceiptPrefs.on.value == false || storyId.isEmpty()) return null
+        return db.collection("stories").document(storyId).collection("meta").document("views")
+            .addSnapshotListener { s, _ -> if (s != null) onChange() }
+    }
 
     /**
      * iOS watchStoryGone: [onGone] once the story on screen is deleted, or no longer reaches me (the
