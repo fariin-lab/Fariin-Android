@@ -154,6 +154,27 @@ object StoryPrivacyRules {
     }
 
     /**
+     * A queued post's My Chats list against the list as it is now (iOS rereads it at upload): the
+     * ticket may only narrow. Except lists add up, only lists meet, replies need both. When the two
+     * leave nobody, the list as it is now wins (what iOS would post), never "all".
+     */
+    fun narrowMyFriends(saved: StoryListDoc, now: StoryListDoc): StoryListDoc {
+        val replies = saved.allowReplies && now.allowReplies
+        val a = saved.members.toSet(); val b = now.members.toSet()
+        fun only(m: Set<String>) = if (m.isEmpty()) now.copy(allowReplies = replies)
+            else now.copy(mode = MODE_ONLY, members = m.toList(), allowReplies = replies)
+        return when {
+            saved.mode == MODE_ONLY && now.mode == MODE_ONLY -> only(a intersect b)
+            saved.mode == MODE_ONLY && now.mode == MODE_EXCEPT -> only(a - b)
+            saved.mode == MODE_ONLY -> saved.copy(allowReplies = replies)
+            saved.mode == MODE_EXCEPT && now.mode == MODE_ONLY -> only(b - a)
+            saved.mode == MODE_EXCEPT && now.mode == MODE_EXCEPT -> saved.copy(members = (a + b).toList(), allowReplies = replies)
+            saved.mode == MODE_EXCEPT -> saved.copy(allowReplies = replies)
+            else -> now.copy(allowReplies = replies)
+        }
+    }
+
+    /**
      * Who a post reaches and its `audience.mode`, as iOS ShareStorySheet.post + resolveAudience:
      * Everyone leaves out the hidden list; My Chats follows its own except / only list; a hand
      * picked list (Custom, One-Time) is only those people. Always within my accepted 1:1 chats.

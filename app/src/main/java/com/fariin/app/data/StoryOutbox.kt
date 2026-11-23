@@ -131,15 +131,18 @@ object StoryOutbox {
             if (group != null) {
                 myFriends = StoryPrivacyRules.defaultMyFriends; hidden = emptySet(); lists = emptyList()
             } else {
-                val needStore = aud == null || choice == StoryAudienceChoice.GLOWERS
-                if (needStore && !StoryPrivacyStore.awaitLoaded(me, 15_000)) return
+                // The store is needed for a ticket too: what was hidden or excluded since it was queued
+                // must be taken off (J-51). Not loaded = keep the ticket for a later pass.
+                if (!StoryPrivacyStore.awaitLoaded(me, 15_000)) return
                 if (choice == StoryAudienceChoice.GLOWERS && !Glow.state.value.known) return
                 if (aud != null) {
-                    myFriends = aud.optJSONObject("myFriends")?.let { listFrom(it) } ?: continue
+                    // The ticket's My Chats list narrowed by the list as it is now (iOS rereads it at upload).
+                    myFriends = aud.optJSONObject("myFriends")?.let { listFrom(it) }
+                        ?.let { StoryPrivacyRules.narrowMyFriends(it, StoryPrivacyStore.myFriends.value) } ?: continue
                     // The ticket's hide list plus anyone hidden since it was queued (iOS resolveAudience reads
                     // the hide list live at upload): someone hidden while it waited must not get it.
                     val queuedHidden = aud.optJSONArray("hidden")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() } ?: continue
-                    hidden = queuedHidden + (if (StoryPrivacyStore.serverLoaded.value) StoryPrivacyStore.hidden.value else emptySet())
+                    hidden = queuedHidden + StoryPrivacyStore.hidden.value
                     lists = aud.optJSONArray("lists")?.let { a -> (0 until a.length()).mapNotNull { listFrom(a.getJSONObject(it)) } }.orEmpty()
                 } else {
                     myFriends = StoryPrivacyStore.myFriends.value

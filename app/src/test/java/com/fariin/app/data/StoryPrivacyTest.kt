@@ -96,4 +96,24 @@ class StoryPrivacyTest {
         assertEquals("3 people you have a Glow with · 1 hidden", StoryPrivacyRules.glowersSubtitle(list, setOf("a", "x", "g", "z")))
         assertEquals("People you have a Glow with", StoryPrivacyRules.glowersSubtitle(StoryPrivacyRules.defaultGlowers, emptySet()))
     }
+
+    @Test fun aQueuedMyChatsListOnlyNarrows() {
+        fun l(mode: String, vararg m: String, replies: Boolean = true) =
+            StoryListDoc("myFriends", "myFriends", mode, m.toList(), replies)
+        val R = StoryPrivacyRules
+        // all then except Bob: Bob is left out
+        assertEquals(l("except", "bob"), R.narrowMyFriends(l("all"), l("except", "bob")))
+        // except Ann then except Bob: both left out
+        assertEquals(setOf("ann", "bob"), R.narrowMyFriends(l("except", "ann"), l("except", "bob")).members.toSet())
+        // except Ann then all: Ann stays out
+        assertEquals(l("except", "ann"), R.narrowMyFriends(l("except", "ann"), l("all")))
+        // only Ann, Bob then except Bob: only Ann
+        assertEquals(l("only", "ann"), R.narrowMyFriends(l("only", "ann", "bob"), l("except", "bob")))
+        // except Ann then only Ann, Cy: only Cy
+        assertEquals(l("only", "cy"), R.narrowMyFriends(l("except", "ann"), l("only", "ann", "cy")))
+        // nothing left: the list as it is now, never all
+        assertEquals(l("only", "cy"), R.narrowMyFriends(l("only", "ann"), l("only", "cy")))
+        // replies off on either side stays off
+        assertFalse(R.narrowMyFriends(l("all", replies = false), l("all")).allowReplies)
+    }
 }
