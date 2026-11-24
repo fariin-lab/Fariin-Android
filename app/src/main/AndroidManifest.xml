@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Fariin takes no money yet. The Play billing library adds this permission, and Play then shows
+         "In-app purchases" on the store page. Removed until Plus goes on sale: delete this line then,
+         before the server opens Android purchases (PlusBilling just gives up while it is missing). -->
+    <uses-permission android:name="com.android.vending.BILLING" tools:node="remove" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
