@@ -7,6 +7,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onPlaced
@@ -204,6 +207,23 @@ fun ChatListScreen(
     var searching by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     var showArchive by rememberSaveable { mutableStateOf(false) }
+    // The Archive opens as a page, not a cut (owner 2026-11-24): a picture of the list as it stood,
+    // and the new list slides over it from the right; back slides the Archive off to the right.
+    val swapLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    val swap = remember { ArchiveSwap() }
+    val setArchive: (Boolean) -> Unit = { open ->
+        if (open != showArchive) scope.launch {
+            val token = ++swap.token
+            val shot = if (com.fariin.app.ui.components.Motion.on) runCatching { swapLayer.toImageBitmap() }.getOrNull() else null
+            swap.forward = open; swap.p.snapTo(0f); swap.frozen = shot
+            showArchive = open
+            try {
+                if (shot != null) swap.p.animateTo(1f, androidx.compose.animation.core.tween(
+                    com.fariin.app.ui.components.Motion.ms(if (open) com.fariin.app.ui.components.Motion.PAGE_MS else com.fariin.app.ui.components.Motion.PAGE_BACK_MS),
+                    easing = if (open) com.fariin.app.ui.components.Motion.PageEase else com.fariin.app.ui.components.Motion.BackEase))
+            } finally { if (swap.token == token) swap.frozen = null }
+        }
+    }
     // Fariin Plus chat folders: the folder being edited from a chip, a new folder for one chat, and
     // the Add to Folder list for the chat picked.
     var folderEdit by remember { mutableStateOf<com.fariin.app.data.ChatFolder?>(null) }
@@ -223,7 +243,7 @@ fun ChatListScreen(
     // A second tap on Chats: out of Archived or search first, then to the top.
     com.fariin.app.ui.shell.OnTabReselect {
         when {
-            showArchive -> showArchive = false
+            showArchive -> setArchive(false)
             searching -> { searching = false; query = "" }
             else -> listState.animateScrollToItem(0)
         }
@@ -267,7 +287,7 @@ fun ChatListScreen(
     PeelBack(active, selecting, searching, showArchive,
         clearSelection = { selected = emptySet(); selectMode = false },
         closeSearch = { searching = false; query = "" },
-        closeArchive = { showArchive = false })
+        closeArchive = { setArchive(false) })
 
     // Archived chats older than the live window (iOS needWholeList("archive")): the list holds the
     // newest chats only, so the Archive reads the older ones once each time it opens.
@@ -526,7 +546,20 @@ fun ChatListScreen(
         shown.isEmpty() && !officialShown && newPeople.isEmpty()
     // Opening New Chat (the pen or the tip) ends the tip, as on iOS.
     val openNewChat = { GetStartedStore.dismissTip(appCtx, me); people.newChat() }
-    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().drawWithContent {
+        swapLayer.record { this@drawWithContent.drawContent() }
+        val shot = swap.frozen
+        if (shot == null) { drawLayer(swapLayer); return@drawWithContent }
+        // The screen is see-through (the shell paints the page colour): each sliding page brings its own.
+        val w = size.width; val p = swap.p.value; val under = com.fariin.app.ui.components.Motion.UNDER_SHIFT
+        if (swap.forward) {
+            translate(left = -w * under * p) { drawRect(c.bg); drawImage(shot) }
+            translate(left = w * (1f - p)) { drawRect(c.bg); drawLayer(swapLayer) }
+        } else {
+            translate(left = -w * under * (1f - p)) { drawRect(c.bg); drawLayer(swapLayer) }
+            translate(left = w * p) { drawRect(c.bg); drawImage(shot) }
+        }
+    }) {
     Scaffold(
         modifier = Modifier.nestedScroll((if (selecting || searching) pinBar else scroll).nestedScrollConnection).nestedScroll(fabScroll),
         // The shell already paints this colour under the whole screen: painting it again cost a full
@@ -650,7 +683,7 @@ fun ChatListScreen(
                             },
                             // The bar's buttons float in their own circles, as the chat screen's back does.
                             navigationIcon = {
-                                if (showArchive) FloatingBack(onBack = { showArchive = false }, modifier = Modifier.padding(start = 12.dp, end = 4.dp))
+                                if (showArchive) FloatingBack(onBack = { setArchive(false) }, modifier = Modifier.padding(start = 12.dp, end = 4.dp))
                             },
                             actions = {
                                 // In the Archive the search stays a button; the list itself has the field below.
@@ -735,6 +768,10 @@ fun ChatListScreen(
         // The list runs under the title bar (padded by it), everything else sits below it.
         Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
+            // The Message Requests and Archived rows are the only way in (not in the menu any more):
+            // with nothing else listed the list still draws to hold them, never the empty page.
+            val doorRows = !showArchive && !searching && filter == FILTER_ALL && folder == null && (state.requests.isNotEmpty() ||
+                state.archived.isNotEmpty() || (officialArchived && official.latest != null))
             when {
                 // iOS ChatListSkeleton: rows the shape of chats while the first page loads.
                 state.loading && source.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { com.fariin.app.ui.components.ChatListSkeleton() }
@@ -788,7 +825,7 @@ fun ChatListScreen(
                 // iOS wording, each with its line under it. The main list has no button (iOS: nothing
                 // else on a fresh account); Groups offers New Group, Channels Find Channels.
                 // Fades in when a filter, folder or search empties the list (iOS pops 7), not on first paint.
-                shown.isEmpty() && !officialShown && !activitySearchHit && !activityShown && newPeople.isEmpty() && groupHits.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding()).enterFade(listSettled.value)) { when {
+                shown.isEmpty() && !officialShown && !activitySearchHit && !activityShown && newPeople.isEmpty() && groupHits.isEmpty() && !doorRows -> Box(Modifier.padding(top = pad.calculateTopPadding()).enterFade(listSettled.value)) { when {
                     query.isNotBlank() -> Centered(null, "No results", null)
                     showArchive -> Centered(fi(R.drawable.ic_archive), "Nothing archived", "Chats you archive and stories you hide will show here.")
                     folder != null -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -847,7 +884,7 @@ fun ChatListScreen(
                     val archivedCount = state.archived.size + if (officialArchived && official.latest != null) 1 else 0
                     if (!showArchive && !searching && filter == FILTER_ALL && folder == null && archivedCount > 0) {
                         item(key = "archive") {
-                            ListRow("Archived", fi(R.drawable.ic_archive), trailing = "$archivedCount") { showArchive = true }
+                            ListRow("Archived", fi(R.drawable.ic_archive), trailing = "$archivedCount") { setArchive(true) }
                         }
                     }
                     // hold: what a long press does instead of selecting (a Recent row's Remove from Recent).
@@ -2027,4 +2064,12 @@ internal object ListClock {
             schedule()
         }, maxOf(1_000L, midnight - System.currentTimeMillis()))
     }
+}
+
+/** The Archive's page slide: the picture of the page it left, which way, and how far (0 to 1). */
+private class ArchiveSwap {
+    var frozen by mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null)
+    var forward = true
+    var token = 0
+    val p = androidx.compose.animation.core.Animatable(1f)
 }
