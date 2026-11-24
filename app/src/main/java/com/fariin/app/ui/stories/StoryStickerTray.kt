@@ -201,7 +201,8 @@ fun StoryStickerTray(
     ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = Color.Black, contentColor = Color.White) {
         // Link and Place slide in over the stickers like a pushed page, never a cut.
-        com.fariin.app.ui.components.SlidePages(page, depth = { if (it == null) 0 else 1 }) { shownPage ->
+        // Each page solid black (the sheet's colour): during the slide a see-through page showed the other through it.
+        com.fariin.app.ui.components.SlidePages(page, depth = { if (it == null) 0 else 1 }) { shownPage -> Box(Modifier.background(Color.Black)) {
         when (shownPage) {
         "link" -> Box(Modifier.fillMaxWidth().fillMaxHeight(0.8f)) { StoryLinkPage({ page = null }, onLink) }
         "place" -> Box(Modifier.fillMaxWidth().fillMaxHeight(0.8f)) { StoryPlacePage({ page = null }, onPlace) }
@@ -272,7 +273,7 @@ fun StoryStickerTray(
             }
         }
         }
-        }
+        } }
     }
 }
 
