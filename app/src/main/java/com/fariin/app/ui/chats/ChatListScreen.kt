@@ -673,17 +673,6 @@ fun ChatListScreen(
                                     // picking a filter selects All Chats, and nothing is ticked while a folder is chosen.
                                     filter = if (folder != null) -1 else filter,
                                     onFilter = { filter = it; com.fariin.app.data.ChatFoldersStore.select(com.fariin.app.data.ChatFolder.ALL.id) },
-                                    requests = state.requests.size,
-                                    // Off from the admin panel = no entry (iOS: owner 2026-10-18). Live:
-                                    // reading `revision` redraws this when the panel switch flips.
-                                    showRequests = run { com.fariin.app.data.MsgPolicy.revision; com.fariin.app.data.MsgPolicy.requestsOn(me) } || state.requests.isNotEmpty(),
-                                    onRequests = people.requests,
-                                    // The Chat Key page lives in Settings; the same link the Get Started card uses.
-                                    onChatKey = {
-                                        com.fariin.app.ui.settings.SettingsLink.request(com.fariin.app.ui.settings.PAGE_CHAT_KEY)
-                                        onSettings()
-                                    },
-                                    onArchive = { showArchive = true; filter = FILTER_ALL },
                                     onMarkAllRead = {
                                         val list = state.chats.filter { !it.isBlockedByMe(me) && it.hasUnreadMark(me) }
                                         scope.launch {
@@ -1414,11 +1403,11 @@ private fun SearchBar(query: String, onQuery: (String) -> Unit, onClose: () -> U
 @Composable
 private fun OverflowMenu(
     anchor: com.fariin.app.ui.components.GlassMenuAnchor, onOpen: (List<com.fariin.app.ui.components.GlassMenuItem>) -> Unit,
-    filter: Int, onFilter: (Int) -> Unit, requests: Int, showRequests: Boolean, onRequests: () -> Unit, onChatKey: () -> Unit, onArchive: () -> Unit,
+    filter: Int, onFilter: (Int) -> Unit,
     onMarkAllRead: () -> Unit, onSelect: () -> Unit, onNewGroup: () -> Unit, onNewChannel: () -> Unit, onFindChannels: () -> Unit, onSettings: () -> Unit,
 ) {
-    // iOS's own set, in its order: the filters (the chosen one ticked), then Message Requests, Chat Key,
-    // Archive, then Mark All Read; New Group / Channel live under the pen, Settings is a tab.
+    // Select, Mark All Read, then the filters (the chosen one ticked); New Group / Channel live under
+    // the pen, Settings is a tab.
     fun item(text: String, icon: Int, checked: Boolean = false, divider: Boolean = false, onClick: () -> Unit) = icon to
         { p: androidx.compose.ui.graphics.painter.Painter -> com.fariin.app.ui.components.GlassMenuItem(text, p, divider = divider, checked = checked, onClick = onClick) }
     // Owner 2026-11-09 (iOS Chats bar, the Android way): Select chats and Mark All Read first, then
@@ -1437,11 +1426,8 @@ private fun OverflowMenu(
         if (folders.active) item(if (folders.tabsHidden) "Show Folder Tabs" else "Hide Folder Tabs", R.drawable.ic_story_folder) {
             folders.hideTabs(!folders.tabsHidden)
         } else null,
-        // Message Requests switched off in the admin panel: no entry (unless something still waits).
-        if (showRequests) item(if (requests > 0) "Message Requests ($requests)" else "Message Requests", R.drawable.ic_message_request, divider = true, onClick = onRequests) else null,
-        // Hidden with the Chat Key itself (admin panel chatKeyVisible, iOS MainShell).
-        if (com.fariin.app.data.MsgPolicy.chatKeyVisible) item("Chat Key", R.drawable.ic_chat_key, divider = !showRequests, onClick = onChatKey) else null,
-        item("Archive", R.drawable.ic_archive, onClick = onArchive),
+        // Owner 2026-11-24, kept minimal: no Message Requests or Archive here (each has its own row at
+        // the top of the list whenever it holds something), no Chat Key (Settings > Privacy has it).
     )
     val painters = rows.map { androidx.compose.ui.res.painterResource(it.first) }
     FloatingIcon(ImageVector.cachedVector(R.drawable.ic_more_ios), contentDescription = "More",
