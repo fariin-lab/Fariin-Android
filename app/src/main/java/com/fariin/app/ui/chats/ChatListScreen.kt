@@ -1997,8 +1997,9 @@ private fun ActivityChatRow(s: com.fariin.app.data.ActivitySummary, muted: Boole
                 Text(com.fariin.app.data.ActivityRules.preview(s), style = MaterialTheme.typography.bodyMedium, color = c.secondary,
                     maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
-                if (s.unread > 0) Box(Modifier.padding(top = 1.dp).heightIn(min = 20.dp).clip(CircleShape).background(if (muted) c.secondary.copy(alpha = 0.6f) else c.blue)
-                    .padding(horizontal = 6.dp, vertical = 2.dp), contentAlignment = Alignment.Center) {
+                if (s.unread > 0) Box(Modifier.padding(top = 1.dp).height(20.dp).defaultMinSize(minWidth = 20.dp)
+                    .background(if (muted) c.secondary.copy(alpha = 0.6f) else c.blue, CircleShape)
+                    .padding(horizontal = 5.dp), contentAlignment = Alignment.Center) {
                     Text(if (s.unread > 99) "99+" else "${s.unread}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
                 }
             }

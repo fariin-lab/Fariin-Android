@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -592,8 +593,9 @@ fun OfficialRow(view: OfficialChannel.View, onOpen: () -> Unit,
                     maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
                 if (unread > 0) {
-                    Box(Modifier.padding(top = 1.dp).heightIn(min = 20.dp).clip(CircleShape)
-                        .background(if (muted) c.secondary else c.accent).padding(horizontal = 6.dp, vertical = 2.dp),
+                    // Same badge as every chat row: a 20 dp circle for one digit, a capsule for more.
+                    Box(Modifier.padding(top = 1.dp).height(20.dp).defaultMinSize(minWidth = 20.dp)
+                        .background(if (muted) c.secondary else c.accent, CircleShape).padding(horizontal = 5.dp),
                         contentAlignment = Alignment.Center) {
                         Text(if (unread > 99) "99+" else "$unread", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.onAccent, maxLines = 1)
                     }
