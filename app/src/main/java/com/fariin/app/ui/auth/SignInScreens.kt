@@ -1,5 +1,6 @@
 package com.fariin.app.ui.auth
 
+import androidx.compose.animation.togetherWith
 import com.fariin.app.ui.components.GlassDropdown
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.fariin.app.ui.components.cachedVector
@@ -141,7 +142,7 @@ fun SignInFlow(auth: AuthRepository) {
 internal fun AuthPages(auth: AuthRepository, start: AuthPage) {
     var stack by rememberSaveable(stateSaver = PageStackSaver) { mutableStateOf(listOf(start)) }
     val holder = rememberSaveableStateHolder()
-    val page = stack.last()
+
     BackHandler(enabled = stack.size > 1) { stack = stack.dropLast(1) }
     val push: (AuthPage) -> Unit = { stack = stack + it }
     val pop: () -> Unit = { stack = stack.dropLast(1) }
@@ -156,7 +157,23 @@ internal fun AuthPages(auth: AuthRepository, start: AuthPage) {
         if (isLocalBackend(ctx)) return@LaunchedEffect
         try { Passkeys.signIn(act, auth, immediateOnly = true) } catch (_: Exception) {}
     }
-    holder.SaveableStateProvider("${stack.size}:${pageKey(page)}") {
+    // The same page motion as the rest of the app: a new page slides in from the right over the
+    // old one (which drifts left); Back slides it off to the right. A plain swap felt like a cut.
+    androidx.compose.animation.AnimatedContent(
+        targetState = stack,
+        transitionSpec = {
+            if (targetState.size >= initialState.size)
+                (com.fariin.app.ui.components.Motion.pageIn() togetherWith com.fariin.app.ui.components.Motion.pageUnder())
+                    .apply { targetContentZIndex = targetState.size.toFloat() }
+            else
+                (com.fariin.app.ui.components.Motion.pageBackUnder() togetherWith com.fariin.app.ui.components.Motion.pageOut())
+                    .apply { targetContentZIndex = targetState.size.toFloat() }
+        },
+        contentKey = { s -> "${s.size}:${pageKey(s.last())}" },
+        label = "authPages",
+    ) { shown ->
+    val page = shown.last()
+    holder.SaveableStateProvider("${shown.size}:${pageKey(page)}") {
         Box(Modifier.fillMaxSize().background(Fariin.colors.bg).statusBarsPadding().navigationBarsPadding()) {
             when (page) {
                 AuthPage.Welcome -> WelcomePage(
@@ -180,6 +197,7 @@ internal fun AuthPages(auth: AuthRepository, start: AuthPage) {
                 )
             }
         }
+    }
     }
 }
 
