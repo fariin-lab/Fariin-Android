@@ -22,6 +22,8 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.runningFold
+import kotlinx.coroutines.flow.transformLatest
+import kotlinx.coroutines.channels.awaitClose
 
 /** What the Chats tab draws. */
 data class ChatsUiState(
@@ -67,6 +69,30 @@ class ChatsViewModel(
         kotlinx.coroutines.flow.flow { kotlinx.coroutines.delay(3_000); emit(true) })
         .runningFold(false) { was, now -> was || now }
         .combine(com.fariin.app.data.BlockList.state.map { it.entries.keys }.distinctUntilChanged()) { ok, _ -> ok }
+
+    /** True once the rows that load on their own have come in too: the channels I follow and the
+     *  official Fariin chat. Up to 2.5 s, so a slow or offline start still draws. Without it, after
+     *  a fresh sign-in those two rows landed a moment late and pushed the chats down (owner 2026-11-24). */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private val sideRowsGate = kotlinx.coroutines.flow.combine(
+        com.fariin.app.channel.ChannelFollows.listed, com.fariin.app.channel.ChannelFollows.entries,
+        com.fariin.app.channel.ChannelFollows.docs, com.fariin.app.data.OfficialChannel.view,
+    ) { l, e, d, v -> l && (e.isEmpty() || d.isNotEmpty()) && (v.loaded || v.latest != null) }
+        .combine(signedInFlow()) { ready, inNow -> ready to inNow }
+        .distinctUntilChanged()
+        // Ready opens it; otherwise the wait starts at each sign-in (this list outlives a log out).
+        .transformLatest { (ready, inNow) ->
+            if (ready) emit(true) else { emit(false); if (inNow) { kotlinx.coroutines.delay(2_500); emit(true) } }
+        }
+        .distinctUntilChanged()
+
+    /** True while this list's own account is signed in. */
+    private fun signedInFlow() = kotlinx.coroutines.flow.callbackFlow {
+        val auth = com.fariin.app.Fb.auth
+        val l = com.google.firebase.auth.FirebaseAuth.AuthStateListener { a -> trySend(a.currentUser?.uid == me) }
+        auth.addAuthStateListener(l)
+        awaitClose { auth.removeAuthStateListener(l) }
+    }.distinctUntilChanged()
 
     /** Bumped by Retry on the list's error page: a fresh listener, not a timer. */
     private val reloadTick = kotlinx.coroutines.flow.MutableStateFlow(0)
@@ -115,6 +141,7 @@ class ChatsViewModel(
         // The rows follow my block list, and wait for it to load (up to 3 s, so an offline start
         // still draws): a blocked person's preview and badge flashed after a fresh sign-in (F-61).
         .combine(blockGate) { s, ok -> if (ok || s is ConversationsRepository.State.Failed) s else null }
+        .combine(sideRowsGate) { s, ok -> if (ok || s !is ConversationsRepository.State.Loaded) s else null }
         .filterNotNull()
         .onEach { s ->
             if (s is ConversationsRepository.State.Loaded) {

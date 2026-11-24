@@ -45,6 +45,9 @@ object ChannelFollows {
     /** Followed channels' documents as conversations (my read count lives in `entries`). */
     private val _docs = MutableStateFlow<Map<String, Map<String, Any?>>>(emptyMap())
     val docs: StateFlow<Map<String, Map<String, Any?>>> = _docs
+    /** True once my follow list is known (from the server, or a non-empty copy on this phone). */
+    private val _listed = MutableStateFlow(false)
+    val listed: StateFlow<Boolean> = _listed
     /** cid -> mid -> my emoji, from my entries' `rx` and channelRx (merged). */
     private val _rx = MutableStateFlow<Map<String, Map<String, String>>>(emptyMap())
     val rx: StateFlow<Map<String, Map<String, String>>> = _rx
@@ -101,6 +104,7 @@ object ChannelFollows {
             pinned = m["pinned"] as? Boolean ?: false, archived = m["archived"] as? Boolean ?: false,
             at = (m["at"] as? Number)?.toDouble() ?: 0.0) }
         _docs.value = d.toMap()
+        _listed.value = true
     }
 
     private fun saveToDisk() {
@@ -136,6 +140,8 @@ object ChannelFollows {
                     )
                 }
                 _entries.value = next
+                // An empty answer from this phone's cache right after a sign-in proves nothing.
+                if (!snap.metadata.isFromCache || next.isNotEmpty()) _listed.value = true
                 if (!snap.metadata.isFromCache) saveToDisk()
                 followRx = rx
                 mergeRx()
@@ -161,6 +167,7 @@ object ChannelFollows {
         fetchedOnce.clear()
         com.fariin.app.perf.ListenThread.exec.execute { inbox.clear(); inboxFromServer = false; throttle.reset() }
         _entries.value = emptyMap(); _docs.value = emptyMap(); _rx.value = emptyMap(); _pending.value = emptyMap()
+        _listed.value = false
         // The next account never sees this one's served counts or follower-count guesses.
         _served.value = emptyMap(); _bias.value = emptyMap()
         synchronized(servedToken) { servedToken.clear() }
