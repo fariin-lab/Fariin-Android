@@ -270,6 +270,16 @@ fun ThreadScreen(
     /** Several files at once, in order (Add files > Photos). */
     onSendFiles: (List<Uri>, Message?) -> Unit = { l, re -> l.forEachIndexed { i, u -> onSendFile(u, if (i == 0) re else null) } },
 ) {
+    // A chat already listed as a channel draws its posts only once the channel's details are here (at
+    // most 1.5 s), its post cards skeleton until then. Drawn before, every post came first as a plain
+    // group bubble (other width, no share button, other style) and all switched a moment later (owner's
+    // Pixel 2026-11-24, Fariin News from Settings).
+    val listedChannel = remember(ui.cid) { com.fariin.app.data.CryptoHub.listedConversation(ui.cid)?.isChannel == true }
+    var channelWaitOver by remember(ui.cid) { mutableStateOf(false) }
+    val channelWait = listedChannel && ui.channel == null && !channelWaitOver
+    if (channelWait) LaunchedEffect(ui.cid) { kotlinx.coroutines.delay(1_500); channelWaitOver = true }
+    @Suppress("NAME_SHADOWING")
+    val ui = if (channelWait) ui.copy(messages = emptyList(), loaded = false) else ui
     val ctx = androidx.compose.ui.platform.LocalContext.current
     // Not ready on the first frame (no saved rows read yet): the slide waits for the messages, at most
     // 200 ms (PageMotion.hold), so the chat never slides in as bare wallpaper and fills at the end
