@@ -8,8 +8,9 @@ package com.fariin.app.data
  * 2026-11-23).
  */
 object KeptChatRules {
-    /** A page change still "moving" after this long is stuck and is landed (hold 200 + slide 320 ms). */
-    const val STUCK_MS = 1500L
+    /** A page change still "moving" after this long is stuck and is landed (hold 200 + slide 320 ms; a
+     *  weak phone stretches a slide that is really playing well past 1.5 s, so 3 s, not less). */
+    const val STUCK_MS = 3000L
 
     /** Whether a held chat is composed at all. */
     fun composed(inStack: Boolean, moving: Boolean): Boolean = inStack || moving
