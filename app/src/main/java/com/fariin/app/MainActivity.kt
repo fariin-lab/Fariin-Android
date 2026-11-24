@@ -73,6 +73,7 @@ import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.currentBackStackEntryAsState
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import androidx.navigation.compose.LocalOwnersProvider
 import com.fariin.app.device.DeviceRecord
@@ -498,7 +499,19 @@ class MainActivity : ComponentActivity() {
                         .hide(androidx.core.view.WindowInsetsCompat.Type.ime())
                 }
             }
-            LaunchedEffect(top?.id) { pm.play() }
+            // Keyed on PageMotion's own top too: PageMotion is one object for the process, so when
+            // anything else wrote it this composition begins again with the same top id, and an
+            // effect keyed on that id alone never played it, leaving the change at 0 for good: the
+            // closed chat stood on top, every tap died and Back was held (tester after sign-in,
+            // 2026-11-23).
+            LaunchedEffect(top?.id, pm.top) { pm.play() }
+            // A change still "moving" long after the longest real one (hold + slide, about half a
+            // second) is landed: a stuck one takes no touch and holds every Back press.
+            LaunchedEffect(Unit) {
+                androidx.compose.runtime.snapshotFlow { pm.moving }.collectLatest { m ->
+                    if (m) { kotlinx.coroutines.delay(com.fariin.app.data.KeptChatRules.STUCK_MS); pm.settle() }
+                }
+            }
             // The shell's back handlers live on their own dispatcher, joined to the activity's only
             // while the list is on top. It used to be handed the activity or an inert owner as a page
             // opened and closed: a new CompositionLocal value each time, which rebuilt the whole chat
@@ -514,7 +527,8 @@ class MainActivity : ComponentActivity() {
             val keptChats = remember { KeptChats(this@MainActivity) }
             val stack by nav.currentBackStack.collectAsState()
             keptChats.sync(stack)
-            LaunchedEffect(top?.id) {
+            // Also when the stack changes with no page change playing (a pop with no motion).
+            LaunchedEffect(top?.id, stack) {
                 androidx.compose.runtime.snapshotFlow { pm.moving }.first { !it }
                 keptChats.purge(nav.currentBackStack.value)
             }
@@ -590,7 +604,7 @@ class MainActivity : ComponentActivity() {
             // page), as the list is kept above: the nav host took it apart once such a page landed and
             // built it again from nothing on Back, the heaviest frame of that trip (480 ms on the cheap
             // emulator, 2026-11-17). Its nav host page is a see-through stand-in meanwhile.
-            KeptChatLayer(keptChats, top?.id) { cid -> ThreadRoute(cid, me, crypto, onBack = { nav.popBackStack() }) }
+            KeptChatLayer(keptChats, top?.id, stack) { cid -> ThreadRoute(cid, me, crypto, onBack = { nav.popBackStack() }) }
             NavHost(nav, startDestination = "main",
                 enterTransition = com.fariin.app.ui.components.Motion.enter(), exitTransition = com.fariin.app.ui.components.Motion.exit(),
                 popEnterTransition = com.fariin.app.ui.components.Motion.popEnter(), popExitTransition = com.fariin.app.ui.components.Motion.popExit()) {
@@ -1080,11 +1094,16 @@ private class PageBack(private val activity: ComponentActivity) : OnBackPressedD
 }
 
 @Composable
-private fun KeptChatLayer(kept: KeptChats, topId: String?, chat: @Composable (String) -> Unit) {
+private fun KeptChatLayer(kept: KeptChats, topId: String?, stack: List<androidx.navigation.NavBackStackEntry>,
+                          chat: @Composable (String) -> Unit) {
     val saveable = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     androidx.compose.runtime.SideEffect { kept.dropSaved = { saveable.removeState(it) } }
+    val ids = stack.mapTo(HashSet()) { it.id }
+    val moving = com.fariin.app.ui.components.PageMotion.moving
     for (held in kept.list) androidx.compose.runtime.key(held.entry.id) {
-        KeptChat(held, topId, saveable, chat)
+        // A closed chat is drawn only while its slide away plays: still, it is gone (never a chat
+        // drawn over the list, eating its taps, with the stack already back at "main").
+        if (com.fariin.app.data.KeptChatRules.composed(held.entry.id in ids, moving)) KeptChat(held, topId, saveable, chat)
     }
 }
 
