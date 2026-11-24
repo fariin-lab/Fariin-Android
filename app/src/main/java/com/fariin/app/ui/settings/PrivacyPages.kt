@@ -604,7 +604,8 @@ internal fun ChatKeyPage(pop: () -> Unit) {
                 }
             }
     }
-    if (ownKey) OwnChatKeyPage(pop = { ownKey = false }) { saved -> pin = saved; set = true; ownKey = false }
+    // Choose Your Own Key slides in over the page like a pushed page, never a cut.
+    com.fariin.app.ui.components.SlideOver(ownKey) { OwnChatKeyPage(pop = { ownKey = false }) { saved -> pin = saved; set = true; ownKey = false } }
     }
     if (plusPage) com.fariin.app.ui.settings.PlusGateSheet("chatKey") { plusPage = false }
     if (intro) ChatKeyIntroSheet(onDismiss = { intro = false }) { run { makeKey(); syncMessagesMode(true) } }

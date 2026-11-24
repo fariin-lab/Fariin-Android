@@ -132,8 +132,10 @@ fun SignInFlow(auth: AuthRepository) {
     val ctx = LocalContext.current
     var agreed by remember { mutableStateOf(FirstRun.agreedAt(ctx) > 0) }
     Box(Modifier.fillMaxSize().background(Fariin.colors.bg)) {
-        if (!agreed) AgreementPage { FirstRun.agree(ctx); agreed = true }
-        else AuthPages(auth, start = if (SavedAccounts.all(ctx).isEmpty()) AuthPage.Welcome else AuthPage.Method(AuthMode.Login))
+        com.fariin.app.ui.components.SlidePages(agreed, depth = { if (it) 1 else 0 }) { done ->
+            if (!done) AgreementPage { FirstRun.agree(ctx); agreed = true }
+            else AuthPages(auth, start = if (SavedAccounts.all(ctx).isEmpty()) AuthPage.Welcome else AuthPage.Method(AuthMode.Login))
+        }
     }
 }
 

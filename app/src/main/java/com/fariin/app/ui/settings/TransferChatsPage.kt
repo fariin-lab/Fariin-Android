@@ -93,7 +93,9 @@ internal fun TransferChatsPage(pop: () -> Unit, startScanning: Boolean = false) 
     fun reset() { job?.cancel(); job = null; qr = null; ready = 0f; done = false; line = null; got = 0 to 0; mode = "" }
     BackHandler(enabled = mode != "") { reset() }
 
-    when (mode) {
+    // Each step slides in like a pushed page, never a cut; back to the start slides back.
+    com.fariin.app.ui.components.SlidePages(mode, depth = { if (it == "") 0 else 1 }) { shownMode ->
+    when (shownMode) {
         "send" -> StepsPage("Moving your chats", onCancel = { reset() }) {
             LaunchedEffect(Unit) {
                 job = scope.launch {
@@ -185,6 +187,7 @@ internal fun TransferChatsPage(pop: () -> Unit, startScanning: Boolean = false) 
                     }.padding(horizontal = 16.dp, vertical = 10.dp))
             }
         }
+    }
     }
 }
 

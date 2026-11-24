@@ -429,6 +429,8 @@ fun NewChannelScreen(me: String, onBack: () -> Unit, onDone: (String) -> Unit) {
     // Once the channel is made, Channel Type has no way back: only Done leaves, into the channel
     // (iOS hides Back there and blocks the swipe). The phone's Back left it half set up.
     androidx.activity.compose.BackHandler(enabled = step == 2) {}
+    // Each step slides in like a pushed page, never a cut.
+    com.fariin.app.ui.components.InnerPageDepth(step)
     when (step) {
         0 -> Intro(onBack) { step = 1 }
         1 -> Details(name, about, creating, error, photo, picker, onRemovePhoto = { photo = null },

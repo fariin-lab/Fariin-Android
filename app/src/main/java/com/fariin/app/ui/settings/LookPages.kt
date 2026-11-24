@@ -256,8 +256,11 @@ fun ChatWallpaperPicker(cid: String, shared: Boolean = false, channel: Boolean =
     // as taken by someone else, so the presets only moved on a quick flick.
     Box(Modifier.fillMaxSize().background(Fariin.colors.bgSecondary)
         .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } }) {
-        if (colors) WallpaperColorPage({ colors = false }, cid, done = onClose, shared = shared)
-        else ChatWallpaperPage({ colors = true }, onClose, cid, shared, channel)
+        // Wallpaper Color slides in over Chat Wallpaper like a pushed page, never a cut.
+        com.fariin.app.ui.components.SlidePages(colors, depth = { if (it) 1 else 0 }) { col ->
+            if (col) WallpaperColorPage({ colors = false }, cid, done = onClose, shared = shared)
+            else ChatWallpaperPage({ colors = true }, onClose, cid, shared, channel)
+        }
     }
 }
 

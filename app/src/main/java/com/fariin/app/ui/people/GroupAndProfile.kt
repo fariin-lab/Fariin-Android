@@ -731,6 +731,8 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
         // The capsule is the action's own (TextAction floats), so no second circle around it.
         com.fariin.app.ui.components.FloatingTopBar(t, onBack = back, container = c.bgSecondary) { action() }
     }
+    // Each step slides in like a pushed page (Add Members, New Group, Permissions), never a cut.
+    com.fariin.app.ui.components.InnerPageDepth(step - 1)
     // Every step's bar is glass over its page (GlassBarPage); each step lays out below it.
     com.fariin.app.ui.components.GlassColumnPage(false, Modifier.background(c.bgSecondary), bar = {
         Box(Modifier.fillMaxWidth().background(c.bgSecondary).statusBarsPadding()) {
