@@ -212,11 +212,14 @@ fun ChatListScreen(
     val swapLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
     val swap = remember { ArchiveSwap() }
     val setArchive: (Boolean) -> Unit = { open ->
-        if (open != showArchive) scope.launch {
+        // One switch at a time while its picture is taken: a quick second tap would photograph the new page.
+        if (open != showArchive && !swap.capturing) scope.launch {
+            swap.capturing = true
             val token = ++swap.token
             val shot = if (com.fariin.app.ui.components.Motion.on) runCatching { swapLayer.toImageBitmap() }.getOrNull() else null
             swap.forward = open; swap.p.snapTo(0f); swap.frozen = shot
             showArchive = open
+            swap.capturing = false
             try {
                 if (shot != null) swap.p.animateTo(1f, androidx.compose.animation.core.tween(
                     com.fariin.app.ui.components.Motion.ms(if (open) com.fariin.app.ui.components.Motion.PAGE_MS else com.fariin.app.ui.components.Motion.PAGE_BACK_MS),
@@ -2071,5 +2074,6 @@ private class ArchiveSwap {
     var frozen by mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null)
     var forward = true
     var token = 0
+    var capturing = false
     val p = androidx.compose.animation.core.Animatable(1f)
 }

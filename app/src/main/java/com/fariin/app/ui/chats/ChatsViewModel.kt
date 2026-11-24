@@ -78,7 +78,7 @@ class ChatsViewModel(
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     private val sideRowsGate = signedInFlow().transformLatest { inNow ->
         if (!inNow) { emit(false); return@transformLatest }
-        val saved = runCatching { !com.fariin.app.local.LocalCache.peekChats(me).isNullOrEmpty() }.getOrDefault(false)
+        val saved = runCatching { com.fariin.app.local.LocalCache.loadChats(me).isNotEmpty() }.getOrDefault(false)
         if (!saved) {
             emit(false)
             kotlinx.coroutines.withTimeoutOrNull(1_500) {
