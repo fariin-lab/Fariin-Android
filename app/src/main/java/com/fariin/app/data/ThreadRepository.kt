@@ -226,8 +226,11 @@ class ThreadRepository(
             // only until the database has this chat.
             val fromDb = ThreadRowsPrefetch.take(me, cid)
                 ?: com.fariin.app.local.LocalDb.newest(me, cid, com.fariin.app.local.LocalCache.THREAD_CAP)
+            // Messages this phone can never open are left out here too, as rebuild leaves them out:
+            // they drew as locks for a beat, then the real rows replaced them (owner 2026-11-24, kreak).
+            val keysSince = runCatching { crypto.keysSince() }.getOrNull()
             val saved = (fromDb.ifEmpty { LocalCache.loadThread(me, cid) })
-                .filter { !HiddenMessages.isHidden(it.id) && !Disappearing.isExpired(it, now) }
+                .filter { !HiddenMessages.isHidden(it.id) && !Disappearing.isExpired(it, now) && !wontOpenHere(it, keysSince) }
             // A forward just sent here is in the first frame too, under the saved rows.
             val echoes = ForwardEchoes.of(cid).filter { e -> saved.none { it.rowId == e.rowId } }
             savedRows = saved.associate { it.id to it.createdAtMillis.toLong() }
