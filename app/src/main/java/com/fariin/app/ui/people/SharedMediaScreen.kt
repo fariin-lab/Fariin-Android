@@ -122,8 +122,20 @@ internal fun rememberSharedMedia(cid: String, me: String, clearedMs: Double = 0.
         if (fresh == null && local.isEmpty()) { delay(3_000); fresh = source.fetch() }
         value = (fresh ?: value.first) to true
     }
-    return remember(raw, hidden, clearedMs) {
-        val kept = if (clearedMs > 0) raw.first.filter { it.createdAtMillis > clearedMs } else raw.first
+    val keysEpoch by CryptoHub.keysEpoch.collectAsState()
+    return remember(raw, hidden, clearedMs, keysEpoch) {
+        // Photos and videos this phone can never open (sealed before its keys were made) are left
+        // out, as the chat leaves them out: they were grey tiles (owner 2026-11-24, kreak's media).
+        val crypto = CryptoHub.get(ctx.applicationContext)
+        val since = runCatching { crypto.keysSince() }.getOrNull()
+        fun wontOpen(m: Message): Boolean {
+            if (m.deleted || since == null || !m.hasServerTime || m.createdAtMillis >= since) return false
+            if (m.text == com.fariin.app.crypto.Wire.LOCKED) return true
+            if (m.enc != null && crypto.fileWillNotOpen(cid, m.enc)) return true
+            return m.album.isNotEmpty() && m.album.all { crypto.fileWillNotOpen(cid, it.enc) }
+        }
+        val kept = (if (clearedMs > 0) raw.first.filter { it.createdAtMillis > clearedMs } else raw.first)
+            .filter { !wontOpen(it) }
         SharedMediaState(SharedMedia.lists(kept, System.currentTimeMillis().toDouble()) { it in hidden }, raw.second)
     }
 }
