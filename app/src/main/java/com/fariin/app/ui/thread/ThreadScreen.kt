@@ -2579,7 +2579,9 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             }
             m.replyTo?.takeIf { !m.deleted && !it.isStatus }?.let { ReplyQuote(it, ui, chromeMe) }
             if (kind == Message.MediaKind.VOICE) {
-                VoiceBody(m, ui.cid, isMe, maxW - 26.dp) { Meta(m, tick, isMe, is24h) }
+                // At most 240 dp of play button and wave (owner 2026-11-25: the note ran the full bubble
+                // width and read as bigger than the reference app's; theirs gives a face part of it).
+                VoiceBody(m, ui.cid, isMe, minOf(maxW - 26.dp, 240.dp)) { Meta(m, tick, isMe, is24h) }
                 return@Column
             }
             if (kind == Message.MediaKind.FILE) {
