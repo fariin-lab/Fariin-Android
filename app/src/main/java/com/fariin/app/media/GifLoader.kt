@@ -38,6 +38,17 @@ object GifLoader {
                     decoderFactory(coil3.decode.BitmapFactoryDecoder.Factory())
             }.build()
 
+    /** Giphy's one-frame copy of a GIF (same name + "_s"): about a sixteenth of the whole file, which
+     *  a chat bubble's still used to wait for (owner 2026-11-24: a GIF showed late on opening a chat).
+     *  Null for any other address. */
+    fun smallStillOf(url: String?): String? {
+        val u = url ?: return null
+        if (!u.contains("giphy.com/media", ignoreCase = true)) return null
+        val path = u.substringBefore('?')
+        if (!path.endsWith(".gif", ignoreCase = true) || path.endsWith("_s.gif", ignoreCase = true)) return null
+        return path.dropLast(4) + "_s.gif"
+    }
+
     /** The first frames of the GIF panel's last trending list, made ahead (a chat opened). */
     fun warmStills(c: Context) {
         val list = com.fariin.app.data.Giphy.cached(c, "") ?: return

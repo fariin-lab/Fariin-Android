@@ -284,8 +284,14 @@ internal fun GifRow(m: Message, shape: Shape, fill: Color, hasHeader: Boolean, h
                 com.fariin.app.perf.LowPhoneMedia.held(PowerSaving.state.value.deviceClass, false, com.fariin.app.ui.components.WallpaperHold.scrolling)
             } }
             GifMp4(url, autoplay() && landed, Modifier.fillMaxSize(), paused = scrollHeld) {
-                if (hasMp4) AsyncImage(com.fariin.app.media.GifLoader.still(LocalContext.current, url ?: ""), contentDescription = "GIF",
-                    imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current), contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                if (hasMp4) {
+                    // Giphy's small one-frame copy first; the whole GIF only if that copy fails.
+                    var smallFailed by remember(url) { mutableStateOf(false) }
+                    val stillUrl = (if (smallFailed) null else com.fariin.app.media.GifLoader.smallStillOf(url)) ?: url ?: ""
+                    AsyncImage(com.fariin.app.media.GifLoader.still(LocalContext.current, stillUrl), contentDescription = "GIF",
+                        imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current), contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
+                        onError = { if (stillUrl != url) smallFailed = true })
+                }
                 else AsyncImage(animatedRequest(url, autoplay()), contentDescription = "GIF", imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current),
                     contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             }
