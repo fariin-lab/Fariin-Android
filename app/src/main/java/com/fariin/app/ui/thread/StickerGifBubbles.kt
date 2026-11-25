@@ -288,9 +288,9 @@ internal fun GifRow(m: Message, shape: Shape, fill: Color, hasHeader: Boolean, h
                     // Giphy's small one-frame copy first; the whole GIF only if that copy fails.
                     var smallFailed by remember(url) { mutableStateOf(false) }
                     val stillUrl = (if (smallFailed) null else com.fariin.app.media.GifLoader.smallStillOf(url)) ?: url ?: ""
-                    AsyncImage(com.fariin.app.media.GifLoader.still(LocalContext.current, stillUrl), contentDescription = "GIF",
+                    AsyncImage(com.fariin.app.media.GifLoader.still(LocalContext.current, stillUrl, shownFirst = url), contentDescription = "GIF",
                         imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current), contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
-                        onError = { if (stillUrl != url) smallFailed = true })
+                        onError = { if (stillUrl != url) { com.fariin.app.media.GifLoader.smallStillMissing(stillUrl); smallFailed = true } })
                 }
                 else AsyncImage(animatedRequest(url, autoplay()), contentDescription = "GIF", imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current),
                     contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())

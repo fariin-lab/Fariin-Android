@@ -26,9 +26,12 @@ object GifLoader {
 
     /** A GIF's first frame as a still picture, a third of the screen wide: memory-cached, unlike
      *  the animated decode, so a grid shown again draws at once. */
-    fun still(c: Context, url: String): coil3.request.ImageRequest =
+    fun still(c: Context, url: String, shownFirst: String? = null): coil3.request.ImageRequest =
         coil3.request.ImageRequest.Builder(c.applicationContext).data(url)
             .size(STILL_PX).memoryCacheKey("still:$url").apply {
+                // The same GIF's still already in memory under another address (the panel's whole-GIF
+                // still), drawn while this one loads: a GIF just sent shows at once.
+                if (shownFirst != null && shownFirst != url) placeholderMemoryCacheKey("still:$shownFirst")
                 // coil-gif adds its animated decoders to every loader by itself, so this "still" moved
                 // too: on the low-end emulator (GIF autoplay off) four GIF bubbles each decoded a frame
                 // on the main thread and sent it to the GPU every frame (2026-11-15). See
@@ -41,12 +44,16 @@ object GifLoader {
     /** Giphy's one-frame copy of a GIF (same name + "_s"): about a sixteenth of the whole file, which
      *  a chat bubble's still used to wait for (owner 2026-11-24: a GIF showed late on opening a chat).
      *  Null for any other address. */
+    /** Small copies Giphy did not have: asked for once per run, then the whole GIF straight away. */
+    private val noSmall = java.util.Collections.synchronizedSet(HashSet<String>())
+    fun smallStillMissing(small: String) { noSmall.add(small) }
+
     fun smallStillOf(url: String?): String? {
         val u = url ?: return null
         if (!u.contains("giphy.com/media", ignoreCase = true)) return null
         val path = u.substringBefore('?')
         if (!path.endsWith(".gif", ignoreCase = true) || path.endsWith("_s.gif", ignoreCase = true)) return null
-        return path.dropLast(4) + "_s.gif"
+        return (path.dropLast(4) + "_s.gif").takeIf { it !in noSmall }
     }
 
     /** The first frames of the GIF panel's last trending list, made ahead (a chat opened). */

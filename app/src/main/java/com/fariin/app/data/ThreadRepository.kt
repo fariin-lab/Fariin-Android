@@ -229,16 +229,18 @@ class ThreadRepository(
             // Messages this phone can never open are left out here too, as rebuild leaves them out:
             // they drew as locks for a beat, then the real rows replaced them (owner 2026-11-24, kreak).
             val keysSince = runCatching { crypto.keysSince() }.getOrNull()
-            val saved = (fromDb.ifEmpty { LocalCache.loadThread(me, cid) })
-                .filter { !HiddenMessages.isHidden(it.id) && !Disappearing.isExpired(it, now) && !wontOpenHere(it, keysSince) }
+            val kept = (fromDb.ifEmpty { LocalCache.loadThread(me, cid) })
+                .filter { !HiddenMessages.isHidden(it.id) && !Disappearing.isExpired(it, now) }
+            val saved = kept.filter { !wontOpenHere(it, keysSince) }
             // A forward just sent here is in the first frame too, under the saved rows.
             val echoes = ForwardEchoes.of(cid).filter { e -> saved.none { it.rowId == e.rowId } }
             savedRows = saved.associate { it.id to it.createdAtMillis.toLong() }
             // The "messages from before you signed in" line as the last open drew it (owner's Oppo
             // 2026-11-20: it came a beat after the chat opened, once the server answered).
-            val keysLine = KeysNoticeMemo.get(me, cid)?.takeIf { (at, _) -> saved.any { it.createdAtMillis <= at } || saved.isEmpty() }
+            val keysLine = KeysNoticeMemo.get(me, cid)?.takeIf { (at, _) -> kept.any { it.createdAtMillis <= at } || kept.isEmpty() }
                 ?.let { (at, text) -> Message(id = KEYS_NOTICE_ID, authorId = "", text = text, type = "system", createdAtMillis = at, hasServerTime = true) }
-            if (saved.isNotEmpty() || echoes.isNotEmpty()) {
+            // The line alone still draws when every saved row was one this phone can't open: never an empty first frame.
+            if (saved.isNotEmpty() || echoes.isNotEmpty() || keysLine != null) {
                 // Owner's Pixel 2026-11-09: a first open after launch slid in empty and the rows came
                 // a beat later, a second open was full at once. The saved rows now draw on the first
                 // frame always (as iOS ThreadMessageCache paints before the push); rows the list knows
