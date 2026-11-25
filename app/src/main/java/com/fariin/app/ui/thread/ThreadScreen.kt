@@ -1510,23 +1510,18 @@ private fun ThreadContent(
                 val due = com.fariin.app.data.SharedWallpapers.noteDue(wpCtx, ui.cid, ui.me)
                 var noteAt by remember(ui.cid) { mutableStateOf<Long?>(null) }
                 LaunchedEffect(due?.at) { if (due != null) { noteAt = due.at; com.fariin.app.data.SharedWallpapers.noteSeen(wpCtx, ui.cid, due.at) } }
-                if (noteAt != null) Box(Modifier.align(Alignment.Center).zIndex(3f).padding(horizontal = 40.dp)
-                    .clip(RoundedCornerShape(20.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 18.dp, vertical = 14.dp)) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("${ui.title} set a wallpaper for both of you", fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
-                            color = Color.White, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                        Spacer(Modifier.height(10.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Use My Own Wallpaper", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
-                                modifier = Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.22f))
-                                    .clickable { com.fariin.app.data.SharedWallpapers.optOut(wpCtx, ui.cid); noteAt = null }
-                                    .padding(horizontal = 14.dp, vertical = 8.dp))
-                            Text("OK", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
-                                modifier = Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.22f))
-                                    .clickable { noteAt = null }.padding(horizontal = 14.dp, vertical = 8.dp))
-                        }
-                    }
-                }
+                // The house glass alert (owner 2026-11-24: the see-through card lay over a sticker and
+                // read as two things drawn on each other). Solid, stacked pills, like every confirm.
+                if (noteAt != null) com.fariin.app.ui.components.GlassAlert(
+                    onDismissRequest = { noteAt = null },
+                    title = "${ui.title} set a wallpaper for both of you",
+                    actions = listOf(
+                        com.fariin.app.ui.components.GlassAlertAction("OK") { noteAt = null },
+                        com.fariin.app.ui.components.GlassAlertAction("Use My Own Wallpaper") {
+                            com.fariin.app.data.SharedWallpapers.optOut(wpCtx, ui.cid); noteAt = null
+                        },
+                    ),
+                )
             }
             // Fariin Plus send effect over the chat; it has no touch handling, so taps go through.
             fxPlaying?.let { (id, k) -> Box(Modifier.matchParentSize().zIndex(2f)) { SendEffectOverlay(id, k) { fxPlaying = null } } }
