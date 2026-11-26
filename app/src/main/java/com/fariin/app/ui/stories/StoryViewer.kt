@@ -1361,13 +1361,13 @@ private fun StoryPage(
         DisposableEffect(story.id) {
             var job: kotlinx.coroutines.Job? = null
             var first = true
-            fun refresh() {
+            fun refresh(now: Boolean = false) {
                 job?.cancel()
                 val prewarm = first
                 first = false
                 job = storyScope.launch {
                     // Later ticks wait a moment, so a burst of new views is one read, not one each.
-                    if (!prewarm) kotlinx.coroutines.delay(1500)
+                    if (!prewarm && !now) kotlinx.coroutines.delay(1500)
                     service.viewSummary(story.id, who)?.let { summaries[story.id] = it }
                     // The viewers list once, so a swipe up shows the real rows from its first frame (iOS);
                     // the open sheet rereads it itself (never 500 rows on every new view).
@@ -1375,10 +1375,14 @@ private fun StoryPage(
                 }
             }
             refresh()
-            // The listener's first answer is the state the read above already fetches: taking it as a
-            // change cancelled that read and waited 1.5 s, so the views line always came late (owner 2026-11-25).
+            // The listener's first answer is the state the read above is fetching: taking it as a change
+            // cancelled that read and waited 1.5 s, so the views line always came late (owner 2026-11-25).
+            // While that read runs it is left alone; if it already ended without a count, read now.
             var heard = false
-            val reg = service.watchViews(story.id) { if (heard) refresh() else heard = true }
+            val reg = service.watchViews(story.id) {
+                if (heard) refresh()
+                else { heard = true; if (job?.isActive != true && summaries[story.id] == null) refresh(now = true) }
+            }
             onDispose { reg?.remove(); job?.cancel() }
         }
     }

@@ -136,7 +136,13 @@ internal fun rememberSharedMedia(cid: String, me: String, clearedMs: Double = 0.
         }
         val kept = (if (clearedMs > 0) raw.first.filter { it.createdAtMillis > clearedMs } else raw.first)
             .filter { !wontOpen(it) }
-        SharedMediaState(SharedMedia.lists(kept, System.currentTimeMillis().toDouble()) { it in hidden }, raw.second)
+        val lists = SharedMedia.lists(kept, System.currentTimeMillis().toDouble()) { it in hidden }
+        // An album with only some of its pictures sealed to an old key: those tiles are left out too.
+        val shown = lists.media.filter { item ->
+            !(item.id != item.messageId && since != null && item.createdAtMillis < since &&
+                (item.videoEnc ?: item.pictureEnc)?.let { crypto.fileWillNotOpen(cid, it) } == true)
+        }
+        SharedMediaState(lists.copy(media = shown), raw.second)
     }
 }
 
