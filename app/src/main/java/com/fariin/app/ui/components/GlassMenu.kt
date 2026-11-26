@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -130,7 +131,8 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
     var pressed by remember { mutableIntStateOf(-1) }
     val pill = remember { Animatable(0f) }
     val lean = remember { Animatable(0f) }
-    val menuW = with(density) { 260.dp.toPx() }
+    // As wide as its longest row (owner 2026-11-25: the reference's menu is thin, ours was a fixed 260).
+    val menuW = if (size.width > 0) size.width.toFloat() else with(density) { 200.dp.toPx() }
     val margin = with(density) { 16.dp.toPx() }
     var boxH by remember { mutableIntStateOf(0) }
     Box(Modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInWindow(); boxH = it.size.height }
@@ -171,7 +173,7 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
         ) else Modifier.background((if (c.dark) c.card else Color(0xFFF7F7F9)), shape)
         Column(
             Modifier.offset { IntOffset(left.roundToInt(), top.roundToInt()) }
-                .width(260.dp)
+                .width(androidx.compose.foundation.layout.IntrinsicSize.Max).widthIn(min = 180.dp, max = 260.dp)
                 .onGloballyPositioned { size = it.size }
                 .graphicsLayer {
                     val k = g
