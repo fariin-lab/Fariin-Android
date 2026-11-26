@@ -201,6 +201,7 @@ internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta:
                         else coil3.compose.AsyncImage(image, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                     }
                 }
+                QuoteViaLine(card, ink)
             } else if (image != null) {
                 // Owner's mockup (2026-11-07, both apps): a quoted post with a picture is one compact
                 // row: the picture on the left (42% of the inner width, 0.72 as tall, corners 14), the
@@ -220,6 +221,7 @@ internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta:
                         }
                     }
                 }
+                QuoteViaLine(card, ink)
             } else if (body.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 Text(body, fontSize = 14.sp, color = ink.copy(alpha = if (quiet) 0.5f else 1f), maxLines = 8,
@@ -228,6 +230,22 @@ internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta:
         }
         if (meta != null) Box(Modifier.align(Alignment.End)) { meta() }
     }
+}
+
+/**
+ * The picture came from another channel (iOS 4743aacce, owner 2026-11-26, `QuoteCard.viaTitle`):
+ * "From <name>" on its own quiet line under the card's words, so the source channel is still named.
+ */
+@Composable
+private fun QuoteViaLine(card: QuoteCard?, ink: Color) {
+    val via = card?.takeIf { it.state == QuoteCard.State.OK }?.viaName ?: return
+    val quiet = ink.copy(alpha = 0.6f)
+    Text(androidx.compose.ui.text.buildAnnotatedString {
+        append("From ")
+        pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.SemiBold))
+        append(via)
+        pop()
+    }, fontSize = 13.sp, color = quiet, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
 }
 
 /** A quoted poll's live state: the original post's tally and my own vote doc (shared PollVotes listener). */
@@ -374,15 +392,19 @@ internal fun QuoteMediaOnly(qid: String, openCid: String?, hostMid: String?): Bo
         Row(Modifier.align(Alignment.BottomStart).padding(8.dp).clip(RoundedCornerShape(50))
             .background(Color.Black.copy(alpha = 0.5f)).clickable { openPost() }.padding(start = 3.dp, end = 9.dp, top = 3.dp, bottom = 3.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            com.fariin.app.ui.components.Avatar(card.photoUrl.ifEmpty { null }, 20.dp, squircle = true,
+            com.fariin.app.ui.components.Avatar(chipPhoto(card), 20.dp, squircle = true,
                 kind = com.fariin.app.ui.components.AvatarKind.CHANNEL)
             Spacer(Modifier.width(6.dp))
-            Text(card.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1,
+            Text(card.viaName ?: card.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1,
                 overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 180.dp))
         }
     }
     return true
 }
+
+/** The chip's photo: the source channel's when the media came from another channel, else the card's own. */
+private fun chipPhoto(card: QuoteCard): String? =
+    (if (card.viaName != null) card.viaPhoto else card.photoUrl).ifEmpty { null }
 
 /**
  * A quote's picture as the image loader can draw it. A channel's post picture on R2 (`r2:chat/<cid>/…`,
@@ -395,10 +417,12 @@ internal fun rememberQuotePicture(card: QuoteCard, raw: Any?): Any? {
     val r2 = (raw as? String)?.takeIf { com.fariin.app.media.R2Media.isR2(it) }
     if (r2 == null) return raw
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    val own = card.cid.isNotEmpty() && com.fariin.app.media.R2Media.keyOf(r2).startsWith("chat/${card.cid}/")
-    val file by androidx.compose.runtime.produceState<java.io.File?>(null, r2, own) {
-        if (!own) return@produceState
-        value = runCatching { com.fariin.app.media.ChatMedia(ctx.applicationContext, card.cid, null).file(r2, null) }.getOrNull()
+    // The card's own channel, or the channel its media came from (2026-11-26, `viaCid`).
+    val key = com.fariin.app.media.R2Media.keyOf(r2)
+    val folder = listOf(card.cid, card.viaCid).firstOrNull { it.isNotEmpty() && key.startsWith("chat/$it/") }
+    val file by androidx.compose.runtime.produceState<java.io.File?>(null, r2, folder) {
+        if (folder == null) return@produceState
+        value = runCatching { com.fariin.app.media.ChatMedia(ctx.applicationContext, folder, null).file(r2, null) }.getOrNull()
     }
     return file
 }
@@ -430,10 +454,10 @@ private fun QuoteMediaViewer(qid: String, card: QuoteCard, url: String, onClose:
                 }
                 Row(Modifier.clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.18f)).clickable(onClick = onOpenPost)
                     .padding(start = 5.dp, end = 14.dp, top = 5.dp, bottom = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                    com.fariin.app.ui.components.Avatar(card.photoUrl.ifEmpty { null }, 26.dp, squircle = true,
+                    com.fariin.app.ui.components.Avatar(chipPhoto(card), 26.dp, squircle = true,
                         kind = com.fariin.app.ui.components.AvatarKind.CHANNEL)
                     Spacer(Modifier.width(8.dp))
-                    Text("From ${card.title}", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1,
+                    Text("From ${card.viaName ?: card.title}", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 240.dp))
                 }
             }

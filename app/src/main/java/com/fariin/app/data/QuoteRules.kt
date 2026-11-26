@@ -28,7 +28,20 @@ data class QuoteCard(
     val musicTitle: String = "",
     val musicSub: String = "",
     val count: Int = 0,
+    /**
+     * MEDIA CARRIED FROM ANOTHER CHANNEL (iOS 4743aacce, owner 2026-11-26). A post sent while quoting
+     * with the quote's text hidden (`quote.mediaOnly`) shows the quoted post's photo, video or album
+     * as its own. Quoted again, this card keeps that media (the server takes it from the inner quote)
+     * and names the channel it came from: its id (`via`), name (`viaTitle`) and photo (`viaPhotoUrl`).
+     * The server sends them only to a reader who may see that channel. "" for every other card.
+     */
+    val viaCid: String = "",
+    val viaTitle: String = "",
+    val viaPhoto: String = "",
 ) {
+    /** The name of the channel this card's media came from, or null when it is the card's own. */
+    val viaName: String? get() = viaTitle.takeIf { viaCid.isNotEmpty() && it.isNotEmpty() }
+
     /** OK: the post as it was quoted. DELETED: the channel's face, "Post deleted". HIDDEN: the
      *  channel is private to this reader, nothing of the post. GONE: the channel no longer exists. */
     enum class State { OK, DELETED, HIDDEN, GONE }
@@ -67,6 +80,36 @@ object QuoteRules {
             images = (d["images"] as? List<*>)?.filterIsInstance<String>()?.filter { it.isNotEmpty() } ?: emptyList(),
             musicTitle = s("musicTitle").take(128), musicSub = s("musicSub").take(128),
             count = ((d["count"] as? Number)?.toInt() ?: 0).coerceIn(0, 100))
+            .withVia(d)
+    }
+
+    /** A via id as the server sends it: no `_`, no `/`, at most 128 characters. */
+    fun isViaCid(v: String?): Boolean = v != null && v.isNotEmpty() && v.length <= 128 && '_' !in v && '/' !in v
+
+    /** The via fields of an answer (or a saved copy), held to their shape; only on a photo, video or album card. */
+    private fun QuoteCard.withVia(d: Map<*, *>): QuoteCard {
+        val v = d["via"] as? String
+        if (!isViaCid(v) || kind !in MEDIA_KINDS) return this
+        val ph = (d["viaPhotoUrl"] as? String).orEmpty()
+        return copy(viaCid = v!!, viaTitle = (d["viaTitle"] as? String).orEmpty().trim().take(128),
+            viaPhoto = ph.takeIf { it.length <= 2048 && (it.startsWith("https://") || it.startsWith("fariin-photo://")) }.orEmpty())
+    }
+
+    private val MEDIA_KINDS = setOf("photo", "video", "album")
+
+    /**
+     * The card while composing a quote of a post that is itself a hidden-text quote (iOS startQuote,
+     * 2026-11-26): its bubble is the inner quote's photo, video or album, so the new card takes that
+     * media and names the channel it came from. [inner] = the inner quote's card as this phone holds
+     * it; anything else (no card yet, no picture, not a media post) leaves [card] as it is.
+     */
+    fun carryInnerMedia(card: QuoteCard, inner: QuoteCard?): QuoteCard {
+        if (card.kind != "text" || inner == null || inner.state != QuoteCard.State.OK || inner.kind !in MEDIA_KINDS || inner.image.isEmpty()) return card
+        val hasVia = inner.viaCid.isNotEmpty()
+        return card.copy(kind = inner.kind, image = inner.image, images = inner.images,
+            viaCid = if (hasVia) inner.viaCid else inner.cid,
+            viaTitle = if (hasVia) inner.viaTitle else inner.title,
+            viaPhoto = if (hasVia) inner.viaPhoto else inner.photoUrl)
     }
 
     /** The card's title: the channel's name, or "Channel post" when nothing of it may be shown. */

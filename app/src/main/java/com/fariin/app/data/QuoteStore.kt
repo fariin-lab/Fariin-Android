@@ -131,6 +131,12 @@ object QuoteStore {
                 put("username", c.username); put("text", c.text); put("kind", c.kind); put("image", c.image)
                 // A song or playlist keeps its name and line in the saved copy too (L-93).
                 if (c.kind == "music") { put("musicTitle", c.musicTitle); put("musicSub", c.musicSub); put("count", c.count) }
+                // Media carried from another channel (2026-11-26): same keys as the server's answer.
+                if (c.viaCid.isNotEmpty()) {
+                    put("via", c.viaCid)
+                    if (c.viaTitle.isNotEmpty()) put("viaTitle", c.viaTitle)
+                    if (c.viaPhoto.isNotEmpty()) put("viaPhotoUrl", c.viaPhoto)
+                }
             })
         }
         com.fariin.app.local.LocalCache.saveQuotes(uid, o.toString())

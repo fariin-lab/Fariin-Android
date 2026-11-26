@@ -390,6 +390,13 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
             val card = com.fariin.app.data.QuoteRules.localCard(cid, m.id, ui.title, ui.photoUrl,
                 if (m.mediaKind == null) m.bodyText else m.text, m.type, m.album.isNotEmpty(),
                 image = if (sealed) null else com.fariin.app.data.QuoteRules.pictureUrl(m.imageUrl, m.videoUrl, m.thumbUrl, m.album.firstOrNull()?.imageUrl))
+                // A post that shows its own quote's media (`quote.mediaOnly`, iOS 2026-11-26): the card
+                // takes that photo, video or album and names the channel it came from. The server's
+                // snapshot does the same, and its answer replaces this card when it lands.
+                .let { local ->
+                    val iq = m.quoteId?.takeIf { m.quoteMediaOnly }
+                    if (iq == null) local else com.fariin.app.data.QuoteRules.carryInnerMedia(local, com.fariin.app.data.QuoteStore.cards.value[iq])
+                }
             com.fariin.app.data.QuoteStore.pendingDraft.value = com.fariin.app.data.QuoteStore.Draft(dest, "", card, token)
             if (dest != cid) nav.chat(dest)
         },
