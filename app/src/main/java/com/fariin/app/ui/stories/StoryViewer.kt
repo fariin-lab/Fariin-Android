@@ -1375,7 +1375,10 @@ private fun StoryPage(
                 }
             }
             refresh()
-            val reg = service.watchViews(story.id) { refresh() }
+            // The listener's first answer is the state the read above already fetches: taking it as a
+            // change cancelled that read and waited 1.5 s, so the views line always came late (owner 2026-11-25).
+            var heard = false
+            val reg = service.watchViews(story.id) { if (heard) refresh() else heard = true }
             onDispose { reg?.remove(); job?.cancel() }
         }
     }
