@@ -177,10 +177,11 @@ class ChatMedia(
     }
 
     private suspend fun download(url: String, enc: EncMeta?): File? {
-        // Downloaded once and it would not open: not fetched again until a new key arrives (Pixel log
-        // 2026-11-25: the same 2-5 MB files came down twice a second, forever, and never opened).
+        // Downloaded and it would not open: not fetched again for a minute, unless a new key arrives
+        // (Pixel log 2026-11-25: the same 2-5 MB files came down twice a second, forever, never opening).
         val epoch = com.fariin.app.data.CryptoHub.keysEpoch.value
-        if (wontOpen[url] == epoch) return null
+        val memoKey = url + "|" + (enc?.hashCode() ?: 0)
+        wontOpen[memoKey]?.let { (e, at) -> if (e == epoch && System.currentTimeMillis() - at < WONT_OPEN_WAIT_MS) return null }
         dirMade()
         // A plain clip already watched to the end through the stream cache: copied out, not fetched again.
         if ((enc == null || enc.isPlain) && Wire.isGroupCid(cid) && url.startsWith("https://")) {
@@ -204,9 +205,11 @@ class ChatMedia(
             android.util.Log.w("ChatMedia", "download failed: ${e.javaClass.simpleName} ${(e as? com.google.firebase.storage.StorageException)?.errorCode ?: ""}")
             return null
         } ?: return null
-        val plain = (try { open(cipher, enc) } catch (_: OutOfMemoryError) { null }) ?: run {
+        var oom = false
+        val plain = (try { open(cipher, enc) } catch (_: OutOfMemoryError) { oom = true; null }) ?: run {
             android.util.Log.w("ChatMedia", "downloaded ${cipher.size} bytes but could not open them (enc=${enc != null})")
-            wontOpen[url] = epoch
+            // Only a real "this key will not open it": not short memory, and not keys still loading.
+            if (!oom && enc != null && crypto != null) wontOpen[memoKey] = epoch to System.currentTimeMillis()
             return null
         }
         val f = key(url)
@@ -296,7 +299,10 @@ class ChatMedia(
     companion object {
         /** url -> the key epoch its download would not open under (see download); one for the app,
          *  as each bubble makes its own ChatMedia. */
-        private val wontOpen = java.util.concurrent.ConcurrentHashMap<String, Int>()
+        private val wontOpen = java.util.concurrent.ConcurrentHashMap<String, Pair<Int, Long>>()
+        private const val WONT_OPEN_WAIT_MS = 60_000L
+        /** The user tapped to try [url] again: fetched at once, whatever failed before. */
+        fun retryNow(url: String) { wontOpen.keys.removeIf { it.startsWith("$url|") } }
         const val ASSET = "asset://"
         /** iOS DiskImageCache's budget: 250 MB of opened chat files, least recently used go first. */
         const val MAX_BYTES = 250L * 1024 * 1024

@@ -173,7 +173,7 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
         ) else Modifier.background((if (c.dark) c.card else Color(0xFFF7F7F9)), shape)
         Column(
             Modifier.offset { IntOffset(left.roundToInt(), top.roundToInt()) }
-                .width(androidx.compose.foundation.layout.IntrinsicSize.Max).widthIn(min = 180.dp, max = 260.dp)
+                .widthIn(min = 180.dp, max = 260.dp).width(androidx.compose.foundation.layout.IntrinsicSize.Max)
                 .onGloballyPositioned { size = it.size }
                 .graphicsLayer {
                     val k = g

@@ -2581,7 +2581,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             if (kind == Message.MediaKind.VOICE) {
                 // At most 240 dp of play button and wave (owner 2026-11-25: the note ran the full bubble
                 // width and read as bigger than the reference app's; theirs gives a face part of it).
-                VoiceBody(m, ui.cid, isMe, minOf(maxW - 26.dp, 240.dp)) { Meta(m, tick, isMe, is24h) }
+                VoiceBody(m, ui.cid, isMe, if (m.replyTo != null) maxW - 26.dp else minOf(maxW - 26.dp, 240.dp)) { Meta(m, tick, isMe, is24h) }
                 return@Column
             }
             if (kind == Message.MediaKind.FILE) {

@@ -109,7 +109,8 @@ internal class GatedFile(val file: File?, val state: Fetch, val url: String? = n
     fun tap(): Boolean = when (state) {
         Fetch.DONE -> false
         Fetch.LOADING -> { cancel(); true }
-        else -> { start(); true }
+        // A tap is a real retry: the "would not open" wait (ChatMedia) does not apply to it.
+        else -> { url?.let { com.fariin.app.media.ChatMedia.retryNow(it) }; start(); true }
     }
 }
 
