@@ -1454,7 +1454,7 @@ private fun OverflowMenu(
     // the "Show" filters, then the rest.
     val folders = com.fariin.app.data.ChatFoldersStore
     val rows = listOfNotNull(
-        item("Select Chats", R.drawable.ic_sf_checkmark_circle, onClick = onSelect),
+        // No Select Chats (owner 2026-11-25): on Android a long press on a chat selects, as big apps do.
         item("Mark All Read", R.drawable.ic_mark_all_read, onClick = onMarkAllRead),
         item("All Chats", R.drawable.ic_menu_read, filter == FILTER_ALL, divider = true) { onFilter(FILTER_ALL) },
         // A filter that already is a folder (by its rule) leaves the menu (iOS 2026-11-20).
